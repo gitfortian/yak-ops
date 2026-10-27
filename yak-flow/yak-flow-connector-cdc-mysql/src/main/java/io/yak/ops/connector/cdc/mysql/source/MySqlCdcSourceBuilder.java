@@ -10,8 +10,7 @@ import java.util.Objects;
 /**
  * Defines MySQL CDC connection and table settings shared by both startup modes.
  *
- * <p>{@link MySqlSource} selects the runtime path. The typed build methods remain in
- * use by connector tests until the split and checkpoint contracts are unified.
+ * <p>{@link MySqlSource} owns the runtime entry and its mode-specific checkpoint types.
  */
 public final class MySqlCdcSourceBuilder {
 
@@ -87,35 +86,36 @@ public final class MySqlCdcSourceBuilder {
     }
 
     /** Creates the initial Snapshot + Binlog Source from the same validated connection plan. */
-    public MySqlHybridCdcSource buildHybrid(int chunkSize) {
-        return build().initialSnapshot(chunkSize);
+    public MySqlSource<io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit, io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridEnumeratorState> buildHybrid(int chunkSize) {
+        return MySqlSource.initial(config(), chunkSize, new TableMetrics());
     }
 
     /** Builds the shared snapshot and Binlog source with generation-scoped measurements. */
-    public MySqlHybridCdcSource buildHybrid(int chunkSize, io.yak.ops.connector.base.metrics.TableMetrics metrics) {
-        MySqlCdcSource source = build();
-        return source.initialSnapshot(chunkSize, metrics);
+    public MySqlSource<io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit, io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridEnumeratorState> buildHybrid(int chunkSize, io.yak.ops.connector.base.metrics.TableMetrics metrics) {
+        return MySqlSource.initial(config(), chunkSize, metrics);
     }
 
     /** Builds a reusable Source definition without opening a database connection. */
-    public MySqlCdcSource build() {
+    public MySqlSource<io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit, io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsState> build() {
         return build(new TableMetrics());
     }
 
     /** Shares pipeline measurements with a standalone Binlog source. */
-    public MySqlCdcSource build(TableMetrics metrics) {
-        return new MySqlCdcSource(
-                new MySqlCdcSourceConfig(
-                        hostname,
-                        port,
-                        username,
-                        password,
-                        serverId,
-                        topicPrefix,
-                        tables,
-                        queueCapacity,
-                        connectionProperties,
-                        chunkKeyColumns),
-                metrics);
+    public MySqlSource<io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit, io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsState> build(TableMetrics metrics) {
+        return MySqlSource.latestOffset(config(), metrics);
+    }
+
+    private MySqlCdcSourceConfig config() {
+        return new MySqlCdcSourceConfig(
+                hostname,
+                port,
+                username,
+                password,
+                serverId,
+                topicPrefix,
+                tables,
+                queueCapacity,
+                connectionProperties,
+                chunkKeyColumns);
     }
 }

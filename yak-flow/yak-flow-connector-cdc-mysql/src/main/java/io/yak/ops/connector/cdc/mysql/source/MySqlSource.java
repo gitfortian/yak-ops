@@ -2,46 +2,76 @@ package io.yak.ops.connector.cdc.mysql.source;
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridEnumeratorState;
+import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridEnumeratorStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridSourceEnumerator;
 import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlSourceEnumerator;
+import io.yak.ops.connector.cdc.mysql.source.enumerator.PendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.reader.MySqlHybridSourceReader;
+import io.yak.ops.connector.cdc.mysql.source.reader.MySqlSourceReader;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
+import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.api.connector.source.SourceReader;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
-import io.yak.ops.core.api.connector.source.SourceSplit;
 import io.yak.ops.core.api.connector.source.SplitEnumerator;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
+import io.yak.ops.core.configuration.CheckpointingOptions;
+import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
+import io.yak.ops.core.types.Column;
+import io.yak.ops.core.types.TableSchema;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Objects;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 /**
- * Single MySQL CDC Source entry point for initial snapshot and latest-offset startup.
+ * One MySQL CDC Source entry for initial Snapshot/Hybrid and latest-offset Binlog streams.
  *
- * <p>The underlying implementations retain their distinct split, reader and checkpoint types
- * until those contracts are unified. Delegation does not translate checkpoint state, change
- * fingerprints or introduce a second serializer.
- *
- * @param <SplitT> split type of the selected startup mode
- * @param <StateT> enumerator checkpoint type of the selected startup mode
+ * <p>The two modes retain their existing split/state serializers and reader progress.
+ * A checkpoint from one mode must never be interpreted as a checkpoint from the other.
+ * No intermediate Source owns an additional checkpoint or metrics lifecycle.
  */
-public final class MySqlSource<SplitT extends SourceSplit, StateT> implements Source<TableRecord, SplitT, StateT> {
+public final class MySqlSource<SplitT extends MySqlSplit, StateT extends PendingSplitsState>
+        implements Source<TableRecord, SplitT, StateT> {
 
     private final StartupMode startupMode;
     private final MySqlCdcSourceConfig config;
     private final int snapshotChunkSize;
-    private final Source<TableRecord, SplitT, StateT> source;
+    private final Function<SplitEnumeratorContext<SplitT>, SplitEnumerator<SplitT, StateT>> createEnumerator;
+    private final BiFunction<SplitEnumeratorContext<SplitT>, StateT, SplitEnumerator<SplitT, StateT>> restoreEnumerator;
+    private final Function<SourceReaderContext, SourceReader<TableRecord, SplitT>> createReader;
+    private final SimpleVersionedSerializer<SplitT> splitSerializer;
+    private final SimpleVersionedSerializer<StateT> stateSerializer;
 
     private MySqlSource(
             StartupMode startupMode,
             MySqlCdcSourceConfig config,
             int snapshotChunkSize,
-            Source<TableRecord, SplitT, StateT> source) {
+            Function<SplitEnumeratorContext<SplitT>, SplitEnumerator<SplitT, StateT>> createEnumerator,
+            BiFunction<SplitEnumeratorContext<SplitT>, StateT, SplitEnumerator<SplitT, StateT>> restoreEnumerator,
+            Function<SourceReaderContext, SourceReader<TableRecord, SplitT>> createReader,
+            SimpleVersionedSerializer<SplitT> splitSerializer,
+            SimpleVersionedSerializer<StateT> stateSerializer) {
         this.startupMode = Objects.requireNonNull(startupMode, "startupMode");
         this.config = Objects.requireNonNull(config, "config");
         this.snapshotChunkSize = snapshotChunkSize;
-        this.source = Objects.requireNonNull(source, "source");
+        this.createEnumerator = Objects.requireNonNull(createEnumerator, "createEnumerator");
+        this.restoreEnumerator = Objects.requireNonNull(restoreEnumerator, "restoreEnumerator");
+        this.createReader = Objects.requireNonNull(createReader, "createReader");
+        this.splitSerializer = Objects.requireNonNull(splitSerializer, "splitSerializer");
+        this.stateSerializer = Objects.requireNonNull(stateSerializer, "stateSerializer");
     }
 
     public static MySqlCdcSourceBuilder builder() {
@@ -52,15 +82,72 @@ public final class MySqlSource<SplitT extends SourceSplit, StateT> implements So
             MySqlCdcSourceBuilder builder, StartupMode startupMode, int snapshotChunkSize, TableMetrics metrics) {
         Objects.requireNonNull(startupMode, "startupMode");
         Objects.requireNonNull(metrics, "metrics");
-        // Match the existing Hybrid builder: its Binlog definition does not own task metrics.
-        TableMetrics definitionMetrics = startupMode.includesSnapshot() ? new TableMetrics() : metrics;
-        MySqlCdcSource binlog = Objects.requireNonNull(builder, "builder").build(definitionMetrics);
         if (startupMode == StartupMode.INITIAL) {
-            MySqlHybridCdcSource hybrid = binlog.initialSnapshot(snapshotChunkSize, metrics);
-            return new MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState>(
-                    startupMode, binlog.config(), snapshotChunkSize, hybrid);
+            return builder.buildHybrid(snapshotChunkSize, metrics);
         }
-        return new MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState>(startupMode, binlog.config(), 0, binlog);
+        return builder.build(metrics);
+    }
+
+    static MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> latestOffset(
+            MySqlCdcSourceConfig config, TableMetrics metrics) {
+        Objects.requireNonNull(config, "config");
+        Objects.requireNonNull(metrics, "metrics");
+        config.schemas().keySet().forEach(metrics::register);
+        String fingerprint = fingerprint(config);
+        return new MySqlSource<>(
+                StartupMode.LATEST_OFFSET,
+                config,
+                0,
+                context -> {
+                    requirePhysicalPrimaryKeys(config);
+                    metrics.beginSnapshot(false);
+                    return new MySqlSourceEnumerator(context, fingerprint, null);
+                },
+                (context, state) -> {
+                    requirePhysicalPrimaryKeys(config);
+                    metrics.beginSnapshot(true);
+                    return new MySqlSourceEnumerator(
+                            context, fingerprint, Objects.requireNonNull(state, "checkpoint"));
+                },
+                context -> {
+                    requirePhysicalPrimaryKeys(config);
+                    if (context.currentParallelism() != 1 || context.getIndexOfSubtask() != 0) {
+                        throw new IllegalArgumentException("MySQL Binlog Source requires exactly one SourceReader");
+                    }
+                    return new MySqlSourceReader(config.withRuntimeState(context), fingerprint, context, metrics);
+                },
+                new MySqlBinlogSplitSerializer(),
+                new MySqlPendingSplitsStateSerializer());
+    }
+
+    static MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> initial(
+            MySqlCdcSourceConfig config, int chunkSize, TableMetrics metrics) {
+        Objects.requireNonNull(config, "config");
+        Objects.requireNonNull(metrics, "metrics");
+        config.snapshotServerId(15);
+        if (chunkSize < 1 || chunkSize > 100_000) {
+            throw new IllegalArgumentException("Hybrid snapshot chunk size must be between 1 and 100000");
+        }
+        config.schemas().forEach((table, schema) ->
+                ChunkUtils.requireSupportedSnapshot(schema, config.chunkKeyColumns().get(table)));
+        config.schemas().keySet().forEach(metrics::register);
+        String fingerprint = fingerprint(config) + "-hybrid-typed-backfill-v3-" + chunkSize;
+        return new MySqlSource<>(
+                StartupMode.INITIAL,
+                config,
+                chunkSize,
+                context -> new MySqlHybridSourceEnumerator(context, config, fingerprint, chunkSize, null, metrics),
+                (context, state) -> new MySqlHybridSourceEnumerator(
+                        context, config, fingerprint, chunkSize, Objects.requireNonNull(state, "checkpoint state"), metrics),
+                context -> {
+                    Objects.requireNonNull(context, "context");
+                    if (context.getConfiguration().get(CheckpointingOptions.CHECKPOINTING_INTERVAL).isZero()) {
+                        throw new IllegalArgumentException("MySQL Hybrid Snapshot requires periodic durable checkpoints");
+                    }
+                    return new MySqlHybridSourceReader(config.withRuntimeState(context), context, metrics);
+                },
+                new MySqlHybridSplitSerializer(),
+                new MySqlHybridEnumeratorStateSerializer());
     }
 
     public StartupMode startupMode() {
@@ -78,39 +165,65 @@ public final class MySqlSource<SplitT extends SourceSplit, StateT> implements So
         return snapshotChunkSize;
     }
 
-    // Used by connector tests while the mode-specific split types remain distinct.
-    Source<TableRecord, SplitT, StateT> delegate() {
-        return source;
-    }
-
     @Override
     public Boundedness getBoundedness() {
-        return source.getBoundedness();
+        return Boundedness.CONTINUOUS_UNBOUNDED;
     }
 
     @Override
-    public SplitEnumerator<SplitT, StateT> createEnumerator(SplitEnumeratorContext<SplitT> context) throws Exception {
-        return source.createEnumerator(context);
+    public SplitEnumerator<SplitT, StateT> createEnumerator(SplitEnumeratorContext<SplitT> context) {
+        return createEnumerator.apply(context);
     }
 
     @Override
     public SplitEnumerator<SplitT, StateT> restoreEnumerator(
-            SplitEnumeratorContext<SplitT> context, StateT checkpointState) throws Exception {
-        return source.restoreEnumerator(context, checkpointState);
+            SplitEnumeratorContext<SplitT> context, StateT checkpointState) {
+        return restoreEnumerator.apply(context, checkpointState);
     }
 
     @Override
-    public SourceReader<TableRecord, SplitT> createReader(SourceReaderContext context) throws Exception {
-        return source.createReader(context);
+    public SourceReader<TableRecord, SplitT> createReader(SourceReaderContext context) {
+        return createReader.apply(context);
     }
 
     @Override
     public SimpleVersionedSerializer<SplitT> getSplitSerializer() {
-        return source.getSplitSerializer();
+        return splitSerializer;
     }
 
     @Override
     public SimpleVersionedSerializer<StateT> getEnumeratorCheckpointSerializer() {
-        return source.getEnumeratorCheckpointSerializer();
+        return stateSerializer;
+    }
+
+    private static void requirePhysicalPrimaryKeys(MySqlCdcSourceConfig config) {
+        if (config.schemas().values().stream().anyMatch(schema -> schema.primaryKeys().isEmpty())) {
+            throw new UnsupportedOperationException(
+                    "Keyless MySQL CDC is not executable until Binlog handoff and RETRACT are supported");
+        }
+    }
+
+    private static String fingerprint(MySqlCdcSourceConfig config) {
+        StringBuilder definition = new StringBuilder(config.hostname())
+                .append('|').append(config.port()).append('|')
+                .append(config.topicPrefix()).append('|').append(config.serverId());
+        for (var entry : config.schemas().entrySet()) {
+            TableId table = entry.getKey();
+            TableSchema schema = entry.getValue();
+            definition.append('|').append(table.catalog()).append('/').append(table.table());
+            for (Column column : schema.columns()) {
+                definition.append('|').append(column.name()).append(':')
+                        .append(column.dataType().asSerializableString());
+            }
+            definition.append("|pk=").append(String.join(",", schema.primaryKeys()));
+            String configured = config.chunkKeyColumns().get(table);
+            if (configured != null) definition.append("|chunk=").append(configured);
+        }
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(definition.toString().getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
     }
 }
