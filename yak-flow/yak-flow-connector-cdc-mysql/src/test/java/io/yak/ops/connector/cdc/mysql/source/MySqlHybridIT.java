@@ -217,7 +217,7 @@ class MySqlHybridIT {
         private final String prefix = "hybrid_" + UUID.randomUUID().toString().replace("-", "");
         private final int tableCount;
         private final TableMetrics metrics = new TableMetrics();
-        private final MySqlHybridCdcSource source;
+        private final MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> source;
         private final List<JdbcTableWritePlan> plans = new ArrayList<>();
         private Fixture(int tableCount, int chunkSize) throws Exception {
             this(tableCount, chunkSize, false);
@@ -252,7 +252,10 @@ class MySqlHybridIT {
             }
             var selected = assertInstanceOf(MySqlSource.class, new MySqlCdcSourceFactory().createSource(contexts));
             assertEquals(StartupMode.INITIAL, selected.startupMode());
-            source = assertInstanceOf(MySqlHybridCdcSource.class, selected.delegate());
+            @SuppressWarnings("unchecked")
+            MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> typed =
+                    (MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState>) selected;
+            source = typed;
         }
         private String source(int i) { return prefix + "_s" + i; }
         private String target(int i) { return prefix + "_t" + i; }

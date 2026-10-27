@@ -24,7 +24,7 @@ class MySqlCdcSourceTest {
 
     @Test
     void assignsOneContinuousSplitAndRestoresItsEnumerationState() throws Exception {
-        MySqlCdcSource source = definition();
+        MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> source = definition();
         assertEquals(Boundedness.CONTINUOUS_UNBOUNDED, source.getBoundedness());
         FakeContext context = new FakeContext();
         var enumerator = source.createEnumerator(context);
@@ -48,10 +48,10 @@ class MySqlCdcSourceTest {
 
     @Test
     void rejectsChangedSourceConfigurationAndInvalidTables() throws Exception {
-        MySqlCdcSource source = definition();
+        MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> source = definition();
         var state = new MySqlPendingSplitsState("other-checkpoint", true, null);
         assertThrows(IllegalArgumentException.class, () -> source.restoreEnumerator(new FakeContext(), state));
-        assertThrows(IllegalArgumentException.class, () -> MySqlCdcSource.builder()
+        assertThrows(IllegalArgumentException.class, () -> MySqlSource.builder()
                 .hostname("localhost")
                 .username("yak")
                 .password("secret")
@@ -64,13 +64,13 @@ class MySqlCdcSourceTest {
 
     @Test
     void explicitChunkKeyCannotRestoreCheckpointCreatedWithoutAnOverride() throws Exception {
-        MySqlCdcSource implicit = definition();
+        MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> implicit = definition();
         var enumerator = implicit.createEnumerator(new FakeContext());
         enumerator.start();
         MySqlPendingSplitsState checkpoint = enumerator.snapshotState(1L);
         enumerator.close();
 
-        MySqlCdcSource explicit = definition("ID");
+        MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> explicit = definition("ID");
         assertThrows(
                 IllegalArgumentException.class,
                 () -> explicit.restoreEnumerator(new FakeContext(), checkpoint));
@@ -80,12 +80,12 @@ class MySqlCdcSourceTest {
         restored.close();
     }
 
-    private static MySqlCdcSource definition() {
+    private static MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> definition() {
         return definition(null);
     }
 
-    private static MySqlCdcSource definition(String chunkKey) {
-        return MySqlCdcSource.builder()
+    private static MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> definition(String chunkKey) {
+        return MySqlSource.builder()
                 .hostname("localhost")
                 .username("yak")
                 .password("secret")

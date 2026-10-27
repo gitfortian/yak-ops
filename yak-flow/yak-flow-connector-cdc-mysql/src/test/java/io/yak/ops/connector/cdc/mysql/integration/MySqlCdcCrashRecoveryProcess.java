@@ -3,7 +3,7 @@ package io.yak.ops.connector.cdc.mysql.integration;
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.sink.writer.BatchFlushPolicy;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSource;
+import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.connector.jdbc.sink.JdbcSink;
 import io.yak.ops.connector.jdbc.sink.JdbcTableWritePlan;
@@ -67,7 +67,7 @@ public final class MySqlCdcCrashRecoveryProcess {
                 List.of("ID"));
         TableId sourceId = new TableId(SOURCE_DATABASE, null, sourceTable);
         TableMetrics metrics = new TableMetrics();
-        var source = MySqlCdcSource.builder()
+        var source = MySqlSource.builder()
                 .hostname(sourceHost)
                 .port(sourcePort)
                 .username(sourceUsername)

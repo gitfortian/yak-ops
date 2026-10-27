@@ -78,7 +78,7 @@ class MySqlCdcRuntimePlanTest {
                 List.of("ID"));
         TableId sourceA = new TableId("sample", null, "orders");
         TableId sourceB = new TableId("sample", null, "items");
-        MySqlHybridCdcSource source = MySqlCdcSource.builder()
+        MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> source = MySqlSource.builder()
                 .hostname("unused")
                 .username("replication")
                 .password("not-used")

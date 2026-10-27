@@ -48,13 +48,13 @@ class MySqlChunkKeyAdmissionTest {
     @Test
     void hybridAdmitsNoPhysicalPrimaryKeyWithExplicitChunkKey() {
         var table = new io.yak.ops.core.data.TableId("app", null, "events");
-        var source = MySqlCdcSource.builder()
+        var source = MySqlSource.builder()
                 .hostname("localhost").username("replication").password("test")
                 .serverId(7731).topicPrefix("no-physical-primary-key")
                 .table(table, WITHOUT_PK, "bucket").buildHybrid(2);
         assertEquals(io.yak.ops.core.api.connector.source.Boundedness.CONTINUOUS_UNBOUNDED,
                 source.getBoundedness());
-        assertThrows(IllegalArgumentException.class, () -> MySqlCdcSource.builder()
+        assertThrows(IllegalArgumentException.class, () -> MySqlSource.builder()
                 .hostname("localhost").username("replication").password("test")
                 .serverId(7732).topicPrefix("missing-chunk-key")
                 .table(table, WITHOUT_PK).buildHybrid(2));

@@ -99,7 +99,7 @@ class MySqlBinlogIT {
                         new Column("ID", LogicalTypes.BIGINT.copy(false)),
                         new Column("NAME", LogicalTypes.varchar(100))),
                 List.of("ID"));
-        MySqlCdcSource source = MySqlCdcSource.builder()
+        MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> source = MySqlSource.builder()
                 .hostname(DATABASE_RESOURCE.metadata().host())
                 .port(DATABASE_RESOURCE.metadata().port())
                 .username(USER)
@@ -180,7 +180,7 @@ class MySqlBinlogIT {
                         new Column("ID", LogicalTypes.BIGINT.copy(false)),
                         new Column("NAME", LogicalTypes.varchar(100))),
                 List.of("ID"));
-        var source = MySqlCdcSource.builder()
+        var source = MySqlSource.builder()
                 .hostname(DATABASE_RESOURCE.metadata().host())
                 .port(DATABASE_RESOURCE.metadata().port())
                 .username(USER)
@@ -247,7 +247,7 @@ class MySqlBinlogIT {
     }
 
     private static SourceReader<TableRecord, MySqlBinlogSplit> createReader(
-            MySqlCdcSource source, MySqlBinlogSplit restored) throws Exception {
+            MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> source, MySqlBinlogSplit restored) throws Exception {
         var context = new TestReaderContext();
         SourceReader<TableRecord, MySqlBinlogSplit> reader = source.createReader(context);
         reader.start();

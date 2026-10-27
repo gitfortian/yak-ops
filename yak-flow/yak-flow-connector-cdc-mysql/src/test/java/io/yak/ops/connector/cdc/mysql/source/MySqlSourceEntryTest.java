@@ -2,7 +2,6 @@ package io.yak.ops.connector.cdc.mysql.source;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
@@ -25,11 +24,8 @@ class MySqlSourceEntryTest {
         var source = MySqlSource.create(builder(), StartupMode.INITIAL, 512, new TableMetrics());
         assertEquals(StartupMode.INITIAL, source.startupMode());
         assertEquals(512, source.snapshotChunkSize());
-        assertInstanceOf(MySqlHybridCdcSource.class, source.delegate());
         assertInstanceOf(MySqlHybridSplitSerializer.class, source.getSplitSerializer());
         assertInstanceOf(MySqlHybridEnumeratorStateSerializer.class, source.getEnumeratorCheckpointSerializer());
-        assertSame(source.delegate().getSplitSerializer(), source.getSplitSerializer());
-        assertSame(source.delegate().getEnumeratorCheckpointSerializer(), source.getEnumeratorCheckpointSerializer());
     }
 
     @Test
@@ -37,11 +33,8 @@ class MySqlSourceEntryTest {
         var source = MySqlSource.create(builder(), StartupMode.LATEST_OFFSET, 512, new TableMetrics());
         assertEquals(StartupMode.LATEST_OFFSET, source.startupMode());
         assertThrows(IllegalStateException.class, source::snapshotChunkSize);
-        assertInstanceOf(MySqlCdcSource.class, source.delegate());
         assertInstanceOf(MySqlBinlogSplitSerializer.class, source.getSplitSerializer());
         assertInstanceOf(MySqlPendingSplitsStateSerializer.class, source.getEnumeratorCheckpointSerializer());
-        assertSame(source.delegate().getSplitSerializer(), source.getSplitSerializer());
-        assertSame(source.delegate().getEnumeratorCheckpointSerializer(), source.getEnumeratorCheckpointSerializer());
     }
 
     private static MySqlCdcSourceBuilder builder() {

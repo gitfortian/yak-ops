@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSource;
+import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
@@ -207,7 +207,7 @@ class MySqlKeylessBackfillIT {
         String table = name("closed_");
         TableId id = new TableId("yak_cdc_it", null, table);
         var config = config(Map.of(id, SCHEMA), Map.of(id, "bucket"), 6761);
-        var source = MySqlCdcSource.builder()
+        var source = MySqlSource.builder()
                 .hostname(DATABASE.metadata().host())
                 .port(DATABASE.metadata().port())
                 .username(DATABASE.metadata().username())
@@ -221,7 +221,16 @@ class MySqlKeylessBackfillIT {
         assertThrows(UnsupportedOperationException.class, () -> source.restoreEnumerator(null, null));
         assertEquals(
                 io.yak.ops.core.api.connector.source.Boundedness.CONTINUOUS_UNBOUNDED,
-                source.initialSnapshot(10).getBoundedness());
+                MySqlSource.builder()
+                        .hostname(DATABASE.metadata().host())
+                        .port(DATABASE.metadata().port())
+                        .username(DATABASE.metadata().username())
+                        .password(DATABASE.metadata().password())
+                        .serverId(6771)
+                        .topicPrefix("blocked-keyless")
+                        .table(id, SCHEMA, "bucket")
+                        .buildHybrid(10)
+                        .getBoundedness());
     }
 
     private static MySqlCdcSourceConfig config(
