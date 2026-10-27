@@ -358,7 +358,7 @@ class ExecutionGraphParallelTest {
                 public void addReader(int subtaskId) {}
 
                 @Override
-                public void handleSplitRequest(int subtaskId) {
+                public void handleSplitRequest(int subtaskId, String requesterHostname) {
                     context.assignSplit(new TestSplit("split-" + subtaskId, subtaskId), subtaskId);
                     if (bounded) {
                         context.signalNoMoreSplits(subtaskId);
