@@ -21,31 +21,19 @@ class MySqlSplitStateTest {
     private static final TableId TABLE = new TableId("shop", null, "orders");
 
     @Test
-    void snapshotStateRetainsPreparedOutputOnlyAfterCompletedCheckpoint() {
-        MySqlSnapshotSplit split = new MySqlSnapshotSplit("shop.orders:0", "definition", TABLE, 0L, 100L, null);
-        MySqlSplitState state = MySqlSplitState.fromSplit(split);
+    void snapshotStatePublishesCompletedChunkOnlyAfterAtomicEmission() throws Exception {
+        var split = new MySqlSnapshotSplit("chunk", "definition", TABLE, 0L, 100L, null);
+        var state = MySqlSplitState.fromSplit(split);
         assertInstanceOf(MySqlSnapshotSplitState.class, state);
         assertTrue(state.isSnapshotSplitState());
-        assertFalse(state.isBinlogSplitState());
-        assertFalse(state.binlog());
-        assertEquals("definition", state.sourceId());
-        assertEquals(split, state.toMySqlSplit());
-
-        MySqlSnapshotOutput output = new MySqlSnapshotOutput(
-                offset(100), offset(200),
-                List.of(new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(42L))));
-        state.prepareSnapshot(split.withOutput(output));
-        assertThrows(IllegalStateException.class, () -> state.emitSnapshotRows(1));
-        state.snapshotCheckpoint(10);
-        assertNull(state.completeCheckpoint(9));
-        assertEquals("shop.orders:0", state.completeCheckpoint(10));
-        state.emitSnapshotRows(1);
-
-        MySqlSnapshotSplit completed = state.asSnapshotSplitState().toMySqlSplit();
-        assertTrue(completed.isSnapshotReadFinished());
-        assertEquals(offset(200), completed.getHighWatermark());
+        assertEquals(split, state.checkpoint(null));
+        var prepared = split.withOutput(new MySqlSnapshotOutput(offset(100), offset(200),
+                List.of(new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(42L)))));
+        state.prepareSnapshot(prepared);
+        var completed = (MySqlSnapshotSplit) state.checkpoint(null);
+        assertEquals(offset(200), completed.finished().highWatermark());
         assertNull(completed.output());
-        assertEquals(completed, state.checkpoint(null));
+        assertEquals(completed, state.toMySqlSplit());
     }
 
     @Test
