@@ -7,6 +7,7 @@ import io.yak.ops.configuration.rule.Conditions;
 import io.yak.ops.configuration.rule.ConfigValidator;
 import io.yak.ops.configuration.rule.OptionRule;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.StartupMode;
 import io.yak.ops.plugin.task.datasync.solution.SolutionType;
 import io.yak.ops.plugin.task.datasync.solution.Step;
 import java.util.LinkedHashMap;
@@ -37,7 +38,7 @@ public record SourceConfig(ReadonlyConfig options, IncrementalConfig incremental
             String datasourceId,
             SolutionType type,
             List<Step> steps,
-            boolean schemaChangesEnabled) {
+            StartupMode startupMode) {
         validate(table, TABLE_RULE, "source.tables");
         Map<String, Object> snapshot = table.get(SNAPSHOT);
         if (snapshot != null
@@ -70,6 +71,7 @@ public record SourceConfig(ReadonlyConfig options, IncrementalConfig incremental
         physical.put(JobOptions.DATASOURCE_ID.key(), datasourceId);
         physical.put(JobOptions.TYPE.key(), type.sourceIdentifier());
         if (chunkKey != null) physical.put(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key(), chunkKey);
+        if (startupMode != null) physical.put(MySqlCdcSourceOptions.STARTUP_MODE.key(), startupMode.value());
         return new SourceConfig(ReadonlyConfig.fromMap(physical), incremental);
     }
 
