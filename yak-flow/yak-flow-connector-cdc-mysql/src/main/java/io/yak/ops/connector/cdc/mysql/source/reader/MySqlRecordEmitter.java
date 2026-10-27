@@ -27,12 +27,14 @@ public final class MySqlRecordEmitter implements RecordEmitter<MySqlFetchedRecor
     private final MySqlSplitReader splits;
     private final TableMetrics metrics;
     private final long generation;
+    private final String sourceId;
 
     public MySqlRecordEmitter(
-            MySqlSourceReaderContext readerContext, MySqlSplitReader splits, TableMetrics metrics) {
+            MySqlSourceReaderContext readerContext, MySqlSplitReader splits, TableMetrics metrics, String sourceId) {
         this.schemaChanges = Objects.requireNonNull(readerContext, "readerContext").schemaChanges();
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         generation = metrics.generation();
+        this.sourceId = Objects.requireNonNull(sourceId, "sourceId");
         this.context = readerContext.getSourceReaderContext();
         this.splits = Objects.requireNonNull(splits, "splits");
     }
@@ -52,7 +54,7 @@ public final class MySqlRecordEmitter implements RecordEmitter<MySqlFetchedRecor
             for (int ordinal = 0; ordinal < rows.size(); ordinal++) {
                 TableRecord row = rows.get(ordinal);
                 ChangeEventId identity = ChangeEventId.snapshot(
-                        state.sourceId(), state.snapshotSplitId(), ordinal);
+                        sourceId, state.snapshotSplitId(), ordinal);
                 output.collect(row.withChangeEventId(identity));
                 metrics.read(generation, row.tableId(), false);
             }
@@ -68,7 +70,7 @@ public final class MySqlRecordEmitter implements RecordEmitter<MySqlFetchedRecor
             TableRecord row = event.rows().get(index);
             ChangeEventId identity = eventPosition == null
                     ? null
-                    : new ChangeEventId(state.sourceId(), eventPosition, index, count);
+                    : new ChangeEventId(sourceId, eventPosition, index, count);
             output.collect(identity == null ? row : row.withChangeEventId(identity));
             metrics.read(generation, row.tableId(), state.binlog());
         }
