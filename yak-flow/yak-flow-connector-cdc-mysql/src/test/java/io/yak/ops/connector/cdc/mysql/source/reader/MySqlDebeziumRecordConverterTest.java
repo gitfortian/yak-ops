@@ -64,8 +64,7 @@ class MySqlDebeziumRecordConverterTest {
                 event.records().stream().map(TableRecord::rowKind).toList());
         assertEquals("new", event.records().getLast().row().getString(1));
 
-        var state = MySqlSplitState.fromSplit(new io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit(
-                "fingerprint", null, new byte[0]));
+        var state = MySqlSplitState.fromSplit(new MySqlBinlogSplit(null, new byte[0]));
         var delivered = new ArrayList<TableRecord>();
         var emitter = binlogEmitter();
         assertThrows(IllegalStateException.class, () -> state.checkpoint(new byte[] {1}));
@@ -73,8 +72,7 @@ class MySqlDebeziumRecordConverterTest {
         assertEquals(2, delivered.size());
         assertEquals(event.offset(), ((MySqlBinlogSplit) state.checkpoint(new byte[] {1})).offset());
 
-        var failedState = MySqlSplitState.fromSplit(new io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit(
-                "fingerprint", null, new byte[0]));
+        var failedState = MySqlSplitState.fromSplit(new MySqlBinlogSplit(null, new byte[0]));
         assertThrows(IllegalStateException.class,
                 () -> emitter.emitRecord(MySqlFetchedRecord.binlog(event), row -> {
                     if (row.rowKind() == RowKind.UPDATE_AFTER) {
