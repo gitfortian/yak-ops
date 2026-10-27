@@ -137,7 +137,7 @@ class MySqlDebeziumRecordConverterTest {
                 .table(TABLE, YAK_SCHEMA)
                 .build()
                 .config();
-        return new MySqlRecordEmitter(new MySqlSourceReaderContext(context), new MySqlSplitReader(config), new TableMetrics());
+        return new MySqlRecordEmitter(new MySqlSourceReaderContext(context), new MySqlSplitReader(config), new TableMetrics(), config.topicPrefix());
     }
 
     private static Struct rowWithCapacity(int length, String name) {
