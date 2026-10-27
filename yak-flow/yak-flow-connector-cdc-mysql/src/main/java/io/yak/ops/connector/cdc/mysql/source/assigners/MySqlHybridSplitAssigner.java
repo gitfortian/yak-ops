@@ -1,7 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
@@ -20,12 +20,12 @@ import java.util.Objects;
  * containing all completed snapshot split watermarks, not by a final split delivery acknowledgment.
  */
 public final class MySqlHybridSplitAssigner
-        implements MySqlSplitAssigner<MySqlSplit, MySqlHybridEnumeratorState> {
+        implements MySqlSplitAssigner<MySqlSplit, HybridPendingSplitsState> {
 
     private final MySqlSnapshotSplitAssigner snapshots;
     private MySqlBinlogSplit pendingBinlog;
     private boolean binlogAssigned;
-    private MySqlHybridEnumeratorState.Phase phase;
+    private HybridPendingSplitsState.Phase phase;
     private DebeziumOffset low;
     private DebeziumOffset high;
     private Long handoffCheckpointId;
@@ -35,7 +35,7 @@ public final class MySqlHybridSplitAssigner
     private ChunkRange nextChunkRange;
 
     public MySqlHybridSplitAssigner(
-            StartupOptions startupOptions, MySqlHybridEnumeratorState restored) {
+            StartupOptions startupOptions, HybridPendingSplitsState restored) {
         Objects.requireNonNull(startupOptions, "startupOptions");
         if (startupOptions.startupMode() != StartupMode.INITIAL) {
             throw new UnsupportedOperationException("MySQL Hybrid Source requires initial startup");
@@ -44,7 +44,7 @@ public final class MySqlHybridSplitAssigner
             snapshots = new MySqlSnapshotSplitAssigner();
             pendingBinlog = MySqlBinlogSplit.forInitialSnapshot();
             binlogAssigned = false;
-            phase = MySqlHybridEnumeratorState.Phase.BOOTSTRAP;
+            phase = HybridPendingSplitsState.Phase.BOOTSTRAP;
         } else {
             restored.finishedSplitInfos().forEach(info -> completed.put(info.splitId(), info));
             nextTableIndex = restored.nextTableIndex();
@@ -84,25 +84,25 @@ public final class MySqlHybridSplitAssigner
     }
 
     public MySqlSnapshotSplit nextSnapshot() {
-        if (phase != MySqlHybridEnumeratorState.Phase.SNAPSHOT) {
+        if (phase != HybridPendingSplitsState.Phase.SNAPSHOT) {
             return null;
         }
         return snapshots.next();
     }
 
     public void captureLow(DebeziumOffset offset) {
-        if (phase != MySqlHybridEnumeratorState.Phase.BOOTSTRAP) {
+        if (phase != HybridPendingSplitsState.Phase.BOOTSTRAP) {
             if (!Objects.equals(low, offset)) {
                 throw new IllegalStateException("Conflicting MySQL hybrid low watermark");
             }
             return;
         }
         low = Objects.requireNonNull(offset, "offset");
-        phase = MySqlHybridEnumeratorState.Phase.SNAPSHOT;
+        phase = HybridPendingSplitsState.Phase.SNAPSHOT;
     }
 
     public void plan(List<MySqlSnapshotSplit> splits) {
-        if (phase != MySqlHybridEnumeratorState.Phase.SNAPSHOT) {
+        if (phase != HybridPendingSplitsState.Phase.SNAPSHOT) {
             throw new IllegalStateException("Cannot plan snapshot before Binlog anchor");
         }
         snapshots.plan(splits);
@@ -150,7 +150,7 @@ public final class MySqlHybridSplitAssigner
     /** Atomically persist one discovered range and advance the durable discovery cursor. */
     public void appendPlan(MySqlSnapshotSplit split, int tableCount) {
         ChunkRange range = split.chunkRange();
-        if (phase != MySqlHybridEnumeratorState.Phase.SNAPSHOT
+        if (phase != HybridPendingSplitsState.Phase.SNAPSHOT
                 || tableCount < 1
                 || nextTableIndex < 0
                 || nextTableIndex >= tableCount
@@ -200,7 +200,7 @@ public final class MySqlHybridSplitAssigner
     }
 
     public boolean snapshotComplete() {
-        return phase == MySqlHybridEnumeratorState.Phase.SNAPSHOT && snapshots.allFinished();
+        return phase == HybridPendingSplitsState.Phase.SNAPSHOT && snapshots.allFinished();
     }
 
     public void captureHigh(DebeziumOffset offset) {
@@ -208,11 +208,11 @@ public final class MySqlHybridSplitAssigner
             throw new IllegalStateException("High watermark requires all snapshot splits to finish");
         }
         high = Objects.requireNonNull(offset, "offset");
-        phase = MySqlHybridEnumeratorState.Phase.HANDOFF;
+        phase = HybridPendingSplitsState.Phase.HANDOFF;
     }
 
     public boolean restoredHandoffReady() {
-        return phase == MySqlHybridEnumeratorState.Phase.HANDOFF && handoffCheckpointId == null;
+        return phase == HybridPendingSplitsState.Phase.HANDOFF && handoffCheckpointId == null;
     }
 
     /**
@@ -221,18 +221,18 @@ public final class MySqlHybridSplitAssigner
      * <p>Fresh in-memory attempts must instead wait for notifyCheckpointComplete.
      */
     public void resumeRestoredHandoff() {
-        if (phase != MySqlHybridEnumeratorState.Phase.HANDOFF || handoffCheckpointId != null) {
+        if (phase != HybridPendingSplitsState.Phase.HANDOFF || handoffCheckpointId != null) {
             throw new IllegalStateException("Expected a restored completed handoff checkpoint");
         }
-        phase = MySqlHybridEnumeratorState.Phase.STREAMING;
+        phase = HybridPendingSplitsState.Phase.STREAMING;
     }
 
     @Override
     public boolean notifyCheckpointComplete(long checkpointId) {
-        if (phase == MySqlHybridEnumeratorState.Phase.HANDOFF
+        if (phase == HybridPendingSplitsState.Phase.HANDOFF
                 && handoffCheckpointId != null
                 && checkpointId >= handoffCheckpointId) {
-            phase = MySqlHybridEnumeratorState.Phase.STREAMING;
+            phase = HybridPendingSplitsState.Phase.STREAMING;
             handoffCheckpointId = null;
             return true;
         }
@@ -240,14 +240,14 @@ public final class MySqlHybridSplitAssigner
     }
 
     @Override
-    public MySqlHybridEnumeratorState snapshotState(long checkpointId) {
+    public HybridPendingSplitsState snapshotState(long checkpointId) {
         if (checkpointId < 0) {
             throw new IllegalArgumentException("Checkpoint ID must not be negative");
         }
-        if (phase == MySqlHybridEnumeratorState.Phase.HANDOFF && handoffCheckpointId == null) {
+        if (phase == HybridPendingSplitsState.Phase.HANDOFF && handoffCheckpointId == null) {
             handoffCheckpointId = checkpointId;
         }
-        return new MySqlHybridEnumeratorState(
+        return new HybridPendingSplitsState(
                 phase,
                 pendingBinlog,
                 binlogAssigned,
@@ -290,7 +290,7 @@ public final class MySqlHybridSplitAssigner
         snapshots.addBack(split);
     }
 
-    public MySqlHybridEnumeratorState.Phase phase() {
+    public HybridPendingSplitsState.Phase phase() {
         return phase;
     }
 
