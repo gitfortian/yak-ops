@@ -52,7 +52,7 @@ class FileCheckpointStoreTest {
             assertEquals(7, loaded.checkpointId());
             assertTrue(loaded.fullyFinishedOperators().isEmpty());
             assertTrue(loaded.finishedSubtasks().isEmpty());
-            assertEquals(1, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
+            assertEquals(5, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
             assertEquals(2, loaded.enumeratorState().version());
             assertArrayEquals(new byte[] {3, 4, 5}, loaded.enumeratorState().bytes());
             loaded.enumeratorState().bytes()[0] = 99;
@@ -80,6 +80,40 @@ class FileCheckpointStoreTest {
     }
 
     @Test
+    void shouldRejectLegacyCheckpointVersionEvenWithValidCrc() throws Exception {
+        String signature = FileCheckpointStore.graphSignature(graph(1));
+        var state = new CheckpointSnapshot.SerializedState(1, new byte[] {1, 2, 3});
+        try (FileCheckpointStore store = new FileCheckpointStore(folder)) {
+            store.save(new CheckpointSnapshot(1, signature, state, Map.of(), Map.of(), 100L));
+            byte[] file = Files.readAllBytes(folder.resolve("checkpoint.bin"));
+            ByteBuffer.wrap(file).putInt(4, 4);
+            java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+            crc.update(file, 0, file.length - Long.BYTES);
+            ByteBuffer.wrap(file).putLong(file.length - Long.BYTES, crc.getValue());
+            Files.write(folder.resolve("checkpoint.bin"), file);
+            assertThrows(IOException.class, () -> store.loadLatest(signature));
+        }
+        try (FileCheckpointStore reopened = new FileCheckpointStore(folder)) {
+            var next = new CheckpointSnapshot(2, signature, state, Map.of(), Map.of(), 200L);
+            assertThrows(IOException.class, () -> reopened.save(next));
+        }
+    }
+
+    @Test
+    void shouldNotOverwriteLatestCheckpointWithSameOrOlderId() throws Exception {
+        String signature = FileCheckpointStore.graphSignature(graph(1));
+        var state = new CheckpointSnapshot.SerializedState(1, new byte[] {7});
+        try (FileCheckpointStore store = new FileCheckpointStore(folder)) {
+            var latest = new CheckpointSnapshot(7, signature, state, Map.of(), Map.of(), 700L);
+            store.save(latest);
+            assertThrows(IOException.class, () -> store.save(latest));
+            assertThrows(IOException.class, () -> store.save(
+                    new CheckpointSnapshot(6, signature, state, Map.of(), Map.of(), 600L)));
+            assertEquals(latest, store.loadLatest(signature).orElseThrow());
+        }
+    }
+
+    @Test
     void shouldRequireStableUidAndRejectDifferentParallelism() throws Exception {
         StreamGraph graph = graph(1);
         String signature = FileCheckpointStore.graphSignature(graph);
@@ -95,7 +129,7 @@ class FileCheckpointStoreTest {
     }
 
     @Test
-    void shouldDurablyPersistOperatorStateWithoutBreakingLegacyFormat() throws Exception {
+    void shouldDurablyPersistOperatorStateUsingUnifiedFormat() throws Exception {
         String signature = FileCheckpointStore.graphSignature(graph(1));
         var encoded = new CheckpointSnapshot.SerializedState(3, new byte[]{7, 9, 11});
         var key = new CheckpointSnapshot.OperatorSubtask("stable-operator", 0);
@@ -105,7 +139,7 @@ class FileCheckpointStoreTest {
             store.save(complete);
             var recovered = store.loadLatest(signature).orElseThrow();
             assertEquals(complete, recovered);
-            assertEquals(2, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
+            assertEquals(5, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
             assertTrue(recovered.fullyFinishedOperators().isEmpty());
             assertTrue(recovered.finishedSubtasks().isEmpty());
             assertEquals(3, recovered.operatorStates().get(key).get("operator/count").version());
@@ -119,7 +153,7 @@ class FileCheckpointStoreTest {
     }
 
     @Test
-    void shouldPersistVersionThreeFinishedOperatorMarkersWithoutLosingActiveState() throws Exception {
+    void shouldPersistFinishedOperatorMarkersWithoutLosingActiveState() throws Exception {
         String signature = FileCheckpointStore.graphSignature(graph(1));
         var state = new CheckpointSnapshot.SerializedState(4, new byte[] {5, 6});
         var active = new CheckpointSnapshot.OperatorSubtask("running-operator", 0);
@@ -136,7 +170,7 @@ class FileCheckpointStoreTest {
                 Set.of(finished));
         try (FileCheckpointStore store = new FileCheckpointStore(folder)) {
             store.save(snapshot);
-            assertEquals(3, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
+            assertEquals(5, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
             CheckpointSnapshot recovered = store.loadLatest(signature).orElseThrow();
             assertEquals(snapshot, recovered);
             assertEquals(Set.of("source-stable-uid"), recovered.fullyFinishedOperators());
