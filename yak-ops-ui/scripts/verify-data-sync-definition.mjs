@@ -80,10 +80,38 @@ assert.equal(latestOnly.source.startup.mode, "latest-offset");
 assert.equal(latestOnly.source.tables[0].snapshot, undefined);
 assert.equal(readSyncParameters(4, latestOnly), latestOnly);
 assert.deepEqual(displaySyncSteps(latestOnly), ["INCREMENTAL"]);
-assert.throws(() => readSyncParameters(4, { ...latestOnly, source: { ...latestOnly.source, startup: { mode: "initial" } } }));
-assert.throws(() => readSyncParameters(4, { ...latestOnly, source: { ...latestOnly.source, startup: undefined } }));
-assert.throws(() => readSyncParameters(4, { ...latestOnly, source: { ...latestOnly.source, startup: { mode: "earliest-offset" } } }));
-assert.throws(() => readSyncParameters(4, { ...latestOnly, source: { ...latestOnly.source, tables: [{ ...latestOnly.source.tables[0], snapshot: { chunkKeyColumn: "id" } }] } }));
+assert.throws(() =>
+  readSyncParameters(4, {
+    ...latestOnly,
+    source: { ...latestOnly.source, startup: { mode: "initial" } },
+  }),
+);
+assert.throws(() =>
+  readSyncParameters(4, {
+    ...latestOnly,
+    source: { ...latestOnly.source, startup: undefined },
+  }),
+);
+assert.throws(() =>
+  readSyncParameters(4, {
+    ...latestOnly,
+    source: { ...latestOnly.source, startup: { mode: "earliest-offset" } },
+  }),
+);
+assert.throws(() =>
+  readSyncParameters(4, {
+    ...latestOnly,
+    source: {
+      ...latestOnly.source,
+      tables: [
+        {
+          ...latestOnly.source.tables[0],
+          snapshot: { chunkKeyColumn: "id" },
+        },
+      ],
+    },
+  }),
+);
 assert.throws(() => readSyncParameters(4, { ...json, steps: ["INCREMENTAL"] }));
 
 const record = {
