@@ -99,7 +99,12 @@ class MySqlTypedSnapshotSplitReaderTest {
             while (first.nextRecordFromSplit() != null) read++;
             assertEquals(256, read);
             assertFalse(first.finishedSplits().contains(split.splitId()));
-            assertThrows(IllegalStateException.class, partial::fetch);
+            RecordsWithSplitIds<TableRecord> secondPage = partial.fetch();
+            assertEquals("replayed-chunk", secondPage.nextSplit());
+            int secondPageRows = 0;
+            while (secondPage.nextRecordFromSplit() != null) secondPageRows++;
+            assertEquals(256, secondPageRows);
+            assertFalse(secondPage.finishedSplits().contains(split.splitId()));
         }
         try (var restarted = reader(url, schema)) {
             restarted.open(split);

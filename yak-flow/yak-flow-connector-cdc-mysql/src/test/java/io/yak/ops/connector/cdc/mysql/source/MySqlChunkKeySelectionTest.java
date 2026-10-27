@@ -107,14 +107,14 @@ class MySqlChunkKeySelectionTest {
         var same = builder().port(3307)
                 .table(ORDERS, ORDERS_SCHEMA, "id")
                 .table(ITEMS, ITEMS_SCHEMA, "sequence")
-                .buildHybrid(1024);
+                .buildHybrid(selected.snapshotChunkSize());
         same.restoreEnumerator(new CoordinatorContext(), checkpoint).close();
 
         // Dropping one table's explicit key must invalidate the saved definition identity.
         var missingOverride = builder().port(3307)
                 .table(ORDERS, ORDERS_SCHEMA, "id")
                 .table(ITEMS, ITEMS_SCHEMA)
-                .buildHybrid(1024);
+                .buildHybrid(selected.snapshotChunkSize());
         assertThrows(
                 IllegalArgumentException.class,
                 () -> missingOverride.restoreEnumerator(new CoordinatorContext(), checkpoint));
