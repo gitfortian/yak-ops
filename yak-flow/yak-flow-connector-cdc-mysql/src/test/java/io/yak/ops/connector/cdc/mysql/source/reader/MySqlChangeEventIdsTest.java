@@ -70,12 +70,14 @@ class MySqlChangeEventIdsTest {
 
 
     @Test
-    void eventIdentityDoesNotDependOnCheckpointSplitFingerprint() throws Exception {
+    void eventIdentityRemainsStableAfterSplitSerialization() throws Exception {
         DebeziumOffset offset = position(88, 2);
         BinlogEvent event = new BinlogEvent(List.of(row(RowKind.INSERT, "payload")), offset);
         var reader = binlogEmitter();
         var first = MySqlSplitState.fromSplit(new MySqlBinlogSplit(null, new byte[0]));
-        var second = MySqlSplitState.fromSplit(new MySqlBinlogSplit(null, new byte[0]));
+        var serializer = MySqlSplitSerializer.INSTANCE;
+        var second = MySqlSplitState.fromSplit(serializer.deserialize(
+                serializer.getVersion(), serializer.serialize(new MySqlBinlogSplit(null, new byte[0]))));
         List<TableRecord> earlier = new ArrayList<>();
         List<TableRecord> later = new ArrayList<>();
         reader.emitRecord(MySqlFetchedRecord.binlog(event), earlier::add, first);
