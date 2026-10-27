@@ -15,10 +15,9 @@ public final class MySqlCdcSourceOptions {
             Options.key("connector.mysql-cdc.topic-prefix").stringType().noDefaultValue();
 
     /** Determines the initial reading position; checkpoint restores use their saved offset. */
-    public static final Option<String> STARTUP_MODE =
-            Options.key("data-sync.mysql-cdc.startup-mode")
-                    .stringType()
-                    .defaultValue(StartupOptions.initial().asModeString());
+    public static final Option<String> STARTUP_MODE = Options.key("data-sync.mysql-cdc.startup-mode")
+            .stringType()
+            .defaultValue(StartupOptions.initial().asModeString());
 
     public static final Option<Integer> SNAPSHOT_CHUNK_SIZE =
             Options.key("data-sync.mysql-cdc.snapshot-chunk-size").intType().defaultValue(1024);

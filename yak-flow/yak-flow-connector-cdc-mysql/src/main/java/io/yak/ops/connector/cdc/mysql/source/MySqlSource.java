@@ -91,8 +91,9 @@ public final class MySqlSource<SplitT extends MySqlSplit, StateT extends Pending
         return switch (startupOptions.startupMode()) {
             case INITIAL -> builder.buildHybrid(snapshotChunkSize, metrics);
             case LATEST_OFFSET -> builder.build(metrics);
-            default -> throw new UnsupportedOperationException(
-                    "MySQL CDC startup mode is not implemented: " + startupOptions.asModeString());
+            default ->
+                throw new UnsupportedOperationException(
+                        "MySQL CDC startup mode is not implemented: " + startupOptions.asModeString());
         };
     }
 
