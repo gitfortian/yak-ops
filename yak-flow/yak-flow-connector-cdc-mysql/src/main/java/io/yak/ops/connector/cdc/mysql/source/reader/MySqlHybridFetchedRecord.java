@@ -1,6 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.event.SourceSchemaChange;
@@ -11,7 +11,7 @@ import java.util.Objects;
 public record MySqlHybridFetchedRecord(
         List<TableRecord> rows,
         Long snapshotKey,
-        BinlogOffset binlogOffset,
+        DebeziumOffset binlogOffset,
         boolean lowWatermark,
         MySqlSnapshotSplit preparedSnapshot,
         Integer snapshotRowsEmitted,
@@ -20,7 +20,7 @@ public record MySqlHybridFetchedRecord(
     public MySqlHybridFetchedRecord(
             List<TableRecord> rows,
             Long snapshotKey,
-            BinlogOffset binlogOffset,
+            DebeziumOffset binlogOffset,
             boolean lowWatermark,
             MySqlSnapshotSplit preparedSnapshot,
             Integer snapshotRowsEmitted) {
@@ -28,7 +28,7 @@ public record MySqlHybridFetchedRecord(
     }
 
     public MySqlHybridFetchedRecord(
-            List<TableRecord> rows, Long snapshotKey, BinlogOffset binlogOffset, boolean lowWatermark) {
+            List<TableRecord> rows, Long snapshotKey, DebeziumOffset binlogOffset, boolean lowWatermark) {
         this(rows, snapshotKey, binlogOffset, lowWatermark, null, null);
     }
 

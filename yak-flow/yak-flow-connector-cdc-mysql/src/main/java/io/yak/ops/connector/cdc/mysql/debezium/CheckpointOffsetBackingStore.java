@@ -1,6 +1,5 @@
 package io.yak.ops.connector.cdc.mysql.debezium;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,7 +27,7 @@ public final class CheckpointOffsetBackingStore extends MemoryOffsetBackingStore
     private Session session;
 
     /** Registers an isolated engine attempt before Debezium instantiates its offset store. */
-    public static String register(String name, BinlogOffset restored) {
+    public static String register(String name, DebeziumOffset restored) {
         String id = UUID.randomUUID().toString();
         SESSIONS.put(id, new Session(Objects.requireNonNull(name, "name"), restored));
         return id;
@@ -48,7 +47,7 @@ public final class CheckpointOffsetBackingStore extends MemoryOffsetBackingStore
         if (session.restored() != null) {
             JsonConverter converter = new JsonConverter();
             converter.configure(Map.of("schemas.enable", "false"), true);
-            BinlogOffset offset = session.restored();
+            DebeziumOffset offset = session.restored();
             byte[] part = converter.fromConnectData(session.name(), null, List.of(session.name(), offset.partition()));
             byte[] cursor = converter.fromConnectData(session.name(), null, offset.position());
             data.put(ByteBuffer.wrap(part), ByteBuffer.wrap(cursor));
@@ -63,5 +62,5 @@ public final class CheckpointOffsetBackingStore extends MemoryOffsetBackingStore
         return Set.of(new LinkedHashMap<>(session.restored().partition()));
     }
 
-    private record Session(String name, BinlogOffset restored) {}
+    private record Session(String name, DebeziumOffset restored) {}
 }

@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlHybridSplitState;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
@@ -131,7 +131,7 @@ class MySqlTypedCheckpointTest {
         return (MySqlSnapshotSplit) SERIALIZER.deserialize(SERIALIZER.getVersion(), SERIALIZER.serialize(split));
     }
 
-    private static BinlogOffset offset(long position) {
-        return new BinlogOffset(Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", position));
+    private static DebeziumOffset offset(long position) {
+        return new DebeziumOffset(Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", position));
     }
 }

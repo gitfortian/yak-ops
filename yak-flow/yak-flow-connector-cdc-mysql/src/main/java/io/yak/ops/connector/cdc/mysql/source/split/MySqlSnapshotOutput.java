@@ -1,6 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowData;
 import io.yak.ops.core.data.RowKind;
@@ -11,11 +11,11 @@ import java.util.Objects;
 
 /** Immutable normalized chunk retained in a completed checkpoint before its first external write. */
 public final class MySqlSnapshotOutput {
-    private final BinlogOffset low;
-    private final BinlogOffset high;
+    private final DebeziumOffset low;
+    private final DebeziumOffset high;
     private final List<TableRecord> rows;
 
-    public MySqlSnapshotOutput(BinlogOffset low, BinlogOffset high, List<TableRecord> rows) {
+    public MySqlSnapshotOutput(DebeziumOffset low, DebeziumOffset high, List<TableRecord> rows) {
         this.low = Objects.requireNonNull(low, "low");
         this.high = Objects.requireNonNull(high, "high");
         if (low.compareTo(high) > 0) {
@@ -42,11 +42,11 @@ public final class MySqlSnapshotOutput {
         return new TableRecord(row.tableId(), RowKind.INSERT, new SnapshotRow(row.row()));
     }
 
-    public BinlogOffset low() {
+    public DebeziumOffset low() {
         return low;
     }
 
-    public BinlogOffset high() {
+    public DebeziumOffset high() {
         return high;
     }
 

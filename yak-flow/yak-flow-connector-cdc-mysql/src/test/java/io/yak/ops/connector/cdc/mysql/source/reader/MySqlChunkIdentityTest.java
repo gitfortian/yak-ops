@@ -3,7 +3,7 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
@@ -69,7 +69,7 @@ class MySqlChunkIdentityTest {
 
     private static BinlogEvent change(TableRecord... rows) {
         return new BinlogEvent(List.of(rows),
-                new BinlogOffset(Map.of("server", "shop"),
+                new DebeziumOffset(Map.of("server", "shop"),
                         Map.of("file", "mysql-bin.000001", "pos", 120L)));
     }
 }

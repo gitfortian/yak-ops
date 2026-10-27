@@ -1,7 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners;
 
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
@@ -26,8 +26,8 @@ public final class MySqlHybridSplitAssigner
     private final MySqlSnapshotSplitAssigner snapshots;
     private final MySqlHybridBinlogSplitAssigner binlog;
     private MySqlHybridEnumeratorState.Phase phase;
-    private BinlogOffset low;
-    private BinlogOffset high;
+    private DebeziumOffset low;
+    private DebeziumOffset high;
     private Long handoffCheckpointId;
     private final Map<String, FinishedSnapshotSplitInfo> completed = new LinkedHashMap<>();
     private int nextTableIndex;
@@ -83,7 +83,7 @@ public final class MySqlHybridSplitAssigner
         return snapshots.next();
     }
 
-    public void captureLow(BinlogOffset offset) {
+    public void captureLow(DebeziumOffset offset) {
         if (phase != MySqlHybridEnumeratorState.Phase.BOOTSTRAP) {
             if (!Objects.equals(low, offset)) {
                 throw new IllegalStateException("Conflicting MySQL hybrid low watermark");
@@ -175,7 +175,7 @@ public final class MySqlHybridSplitAssigner
         return phase == MySqlHybridEnumeratorState.Phase.SNAPSHOT && snapshots.allFinished();
     }
 
-    public void captureHigh(BinlogOffset offset) {
+    public void captureHigh(DebeziumOffset offset) {
         if (!snapshotComplete()) {
             throw new IllegalStateException("High watermark requires all snapshot splits to finish");
         }
@@ -263,11 +263,11 @@ public final class MySqlHybridSplitAssigner
         return phase;
     }
 
-    public BinlogOffset low() {
+    public DebeziumOffset low() {
         return low;
     }
 
-    public BinlogOffset high() {
+    public DebeziumOffset high() {
         return high;
     }
 

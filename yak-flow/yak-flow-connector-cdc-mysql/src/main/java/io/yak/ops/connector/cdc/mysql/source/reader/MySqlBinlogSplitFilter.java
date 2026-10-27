@@ -1,7 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
@@ -30,7 +30,7 @@ import java.util.Set;
 public final class MySqlBinlogSplitFilter {
 
     /** Completed chunk fence, derived from the versioned persisted Split metadata. */
-    public record FinishedChunk(String splitId, ChunkRange range, BinlogOffset highWatermark) {
+    public record FinishedChunk(String splitId, ChunkRange range, DebeziumOffset highWatermark) {
         public FinishedChunk {
             if (splitId == null || splitId.isBlank()) {
                 throw new IllegalArgumentException("Finished chunk must have a stable split identity");
@@ -44,7 +44,7 @@ public final class MySqlBinlogSplitFilter {
 
     private final Map<TableId, List<FinishedChunk>> completed = new LinkedHashMap<>();
     private final Map<TableId, ChunkColumn> columns = new LinkedHashMap<>();
-    private final Map<TableId, BinlogOffset> maxHighWatermarks = new LinkedHashMap<>();
+    private final Map<TableId, DebeziumOffset> maxHighWatermarks = new LinkedHashMap<>();
     private final Set<TableId> pureBinlogPhaseTables = new HashSet<>();
     private final boolean legacyPrimaryKey;
     private final Set<TableId> schemasWithPrimaryKey = new HashSet<>();
@@ -170,7 +170,7 @@ public final class MySqlBinlogSplitFilter {
                     table,
                     chunks.stream()
                             .map(FinishedChunk::highWatermark)
-                            .max(BinlogOffset::compareTo)
+                            .max(DebeziumOffset::compareTo)
                             .orElseThrow());
             return List.copyOf(chunks);
         });

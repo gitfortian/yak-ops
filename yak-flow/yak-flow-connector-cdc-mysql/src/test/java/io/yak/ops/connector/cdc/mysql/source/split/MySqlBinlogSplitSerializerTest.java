@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsStateSerializer;
 import java.io.IOException;
@@ -25,7 +25,7 @@ class MySqlBinlogSplitSerializerTest {
         original.put("row", 3);
         original.put("snapshot", false);
         original.put("gtids", "uuid:1-20");
-        BinlogOffset offset = new BinlogOffset(Map.of("server", "yak"), original);
+        DebeziumOffset offset = new DebeziumOffset(Map.of("server", "yak"), original);
         byte[] history = {1, 2, 3};
         MySqlBinlogSplit split = new MySqlBinlogSplit("fingerprint", offset, history);
         history[0] = 99;
@@ -58,7 +58,7 @@ class MySqlBinlogSplitSerializerTest {
     @Test
     void rejectsIncompleteRestoredOffsetAndCorruptData() throws Exception {
         MySqlBinlogSplitSerializer codec = new MySqlBinlogSplitSerializer();
-        var offset = new BinlogOffset(Map.of("server", "yak"), Map.of("pos", 5L));
+        var offset = new DebeziumOffset(Map.of("server", "yak"), Map.of("pos", 5L));
         var missingHistory = new MySqlBinlogSplit("fingerprint", offset, new byte[0]);
         assertThrows(IOException.class, () -> codec.deserialize(1, codec.serialize(missingHistory)));
         assertThrows(IOException.class, () -> codec.deserialize(1, new byte[] {0, 1}));

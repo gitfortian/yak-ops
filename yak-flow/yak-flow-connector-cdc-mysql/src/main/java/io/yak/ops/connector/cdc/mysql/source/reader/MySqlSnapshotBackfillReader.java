@@ -1,8 +1,8 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogEngine;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
@@ -79,7 +79,7 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
                 ? new MySqlChunkBackfill(split, schema, MAX_ROWS, MAX_PAYLOAD_BYTES)
                 : new MySqlChunkBackfill(split.chunkRange(), schema, MAX_ROWS, MAX_PAYLOAD_BYTES);
         try {
-            BinlogOffset low;
+            DebeziumOffset low;
             if (split.chunkRange() == null) {
                 low = watermark();
                 snapshots.open(split);
@@ -113,7 +113,7 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
                 }
             }
             afterSnapshot.call();
-            BinlogOffset high = watermark();
+            DebeziumOffset high = watermark();
             if (low.compareTo(high) > 0) {
                 throw new IllegalStateException("MySQL snapshot watermarks moved backwards");
             }
@@ -164,7 +164,7 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
         }
     }
 
-    private BinlogOffset watermark() throws SQLException {
+    private DebeziumOffset watermark() throws SQLException {
         try (Connection connection = config.openSnapshotConnection()) {
             return watermark(connection);
         }
@@ -177,9 +177,9 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
      * visible in both the snapshot and the Low-to-High Binlog interval. Chunk Backfill
      * reconciles those changes; a global read lock is not required to close this window.
      */
-    BinlogOffset openConsistentSnapshot(MySqlSnapshotSplit split) throws SQLException {
+    DebeziumOffset openConsistentSnapshot(MySqlSnapshotSplit split) throws SQLException {
         checkCancelled();
-        BinlogOffset low;
+        DebeziumOffset low;
         try {
             low = watermark();
             afterLowWatermark.call();
@@ -221,7 +221,7 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
         }
     }
 
-    private BinlogOffset watermark(Connection connection) throws SQLException {
+    private DebeziumOffset watermark(Connection connection) throws SQLException {
         checkCancelled();
         try (Statement statement = connection.createStatement()) {
             watermarkStatement = statement;
@@ -245,7 +245,7 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
                 long position = status.getLong(2);
                 if (file == null || file.isBlank() || position < 1)
                     throw new SQLException("Invalid MySQL Binlog boundary");
-                return new BinlogOffset(partition, Map.of("file", file, "pos", position));
+                return new DebeziumOffset(partition, Map.of("file", file, "pos", position));
             }
         } finally {
             watermarkStatement = null;

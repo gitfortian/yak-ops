@@ -5,7 +5,6 @@ import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.RecordChangeEvent;
 import io.debezium.engine.format.ChangeEventFormat;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.reader.BinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlDebeziumRecordConverter;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
@@ -48,7 +47,7 @@ public final class MySqlBinlogEngine implements AutoCloseable {
     private String sessionId;
     private volatile boolean stopped;
     private boolean started;
-    private BinlogOffset lastQueuedOffset;
+    private DebeziumOffset lastQueuedOffset;
     private boolean awaitingSchemaSnapshot;
     private final Set<TableId> bootstrapTables = new HashSet<>();
 

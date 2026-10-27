@@ -226,7 +226,7 @@ class MySqlSchemaChangeConverterTest {
         var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
         SourceRecord row = insertWithNote(101L);
         assertEquals(SOURCE, converter.schemaMismatch(row));
-        var previous = new io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset(
+        var previous = new io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset(
                 Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
         BinlogEvent transition = converter.reconcileRowSchema(row, previous);
         assertEquals(previous, transition.offset());
@@ -242,7 +242,7 @@ class MySqlSchemaChangeConverterTest {
     void incompleteRowMetadataFailsClosedBeforeUpdatingSourceSchema() {
         var converter = new MySqlDebeziumRecordConverter(Map.of(SOURCE, ORIGINAL), Map.of(), true);
         SourceRecord row = insertWithNote(101L, false);
-        var previous = new io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset(
+        var previous = new io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset(
                 Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
         assertThrows(UnsupportedOperationException.class, () -> converter.reconcileRowSchema(row, previous));
         assertEquals(SOURCE, converter.schemaMismatch(row));

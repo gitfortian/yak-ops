@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -101,8 +101,8 @@ class MySqlTypedKeyedBackfillTest {
         return new TableRecord(TABLE, kind, GenericRowData.of(tenant, id, bucket, payload));
     }
 
-    private static BinlogOffset offset(long position) {
-        return new BinlogOffset(
+    private static DebeziumOffset offset(long position) {
+        return new DebeziumOffset(
                 Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", position));
     }
 

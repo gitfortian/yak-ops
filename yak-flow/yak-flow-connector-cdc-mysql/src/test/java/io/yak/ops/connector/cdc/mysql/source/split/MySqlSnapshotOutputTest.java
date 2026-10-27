@@ -2,7 +2,7 @@ package io.yak.ops.connector.cdc.mysql.source.split;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlHybridSplitState;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
@@ -170,7 +170,7 @@ class MySqlSnapshotOutputTest {
                 new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(2L, "second")))));
     }
     private static MySqlSnapshotSplit range() { return new MySqlSnapshotSplit("chunk", "fp", TABLE, null, null, null); }
-    private static BinlogOffset offset(long pos) { return new BinlogOffset(Map.of("server","shop"), Map.of("file","mysql-bin.000001","pos",pos)); }
+    private static DebeziumOffset offset(long pos) { return new DebeziumOffset(Map.of("server","shop"), Map.of("file","mysql-bin.000001","pos",pos)); }
     private static MySqlSnapshotSplit roundTrip(MySqlSnapshotSplit split) throws Exception {
         var serializer = new MySqlHybridSplitSerializer();
         return (MySqlSnapshotSplit) serializer.deserialize(serializer.getVersion(), serializer.serialize(split));

@@ -1,6 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
@@ -85,7 +85,7 @@ public final class MySqlDebeziumRecordConverter {
         if (partition == null || partition.isEmpty() || offset == null || offset.isEmpty()) {
             return null;
         }
-        BinlogOffset progress = new BinlogOffset(asMap(partition), asMap(offset));
+        DebeziumOffset progress = new DebeziumOffset(asMap(partition), asMap(offset));
         Object value = source.value();
         if (value == null || (source.topic() != null && source.topic().startsWith("__debezium-heartbeat"))) {
             return new BinlogEvent(List.of(), progress);
@@ -212,7 +212,7 @@ public final class MySqlDebeziumRecordConverter {
      * The emitted schema event retains the preceding offset until its coordinator
      * acknowledgment, protecting the row that revealed the transition.
      */
-    public BinlogEvent reconcileRowSchema(SourceRecord source, BinlogOffset preceding) {
+    public BinlogEvent reconcileRowSchema(SourceRecord source, DebeziumOffset preceding) {
         Objects.requireNonNull(preceding, "preceding CDC offset");
         if (!evolve || !(source.value() instanceof Struct envelope)) {
             throw new IllegalStateException("CDC schema reconciliation requires a Debezium row");
@@ -267,7 +267,7 @@ public final class MySqlDebeziumRecordConverter {
         if (previous.equals(next)) {
             throw new UnsupportedOperationException("MySQL CDC needs structured DDL metadata for this schema change");
         }
-        BinlogOffset position = new BinlogOffset(asMap(source.sourcePartition()), asMap(source.sourceOffset()));
+        DebeziumOffset position = new DebeziumOffset(asMap(source.sourcePartition()), asMap(source.sourceOffset()));
         SourceSchemaChange change =
                 new SourceSchemaChange(MySqlSchemaChangeConverter.eventId(position, table), table, previous, next);
         physicalSchemas.put(table, next);

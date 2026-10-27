@@ -3,7 +3,7 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
@@ -108,7 +108,7 @@ class MySqlChunkBackfillTest {
     }
 
     private static BinlogEvent change(TableRecord... rows) {
-        return new BinlogEvent(List.of(rows), new BinlogOffset(
+        return new BinlogEvent(List.of(rows), new DebeziumOffset(
                 Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", 100L)));
     }
 

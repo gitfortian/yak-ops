@@ -1,7 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -21,8 +21,8 @@ public record MySqlHybridEnumeratorState(
         Phase phase,
         MySqlHybridBinlogSplit pendingBinlog,
         boolean binlogAssigned,
-        BinlogOffset lowWatermark,
-        BinlogOffset highWatermark,
+        DebeziumOffset lowWatermark,
+        DebeziumOffset highWatermark,
         boolean snapshotPlanned,
         int totalSnapshotSplits,
         List<MySqlSnapshotSplit> pendingSnapshots,
@@ -82,9 +82,9 @@ public record MySqlHybridEnumeratorState(
                     || lowWatermark == null) {
                 throw new IllegalArgumentException("Hybrid handoff requires all normalized chunks to be completed");
             }
-            BinlogOffset maximum = finishedSplitInfos.stream()
+            DebeziumOffset maximum = finishedSplitInfos.stream()
                     .map(FinishedSnapshotSplitInfo::highWatermark)
-                    .max(BinlogOffset::compareTo)
+                    .max(DebeziumOffset::compareTo)
                     .orElseThrow();
             if (highWatermark.compareTo(maximum) != 0 || lowWatermark.compareTo(highWatermark) > 0) {
                 throw new IllegalArgumentException("Hybrid coordinator watermarks differ from completed chunks");

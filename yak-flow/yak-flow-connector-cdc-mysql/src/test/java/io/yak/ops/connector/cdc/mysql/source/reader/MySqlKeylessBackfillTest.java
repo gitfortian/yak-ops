@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotRows;
@@ -132,8 +132,8 @@ class MySqlKeylessBackfillTest {
                 () -> buffer.apply(event(row(RowKind.INSERT, 1, "a"), row(RowKind.INSERT, 1, "b"))));
     }
 
-    private static BinlogOffset offset(long position) {
-        return new BinlogOffset(
+    private static DebeziumOffset offset(long position) {
+        return new DebeziumOffset(
                 Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", position));
     }
 
@@ -148,6 +148,6 @@ class MySqlKeylessBackfillTest {
     private static BinlogEvent event(TableRecord... rows) {
         return new BinlogEvent(
                 List.of(rows),
-                new BinlogOffset(Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", 200L)));
+                new DebeziumOffset(Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", 200L)));
     }
 }

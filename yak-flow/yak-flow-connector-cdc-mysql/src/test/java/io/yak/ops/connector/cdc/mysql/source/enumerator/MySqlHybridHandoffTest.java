@@ -3,7 +3,7 @@ package io.yak.ops.connector.cdc.mysql.source.enumerator;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.data.TableId;
@@ -21,8 +21,8 @@ class MySqlHybridHandoffTest {
 
     @Test
     void gatesHandoffAndRestoresCompletedPendingTransition() throws Exception {
-        var low = new BinlogOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
-        var high = new BinlogOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 300L));
+        var low = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
+        var high = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 300L));
         var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fingerprint", null);
         assertEquals(MySqlHybridEnumeratorState.Phase.BOOTSTRAP, assigner.phase());
         assertEquals("mysql-binlog", assigner.nextBinlog(0).splitId());
@@ -54,7 +54,7 @@ class MySqlHybridHandoffTest {
 
     @Test
     void checkpointDuringAsyncSnapshotPlanningRestartsPlanFromDurableState() throws Exception {
-        var low = new BinlogOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
+        var low = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
         var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fingerprint", null);
         assigner.nextBinlog(0);
         assigner.captureLow(low);
@@ -73,7 +73,7 @@ class MySqlHybridHandoffTest {
 
     @Test
     void restoresCompletedWatermarksBeforeHandoff() throws Exception {
-        var low = new BinlogOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
+        var low = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
         var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fingerprint", null);
         assigner.nextBinlog(0);
         assigner.captureLow(low);
@@ -90,7 +90,7 @@ class MySqlHybridHandoffTest {
         assertEquals(MySqlHybridEnumeratorState.Phase.SNAPSHOT, restored.phase());
         assertTrue(restored.snapshotComplete());
         restored.captureHigh(
-                new BinlogOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 200L)));
+                new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 200L)));
         assertEquals(MySqlHybridEnumeratorState.Phase.HANDOFF, restored.phase());
     }
 
@@ -105,6 +105,6 @@ class MySqlHybridHandoffTest {
             MySqlSnapshotSplit split, long position) {
         return new io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo(split.tableId(),
                 split.splitId(), split.lowerInclusive(), split.upperExclusive(),
-                new BinlogOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", position)));
+                new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", position)));
     }
 }

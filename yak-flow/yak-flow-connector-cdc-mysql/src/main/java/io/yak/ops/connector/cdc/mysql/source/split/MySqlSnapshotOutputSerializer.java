@@ -1,6 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
@@ -71,8 +71,8 @@ final class MySqlSnapshotOutputSerializer {
     }
 
     private static MySqlSnapshotOutput readRows(DataInputStream in, TableId table, boolean packed) throws IOException {
-        BinlogOffset low = BinlogOffset.readFrom(in);
-        BinlogOffset high = BinlogOffset.readFrom(in);
+        DebeziumOffset low = DebeziumOffset.readFrom(in);
+        DebeziumOffset high = DebeziumOffset.readFrom(in);
         int marker = in.readInt();
         if (marker == -1 && packed) {
             int runs = count(in, 100_000);

@@ -1,205 +1,290 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.yak.ops.connector.cdc.mysql.source.offset;
 
 import io.debezium.connector.mysql.gtid.MySqlGtidSet;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.util.Collections;
-import java.util.LinkedHashMap;
+import java.io.Serializable;
 import java.util.Map;
 import java.util.Objects;
+import org.apache.kafka.connect.errors.ConnectException;
 
 /**
- * Kafka Connect source partition and offset for one delivered MySQL Binlog event.
+ * A structure describes a fine grained offset in a binlog event including binlog position and gtid
+ * set etc.
  *
- * <p>Offsets include finer-grained Debezium event/row positions, not only the Binlog file
- * and byte position. An immutable copy is checkpointed after downstream emission.
+ * <p>This structure can also be used to deal the binlog event in transaction, a transaction may
+ * contain multiple change events, and each change event may contain multiple rows. When restart
+ * from a specific {@link BinlogOffset}, we need to skip the processed change events and the
+ * processed rows.
  */
-public record BinlogOffset(Map<String, Object> partition, Map<String, Object> position)
-        implements Comparable<BinlogOffset>, java.io.Serializable {
+public class BinlogOffset implements Comparable<BinlogOffset>, Serializable {
 
-    public BinlogOffset {
-        partition = immutable(Objects.requireNonNull(partition, "partition"));
-        position = immutable(Objects.requireNonNull(position, "position"));
-        if (partition.isEmpty() || position.isEmpty()) {
-            throw new IllegalArgumentException("MySQL Binlog offset requires a source partition and position");
-        }
+    private static final long serialVersionUID = 1L;
+
+    public static final String BINLOG_FILENAME_OFFSET_KEY = "file";
+    public static final String BINLOG_POSITION_OFFSET_KEY = "pos";
+    public static final String EVENTS_TO_SKIP_OFFSET_KEY = "event";
+    public static final String ROWS_TO_SKIP_OFFSET_KEY = "row";
+    public static final String GTID_SET_KEY = "gtids";
+    public static final String TIMESTAMP_KEY = "ts_sec";
+    public static final String SERVER_ID_KEY = "server_id";
+    public static final String OFFSET_KIND_KEY = "kind";
+
+    private final Map<String, String> offset;
+
+    // ------------------------------- Builders --------------------------------
+
+    /** Create a {@link BinlogOffsetBuilder}. */
+    public static BinlogOffsetBuilder builder() {
+        return new BinlogOffsetBuilder();
     }
 
-    /**
-     * Orders the offsets of the same Debezium source for snapshot backfill and binlog filtering.
-     *
-     * <p>GTID sets are compared with Debezium's GTID implementation. When both sets identify
-     * the same completed transactions, file and event positions distinguish records within
-     * the transaction. File-name rotation follows the ordering used by Flink CDC's BinlogOffset.
-     *
-     * @throws IllegalArgumentException if the partitions differ or the offsets cannot be ordered
-     */
-    @Override
-    public int compareTo(BinlogOffset other) {
-        Objects.requireNonNull(other, "other");
-        if (!partition.equals(other.partition)) {
-            throw new IllegalArgumentException("Cannot compare offsets from different MySQL source partitions");
-        }
-
-        String leftGtids = text(position, "gtids");
-        String rightGtids = text(other.position, "gtids");
-        if (leftGtids != null && rightGtids != null) {
-            MySqlGtidSet leftSet = new MySqlGtidSet(leftGtids);
-            MySqlGtidSet rightSet = new MySqlGtidSet(rightGtids);
-            if (!leftSet.equals(rightSet)) {
-                boolean leftWithinRight = leftSet.isContainedWithin(rightSet);
-                boolean rightWithinLeft = rightSet.isContainedWithin(leftSet);
-                if (leftWithinRight && !rightWithinLeft) {
-                    return -1;
-                }
-                if (rightWithinLeft && !leftWithinRight) {
-                    return 1;
-                }
-                throw new IllegalArgumentException("Incomparable MySQL GTID sets");
-            }
-        }
-
-        String leftFile = text(position, "file");
-        String rightFile = text(other.position, "file");
-        if (leftFile == null || rightFile == null) {
-            if (leftFile != null || rightFile != null || leftGtids == null || rightGtids == null) {
-                throw new IllegalArgumentException("Comparable MySQL offsets require matching position metadata");
-            }
-            return compareEventRow(position, other.position);
-        }
-
-        // MySQL binlog names can change digit widths at a rotation boundary (e.g. .9 -> .10).
-        int fileOrder = leftFile.length() == rightFile.length()
-                ? leftFile.compareToIgnoreCase(rightFile)
-                : Integer.compare(leftFile.length(), rightFile.length());
-        if (fileOrder != 0) {
-            return fileOrder;
-        }
-        int positionOrder = Long.compare(requiredPosition(position), requiredPosition(other.position));
-        return positionOrder != 0 ? positionOrder : compareEventRow(position, other.position);
+    /** Create offset from binlog filename and position. */
+    public static BinlogOffset ofBinlogFilePosition(String filename, long position) {
+        return builder().setBinlogFilePosition(filename, position).build();
     }
 
-    private static int compareEventRow(Map<String, Object> left, Map<String, Object> right) {
-        int eventOrder = Long.compare(number(left, "event"), number(right, "event"));
-        return eventOrder != 0 ? eventOrder : Long.compare(number(left, "row"), number(right, "row"));
+    /** Create offset from GTID set. */
+    public static BinlogOffset ofGtidSet(String gtidSet) {
+        return builder().setBinlogFilePosition("", 0).setGtidSet(gtidSet).build();
     }
 
-    private static String text(Map<String, Object> offset, String key) {
-        Object value = offset.get(key);
-        return value instanceof String text && !text.isBlank() ? text : null;
+    /** Create offset which represents the earliest accessible binlog offset. */
+    public static BinlogOffset ofEarliest() {
+        return builder().setOffsetKind(BinlogOffsetKind.EARLIEST).build();
     }
 
-    private static long requiredPosition(Map<String, Object> offset) {
-        if (!offset.containsKey("pos")) {
-            throw new IllegalArgumentException("MySQL binlog offset has no file position");
+    /** Create offset which represents the latest offset at the point of access. */
+    public static BinlogOffset ofLatest() {
+        return builder().setOffsetKind(BinlogOffsetKind.LATEST).build();
+    }
+
+    /** Create offset specified by a timestamp in second. */
+    public static BinlogOffset ofTimestampSec(long timestampSec) {
+        return builder()
+                .setOffsetKind(BinlogOffsetKind.TIMESTAMP)
+                .setTimestampSec(timestampSec)
+                .build();
+    }
+
+    public static BinlogOffset ofNonStopping() {
+        return builder().setOffsetKind(BinlogOffsetKind.NON_STOPPING).build();
+    }
+
+    public BinlogOffset(Map<String, String> offset) {
+        this.offset = offset;
+    }
+
+    // ------------------------------ Field getters -----------------------------
+
+    public Map<String, String> getOffset() {
+        return offset;
+    }
+
+    public String getFilename() {
+        return offset.get(BINLOG_FILENAME_OFFSET_KEY);
+    }
+
+    public long getPosition() {
+        return longOffsetValue(offset, BINLOG_POSITION_OFFSET_KEY);
+    }
+
+    public long getRestartSkipEvents() {
+        return longOffsetValue(offset, EVENTS_TO_SKIP_OFFSET_KEY);
+    }
+
+    public long getRestartSkipRows() {
+        return longOffsetValue(offset, ROWS_TO_SKIP_OFFSET_KEY);
+    }
+
+    public String getGtidSet() {
+        return offset.get(GTID_SET_KEY);
+    }
+
+    public long getTimestampSec() {
+        return longOffsetValue(offset, TIMESTAMP_KEY);
+    }
+
+    public Long getServerId() {
+        return longOffsetValue(offset, SERVER_ID_KEY);
+    }
+
+    public BinlogOffsetKind getOffsetKind() {
+        if (offset.get(OFFSET_KIND_KEY) == null) {
+            return null;
         }
-        return number(offset, "pos");
+        return BinlogOffsetKind.valueOf(offset.get(OFFSET_KIND_KEY));
     }
 
-    private static long number(Map<String, Object> offset, String key) {
-        Object value = offset.get(key);
-        if (value == null && !offset.containsKey(key)) {
+    private long longOffsetValue(Map<String, ?> values, String key) {
+        Object obj = values.get(key);
+        if (obj == null) {
             return 0L;
         }
-        if (!(value instanceof Number number)) {
-            throw new IllegalArgumentException("Invalid MySQL binlog offset field: " + key);
+        if (obj instanceof Number) {
+            return ((Number) obj).longValue();
         }
-        return number.longValue();
+        try {
+            return Long.parseLong(obj.toString());
+        } catch (NumberFormatException e) {
+            throw new ConnectException(
+                    "Source offset '" + key + "' parameter value " + obj + " could not be converted to a long");
+        }
     }
 
-    private static Map<String, Object> immutable(Map<String, ?> values) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        values.forEach((key, value) -> {
-            if (key == null || key.isBlank()) {
-                throw new IllegalArgumentException("MySQL offset keys must be nonblank");
+    // ---------------------- Comparing BinlogOffset ----------------------
+
+    /**
+     * This method is inspired by {@link io.debezium.relational.history.HistoryRecordComparator}.
+     */
+    @Override
+    public int compareTo(BinlogOffset that) {
+        // the NON_STOPPING is the max offset
+        if (that.getOffsetKind() == BinlogOffsetKind.NON_STOPPING
+                && this.getOffsetKind() == BinlogOffsetKind.NON_STOPPING) {
+            return 0;
+        }
+        if (this.getOffsetKind() == BinlogOffsetKind.NON_STOPPING) {
+            return 1;
+        }
+        if (that.getOffsetKind() == BinlogOffsetKind.NON_STOPPING) {
+            return -1;
+        }
+
+        String gtidSetStr = this.getGtidSet();
+        String targetGtidSetStr = that.getGtidSet();
+        if (targetGtidSetStr != null && !targetGtidSetStr.isEmpty()) {
+            // The target offset uses GTIDs, so we ideally compare using GTIDs ...
+            if (gtidSetStr != null && !gtidSetStr.isEmpty()) {
+                // Both have GTIDs, so base the comparison entirely on the GTID sets.
+                MySqlGtidSet gtidSet = new MySqlGtidSet(gtidSetStr);
+                MySqlGtidSet targetGtidSet = new MySqlGtidSet(targetGtidSetStr);
+                if (gtidSet.equals(targetGtidSet)) {
+                    long restartSkipEvents = this.getRestartSkipEvents();
+                    long targetRestartSkipEvents = that.getRestartSkipEvents();
+                    if (restartSkipEvents != targetRestartSkipEvents) {
+                        return Long.compare(restartSkipEvents, targetRestartSkipEvents);
+                    }
+                    // The completed events are the same, so compare the row number ...
+                    return Long.compare(this.getRestartSkipRows(), that.getRestartSkipRows());
+                }
+                // The GTIDs are not an exact match, so figure out if this is a subset of the target
+                // offset
+                // ...
+                return gtidSet.isContainedWithin(targetGtidSet) ? -1 : 1;
             }
-            if (value != null
-                    && !(value instanceof String)
-                    && !(value instanceof Number)
-                    && !(value instanceof Boolean)) {
-                throw new IllegalArgumentException("Unsupported MySQL offset field type: " + key);
-            }
-            result.put(key, value);
-        });
-        return Collections.unmodifiableMap(result);
-    }
-
-    public void writeTo(DataOutputStream out) throws IOException {
-        writeMap(out, partition);
-        writeMap(out, position);
-    }
-
-    public static BinlogOffset readFrom(DataInputStream in) throws IOException {
-        return new BinlogOffset(readMap(in), readMap(in));
-    }
-
-    private static void writeMap(DataOutputStream out, Map<String, Object> values) throws IOException {
-        if (values.size() > 128) {
-            throw new IOException("MySQL offset has too many fields");
+            // The target offset did use GTIDs while this did not use GTIDs. So, we assume
+            // that this offset is older since GTIDs are often enabled but rarely disabled.
+            // And if they are disabled,
+            // it is likely that this offset would not include GTIDs as we would be trying
+            // to read the binlog of a
+            // server that no longer has GTIDs. And if they are enabled, disabled, and re-enabled,
+            // per
+            // https://dev.mysql.com/doc/refman/5.7/en/replication-gtids-failover.html all properly
+            // configured slaves that
+            // use GTIDs should always have the complete set of GTIDs copied from the master, in
+            // which case
+            // again we know that this offset not having GTIDs is before the target offset ...
+            return -1;
+        } else if (gtidSetStr != null && !gtidSetStr.isEmpty()) {
+            // This offset has a GTID but the target offset does not, so per the previous paragraph
+            // we
+            // assume that previous
+            // is not at or before ...
+            return 1;
         }
-        out.writeInt(values.size());
-        for (var entry : values.entrySet()) {
-            out.writeUTF(entry.getKey());
-            Object value = entry.getValue();
-            if (value == null) {
-                out.writeByte(0);
-            } else if (value instanceof String text) {
-                out.writeByte(1);
-                out.writeUTF(text);
-            } else if (value instanceof Integer number) {
-                out.writeByte(2);
-                out.writeInt(number);
-            } else if (value instanceof Long number) {
-                out.writeByte(3);
-                out.writeLong(number);
-            } else if (value instanceof Boolean booleanValue) {
-                out.writeByte(4);
-                out.writeBoolean(booleanValue);
-            } else if (value instanceof Short number) {
-                out.writeByte(5);
-                out.writeShort(number);
-            } else if (value instanceof Byte number) {
-                out.writeByte(6);
-                out.writeByte(number);
-            } else if (value instanceof Double number) {
-                out.writeByte(7);
-                out.writeDouble(number);
-            } else if (value instanceof Float number) {
-                out.writeByte(8);
-                out.writeFloat(number);
-            } else {
-                throw new IOException("Unsupported Binlog offset field type: " + entry.getKey());
+
+        // Both offsets are missing GTIDs. Look at the servers ...
+        long serverId = this.getServerId();
+        long targetServerId = that.getServerId();
+
+        if (serverId != targetServerId) {
+            // These are from different servers, and their binlog coordinates are not related. So
+            // the only thing we can do
+            // is compare timestamps, and we have to assume that the server timestamps can be
+            // compared ...
+            long timestamp = this.getTimestampSec();
+            long targetTimestamp = that.getTimestampSec();
+            if (timestamp != 0 && targetTimestamp != 0) {
+                return Long.compare(timestamp, targetTimestamp);
             }
         }
+
+        // First compare the MySQL binlog filenames
+        if (this.getFilename() != null
+                && that.getFilename() != null
+                && this.getFilename().compareToIgnoreCase(that.getFilename()) != 0) {
+            if (this.getFilename().length() != that.getFilename().length()) {
+                return Integer.compare(
+                        this.getFilename().length(), that.getFilename().length());
+            }
+            return this.getFilename().compareToIgnoreCase(that.getFilename());
+        }
+
+        // The filenames are the same, so compare the positions
+        if (this.getPosition() != that.getPosition()) {
+            return Long.compare(this.getPosition(), that.getPosition());
+        }
+
+        // The positions are the same, so compare the completed events in the transaction ...
+        if (this.getRestartSkipEvents() != that.getRestartSkipEvents()) {
+            return Long.compare(this.getRestartSkipEvents(), that.getRestartSkipEvents());
+        }
+
+        // The completed events are the same, so compare the row number ...
+        return Long.compare(this.getRestartSkipRows(), that.getRestartSkipRows());
     }
 
-    private static Map<String, Object> readMap(DataInputStream in) throws IOException {
-        int size = in.readInt();
-        if (size < 0 || size > 128) {
-            throw new IOException("Invalid MySQL Binlog offset field count");
+    public boolean isAtOrBefore(BinlogOffset that) {
+        return this.compareTo(that) <= 0;
+    }
+
+    public boolean isBefore(BinlogOffset that) {
+        return this.compareTo(that) < 0;
+    }
+
+    public boolean isAtOrAfter(BinlogOffset that) {
+        return this.compareTo(that) >= 0;
+    }
+
+    public boolean isAfter(BinlogOffset that) {
+        return this.compareTo(that) > 0;
+    }
+
+    @Override
+    public String toString() {
+        return offset.toString();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
         }
-        Map<String, Object> result = new LinkedHashMap<>();
-        for (int index = 0; index < size; index++) {
-            String key = in.readUTF();
-            Object value =
-                    switch (in.readUnsignedByte()) {
-                        case 0 -> null;
-                        case 1 -> in.readUTF();
-                        case 2 -> in.readInt();
-                        case 3 -> in.readLong();
-                        case 4 -> in.readBoolean();
-                        case 5 -> in.readShort();
-                        case 6 -> in.readByte();
-                        case 7 -> in.readDouble();
-                        case 8 -> in.readFloat();
-                        default -> throw new IOException("Unsupported MySQL offset field encoding");
-                    };
-            if (result.containsKey(key)) {
-                throw new IOException("Duplicate MySQL offset field");
-            }
-            result.put(key, value);
+        if (!(o instanceof BinlogOffset)) {
+            return false;
         }
-        return result;
+        BinlogOffset that = (BinlogOffset) o;
+        return offset.equals(that.offset);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(offset);
     }
 }

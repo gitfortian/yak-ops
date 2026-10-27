@@ -1,6 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import java.util.Objects;
 
@@ -12,7 +12,7 @@ import java.util.Objects;
 public final class MySqlCdcSplitState {
 
     private final MySqlBinlogSplit assigned;
-    private BinlogOffset emittedOffset;
+    private DebeziumOffset emittedOffset;
 
     public MySqlCdcSplitState(MySqlBinlogSplit assigned) {
         this.assigned = Objects.requireNonNull(assigned, "assigned");
@@ -23,7 +23,7 @@ public final class MySqlCdcSplitState {
         return assigned.definitionFingerprint();
     }
 
-    public void onEmitted(BinlogOffset offset) {
+    public void onEmitted(DebeziumOffset offset) {
         emittedOffset = Objects.requireNonNull(offset, "offset");
     }
 

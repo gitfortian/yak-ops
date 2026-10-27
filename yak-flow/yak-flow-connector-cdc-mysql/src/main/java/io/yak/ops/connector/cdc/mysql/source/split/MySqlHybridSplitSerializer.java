@@ -1,7 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import io.yak.ops.core.data.TableId;
 import java.io.ByteArrayInputStream;
@@ -93,7 +93,7 @@ public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializ
                             int stage = in.readUnsignedByte();
                             MySqlSnapshotOutput output = null;
                             FinishedSnapshotSplitInfo finished = null;
-                            BinlogOffset finishedHigh = null;
+                            DebeziumOffset finishedHigh = null;
                             int position = 0;
                             if (stage == 1) {
                                 output = version == 2
@@ -101,7 +101,7 @@ public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializ
                                         : MySqlSnapshotOutputSerializer.readCompact(in, table, version >= 5);
                                 position = in.readInt();
                             } else if (stage == 2) {
-                                finishedHigh = BinlogOffset.readFrom(in);
+                                finishedHigh = DebeziumOffset.readFrom(in);
                             } else if (stage != 0) throw new IOException("Unknown snapshot output stage");
                             ChunkRange typed = version >= 4 ? ChunkRangeStateSerializer.read(in) : null;
                             if (finishedHigh != null) {
@@ -115,7 +115,7 @@ public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializ
                             if (phase >= MySqlHybridBinlogSplit.Phase.values().length) {
                                 throw new IOException("Unknown hybrid Binlog phase");
                             }
-                            BinlogOffset high = in.readBoolean() ? BinlogOffset.readFrom(in) : null;
+                            DebeziumOffset high = in.readBoolean() ? DebeziumOffset.readFrom(in) : null;
                             int length = in.readInt();
                             if (length < 0 || length > in.available() || length > MAX_BYTES) {
                                 throw new IOException("Invalid hybrid Binlog state size");
@@ -169,7 +169,7 @@ public final class MySqlHybridSplitSerializer implements SimpleVersionedSerializ
             if (!ids.add(id)) throw new IOException("Duplicate finished snapshot identity");
             Long lower = readLong(in);
             Long upper = readLong(in);
-            BinlogOffset high = BinlogOffset.readFrom(in);
+            DebeziumOffset high = DebeziumOffset.readFrom(in);
             ChunkRange range = typed ? ChunkRangeStateSerializer.read(in) : null;
             result.add(new FinishedSnapshotSplitInfo(table, id, lower, upper, high, range));
         }
