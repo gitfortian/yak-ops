@@ -104,16 +104,18 @@ public final class MySqlCdcSourceBuilder {
 
     /** Shares pipeline measurements with a standalone Binlog source. */
     public MySqlCdcSource build(TableMetrics metrics) {
-        return new MySqlCdcSource(new MySqlCdcSourceConfig(
-                hostname,
-                port,
-                username,
-                password,
-                serverId,
-                topicPrefix,
-                tables,
-                queueCapacity,
-                connectionProperties,
-                chunkKeyColumns), metrics);
+        return new MySqlCdcSource(
+                new MySqlCdcSourceConfig(
+                        hostname,
+                        port,
+                        username,
+                        password,
+                        serverId,
+                        topicPrefix,
+                        tables,
+                        queueCapacity,
+                        connectionProperties,
+                        chunkKeyColumns),
+                metrics);
     }
 }
