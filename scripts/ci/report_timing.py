@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import json
+import re
 import os
 import sys
 from urllib.request import Request, urlopen
@@ -27,6 +28,30 @@ def duration(seconds: int | None) -> str:
     return f"{minutes}m {secs:02d}s" if minutes else f"{secs}s"
 
 
+def classify_failure(log: str) -> str:
+    """Classify failures only when Maven output provides reliable evidence."""
+    patterns = (
+        ("FORMAT", r"Failed to execute goal com\.diffplug\.spotless:"),
+        ("STATIC", r"Failed to execute goal org\.apache\.maven\.plugins:maven-checkstyle-plugin:"),
+        ("COMPILE", r"(?:COMPILATION ERROR|maven-compiler-plugin:.*(?:compile|testCompile))"),
+        ("INTEGRATION_TEST", r"maven-failsafe-plugin:"),
+        ("UNIT_TEST", r"(?:maven-surefire-plugin:.*:test|There are test failures)"),
+        ("INFRASTRUCTURE", r"(?:Could not transfer artifact|PluginResolutionException|No space left on device|Temporary failure in name resolution)"),
+    )
+    for name, expression in patterns:
+        if re.search(expression, log, re.IGNORECASE):
+            return name
+    return "UNKNOWN"
+
+
+def format_failure(log_path: str) -> str:
+    try:
+        with open(log_path, encoding="utf-8", errors="replace") as source:
+            kind = classify_failure(source.read())
+    except OSError:
+        kind = "UNKNOWN"
+    return f"### Backend failure\n\nType: {kind}\n\nReview the first Maven failure and test reports.\n"
+
 def format_report(jobs: list[dict]) -> str:
     completed = [job for job in jobs if job.get("started_at") and job.get("completed_at")]
     completed.sort(key=lambda job: (
@@ -46,6 +71,11 @@ def format_report(jobs: list[dict]) -> str:
         lines.append(f"| {name} | {duration(queue)} | {duration(execution)} | {result} |")
     if not completed:
         lines.append("| No completed jobs | - | - | - |")
+    failures = [job for job in completed if job.get("conclusion") == "failure"
+                and job.get("name") != "PR Required Checks"]
+    if failures:
+        first = min(failures, key=lambda job: job["completed_at"])
+        lines.extend(["", f"First failed job: {first.get('name', 'unknown')}"])
     return "\n".join(lines) + "\n"
 
 
@@ -69,6 +99,13 @@ def fetch_jobs(repository: str, run_id: str, token: str) -> list[dict]:
 
 
 def main() -> None:
+    if len(sys.argv) == 3 and sys.argv[1] == "--classify":
+        report = format_failure(sys.argv[2])
+        print(report)
+        if os.environ.get("GITHUB_STEP_SUMMARY"):
+            with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
+                output.write(report)
+        return
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not path:
         print("No GitHub Actions summary file; skipping timing report.")

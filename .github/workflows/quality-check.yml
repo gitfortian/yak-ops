@@ -10,8 +10,8 @@ on:
 permissions:
   contents: read
 
-# A single scope classifier runs in existing jobs, not in an extra Actions job.
-# Reusable Release Gate invocations are deliberately treated as full-quality runs.
+# Change selection remains in scope; PR static checks use a separate fast job.
+# Release Gate and main pushes retain their existing full quality requirements.
 env:
   CI_EVENT_NAME: ${{ github.event_name }}
   CI_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -36,6 +36,8 @@ jobs:
       tests: ${{ steps.impact.outputs.tests }}
       modules: ${{ steps.impact.outputs.modules }}
       suites: ${{ steps.impact.outputs.suites }}
+      preflight: ${{ steps.impact.outputs.preflight }}
+      preflight_modules: ${{ steps.impact.outputs.preflight_modules }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -48,6 +50,28 @@ jobs:
           bash scripts/ci/test-detect-changes.sh
           python3 -m unittest discover -s scripts/ci -p 'test_impact.py' -v
           python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+
+  preflight:
+    name: Fast Preflight
+    needs: scope
+    if: github.event_name == 'pull_request' && needs.scope.outputs.preflight == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Check Java formatting and static rules before database tests
+        env:
+          CI_PREFLIGHT_MODULES: ${{ needs.scope.outputs.preflight_modules }}
+        run: |
+          test -n "${CI_PREFLIGHT_MODULES}"
+          bash mvnw -B -ntp -pl "${CI_PREFLIGHT_MODULES}" \
+            com.diffplug.spotless:spotless-maven-plugin:3.10.2:check \
+            org.apache.maven.plugins:maven-checkstyle-plugin:3.6.0:check
 
   backend-quality:
     name: Backend Quality
@@ -70,8 +94,12 @@ jobs:
         env:
           CI_MODULES: ${{ needs.scope.outputs.modules }}
         run: |
+          set -o pipefail
           test -n "${CI_MODULES}"
-          bash mvnw -B -ntp -pl "${CI_MODULES}" -am verify
+          bash mvnw -B -ntp -pl "${CI_MODULES}" -am verify 2>&1 | tee "${RUNNER_TEMP}/backend-quality-maven.log"
+      - name: Classify backend failure
+        if: failure()
+        run: python3 scripts/ci/report_timing.py --classify "${RUNNER_TEMP}/backend-quality-maven.log"
       - name: Upload failed test reports
         if: failure()
         uses: actions/upload-artifact@v4
@@ -192,8 +220,19 @@ jobs:
   # standalone Backend Tests workflow remains available manually and for releases.
   backend-tests:
     name: Affected Backend Tests
-    needs: scope
-    if: github.event_name == 'pull_request' && needs.scope.outputs.tests == 'true'
+    needs: [scope, preflight]
+    # A skipped Preflight must not suppress selected tests (e.g. test-runner changes).
+    if: >-
+      ${{
+        always() &&
+        github.event_name == 'pull_request' &&
+        needs.scope.result == 'success' &&
+        needs.scope.outputs.tests == 'true' &&
+        (
+          (needs.scope.outputs.preflight == 'true' && needs.preflight.result == 'success') ||
+          (needs.scope.outputs.preflight != 'true' && needs.preflight.result == 'skipped')
+        )
+      }}
     uses: ./.github/workflows/backend-tests.yml
     with:
       suite: auto
@@ -208,6 +247,7 @@ jobs:
     if: ${{ always() }}
     needs:
       - scope
+      - preflight
       - backend-quality
       - frontend-quality
       - distribution-quality
@@ -221,6 +261,8 @@ jobs:
         shell: bash
         env:
           SCOPE_RESULT: ${{ needs.scope.result }}
+          SELECT_PREFLIGHT: ${{ needs.scope.outputs.preflight }}
+          PREFLIGHT_RESULT: ${{ needs.preflight.result }}
           SELECT_BACKEND: ${{ needs.scope.outputs.backend }}
           SELECT_FRONTEND: ${{ needs.scope.outputs.frontend }}
           SELECT_DISTRIBUTION: ${{ needs.scope.outputs.distribution }}
@@ -247,6 +289,7 @@ jobs:
             "Release Checks:${SELECT_RELEASE}:${RELEASE_RESULT}"
           )
           if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            checks+=("Fast Preflight:${SELECT_PREFLIGHT}:${PREFLIGHT_RESULT}")
             checks+=("Affected Backend Tests:${SELECT_TESTS}:${BACKEND_TESTS_RESULT}")
           fi
           for check in "${checks[@]}"; do

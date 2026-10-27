@@ -14,6 +14,54 @@ class ImpactTest(unittest.TestCase):
                 self.assertFalse(any(check[key] for key in ("backend", "frontend", "distribution", "release")))
                 self.assertEqual(set(), check["suites"])
 
+    def test_fast_preflight_direct_modules(self):
+        source = "yak-flow/yak-flow-connector-cdc-mysql/src/main/java/Source.java"
+        result = impact.analyze([source])
+        self.assertTrue(result["preflight"])
+        self.assertEqual({"yak-flow/yak-flow-connector-cdc-mysql"}, result["preflight_modules"])
+        self.assertIn("yak-ops-boot", result["modules"])
+        outputs = dict(line.split("=", 1) for line in impact.outputs([source]).splitlines())
+        self.assertEqual("true", outputs["preflight"])
+
+    def test_fast_preflight_skips_docs_frontend_and_test_only_changes(self):
+        from unittest.mock import patch
+        paths = (
+            ("docs/engineering/note.md", False),
+            ("yak-ops-ui/apps/web/app/App.tsx", False),
+            ("yak-flow/yak-flow-connector-cdc-mysql/src/test/java/SourceTest.java", False),
+            ("scripts/tests/backend_tests.py", False),
+            ("scripts/ci/test_impact.py", False),
+            ("yak-flow/yak-flow-connector-cdc-mysql/src/main/java/Source.java", True),
+            ("yak-flow/yak-flow-connector-cdc-mysql/pom.xml", True),
+            ("yak-ops-bom/pom.xml", False),
+        )
+        with patch.object(impact, "suite_registration_changes", return_value={"cdc-binlog"}):
+            for path, expected in paths:
+                with self.subTest(path=path):
+                    self.assertEqual(expected, impact.analyze([path])["preflight"])
+            self.assertEqual({"cdc-binlog"}, impact.analyze(["scripts/tests/backend_tests.py"])["suites"])
+
+    def test_fast_preflight_full_scope_for_build_and_workflow(self):
+        for path in ("pom.xml", "tools/maven/checkstyle.xml",
+                     ".github/workflows/quality-check.yml", ".editorconfig"):
+            with self.subTest(path=path):
+                result = impact.analyze([path])
+                self.assertTrue(result["preflight"])
+                self.assertTrue(result["full"])
+                self.assertEqual(set(impact.SUITES), result["suites"])
+                outputs = dict(line.split("=", 1) for line in impact.outputs([path]).splitlines())
+                self.assertEqual("!yak-ops-bom,!yak-ops-ui,!yak-ops-dist", outputs["preflight_modules"])
+        self.assertTrue(impact.analyze([], full=True)["preflight"])
+
+    def test_fast_preflight_union_and_full_precedence(self):
+        java = "yak-flow/yak-flow-runtime/src/main/java/StreamTask.java"
+        frontend = "yak-ops-ui/apps/web/app/App.tsx"
+        selected = impact.analyze([java, frontend])
+        self.assertEqual({"yak-flow/yak-flow-runtime"}, selected["preflight_modules"])
+        full = impact.analyze([java, "pom.xml"])
+        self.assertEqual(set(), full["preflight_modules"])
+        self.assertEqual(set(impact.SUITES), full["suites"])
+
     def test_backend_module_uses_reactor_path(self):
         check = impact.analyze(["yak-ops-common/src/main/java/io/yak/ops/common/enums/common/CommonErrorCode.java"])
         self.assertIn("yak-ops-common", check["modules"])

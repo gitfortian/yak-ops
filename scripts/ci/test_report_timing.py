@@ -22,6 +22,31 @@ class TimingReportTest(unittest.TestCase):
         self.assertIn("3m 20s", report)
         self.assertIn("success", report)
 
+    def test_maven_failure_categories_require_evidence(self):
+        samples = {
+            "FORMAT": "[ERROR] Failed to execute goal com.diffplug.spotless:spotless-maven-plugin:check",
+            "STATIC": "[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:check",
+            "COMPILE": "[ERROR] COMPILATION ERROR :",
+            "UNIT_TEST": "[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.2.5:test",
+            "INTEGRATION_TEST": "[ERROR] Failed to execute goal org.apache.maven.plugins:maven-failsafe-plugin:verify",
+            "INFRASTRUCTURE": "Could not transfer artifact from repository",
+            "UNKNOWN": "Unexpected failure without Maven evidence",
+        }
+        for expected, message in samples.items():
+            with self.subTest(expected=expected):
+                self.assertEqual(expected, subject.classify_failure(message))
+
+    def test_timing_first_failure_ignores_aggregate_gate(self):
+        jobs = [
+            {"name": "Backend Quality", "created_at": "2026-10-23T08:00:00Z",
+             "started_at": "2026-10-23T08:00:01Z", "completed_at": "2026-10-23T08:01:00Z",
+             "conclusion": "failure"},
+            {"name": "PR Required Checks", "created_at": "2026-10-23T08:02:00Z",
+             "started_at": "2026-10-23T08:02:01Z", "completed_at": "2026-10-23T08:02:10Z",
+             "conclusion": "failure"},
+        ]
+        self.assertIn("First failed job: Backend Quality", subject.format_report(jobs))
+
     def test_invalid_and_incomplete_jobs_do_not_crash(self):
         self.assertIsNone(subject.seconds_between("bad", "2026-10-23T08:05:20Z"))
         self.assertIn("No completed jobs", subject.format_report([{"name": "running"}]))
