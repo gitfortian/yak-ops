@@ -645,7 +645,15 @@ public final class MySqlSourceConfig {
 
     public Predicate<io.debezium.relational.TableId> getTableFilter() {
         RelationalTableFilters tableFilters = getMySqlConnectorConfig().getTableFilters();
-        return tableId -> tableFilters.dataCollectionFilter().isIncluded(tableId);
+        List<Pattern> exclusions = excludeTableList == null || excludeTableList.isBlank()
+                ? List.of()
+                : java.util.Arrays.stream(excludeTableList.split(","))
+                        .map(String::trim)
+                        .filter(value -> !value.isEmpty())
+                        .map(Pattern::compile)
+                        .toList();
+        return tableId -> tableFilters.dataCollectionFilter().isIncluded(tableId)
+                && exclusions.stream().noneMatch(pattern -> pattern.matcher(tableId.toString()).matches());
     }
 
     public Properties getJdbcProperties() {
