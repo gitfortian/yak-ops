@@ -19,7 +19,7 @@ package io.yak.ops.connector.cdc.mysql.source.utils;
 
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 
-import io.debezium.util.SchemaNameAdjuster;
+import io.debezium.schema.SchemaNameAdjuster;
 import org.apache.kafka.connect.data.Struct;
 
 import java.math.BigDecimal;
