@@ -134,19 +134,18 @@ class MySqlTypedSnapshotAssignmentTest {
                         new Column("payload", LogicalTypes.INTEGER)),
                 List.of());
         var planner = splitter(url, keyless, "bucket");
-        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), FINGERPRINT, null);
+        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
         assigner.nextBinlog(0);
         assigner.captureLow(offset(100));
-        MySqlSnapshotSplit first = planner.planNext(ORDERS, FINGERPRINT, 0, 0, null);
+        MySqlSnapshotSplit first = planner.planNext(ORDERS, 0, 0, null);
         assertEquals(new BigDecimal("9223372036854775808.00000000"), first.chunkRange().end());
         var cursor = new ChunkRange(
                 ORDERS, "bucket", LogicalTypeRoot.DECIMAL, first.chunkRange().end(), null);
         assigner.appendPlan(first, 1);
         var saved = (MySqlHybridEnumeratorState) SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize((MySqlHybridEnumeratorState) assigner.snapshotState(9)));
-        var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), FINGERPRINT, saved);
-        MySqlSnapshotSplit last = planner.planNext(
-                ORDERS, FINGERPRINT, restored.nextTableIndex(), restored.nextChunkIndex(),
+        var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), saved);
+        MySqlSnapshotSplit last = planner.planNext(ORDERS, restored.nextTableIndex(), restored.nextChunkIndex(),
                 restored.nextChunkRange());
         assertEquals(cursor.start(), last.chunkRange().start());
         assertNull(last.chunkRange().end());
@@ -164,17 +163,14 @@ class MySqlTypedSnapshotAssignmentTest {
                         new Column("bucket", LogicalTypes.INTEGER.copy(false))),
                 List.of("id"));
         var planner = splitter(url, schema, "bucket");
-        assertThrows(IllegalArgumentException.class, () -> planner.planNext(
-                ORDERS, FINGERPRINT, 0, 1,
+        assertThrows(IllegalArgumentException.class, () -> planner.planNext(ORDERS, 0, 1,
                 new ChunkRange(ORDERS, "id", LogicalTypeRoot.BIGINT, 2L, null)));
-        assertThrows(IllegalArgumentException.class, () -> planner.planNext(
-                ORDERS, FINGERPRINT, 0, 1,
+        assertThrows(IllegalArgumentException.class, () -> planner.planNext(ORDERS, 0, 1,
                 new ChunkRange(new TableId("other", null, "orders"), "bucket", LogicalTypeRoot.INTEGER, 2L, null)));
         assertThrows(IllegalArgumentException.class,
-                () -> planner.planNext(ORDERS, FINGERPRINT, 0, 1, null));
+                () -> planner.planNext(ORDERS, 0, 1, null));
         assertThrows(IllegalArgumentException.class,
-                () -> planner.planNext(
-                        ORDERS, FINGERPRINT, 0, 0,
+                () -> planner.planNext(ORDERS, 0, 0,
                         new ChunkRange(ORDERS, "bucket", LogicalTypeRoot.INTEGER, 2L, null)));
     }
 
