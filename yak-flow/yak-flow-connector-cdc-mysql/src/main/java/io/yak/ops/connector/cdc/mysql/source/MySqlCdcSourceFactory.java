@@ -20,7 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Creates a hybrid MySQL Source from direct connection and replication settings. */
+/** Creates an initial Snapshot + Binlog Source or a latest-position Binlog Source. */
 @AutoService(TableSourceFactory.class)
 public final class MySqlCdcSourceFactory implements TableSourceFactory {
     @Override
@@ -34,6 +34,7 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
                 .optional(
                         MySqlCdcSourceOptions.CHUNK_KEY_COLUMN,
                         Conditions.notBlank(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN))
+                .optional(MySqlCdcSourceOptions.STARTUP_MODE)
                 .build();
     }
 
@@ -73,8 +74,23 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
 
     @Override
     public void validateSchema(ReadonlyConfig options, TableSchema schema) {
+        StartupMode startupMode = StartupMode.from(options.get(MySqlCdcSourceOptions.STARTUP_MODE));
         String selected = options.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN);
-        ChunkUtils.requireSupportedSnapshot(schema, selected);
+        if (startupMode == StartupMode.INITIAL) {
+            ChunkUtils.requireSupportedSnapshot(schema, selected);
+            return;
+        }
+        if (selected != null) {
+            throw new IllegalArgumentException("Snapshot Chunk Key is not supported for latest-offset startup");
+        }
+        if (schema.primaryKeys().isEmpty()) {
+            throw new IllegalArgumentException("Latest-offset MySQL CDC requires a physical primary key");
+        }
+        for (var column : schema.columns()) {
+            if (!column.dataType().isResolved()) {
+                throw new IllegalArgumentException("MySQL CDC requires resolved source column types");
+            }
+        }
     }
 
     @Override
@@ -89,6 +105,7 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
         }
         var first = contexts.getFirst();
         ReadonlyConfig options = first.options();
+        StartupMode startupMode = StartupMode.from(options.get(MySqlCdcSourceOptions.STARTUP_MODE));
         if (options.get(JdbcConnectionOptions.SSH_ENABLED)) {
             throw new UnsupportedOperationException("MySQL CDC requires a direct MySQL connection");
         }
@@ -124,7 +141,9 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
             builder.table(
                     context.table(), context.schema(), context.options().get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
         }
-        return builder.buildHybrid(options.get(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE), first.metrics());
+        return startupMode == StartupMode.INITIAL
+                ? builder.buildHybrid(options.get(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE), first.metrics())
+                : builder.build();
     }
 
     /**
