@@ -3,7 +3,7 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
@@ -17,7 +17,7 @@ class MySqlRecordDiagnosticsTest {
     @Test
     void binlogDiagnosticsRedactRowsAndOffsets() {
         TableRecord row = tableRecord();
-        BinlogOffset offset = new BinlogOffset(
+        DebeziumOffset offset = new DebeziumOffset(
                 Map.of("server", "internal-server"),
                 Map.of("file", "sensitive-binlog-file", "position", 7654321L));
         BinlogEvent event = new BinlogEvent(List.of(row), offset);

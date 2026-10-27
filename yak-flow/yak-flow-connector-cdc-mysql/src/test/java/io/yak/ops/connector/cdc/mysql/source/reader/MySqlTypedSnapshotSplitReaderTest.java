@@ -205,8 +205,8 @@ class MySqlTypedSnapshotSplitReaderTest {
         return records;
     }
 
-    private static io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset offset(long pos) {
-        return new io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset(
+    private static io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset offset(long pos) {
+        return new io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset(
                 Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", pos));
     }
 

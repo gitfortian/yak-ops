@@ -19,7 +19,7 @@ import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.data.ChangeEventId;
@@ -48,36 +48,36 @@ class MySqlChangeEventIdsTest {
         position.put("event", 3);
         position.put("row", 1L);
         position.put("gtids", "abc:1-2");
-        var first = new BinlogOffset(partition, position);
-        var reversed = new BinlogOffset(
+        var first = new DebeziumOffset(partition, position);
+        var reversed = new DebeziumOffset(
                 Map.of("connector", "mysql", "server", "yak"),
                 Map.of("gtids", "abc:1-2", "row", 1, "event", 3L,
                         "pos", 600, "file", "mysql-bin.000004"));
         assertEquals(MySqlChangeEventIds.fromBinlog(first), MySqlChangeEventIds.fromBinlog(reversed));
         assertNotEquals(MySqlChangeEventIds.fromBinlog(first), MySqlChangeEventIds.fromBinlog(
-                new BinlogOffset(partition, Map.of("file", "mysql-bin.000004",
+                new DebeziumOffset(partition, Map.of("file", "mysql-bin.000004",
                         "pos", 600, "event", 3, "row", 2))));
         assertNotEquals(MySqlChangeEventIds.fromBinlog(first), MySqlChangeEventIds.fromBinlog(
-                new BinlogOffset(partition, Map.of("file", "mysql-bin.000005",
+                new DebeziumOffset(partition, Map.of("file", "mysql-bin.000005",
                         "pos", 600, "event", 3, "row", 1))));
         assertNotEquals(MySqlChangeEventIds.fromBinlog(first), MySqlChangeEventIds.fromBinlog(
-                new BinlogOffset(Map.of("server", "other"), position)));
+                new DebeziumOffset(Map.of("server", "other"), position)));
     }
 
     @Test
     void incompleteOffsetsCannotBePresentedAsReplaySafeIdentities() {
         assertNull(MySqlChangeEventIds.fromBinlog(
-                new BinlogOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.1", "pos", 42))));
+                new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.1", "pos", 42))));
         assertNull(MySqlChangeEventIds.fromBinlog(
-                new BinlogOffset(Map.of("server", "yak"),
+                new DebeziumOffset(Map.of("server", "yak"),
                         Map.of("file", "mysql-bin.1", "pos", 42, "event", 1))));
         assertNull(MySqlChangeEventIds.fromBinlog(
-                new BinlogOffset(Map.of("server", "yak"), Map.of("gtids", "abc:1", "event", 1, "row", 1))));
+                new DebeziumOffset(Map.of("server", "yak"), Map.of("gtids", "abc:1", "event", 1, "row", 1))));
     }
 
     @Test
     void updateImagesShareEventIdentityButKeepDifferentImageIndexesAndCheckpointOrder() throws Exception {
-        BinlogOffset position = position(44, 3);
+        DebeziumOffset position = position(44, 3);
         BinlogEvent update = new BinlogEvent(
                 List.of(row(RowKind.UPDATE_BEFORE, "same"), row(RowKind.UPDATE_AFTER, "same")),
                 position);
@@ -159,9 +159,9 @@ class MySqlChangeEventIdsTest {
 
     @Test
     void binlogRowsShareIdentityAcrossModesAndAdvanceOnlyAfterWholeEvent() throws Exception {
-        BinlogOffset previous = position(42, 1);
-        BinlogOffset offset = position(44, 3);
-        BinlogOffset high = position(50, 5);
+        DebeziumOffset previous = position(42, 1);
+        DebeziumOffset offset = position(44, 3);
+        DebeziumOffset high = position(50, 5);
         List<TableRecord> rows = List.of(row(RowKind.UPDATE_BEFORE, "same"), row(RowKind.UPDATE_AFTER, "same"));
 
         var cdcState = new MySqlCdcSplitState(new MySqlBinlogSplit("task-definition", previous, new byte[] {1}));
@@ -220,7 +220,7 @@ class MySqlChangeEventIdsTest {
         var state = new MySqlCdcSplitState(new MySqlBinlogSplit("task-definition", null, new byte[0]));
         var output = new ArrayList<TableRecord>();
         BinlogEvent update = new BinlogEvent(List.of(row(RowKind.INSERT, "legacy")),
-                new BinlogOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.1", "pos", 8)));
+                new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.1", "pos", 8)));
         new MySqlCdcRecordEmitter(new SchemaChangeHandler(context())).emitRecord(update, output::add, state);
         assertNull(output.getFirst().changeEventId());
         assertEquals(update.offset(), state.checkpoint(new byte[] {1}).offset());
@@ -230,8 +230,8 @@ class MySqlChangeEventIdsTest {
         return new TableRecord(TABLE, kind, GenericRowData.of(value));
     }
 
-    private static BinlogOffset position(long offset, int row) {
-        return new BinlogOffset(Map.of("server", "yak"),
+    private static DebeziumOffset position(long offset, int row) {
+        return new DebeziumOffset(Map.of("server", "yak"),
                 Map.of("file", "mysql-bin.000004", "pos", offset, "event", 1, "row", row));
     }
 

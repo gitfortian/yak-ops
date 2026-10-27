@@ -1,6 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -55,7 +55,7 @@ public final class MySqlBinlogSplitSerializer implements SimpleVersionedSerializ
         }
         try (var in = new DataInputStream(new ByteArrayInputStream(serialized))) {
             String fingerprint = in.readUTF();
-            BinlogOffset offset = in.readBoolean() ? BinlogOffset.readFrom(in) : null;
+            DebeziumOffset offset = in.readBoolean() ? DebeziumOffset.readFrom(in) : null;
             int count = in.readInt();
             if (count < 0 || count > in.available() || count > MAX_STATE_BYTES) {
                 throw new IOException("Invalid MySQL Schema History block length");

@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlBinlogSplitFilter;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlChunkBackfill;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
@@ -110,8 +110,8 @@ class MySqlCdcKeylessBaselineTest {
         assertEquals(prepared, restored);
     }
 
-    private static BinlogOffset offset(long position) {
-        return new BinlogOffset(
+    private static DebeziumOffset offset(long position) {
+        return new DebeziumOffset(
                 Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", position));
     }
 }

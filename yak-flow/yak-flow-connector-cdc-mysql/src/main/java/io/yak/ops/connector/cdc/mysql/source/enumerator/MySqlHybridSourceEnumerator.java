@@ -11,7 +11,7 @@ import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedAckEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlStopSnapshotEvent;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
@@ -253,7 +253,7 @@ public final class MySqlHybridSourceEnumerator
     private void enterHandoff() {
         var high = assigner.finishedSplits().stream()
                 .map(FinishedSnapshotSplitInfo::highWatermark)
-                .max(BinlogOffset::compareTo)
+                .max(DebeziumOffset::compareTo)
                 .orElseThrow();
         assigner.captureHigh(high);
         metrics.phase(generation, TableMetrics.Phase.HANDOFF, false);

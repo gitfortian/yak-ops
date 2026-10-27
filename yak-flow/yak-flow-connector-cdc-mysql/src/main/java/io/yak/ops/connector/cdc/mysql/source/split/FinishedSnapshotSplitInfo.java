@@ -2,7 +2,7 @@ package io.yak.ops.connector.cdc.mysql.source.split;
 
 import io.yak.ops.connector.cdc.base.source.meta.split.FinishedSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.core.data.TableId;
 import java.util.Objects;
 
@@ -24,12 +24,12 @@ public record FinishedSnapshotSplitInfo(
         String splitId,
         Long lowerInclusive,
         Long upperExclusive,
-        BinlogOffset highWatermark,
+        DebeziumOffset highWatermark,
         ChunkRange chunkRange)
-        implements FinishedSnapshotSplit<BinlogOffset> {
+        implements FinishedSnapshotSplit<DebeziumOffset> {
 
     public FinishedSnapshotSplitInfo(
-            TableId tableId, String splitId, Long lowerInclusive, Long upperExclusive, BinlogOffset highWatermark) {
+            TableId tableId, String splitId, Long lowerInclusive, Long upperExclusive, DebeziumOffset highWatermark) {
         this(tableId, splitId, lowerInclusive, upperExclusive, highWatermark, null);
     }
 

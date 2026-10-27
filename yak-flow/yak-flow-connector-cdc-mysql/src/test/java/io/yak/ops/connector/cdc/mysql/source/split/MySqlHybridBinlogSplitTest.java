@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -18,9 +18,9 @@ class MySqlHybridBinlogSplitTest {
     @Test
     void transitionsReturnIndependentStateWithoutMutatingCheckpointHistory() {
         byte[] originalHistory = {1, 2, 3};
-        BinlogOffset low = offset(100L);
-        BinlogOffset high = offset(300L);
-        BinlogOffset emitted = offset(400L);
+        DebeziumOffset low = offset(100L);
+        DebeziumOffset high = offset(300L);
+        DebeziumOffset emitted = offset(400L);
         MySqlHybridBinlogSplit bootstrap = new MySqlHybridBinlogSplit(
                 new MySqlBinlogSplit("fingerprint", null, new byte[0]),
                 MySqlHybridBinlogSplit.Phase.BOOTSTRAP,
@@ -83,13 +83,13 @@ class MySqlHybridBinlogSplitTest {
         assertThrows(IllegalStateException.class, () -> paused.withAnchor(offset(200L), new byte[] {1}));
     }
 
-    private static BinlogOffset offset(long position) {
-        return new BinlogOffset(
+    private static DebeziumOffset offset(long position) {
+        return new DebeziumOffset(
                 Map.of("server", "secret-server"),
                 Map.of("file", "sensitive-binlog-position", "pos", position));
     }
 
-    private static java.util.List<FinishedSnapshotSplitInfo> completed(BinlogOffset high) {
+    private static java.util.List<FinishedSnapshotSplitInfo> completed(DebeziumOffset high) {
         return java.util.List.of(new FinishedSnapshotSplitInfo(
                 new io.yak.ops.core.data.TableId("shop", null, "orders"), "chunk", null, null, high));
     }

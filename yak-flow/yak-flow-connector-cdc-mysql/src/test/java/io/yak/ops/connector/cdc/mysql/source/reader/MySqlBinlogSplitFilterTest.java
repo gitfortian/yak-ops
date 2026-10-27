@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
@@ -172,14 +172,14 @@ class MySqlBinlogSplitFilterTest {
 
     @Test
     void binlogRotationDoesNotDiscardEventsAfterSnapshotHighWatermark() {
-        BinlogOffset high = new BinlogOffset(
+        DebeziumOffset high = new DebeziumOffset(
                 Map.of("server", "shop"), Map.of("file", "mysql-bin.9", "pos", 900L));
         var filter = new MySqlBinlogSplitFilter(
                 Map.of(TABLE, SCHEMA),
                 List.of(new FinishedSnapshotSplitInfo(TABLE, "single", null, null, high)));
         BinlogEvent later = new BinlogEvent(
                 List.of(row(RowKind.INSERT, 1L, "after rotation")),
-                new BinlogOffset(Map.of("server", "shop"), Map.of("file", "mysql-bin.10", "pos", 4L)));
+                new DebeziumOffset(Map.of("server", "shop"), Map.of("file", "mysql-bin.10", "pos", 4L)));
         assertEquals(1, filter.filter(later).records().size());
     }
 

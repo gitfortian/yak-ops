@@ -1,7 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.ChunkRangeStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
@@ -89,8 +89,8 @@ public final class MySqlHybridEnumeratorStateSerializer
             }
             boolean binlogAssigned = in.readBoolean();
             MySqlHybridBinlogSplit pending = binlogAssigned ? null : (MySqlHybridBinlogSplit) readSplit(in);
-            BinlogOffset low = readOffset(in);
-            BinlogOffset high = readOffset(in);
+            DebeziumOffset low = readOffset(in);
+            DebeziumOffset high = readOffset(in);
             boolean planned = in.readBoolean();
             int total = in.readInt();
             List<MySqlSnapshotSplit> pendingSnapshots = readSplits(in);
@@ -179,14 +179,14 @@ public final class MySqlHybridEnumeratorStateSerializer
         return count;
     }
 
-    private static void writeOffset(DataOutputStream out, BinlogOffset offset) throws IOException {
+    private static void writeOffset(DataOutputStream out, DebeziumOffset offset) throws IOException {
         out.writeBoolean(offset != null);
         if (offset != null) {
             offset.writeTo(out);
         }
     }
 
-    private static BinlogOffset readOffset(DataInputStream in) throws IOException {
-        return in.readBoolean() ? BinlogOffset.readFrom(in) : null;
+    private static DebeziumOffset readOffset(DataInputStream in) throws IOException {
+        return in.readBoolean() ? DebeziumOffset.readFrom(in) : null;
     }
 }

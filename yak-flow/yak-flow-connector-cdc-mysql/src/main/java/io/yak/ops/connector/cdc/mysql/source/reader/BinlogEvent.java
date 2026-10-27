@@ -1,6 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.event.SourceSchemaChange;
 import java.util.List;
@@ -12,9 +12,9 @@ import java.util.Objects;
  * <p>UPDATE_BEFORE and UPDATE_AFTER remain adjacent inside a single mailbox emission,
  * so a checkpoint barrier cannot be inserted between the two rows.
  */
-public record BinlogEvent(List<TableRecord> records, BinlogOffset offset, SourceSchemaChange schemaChange) {
+public record BinlogEvent(List<TableRecord> records, DebeziumOffset offset, SourceSchemaChange schemaChange) {
 
-    public BinlogEvent(List<TableRecord> records, BinlogOffset offset) {
+    public BinlogEvent(List<TableRecord> records, DebeziumOffset offset) {
         this(records, offset, null);
     }
 

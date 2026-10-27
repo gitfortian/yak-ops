@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.core.data.TableId;
 import java.io.IOException;
 import java.util.Map;
@@ -30,8 +30,8 @@ class MySqlHybridSplitSerializerTest {
     @Test
     void roundTripsPausedAndRunningBinlogWithSchemaHistory() throws Exception {
         var serializer = new MySqlHybridSplitSerializer();
-        var low = new BinlogOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000010", "pos", 100L));
-        var high = new BinlogOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000010", "pos", 300L));
+        var low = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000010", "pos", 100L));
+        var high = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000010", "pos", 300L));
         var bootstrap = new MySqlHybridBinlogSplit(
                 new MySqlBinlogSplit("fingerprint", null, new byte[0]),
                 MySqlHybridBinlogSplit.Phase.BOOTSTRAP,
@@ -54,7 +54,7 @@ class MySqlHybridSplitSerializerTest {
         assertThrows(IOException.class, () -> serializer.deserialize(serializer.getVersion(), new byte[] {1}));
     }
 
-    private static java.util.List<FinishedSnapshotSplitInfo> completed(BinlogOffset high) {
+    private static java.util.List<FinishedSnapshotSplitInfo> completed(DebeziumOffset high) {
         return java.util.List.of(new FinishedSnapshotSplitInfo(
                 new io.yak.ops.core.data.TableId("shop", null, "orders"), "chunk", null, null, high));
     }

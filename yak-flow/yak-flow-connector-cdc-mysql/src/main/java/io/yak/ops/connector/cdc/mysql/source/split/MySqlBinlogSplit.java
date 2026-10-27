@@ -1,6 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import java.util.Objects;
 
 /**
@@ -15,10 +15,10 @@ public final class MySqlBinlogSplit implements MySqlSplit {
     public static final String ID = "mysql-binlog";
 
     private final String definitionFingerprint;
-    private final BinlogOffset offset;
+    private final DebeziumOffset offset;
     private final byte[] schemaHistory;
 
-    public MySqlBinlogSplit(String definitionFingerprint, BinlogOffset offset, byte[] schemaHistory) {
+    public MySqlBinlogSplit(String definitionFingerprint, DebeziumOffset offset, byte[] schemaHistory) {
         this.definitionFingerprint = Objects.requireNonNull(definitionFingerprint, "definitionFingerprint");
         if (definitionFingerprint.isBlank()) {
             throw new IllegalArgumentException("MySQL source fingerprint must not be blank");
@@ -37,7 +37,7 @@ public final class MySqlBinlogSplit implements MySqlSplit {
         return definitionFingerprint;
     }
 
-    public BinlogOffset offset() {
+    public DebeziumOffset offset() {
         return offset;
     }
 
@@ -45,7 +45,7 @@ public final class MySqlBinlogSplit implements MySqlSplit {
         return schemaHistory.clone();
     }
 
-    public MySqlBinlogSplit withProgress(BinlogOffset position, byte[] history) {
+    public MySqlBinlogSplit withProgress(DebeziumOffset position, byte[] history) {
         return new MySqlBinlogSplit(definitionFingerprint, Objects.requireNonNull(position, "position"), history);
     }
 }

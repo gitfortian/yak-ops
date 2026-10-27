@@ -2,7 +2,7 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.jdbc.database.internal.convert.MySqlTypeConverter;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.event.SourceSchemaChange;
@@ -72,7 +72,7 @@ public final class MySqlSchemaChangeConverter {
         }
     }
 
-    public SourceSchemaChange convert(Struct envelope, BinlogOffset offset, Map<TableId, Schema> current) {
+    public SourceSchemaChange convert(Struct envelope, DebeziumOffset offset, Map<TableId, Schema> current) {
         Objects.requireNonNull(envelope, "envelope");
         if (envelope.schema().field("tableChanges") == null) {
             throw new UnsupportedOperationException("Debezium DDL has no structured tableChanges metadata");
@@ -237,7 +237,7 @@ public final class MySqlSchemaChangeConverter {
     }
 
     /** Hashes the complete Connect offset, including intra-binlog event counters. */
-    static String eventId(BinlogOffset offset, TableId table) {
+    static String eventId(DebeziumOffset offset, TableId table) {
         StringBuilder data = new StringBuilder();
         for (Map<String, Object> part : List.of(offset.partition(), offset.position())) {
             part.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {

@@ -1,6 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -16,7 +16,7 @@ public final class MySqlHybridSplitState {
 
     private MySqlSnapshotSplit snapshot;
     private MySqlHybridBinlogSplit binlog;
-    private BinlogOffset emittedOffset;
+    private DebeziumOffset emittedOffset;
     private Long outputCheckpoint;
     private boolean outputDurable;
 
@@ -53,7 +53,7 @@ public final class MySqlHybridSplitState {
     }
 
     /** Anchors the Binlog BEFORE any JDBC snapshot split may be assigned. */
-    public void captureLow(BinlogOffset low, byte[] schemaHistory) {
+    public void captureLow(DebeziumOffset low, byte[] schemaHistory) {
         if (binlog == null) {
             throw new IllegalStateException("Low watermark is not a Binlog event");
         }
@@ -97,7 +97,7 @@ public final class MySqlHybridSplitState {
     }
 
     public void resume(
-            BinlogOffset high,
+            DebeziumOffset high,
             java.util.List<io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo> finished) {
         if (binlog == null) {
             return;
@@ -112,7 +112,7 @@ public final class MySqlHybridSplitState {
         emittedOffset = binlog.binlog().offset();
     }
 
-    public void emitBinlog(BinlogOffset position) {
+    public void emitBinlog(DebeziumOffset position) {
         if (binlog == null || binlog.phase() != MySqlHybridBinlogSplit.Phase.STREAMING) {
             throw new IllegalStateException("Binlog changes cannot be emitted before snapshot handoff");
         }
