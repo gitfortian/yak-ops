@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+# Last accepted main commit before the Java record ban. Existing declarations are grandfathered.
+RECORD_BASELINE_COMMIT = "cbc26fbeace4bd3cb7fa3df57e8250e27f0abe93"
 NETWORK_IO = "yak-flow/yak-flow-runtime/src/main/java/io/yak/ops/flow/runtime/io/"
 OBSOLETE_DATA_SYNC_PACKAGES = (
     "yak-ops-common/src/main/java/io/yak/ops/common/bean/dto/datasync",
@@ -29,6 +32,7 @@ METHOD = re.compile(
     r"[\w.$<>?,\[\] ]+\s+(?P<name>[A-Za-z_$][\w$]*)\s*\("
 )
 CODEC = re.compile(r"Codec|(?<![A-Za-z])codec")
+RECORD_DECLARATION = re.compile(r"\brecord\s+([A-Za-z_$][\w$]*)\s*\(")
 
 
 def code_only(source: str) -> str:
@@ -85,6 +89,31 @@ def verify_source(path: str, source: str) -> list[tuple[int, str]]:
     return violations
 
 
+def new_record_violations(path: str, source: str, baseline_source: str) -> list[tuple[int, str]]:
+    """Reject record types not already declared in the same production file at the baseline."""
+    if "/src/main/java/" not in path or not path.endswith(".java"):
+        return []
+    current = code_only(source)
+    baseline = {match.group(1) for match in RECORD_DECLARATION.finditer(code_only(baseline_source))}
+    return [
+        (line_number(current, match.start()), f"New Java record '{match.group(1)}' is prohibited; use a class")
+        for match in RECORD_DECLARATION.finditer(current)
+        if match.group(1) not in baseline
+    ]
+
+
+def baseline_record_source(path: str) -> str:
+    """Read the frozen record baseline; missing files are new and cannot contain records."""
+    result = subprocess.run(
+        ["git", "show", f"{RECORD_BASELINE_COMMIT}:{path}"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return result.stdout if result.returncode == 0 else ""
+
+
 def production_java_files(root: Path = ROOT) -> list[Path]:
     return sorted(
         path for path in root.rglob("*.java")
@@ -98,10 +127,25 @@ def verify_repository(root: Path = ROOT) -> tuple[int, list[str]]:
     for folder in OBSOLETE_DATA_SYNC_PACKAGES:
         if (root / folder).exists():
             errors.append(f"Obsolete Data Sync contract package must not return: {folder}")
+    enforce_records = root.resolve() == ROOT.resolve()
+    if enforce_records:
+        found = subprocess.run(
+            ["git", "cat-file", "-e", f"{RECORD_BASELINE_COMMIT}^{{commit}}"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+        )
+        if found.returncode != 0:
+            errors.append("Java record baseline commit is unavailable; a full git history is required")
+            enforce_records = False
     for path in files:
         relative = path.relative_to(root).as_posix()
-        for line, reason in verify_source(relative, path.read_text(encoding="utf-8")):
+        source = path.read_text(encoding="utf-8")
+        for line, reason in verify_source(relative, source):
             errors.append(f"{relative}:{line}: {reason}")
+        if enforce_records and RECORD_DECLARATION.search(code_only(source)):
+            for line, reason in new_record_violations(relative, source, baseline_record_source(relative)):
+                errors.append(f"{relative}:{line}: {reason}")
     return len(files), errors
 
 

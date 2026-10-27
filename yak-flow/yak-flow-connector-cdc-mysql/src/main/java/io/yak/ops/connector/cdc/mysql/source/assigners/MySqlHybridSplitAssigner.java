@@ -101,6 +101,27 @@ public final class MySqlHybridSplitAssigner
         snapshots.plan(splits);
     }
 
+    /** Resolves reported watermarks against coordinator-owned assigned split metadata. */
+    public FinishedSnapshotSplitInfo finishSnapshot(String splitId, DebeziumOffset highWatermark) {
+        Objects.requireNonNull(splitId, "splitId");
+        Objects.requireNonNull(highWatermark, "highWatermark");
+        MySqlSnapshotSplit original = snapshots.assigned().get(splitId);
+        if (original == null) {
+            FinishedSnapshotSplitInfo previous = completed.get(splitId);
+            if (previous != null && previous.highWatermark().equals(highWatermark)) return previous;
+            throw new IllegalArgumentException("Unknown or conflicting completed snapshot split");
+        }
+        FinishedSnapshotSplitInfo info = new FinishedSnapshotSplitInfo(
+                original.tableId(),
+                splitId,
+                original.lowerInclusive(),
+                original.upperExclusive(),
+                highWatermark,
+                original.chunkRange());
+        finishSnapshot(info);
+        return info;
+    }
+
     public void finishSnapshot(FinishedSnapshotSplitInfo info) {
         FinishedSnapshotSplitInfo previous = completed.get(info.splitId());
         if (previous != null) {

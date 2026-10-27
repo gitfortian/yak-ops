@@ -5,9 +5,22 @@ import io.yak.ops.core.api.connector.source.SourceEvent;
 import java.util.Objects;
 
 /** Reports the first durable resume anchor captured before any snapshot split is assigned. */
-public record MySqlLowWatermarkEvent(DebeziumOffset offset) implements SourceEvent {
+public class MySqlLowWatermarkEvent implements SourceEvent {
 
-    public MySqlLowWatermarkEvent {
-        Objects.requireNonNull(offset, "offset");
+    private static final long serialVersionUID = 1L;
+
+    private final DebeziumOffset offset;
+
+    public MySqlLowWatermarkEvent(DebeziumOffset offset) {
+        this.offset = Objects.requireNonNull(offset, "offset");
+    }
+
+    public DebeziumOffset offset() {
+        return offset;
+    }
+
+    @Override
+    public String toString() {
+        return "MySqlLowWatermarkEvent{offset=redacted}";
     }
 }

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from check_backend_naming import verify_repository, verify_source
+from check_backend_naming import new_record_violations, verify_repository, verify_source
 
 CORE = "yak-ops-core/src/main/java/io/yak/ops/core/Foo.java"
 CDC = "yak-flow/yak-flow-connector-cdc-mysql/src/main/java/io/yak/ops/connector/cdc/mysql/Foo.java"
@@ -103,6 +103,29 @@ class BackendNamingTest(unittest.TestCase):
         self.assertEqual([], self.check(
             CORE, "org.external.thirdparty",
             "class ExternalCodec {}",
+        ))
+
+    def test_new_record_declarations_are_rejected_without_rewriting_existing_records(self):
+        previous = source("io.yak.ops.core", "record Existing(int value) {}")
+        current = source(
+            "io.yak.ops.core",
+            "record Existing(int value) {}\nrecord Added(String value) {}",
+        )
+        violations = new_record_violations(CORE, current, previous)
+        self.assertEqual(1, len(violations))
+        self.assertIn("Added", violations[0][1])
+
+    def test_record_check_ignores_comments_strings_and_non_production_files(self):
+        current = source(
+            "io.yak.ops.core",
+            '// record Fake(int id) {}\n'
+            'class Value { String example = "record AlsoFake(int id) {}"; }',
+        )
+        self.assertEqual([], new_record_violations(CORE, current, ""))
+        self.assertEqual([], new_record_violations(
+            "yak-ops-core/src/test/java/io/yak/ops/core/Added.java",
+            source("io.yak.ops.core", "record Added(int id) {}"),
+            "",
         ))
 
     def test_obsolete_datasync_packages_are_rejected(self):
