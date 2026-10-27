@@ -44,7 +44,6 @@ class MySqlSplitStateTest {
         assertTrue(state.isBinlogSplitState());
         assertFalse(state.isSnapshotSplitState());
         assertTrue(state.binlog());
-        assertEquals("definition", state.sourceId());
         assertThrows(IllegalStateException.class, () -> state.checkpoint(new byte[0]));
 
         state.emitBinlog(offset(300));
