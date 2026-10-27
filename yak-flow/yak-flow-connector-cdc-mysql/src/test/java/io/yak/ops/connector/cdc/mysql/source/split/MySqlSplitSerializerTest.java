@@ -32,17 +32,14 @@ class MySqlSplitSerializerTest {
         var serializer = new MySqlSplitSerializer();
         var low = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000010", "pos", 100L));
         var high = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000010", "pos", 300L));
-        var bootstrap = new MySqlHybridBinlogSplit(
-                new MySqlBinlogSplit("fingerprint", null, new byte[0]),
-                MySqlHybridBinlogSplit.Phase.BOOTSTRAP,
-                null);
+        var bootstrap = MySqlBinlogSplit.forInitialSnapshot("fingerprint");
         var paused = bootstrap.withAnchor(low, new byte[] {1, 2, 3});
         var running = paused.startStreaming(high, completed(high)).withEmittedOffset(high, new byte[] {1, 2, 3});
-        var restored = (MySqlHybridBinlogSplit) serializer.deserialize(serializer.getVersion(), serializer.serialize(running));
-        assertEquals(MySqlHybridBinlogSplit.Phase.STREAMING, restored.phase());
+        var restored = (MySqlBinlogSplit) serializer.deserialize(serializer.getVersion(), serializer.serialize(running));
+        assertEquals(MySqlBinlogSplit.Phase.STREAMING, restored.phase());
         assertEquals(high, restored.highWatermark());
-        assertEquals(high, restored.binlog().offset());
-        assertArrayEquals(new byte[] {1, 2, 3}, restored.binlog().schemaHistory());
+        assertEquals(high, restored.offset());
+        assertArrayEquals(new byte[] {1, 2, 3}, restored.schemaHistory());
         assertArrayEquals(serializer.serialize(running), serializer.serialize(restored));
         assertThrows(IllegalStateException.class, () -> paused.withEmittedOffset(high, new byte[] {1}));
     }

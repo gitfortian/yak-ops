@@ -68,25 +68,22 @@ class MySqlSplitStateTest {
 
     @Test
     void binlogBootstrapRequiresCompletedSnapshotBeforeStreaming() {
-        MySqlHybridBinlogSplit split = new MySqlHybridBinlogSplit(
-                new MySqlBinlogSplit("definition", null, new byte[0]),
-                MySqlHybridBinlogSplit.Phase.BOOTSTRAP,
-                null);
+        MySqlBinlogSplit split = MySqlBinlogSplit.forInitialSnapshot("definition");
         MySqlSplitState state = MySqlSplitState.fromSplit(split);
         assertTrue(state.isBinlogSplitState());
         assertThrows(IllegalStateException.class, () -> state.emitBinlog(offset(200)));
         state.captureLow(offset(100), new byte[] {1, 2, 3});
-        assertEquals(MySqlHybridBinlogSplit.Phase.PAUSED,
-                ((MySqlHybridBinlogSplit) state.checkpoint(new byte[] {1, 2, 3})).phase());
+        assertEquals(MySqlBinlogSplit.Phase.PAUSED,
+                ((MySqlBinlogSplit) state.checkpoint(new byte[] {1, 2, 3})).phase());
 
         FinishedSnapshotSplitInfo info =
                 new FinishedSnapshotSplitInfo(TABLE, "shop.orders:0", null, null, offset(200));
         state.resume(offset(200), List.of(info));
         state.emitBinlog(offset(201));
-        MySqlHybridBinlogSplit streaming =
-                assertInstanceOf(MySqlHybridBinlogSplit.class, state.checkpoint(new byte[] {1, 2, 3}));
-        assertEquals(MySqlHybridBinlogSplit.Phase.STREAMING, streaming.phase());
-        assertEquals(offset(201), streaming.binlog().offset());
+        MySqlBinlogSplit streaming =
+                assertInstanceOf(MySqlBinlogSplit.class, state.checkpoint(new byte[] {1, 2, 3}));
+        assertEquals(MySqlBinlogSplit.Phase.STREAMING, streaming.phase());
+        assertEquals(offset(201), streaming.offset());
     }
 
     private static DebeziumOffset offset(long position) {

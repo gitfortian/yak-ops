@@ -79,12 +79,10 @@ class MySqlTypedCheckpointTest {
                         "one", "fp", new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, null, null))
                 .withOutput(new MySqlSnapshotOutput(offset(100), offset, List.of()))
                 .withOutputPosition(0);
-        var anchor = new MySqlHybridBinlogSplit(
-                new MySqlBinlogSplit("fp", null, new byte[0]),
-                MySqlHybridBinlogSplit.Phase.BOOTSTRAP, null)
+        var anchor = MySqlBinlogSplit.forInitialSnapshot("fp")
                 .withAnchor(offset(100), new byte[] {1, 2});
         var streaming = anchor.startStreaming(offset, List.of(typed.finished()));
-        var restored = (MySqlHybridBinlogSplit) SERIALIZER.deserialize(
+        var restored = (MySqlBinlogSplit) SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize(streaming));
         assertEquals(typed.finished(), restored.finishedSplits().getFirst());
     }

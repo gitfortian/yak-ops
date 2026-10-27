@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.debezium.reader.BinlogSplitReader.FinishedChunk;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
@@ -199,11 +199,9 @@ class MySqlTypedBinlogSplitFilterTest {
         assertEquals(1, filter.filter(event(250, row(RowKind.INSERT, 5, "new"))).records().size());
         assertEquals(offset(250), filter.filter(event(250, row(RowKind.INSERT, 10, "covered"))).offset());
 
-        var anchored = new MySqlHybridBinlogSplit(
-                new MySqlBinlogSplit("binlog", offset(100), new byte[] {1}),
-                MySqlHybridBinlogSplit.Phase.PAUSED, null);
+        var anchored = MySqlBinlogSplit.forPausedSnapshot("binlog", offset(100), new byte[] {1});
         var streaming = anchored.startStreaming(offset(300), finished);
-        assertEquals(offset(200), streaming.binlog().offset());
+        assertEquals(offset(200), streaming.offset());
         assertEquals(offset(300), streaming.highWatermark());
         assertEquals(finished, streaming.finishedSplits());
     }

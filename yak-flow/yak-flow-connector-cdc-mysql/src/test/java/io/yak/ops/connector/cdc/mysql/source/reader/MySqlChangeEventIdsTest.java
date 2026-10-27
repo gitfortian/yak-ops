@@ -17,7 +17,7 @@ import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -174,11 +174,7 @@ class MySqlChangeEventIdsTest {
                 .emitRecord(MySqlFetchedRecord.binlog(new BinlogEvent(rows, offset)), cdcOutput::add, cdcState);
 
         var finished = new FinishedSnapshotSplitInfo(TABLE, "chunk-0", null, null, high);
-        var streaming = new MySqlHybridBinlogSplit(
-                new MySqlBinlogSplit("task-definition", previous, new byte[] {1}),
-                MySqlHybridBinlogSplit.Phase.STREAMING,
-                high,
-                List.of(finished));
+        var streaming = MySqlBinlogSplit.forCompletedSnapshot("task-definition", previous, new byte[] {1}, high, List.of(finished));
         var hybridState = MySqlSplitState.fromSplit(streaming);
         var schema = new TableSchema(
                 List.of(
@@ -204,7 +200,7 @@ class MySqlChangeEventIdsTest {
                     cdcOutput.stream().map(TableRecord::changeEventId).toList(),
                     hybridOutput.stream().map(TableRecord::changeEventId).toList());
             assertEquals(offset, ((MySqlBinlogSplit) cdcState.checkpoint(new byte[] {1})).offset());
-            assertEquals(offset, ((MySqlHybridBinlogSplit) hybridState.checkpoint(new byte[] {1})).binlog().offset());
+            assertEquals(offset, ((MySqlBinlogSplit) hybridState.checkpoint(new byte[] {1})).offset());
 
             var failedState = MySqlSplitState.fromSplit(streaming);
             assertThrows(IllegalStateException.class, () -> emitter.emitRecord(event, record -> {
@@ -214,7 +210,7 @@ class MySqlChangeEventIdsTest {
             }, failedState));
             assertEquals(
                     previous,
-                    ((MySqlHybridBinlogSplit) failedState.checkpoint(new byte[] {1})).binlog().offset());
+                    ((MySqlBinlogSplit) failedState.checkpoint(new byte[] {1})).offset());
         }
     }
 
