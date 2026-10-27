@@ -173,7 +173,7 @@ public final class TableExecutionProgress {
             stages.add(schemaStages.get(index));
             if (!dataSubmitted) {
                 stages.add(waitingDataStage(dataStep));
-                if (continuous) stages.add(waitingDataStage("INCREMENTAL"));
+                if (continuous && "FULL".equals(dataStep)) stages.add(waitingDataStage("INCREMENTAL"));
             } else if (continuous) {
                 stages.addAll(data.tables().get(index).stages());
             } else {
@@ -195,7 +195,7 @@ public final class TableExecutionProgress {
         stages.add(schemaSummary());
         if (!dataSubmitted) {
             stages.add(waitingDataStage(dataStep));
-            if (continuous) stages.add(waitingDataStage("INCREMENTAL"));
+            if (continuous && "FULL".equals(dataStep)) stages.add(waitingDataStage("INCREMENTAL"));
         } else if (continuous) {
             stages.addAll(data.stages());
         } else {
@@ -300,9 +300,11 @@ public final class TableExecutionProgress {
             var incremental = observation.incrementalTables().get(id);
             tables.add(new TableStages(
                     index,
-                    List.of(
-                            stage("FULL", full, observation, status),
-                            stage("INCREMENTAL", incremental, observation, status))));
+                    "FULL".equals(dataStep)
+                            ? List.of(
+                                    stage("FULL", full, observation, status),
+                                    stage("INCREMENTAL", incremental, observation, status))
+                            : List.of(stage("INCREMENTAL", incremental, observation, status))));
         }
         var summary = realtimeSummary(status, observation);
         return new RealtimeReport(
@@ -319,9 +321,11 @@ public final class TableExecutionProgress {
     }
 
     private RealtimeSummary realtimeSummary(JobStatus status, TableMetrics.ContinuousSnapshot observation) {
-        List<StageResult> stages = List.of(
-                stage("FULL", aggregate(observation.snapshotTables()), observation, status),
-                stage("INCREMENTAL", aggregate(observation.incrementalTables()), observation, status));
+        List<StageResult> stages = "FULL".equals(dataStep)
+                ? List.of(
+                        stage("FULL", aggregate(observation.snapshotTables()), observation, status),
+                        stage("INCREMENTAL", aggregate(observation.incrementalTables()), observation, status))
+                : List.of(stage("INCREMENTAL", aggregate(observation.incrementalTables()), observation, status));
         return new RealtimeSummary(
                 2,
                 Instant.ofEpochMilli(observation.observedAt()).toString(),
@@ -373,7 +377,8 @@ public final class TableExecutionProgress {
             state = "WAITING";
         else state = "RUNNING";
         // A queued incremental phase was not executed when initialization failed or was cancelled.
-        if (!full && !observation.fullComplete() && jobStatus == JobStatus.FAILED) state = "CANCELED";
+        if (!full && "FULL".equals(dataStep) && !observation.fullComplete() && jobStatus == JobStatus.FAILED)
+            state = "CANCELED";
         Integer percent = null;
         if (full && observation.fullComplete()) percent = 100;
         else if (full && !observation.restored() && value.plannedSplits() != null && value.plannedSplits() > 0) {
