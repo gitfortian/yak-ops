@@ -22,11 +22,6 @@ public final class MySqlSnapshotSplitState extends MySqlSplitState {
     }
 
     @Override
-    public String sourceId() {
-        return snapshot.fingerprint();
-    }
-
-    @Override
     public String snapshotSplitId() {
         return snapshot.splitId();
     }
