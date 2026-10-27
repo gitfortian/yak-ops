@@ -1,0 +1,305 @@
+# FYOIP-15: Data Map — Metadata Catalog
+
+Status: Discussion
+
+Discussion: Pending — proposal PR not yet opened
+
+Decision: Pending (link to the recorded decision after review)
+
+Implementation: N/A until accepted
+
+Release: N/A until released
+
+Related FLIPs: N/A
+
+## Motivation
+
+FYOIP-11 shipped physical publishing for logical models and, with it, one metadata snapshot per publication. That proposal closed the chain from a model to a real table and deliberately stopped there: Proposed Changes §4 records that full-datasource crawling is out of scope because "the current Catalog table listing is bounded and lacks a stable cursor, so a whole-source crawler would need separate pagination, run identity and failure semantics before it could be safe", and Rejected Alternatives 4 declines to build crawling in the same change.
+
+The product consequence is that a Workspace sees physical metadata only for tables it published through 数据建模. A table created by data sync, by another team's DDL, or before the platform existed is invisible in the UI: `DataSourceCatalogController` can list it live, but nothing is persisted, so it cannot be searched, classified, described or assigned an owner, and browsing a database starts from an empty session every time. The only persisted metadata the repository owns is bound to a publication and cascades with it, so it cannot answer "what tables exist in this Workspace".
+
+The product this module is measured against — DataWorks 数据地图 — is an asset catalog over physical tables. Its one part this proposal does not take is lineage: there is no dependency graph, and nothing records which task wrote which table, which is the same reason FYOIP-11's Rejected Alternatives 5 gives for delaying it.
+
+| Capability | DataWorks 数据地图 (分析结果) | Current state |
+| --- | --- | --- |
+| Search by table name, field name and description | Yes | Absent |
+| Category navigation for assets | Yes | Absent |
+| Table detail with columns, owner and description | Yes | Only for published tables, as an immutable snapshot |
+| Bounded sample of table data | Yes, permission-gated | Absent |
+| Favourites, recent visits, hot tables | Yes | Absent |
+| Crawl management with per-run outcomes | Yes, scheduled | Only one table per publication, triggered by publishing |
+| Lineage | Yes | Out of scope for this proposal |
+
+Five current facts shape the design; each one is a constraint this proposal works with rather than changes.
+
+- The metadata database is MySQL. Every migration under `yak-ops-dao/src/main/resources/db/migration/yak-ops/` targets InnoDB with `utf8mb4_unicode_ci`; there is no `JSONB`, and no table uses a native `JSON` column. `V4__v1_6_0.sql` already records why `database` and `schema` become `database_name` and `schema_name`: both are reserved words on the engines the metadata database may run on.
+- Identities are 64-character application-generated strings (`IdUtils.nextId()`), not snowflake `BIGINT`s. Every table `V2` through `V6` created follows that form.
+- The interactive Catalog seam caps a table listing at 500 rows (`DataSourceCatalogQueryDTO.limit`, re-capped in `AbstractJdbcCatalog.listTableInfos`) and has no cursor. The connector can enumerate a namespace without a limit when `limit` is null, and the business seam never exposes that.
+- Every Catalog operation opens and closes its own physical connection (`AbstractJdbcCatalog` documents this on `close()`); there is no pooled connection to a user datasource.
+- The Catalog seam resolves the caller's Workspace from `WorkspaceContext`, a request-scoped `ThreadLocal`. A background thread has no such context unless it binds one.
+
+## Public Interfaces
+
+### Product behavior
+
+| Item | Contract |
+| --- | --- |
+| Placement | A new top-level product `数据地图`, independent of `数据建模`. Its navigation is 数据总览, 资产目录, 元数据采集 and 我的数据. |
+| Assets | An asset is a physical table or view observed in a datasource namespace. System schemas are not filtered by engine: the user chooses the database and schema to crawl, and whatever that namespace returns is what the map holds. |
+| Crawl trigger | Manual only. The user picks a datasource, a database and, where the engine has one, a schema. Submission records a `PENDING` run and returns immediately; collection happens on a background worker. |
+| Crawl scope | One run covers exactly one datasource database (and schema). A second run for the same scope is refused while one is `PENDING` or `RUNNING`. |
+| Crawl ceiling | A namespace of 2,000 tables or more is refused before any column is read. The connector's own unbounded enumeration is reused; nothing is truncated silently. |
+| Crawl outcome | `SUCCEEDED` means enumeration completed and every observed table either refreshed or recorded a per-table failure. A run-level failure (connection lost, ceiling reached, 30-minute budget, process restart) is `FAILED`. |
+| Removal detection | A table absent from a **complete** run — `SUCCEEDED` with zero per-table failures — becomes `MISSING`. A run with any per-table failure marks nothing missing. |
+| Classification | A table may be assigned to one **data domain** of 数仓规划, or to none. There is no separate catalog tree, and `未分类` is the absence of a domain, not a row. |
+| Curated fields | Business description, accountable owner and domain are user-owned. Tags are user-owned. A crawl never writes any of them. |
+| Preview | At most 100 rows and 5 seconds, both fixed in the server. Refused on a datasource declared `PROD`. |
+| Personal surfaces | Favourites and recent visits are per Workspace member. A visit is recorded by an explicit client call, not by reading the detail page. |
+| Access | Every Workspace member may browse, crawl, classify and tag. There is no per-asset or per-datasource permission in this release, because datasources do not have one either; inventing a second authorization model here would disagree with the one the Catalog seam already enforces. |
+| Deletion | Deleting a datasource deletes its assets, their curated text and their history. The datasource delete dialog must say so. |
+
+### REST
+
+New endpoints under `/api/v1/data-map`, all Workspace-scoped through the existing interceptor:
+
+| Method and path | Purpose |
+| --- | --- |
+| `GET /overview` | Asset count, managed datasource count, tables first seen in the last 7 days, unclassified count and the ten most viewed tables. |
+| `GET /tables` | Search and browse: `keyword`, `datasourceId`, `database`, `schema`, `domainId`, `unclassified`, `tagId`, `includeMissing`, `page`, `pageSize`. |
+| `GET /tables/{tableId}` | One asset with its columns, tags, domain and datasource name. |
+| `PUT /tables/{tableId}` | Replace the curated description, owner and domain. Absent or null domain clears the classification. |
+| `GET /tables/{tableId}/changes` | Crawl-detected changes, newest first, capped at 100 rows per call. |
+| `GET /tables/{tableId}/preview` | Bounded sample: column names, types and at most 100 rows. |
+| `PUT /tables/{tableId}/tags` | Replace the asset's tag set with the submitted tag ids. |
+| `POST` / `DELETE /tables/{tableId}/favorites` | Add or remove the caller's favourite. Both are idempotent. |
+| `POST /tables/{tableId}/views` | Record one visit for the caller on this asset. |
+| `GET /favorites` | The caller's favourites, newest first, paged. |
+| `GET /recent` | The caller's assets, most recently viewed first, paged. |
+| `GET` / `POST /tags`, `PUT` / `DELETE /tags/{tagId}` | List, create, rename and delete Workspace tags. Deleting a tag detaches it from every asset. |
+| `GET /crawls` | Runs for the Workspace, newest first, filterable by datasource. |
+| `POST /crawls` | Submit a run and return the `PENDING` record. |
+| `GET /crawls/{crawlId}` | One run with its counters and up to 200 failed tables. |
+
+Request bodies use the existing `Result` envelope. `GET /tables` returns `PagingData`. No existing endpoint is renamed, removed or changes shape.
+
+New error codes, in a new `io.yak.ops.common.enums.datamap` package:
+
+| Code | Use |
+| --- | --- |
+| `19701 CRAWL_SCOPE_INVALID` | The datasource, database or schema cannot be resolved for this Workspace. |
+| `19702 CRAWL_BUSY` | A run for the same scope is already pending or running, or the executor queue is full. |
+| `19703 CRAWL_TOO_LARGE` | The namespace reaches the 2,000-table ceiling. |
+| `19704 PREVIEW_FORBIDDEN` | The datasource is declared `PROD`. |
+| `19705 PREVIEW_TIMEOUT` | The sample exceeded the 5-second statement timeout. |
+| `19706 INVALID_DOMAIN` | The chosen domain does not belong to this Workspace. |
+| `19707 INVALID_OWNER` | The chosen owner is not an active Workspace member. |
+| `19708 INVALID_TAG` | The tag name is blank or longer than 64 characters. |
+| `19709 DUPLICATE_TAG` | The tag name already exists in this Workspace. |
+
+Unknown assets, runs and tags reuse `RESOURCE_NOT_EXISTS`. Field lengths are enforced by Bean Validation, not by a coded error.
+
+### Persisted formats
+
+`V7`, the next release migration, is additive: nine new tables and no change to any existing table.
+
+`yak_ops_data_map_crawl` (append-only run record)
+
+- `id`, `workspace_id`, `datasource_id`, `datasource_revision` `BIGINT`
+- `database_name`, `schema_name` `VARCHAR(128) NOT NULL DEFAULT ''`
+- `status` `VARCHAR(16) ascii_bin` — `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`
+- `table_count`, `column_count`, `added_count`, `updated_count`, `removed_count`, `failed_count` `INT NOT NULL DEFAULT 0`
+- `error` `VARCHAR(1000) NULL`, `created_time`, `started_time NULL`, `finished_time NULL`, `create_by`
+- keys: `PRIMARY KEY (id)`, `UNIQUE (workspace_id, id)`, `KEY (workspace_id, datasource_id, created_time)`
+- `FOREIGN KEY (datasource_id) → yak_ops_data_source (id) ON DELETE CASCADE`
+
+`yak_ops_data_map_crawl_failure` (append-only per-table failure)
+
+- `id`, `workspace_id`, `crawl_id`, `table_name` `VARCHAR(128)`, `error` `VARCHAR(1000) NOT NULL`, `created_time`
+- `FOREIGN KEY (crawl_id) → yak_ops_data_map_crawl (id) ON DELETE CASCADE`
+
+`yak_ops_data_map_table` (current state, one row per physical table)
+
+- `id`, `workspace_id`, `datasource_id`, `database_name`, `schema_name` `VARCHAR(128) NOT NULL DEFAULT ''`, `name` `VARCHAR(128)`
+- observed: `table_type` `VARCHAR(32) NULL`, `remarks` `VARCHAR(500) NULL`, `status` `VARCHAR(16) ascii_bin`, `first_seen_time`, `last_seen_time`
+- curated: `description` `VARCHAR(2000) NULL`, `owner_id` `VARCHAR(64) NULL`, `domain_id` `VARCHAR(64) NULL`
+- audit: `create_time`, `update_time`, `create_by`, `update_by`
+- keys: `PRIMARY KEY (id)`,
+  `UNIQUE uk_data_map_table_identity (workspace_id, datasource_id, database_name, schema_name, name)`,
+  `UNIQUE uk_data_map_table_workspace (workspace_id, id)`,
+  `KEY (workspace_id, name)`, `KEY (workspace_id, domain_id, update_time, id)`, `KEY (workspace_id, first_seen_time)`
+- `FOREIGN KEY (datasource_id) → yak_ops_data_source (id) ON DELETE CASCADE`
+- `FOREIGN KEY (domain_id) → yak_ops_modeling_domain (id) ON DELETE SET NULL`
+- `CHECK (status IN ('ACTIVE', 'MISSING'))`
+
+`yak_ops_data_map_column` (current state, replaced per table)
+
+- `id`, `workspace_id`, `table_id`, `ordinal` `INT`, `name` `VARCHAR(128)`,
+  `type_name` `VARCHAR(128)`, `jdbc_type` `INT`, `size NULL`, `scale NULL`,
+  `nullable` `BIT(1)`, `primary_key` `BIT(1)`, `primary_key_position NULL`, `remarks` `VARCHAR(500) NULL`
+- keys: `PRIMARY KEY (id)`, `UNIQUE (table_id, ordinal)`, `KEY (workspace_id, name)`
+- `FOREIGN KEY (table_id) → yak_ops_data_map_table (id) ON DELETE CASCADE`, `CHECK (ordinal > 0)`
+
+`yak_ops_data_map_table_change` (append-only crawl-detected change)
+
+- `id`, `workspace_id`, `table_id`, `change_type` `VARCHAR(32) ascii_bin`, `detail` `VARCHAR(1000)`, `created_time`
+- keys: `PRIMARY KEY (id)`, `KEY (workspace_id, table_id, created_time)`
+- `FOREIGN KEY (table_id) → yak_ops_data_map_table (id) ON DELETE CASCADE`
+- `CHECK (change_type IN ('COLUMN_ADDED', 'COLUMN_REMOVED', 'COLUMN_TYPE_CHANGED',
+  'COLUMN_NULLABILITY_CHANGED', 'PRIMARY_KEY_CHANGED', 'TABLE_COMMENT_CHANGED'))`
+
+`yak_ops_data_map_tag`
+
+- `id`, `workspace_id`, `name` `VARCHAR(64)`, `create_time`, `update_time`, `create_by`, `update_by`
+- `UNIQUE uk_data_map_tag_name (workspace_id, name)`, `UNIQUE (workspace_id, id)`
+
+`yak_ops_data_map_table_tag`
+
+- `workspace_id`, `table_id`, `tag_id`, `create_time`, `create_by`
+- `PRIMARY KEY (table_id, tag_id)`, `KEY (workspace_id, tag_id)`
+- `FOREIGN KEY (table_id) → yak_ops_data_map_table (id) ON DELETE CASCADE`,
+  `FOREIGN KEY (tag_id) → yak_ops_data_map_tag (id) ON DELETE CASCADE`
+
+`yak_ops_data_map_favorite`
+
+- `workspace_id`, `user_id`, `table_id`, `created_time`
+- `PRIMARY KEY (workspace_id, user_id, table_id)`, `KEY (workspace_id, user_id, created_time)`
+- `FOREIGN KEY (table_id) → yak_ops_data_map_table (id) ON DELETE CASCADE`
+
+`yak_ops_data_map_view`
+
+- `workspace_id`, `user_id`, `table_id`, `view_count` `BIGINT NOT NULL DEFAULT 1`, `first_viewed_time`, `last_viewed_time`
+- `PRIMARY KEY (workspace_id, user_id, table_id)`, `KEY (workspace_id, user_id, last_viewed_time)`,
+  `KEY (workspace_id, table_id)`, `CHECK (view_count > 0)`
+- `FOREIGN KEY (table_id) → yak_ops_data_map_table (id) ON DELETE CASCADE`
+
+Every table carries `ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci` explicitly and a comment on every column, as `V4` does. No table is added to `yak_ops_modeling_*`; the `data_map` segment keeps the new domain distinguishable in the schema.
+
+### Frontend internal contract
+
+- `service/data-map/` owns the endpoints and types, one file per surface (`catalog.ts`, `crawl.ts`, `personal.ts`, `tags.ts`), following `service/data-modeling/warehouse-planning/`.
+- `app/data-map/` owns five routes: `/data-map/overview`, `/data-map/catalog`, `/data-map/tables/:tableId`, `/data-map/crawls`, `/data-map/personal`.
+- The category tree reuses `GET /api/v1/data-modeling/warehouse-planning/tree` and renders only `DOMAIN` nodes plus a fixed `未分类` entry, the same way `planning-tree.tsx` renders the planning tree. No new tree component is introduced; Yak UI has none.
+- The detail page is a route, not a dialog, so an asset is linkable. Its tabs are 基础信息, 字段, 预览 and 变更记录; columns arrive with the detail payload.
+- The crawl dialog reuses the datasource list plus `DataSourceCatalogController`'s existing databases and schemas endpoints, and the owner picker reuses `GET /api/v1/data-modeling/warehouse-planning/owners`. No picker endpoint is added by this proposal.
+
+## Proposed Changes
+
+### 1. The catalog is current state; the publication snapshot stays an audit record
+
+FYOIP-11's `yak_ops_modeling_metadata_table` is a child of one publication: append-only, immutable, cascading with the publication. A catalog needs the opposite properties. An asset must keep one identity across crawls so a description, an owner, a domain and tags stay attached to it; it must survive the deletion of whatever created it; and it must be updatable in place.
+
+The two therefore stay separate, and this proposal does not merge them. A published table appears in the map when its namespace is crawled, like every other table. Merging would require either a second writer into the catalog (rejected below) or a catalog row per publication, which is the snapshot model this proposal exists to replace.
+
+### 2. Enumeration, run identity and failure semantics
+
+These are the three properties FYOIP-11 named as the blockers for crawling, and each is answered explicitly rather than inherited.
+
+**Enumeration.** The 500-row cap on `DataSourceCatalogService.listTables` is a safety bound for an interactive picker, not a crawling primitive: a namespace with 800 tables would be read as 500 with no way to ask for the rest, and no stable order to page by. The proposal adds one method to that seam — `List<DataSourceCatalogTableVO> listAllTables(datasourceId, database, schema)` — which delegates to the connector's existing unbounded `listTableInfos(database, schema, null, null)` and returns the whole namespace. The connector contract is not changed. The crawler refuses a namespace of 2,000 or more tables before reading any column, so the ceiling bounds collection work, not the enumeration itself: names are small, and materialising them is bounded by what one database schema can hold.
+
+Column reads reuse `listColumns` unchanged. That means one physical connection per table, sequentially, which is the load this proposal is willing to place on a user datasource: never two in flight, and at most 2,000 per run. A batched column read would be a second connector contract for one caller, and is not part of this change.
+
+**Run identity.** A run is a row, not a thread. Submission inserts `PENDING` with the datasource revision pinned, then hands the id to a dedicated single-thread executor. The worker claims the row with `UPDATE … SET status = 'RUNNING' WHERE id = ? AND status = 'PENDING'`; a zero-row update means somebody else owns it and the worker returns. The executor is a separate `ThreadPoolTaskExecutor` (`core = max = 1`, queue of 4), not a shared `@Async` pool: a crawl must never compete with request threads, and it must never run two at once against the same metadata database. A full queue rejects the submission with `CRAWL_BUSY` and the inserted row is marked `FAILED`.
+
+Startup marks every `PENDING` or `RUNNING` row `FAILED` with "interrupted by application restart". This is sound only because the product does not support multi-node execution — the repository makes no clustered-execution claim — and it is recorded here so that a future clustered deployment revisits it rather than silently losing runs.
+
+The worker binds the run's Workspace with `WorkspaceContext.bind` and clears it in a `finally`. Binding is not an authorisation decision: membership was checked when the run was submitted, and the Workspace on the row is the one that check authorised. Without the binding, the Catalog seam — which reads the Workspace from that `ThreadLocal` — would fail on the worker thread.
+
+Each table is written in its own transaction through a `TransactionTemplate`, never one transaction per run. A 2,000-table run in a single transaction would hold a metadata-database transaction for minutes and would make every partial result invisible if the run died. Per-table transactions also make the run resumable in the only sense this proposal claims: re-running a scope converges, because every write is an upsert on the natural key.
+
+**Failure semantics.** A table whose columns cannot be read gets a `crawl_failure` row, increments `failed_count`, and is skipped; the run continues. This keeps one bad table from discarding the collection work of a thousand good ones, and it keeps the failure visible per table instead of collapsing it into a single run error.
+
+The run is `FAILED` — not `SUCCEEDED` with failures — when enumeration fails, the ceiling is reached, the 30-minute wall-clock budget expires, or the process stops before the run finishes. The last case is resolved by the startup sweep rather than at shutdown, because a stopping process may not get to write anything. In those cases `removed_count` is zero and nothing is marked `MISSING`, because an incomplete run cannot distinguish "the table was dropped" from "the run never reached it".
+
+A complete run marks `MISSING` exactly the tables in its scope whose `last_seen_time` is older than the run's `started_time`. A table that reappears in a later run returns to `ACTIVE` on the same row, keeping its curated metadata: identity is the physical name, so a drop and a recreate is a reappearance, while a rename is a new asset and the old row stays `MISSING`. That is a real limitation, stated rather than papered over.
+
+### 3. Observed and curated metadata never share a column
+
+The draft rule "a crawl must not clear a description the user wrote" is usually implemented as a merge: read the existing row, keep the user's value when the observed value is empty, and write back. That rule needs a test for every field, and it fails the first time someone adds a field and forgets the rule.
+
+This proposal makes it structural instead. `yak_ops_data_map_table` splits its columns by writer: `table_type`, `remarks`, `status`, `first_seen_time` and `last_seen_time` are written only by the crawler; `description`, `owner_id` and `domain_id` are written only by `PUT /tables/{tableId}`; the tag, favourite and view rows are separate tables the crawler never touches. The crawler's `UPDATE` names `table_type`, `remarks`, `status`, `last_seen_time` and the audit `update_time`, and cannot reach a curated column, so there is no merge rule to get wrong, no ordering dependency between a crawl and an edit, and a unit test can assert the column set.
+
+The two writes also do not conflict at the row level: a crawl and a user edit may land in either order, and neither loses the other's field. That is why the table has no `revision` column — a revision bumped by every crawl would invalidate open edit forms for a field the crawler did not touch, which is the failure mode optimistic locking is meant to prevent, not cause.
+
+Column-level descriptions are not curated in this release. The engine's column comment is collected as `remarks`; a user-maintained column description would need its own table, because replacing a table's columns on every crawl would delete a description stored on those rows. That is a V1.1 addition, not a hidden gap.
+
+### 4. Classification reuses the planning data domain
+
+`数仓规划` is a fixed three-level common tree (业务分类 → 数据域 → 业务过程) plus a two-level application tree, implemented as one table per level and assembled in `PlanningServiceImpl`. The only level that classifies a physical table without overreaching is the **data domain**: a category is too coarse, and a process only exists for tables a model already claims.
+
+So an asset carries a nullable `domain_id`, and `未分类` is `domain_id IS NULL` rather than a synthetic node. This keeps one classification source, needs no new tree, and makes "how much of this domain is mapped" answerable by a `GROUP BY`. The picker reads the existing planning tree and filters `DOMAIN` nodes; the write validates that the domain belongs to the caller's Workspace, because the foreign key alone cannot (domain ids are globally unique strings, so the constraint is safe but not Workspace-aware, exactly as `V4` records for its publication-to-model key).
+
+The foreign key is single-column with `ON DELETE SET NULL`, not the composite `(workspace_id, id)` form the modelling tables use. A composite key would have to null `workspace_id`, which is `NOT NULL`, so the delete would fail at runtime; a single-column key with `SET NULL` instead expresses the intended behaviour — deleting a data domain unclassifies its assets — and needs no change to the modelling delete path, which would otherwise have to ask this module whether a domain is in use and would create the dependency cycle section 8 avoids.
+
+### 5. Preview is bounded by construction, and production is refused
+
+The sample is `SELECT * FROM <qualified table>` executed with `Statement.setMaxRows(100)`, `setQueryTimeout(5)` and `setFetchSize(100)` on a read-only connection. There is no `LIMIT` in the SQL: Oracle does not accept it, and dialect-specific row limiting is a second type-mapping problem for no benefit, because `setMaxRows` is the JDBC contract for exactly this. The table is never taken from the request — only a `tableId` is — and its qualified name is rendered by `JdbcDialect.qualifiedTable`, so no user string reaches the SQL text.
+
+Values are read by JDBC type. Binary, BLOB and CLOB columns are reported with a placeholder and are never materialised: `getBytes` or `getString` on a large object loads it whole, and a preview must not turn a 1 GB BLOB into heap. Text is truncated to 200 characters per cell, and the response reports whether the row cap was hit so the UI can say "仅展示前 100 行".
+
+`PROD` datasources are refused with `PREVIEW_FORBIDDEN`, and the UI explains why. `environment` is already a datasource field (`DEVELOP`, `TEST`, `PROD`), so no new configuration or flag is introduced. This is a policy guard, not a security boundary — a user who may edit a datasource can already mislabel its environment — but it is the right default: sampling production data should require a deliberate, separate decision with its own audit, not arrive as a side effect of installing a catalog. The draft's "allow for now, add a whitelist later" would ship the permissive branch first and make the safe behaviour the harder one to reach.
+
+### 6. Search without a segmenter, and its stated ceiling
+
+The metadata database is MySQL with `utf8mb4_unicode_ci`, so `LIKE` is case-insensitive for ASCII and matches Chinese substrings without a tokenizer. The proposal uses `name`, `remarks` and `description` plus an `EXISTS` subquery over columns, with `%`, `_` and the escape character escaped and an explicit `ESCAPE` clause so a literal `%` searches for `%`. Results carry the columns that matched, fetched in one batch for the page, because "why did this row match" is the difference between a search result and a guess.
+
+A leading wildcard cannot use an index, so this is a scan of the Workspace's assets. It is honest up to roughly 10⁵ tables and 10⁶ columns; beyond that the answer is a real index — MySQL `FULLTEXT … WITH PARSER ngram`, or a search service — and that is a different contract with different failure modes (minimum token length, an index that can disagree with the table). Introducing it now would mean tuning an index for a corpus that does not exist yet, and the draft's `zhparser` reference is a PostgreSQL extension that this metadata database cannot install.
+
+Counts are capped at 1,000 and the UI shows `1000+` past that, so a scan cannot be turned into a long count query by a broad keyword.
+
+### 7. Personal surfaces are bounded per member and asset
+
+A visit is stored as one row per `(workspace, user, table)` with a counter and a last-seen timestamp, upserted. The draft's append-only `md_user_action` log with `action_type` would grow one row per page view and would need `GROUP BY` and `MAX` on every read to answer "recently visited"; the bounded row answers it from a single index. Favourites are their own table with the same key shape, because existence and a counter are different facts and one table with a nullable `action_type` would have to make the counter meaningful for favourites.
+
+Recording a view is an explicit `POST`, not a side effect of reading the detail payload. A detail read is also triggered by a browser refresh, a back navigation and a prefetch; counting those would make the hot list a measure of navigation, not interest.
+
+Hot tables are the ten assets with the highest summed `view_count` in the Workspace. There is no time window, because that would need a log or a per-window counter, and no size or row-count input, for the reasons in Rejected Alternatives 8.
+
+### 8. Module ownership and dependency direction
+
+A new module `yak-ops-business/yak-ops-business-datamap` owns the catalog, the crawler and the preview reader. It depends on `yak-ops-business-datasource` (Catalog seam and connection resolution), `yak-ops-business-modeling` (the planning tree behind classification), `yak-ops-platform` (active-member check for the owner field), `yak-ops-dao`, `yak-ops-common` and `yak-flow-connector-jdbc`. Every one of those edges points the same way as an existing one: modelling already depends on datasource and on the connector for publication.
+
+Nothing depends on the new module except `yak-ops-boot` (controllers and assembly) and `yak-ops-bom`. In particular `yak-ops-business-modeling` does not import it, which is why section 4 chose `ON DELETE SET NULL` over a service-level usage check. Controllers stay in `yak-ops-boot` beside the existing ones; DTOs and VOs go to `yak-ops-common` under `bean/dto/datamap` and `bean/vo/datamap`; the error codes go to `enums/datamap`.
+
+The crawler reaches user datasources only through `DataSourceLookupService.connectionOptions` and the connector's `DefaultJdbcConnectionProvider`, the same two seams `DataSourceCatalogServiceImpl` uses. Credentials are never copied onto a crawl, an asset or an API response, and the connector's existing redaction (`JdbcConnectionOptions.toString`, `SensitiveUtils.mask`) is unchanged.
+
+### 9. Frontend surface
+
+The new product is a fifth entry in `GLOBAL_PRODUCT_MENU` and `ALL_PRODUCT_GROUPS`, registered in `AppRouter.tsx` with its own `AppLayout`. The five routes reuse Yak UI's `Table`, `Dialog`, `Tabs`, `Field` and `Input`; the category tree is hand-written like `planning-tree.tsx`, because Yak UI has no tree component and adding one is a separate design.
+
+The catalog page is a left domain tree plus a right result table with a search box and datasource/database/tag filters above it. It deliberately has **one** tree: a second datasource tree would answer the same question as the filters, and would need lazy loading and its own state for a dataset that the filter already narrows. The detail page is a route so it can be linked and bookmarked; 基础信息 carries the editable description, owner, domain and tags, 字段 renders the columns collected with the asset, 预览 loads on demand, and 变更记录 pages the change rows.
+
+## Compatibility, Deprecation, and Migration Plan
+
+- `V7` is additive and forward-only. A fresh install applies `V1` through `V7`; an upgrade from 1.8.x applies `V7` after `V6`. No existing table, column or row is touched, and no backfill is needed because the catalog starts empty.
+- Existing REST endpoints, task definitions, published models, publication records and metadata snapshots are unchanged. Publication collection keeps writing its own snapshot tables; nothing reads them differently.
+- One existing behaviour changes: deleting a datasource now also deletes its catalog rows, including curated descriptions, owners, domains and tags. The datasource delete dialog must state this before the action. Modelling rows are unaffected, and datasource deletion already requires no dependent task.
+- Deleting a data domain now unclassifies any asset assigned to it. No modelling change is required for this, and no confirmation text changes in this release.
+- Nothing is deprecated. No compatibility layer is introduced.
+- No downgrade path is provided, consistent with previous releases; restoring the pre-upgrade backup is the supported rollback.
+
+## Test Plan
+
+- Unit tests cover the crawl state machine (claim by conditional update, concurrent submission refused, restart sweep to `FAILED`, queue rejection to `FAILED`), the ceiling and the 30-minute budget, per-table failure recording and its effect on `MISSING`, the `MISSING`/`ACTIVE` transition on reappearance, and change detection across all six change types with first observation producing no rows.
+- One structural unit test asserts that the crawler's update statement names only observed columns plus the audit `update_time`, and that the curated update names only the three curated columns. This is the test that keeps section 3 true after a later field is added.
+- Search tests cover `%` and `_` as literals, case-insensitive matching under `utf8mb4_unicode_ci`, Chinese substring matching, matched-column reporting, the 1,000 count cap and the `includeMissing` filter.
+- Preview tests cover the 100-row cap, the per-cell truncation, the placeholder for binary and LOB columns without reading them, the 5-second timeout mapping to `PREVIEW_TIMEOUT`, `PROD` refusal, and a `tableId` for a `MISSING` asset returning `RESOURCE_NOT_EXISTS`.
+- Database integration tests cover `V7` applied on top of `V6`, the identity unique key with `schema_name = ''` (two MySQL tables with different names are distinct, and a duplicate name is rejected — the case a nullable `schema_name` would silently allow), `ON DELETE SET NULL` on domain deletion, `ON DELETE CASCADE` from datasource and table deletion across columns, tags, favourites, views and changes, and Workspace isolation on every read and write including a foreign-workspace `tableId`.
+- End-to-end tests run against the packaged Boot process with a real MySQL datasource: crawl a database, assert tables and columns persisted, re-run and assert no duplicates and no change rows, drop a table and assert `MISSING` only after a complete run, and assert a preview returns at most 100 rows.
+- A failing case for the ceiling and for a datasource with an unreachable host must leave the run `FAILED` with `removed_count = 0`.
+- Frontend verification covers `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm run architecture:check`, `npm run contract:check` and `npm run build`.
+- Manual acceptance must crawl a real database of more than 100 tables, preview a table with a text and a binary column, and confirm that a description, an owner, a domain and a tag survive a second crawl unchanged.
+
+## Rejected Alternatives
+
+1. **Reuse the FYOIP-11 metadata tables as the catalog.** They are append-only children of one publication: a table published twice has two rows, a refreshed snapshot replaces the previous one, and deleting the publication deletes the metadata. Nothing in that shape can hold a description that outlives a publication, which is the whole point of an asset.
+2. **Write publication collections into the catalog when a model is published.** That gives the catalog a second writer with different semantics — a publish would create or overwrite an asset — and it makes modelling depend on this module or this module depend on modelling's publication internals. A published table is discovered by crawling like any other, and the detail page's provenance link is a later addition, not a merge.
+3. **Keep a separate curated-annotation table keyed by the natural key.** It splits one asset across two rows with two lifecycles, needs orphan cleanup when a table disappears, and turns every read into a join to answer "what is this table". Disjoint column ownership in one row gives the same protection with none of that.
+4. **Use `BIGINT` snowflake primary keys and a `JSONB`/`JSON` property bag, as the draft does.** Identities in this repository are 64-character strings from `IdUtils.nextId()`, the metadata database is MySQL, and no table uses a native JSON column. A JSON bag would also be unindexable and unconstrainable, repeating FYOIP-14's first rejected alternative.
+5. **Keep the draft's nullable `schema_name` inside the identity unique key.** MySQL treats `NULL`s as distinct in a unique index, so two rows for the same MySQL table would both be insertable and the crawler would duplicate every table on every run. The column is `NOT NULL DEFAULT ''` for exactly this reason, and a test pins it.
+6. **Schedule crawls through the existing Quartz scheduler now.** The scheduler admits published task definitions; a crawl is not a Task and has no definition, version or execution record. Adding a second job type to that contract is a larger change than this proposal, and a manual trigger is what makes the crawl's cost visible to the person paying it.
+7. **Add a full-text index or an external segmenter now.** `zhparser` is a PostgreSQL extension and this database is MySQL; MySQL `FULLTEXT … WITH PARSER ngram` brings a token-size configuration, an index that can disagree with the table and a second write path, all to accelerate a corpus that does not exist on day one. The `LIKE` ceiling is stated instead of hidden.
+8. **Collect row counts and storage size from engine statistics.** `information_schema.TABLES.TABLE_ROWS`, `pg_class.reltuples` and `ALL_TABLES.NUM_ROWS` are estimates that the UI would present as facts, they differ per engine, and an accurate count is a full scan of the user's table. The catalog therefore carries no size column, and the hot list is built from visits, which the platform observes itself.
+9. **Build the sample by appending `LIMIT 100` to the SQL, or accept user SQL.** Appending `LIMIT` fails on Oracle and turns a policy into string building; user SQL is an arbitrary-query console, which is a different product with its own authorisation, audit and cost model.
+10. **Store one success row per table per run, as the draft's crawl-detail table does.** A successful table is already visible through `last_seen_time`; storing a row per table per run grows with tables × runs and has no reader. Only failures are kept, which is the part an operator needs.
+11. **Build lineage in this proposal.** There is no dependency graph and no persisted record of which task wrote which table. A catalog of physical tables cannot infer it, and any attempt would produce a picture that looks authoritative and is not.
+12. **Add a second navigation tree for datasources.** It answers the same question as the datasource and database filters over one result list, and it would need lazy loading, its own expansion state and its own empty states for a set the filter already narrows.
