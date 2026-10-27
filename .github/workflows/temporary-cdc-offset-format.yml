@@ -1,0 +1,36 @@
+name: Temporary CDC Offset Formatting
+
+on:
+  push:
+    branches:
+      - refactor/mysql-cdc-flink-offset-alignment-20261027
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Format changed MySQL CDC Java sources with the repository's Palantir formatter
+        run: |
+          bash mvnw -B -ntp -pl yak-flow/yak-flow-connector-cdc-mysql \
+            com.diffplug.spotless:spotless-maven-plugin:3.10.2:apply
+      - name: Commit formatter-only changes
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add yak-flow/yak-flow-connector-cdc-mysql
+          if ! git diff --cached --quiet; then
+            git commit -m "style(cdc): apply repository Palantir Java formatter"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
