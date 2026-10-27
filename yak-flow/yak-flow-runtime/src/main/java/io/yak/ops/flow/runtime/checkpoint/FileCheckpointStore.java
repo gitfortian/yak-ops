@@ -260,10 +260,10 @@ public final class FileCheckpointStore implements AutoCloseable {
     }
 
     private static long readLatestPointer(Path pointer) throws IOException {
-        byte[] content = Files.readAllBytes(pointer);
-        if (content.length != Integer.BYTES * 2 + Long.BYTES * 2) {
+        if (Files.size(pointer) != Integer.BYTES * 2 + Long.BYTES * 2) {
             throw new IOException("Unsupported checkpoint pointer format or file size");
         }
+        byte[] content = Files.readAllBytes(pointer);
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(content))) {
             if (in.readInt() != MAGIC || in.readInt() != POINTER_VERSION) {
                 throw new IOException("Unsupported completed checkpoint pointer version");
