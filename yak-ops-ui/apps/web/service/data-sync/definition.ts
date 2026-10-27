@@ -48,6 +48,13 @@ export function buildSyncParameters(task: DataSyncTaskSavePayload): DataSyncPara
     steps: task.steps.filter((step) => step !== "SCHEMA") as Array<"FULL" | "INCREMENTAL">,
     source: {
       datasourceId: task.sourceDataSourceId,
+      ...(realtime
+        ? {
+            startup: {
+              mode: task.steps.includes("FULL") ? ("initial" as const) : ("latest-offset" as const),
+            },
+          }
+        : {}),
       tables: mappings.map((mapping, index) => ({
         id: `table-${index + 1}`,
         database: mapping.source.database,

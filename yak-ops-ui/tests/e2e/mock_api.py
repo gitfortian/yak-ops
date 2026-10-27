@@ -126,6 +126,8 @@ async def mock(route):
                 {"solutionType": "SINGLE_TABLE_REALTIME", "displayName": "单表实时",
                  "steps": ["FULL", "INCREMENTAL"], "defaultSteps": ["FULL", "INCREMENTAL"],
                  "allowedCombinations": [{"steps": ["FULL", "INCREMENTAL"],
+                                          "supportsScheduling": False, "writeModes": ["UPSERT"]},
+                                         {"steps": ["INCREMENTAL"],
                                           "supportsScheduling": False, "writeModes": ["UPSERT"]}]},
                 {"solutionType": "DATABASE_OFFLINE", "displayName": "整库离线",
                  "steps": ["SCHEMA", "FULL"], "defaultSteps": ["FULL"],
@@ -135,6 +137,8 @@ async def mock(route):
                 {"solutionType": "DATABASE_REALTIME", "displayName": "整库实时",
                  "steps": ["FULL", "INCREMENTAL"], "defaultSteps": ["FULL", "INCREMENTAL"],
                  "allowedCombinations": [{"steps": ["FULL", "INCREMENTAL"],
+                                          "supportsScheduling": False, "writeModes": ["UPSERT"]},
+                                         {"steps": ["INCREMENTAL"],
                                           "supportsScheduling": False, "writeModes": ["UPSERT"]}]},
             ])
         if state["fail_solutions"]:

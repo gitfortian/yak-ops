@@ -1,5 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
+import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.TableSchema;
 import java.util.LinkedHashMap;
@@ -98,16 +99,23 @@ public final class MySqlCdcSourceBuilder {
 
     /** Builds a reusable Source definition without opening a database connection. */
     public MySqlCdcSource build() {
-        return new MySqlCdcSource(new MySqlCdcSourceConfig(
-                hostname,
-                port,
-                username,
-                password,
-                serverId,
-                topicPrefix,
-                tables,
-                queueCapacity,
-                connectionProperties,
-                chunkKeyColumns));
+        return build(new TableMetrics());
+    }
+
+    /** Shares pipeline measurements with a standalone Binlog source. */
+    public MySqlCdcSource build(TableMetrics metrics) {
+        return new MySqlCdcSource(
+                new MySqlCdcSourceConfig(
+                        hostname,
+                        port,
+                        username,
+                        password,
+                        serverId,
+                        topicPrefix,
+                        tables,
+                        queueCapacity,
+                        connectionProperties,
+                        chunkKeyColumns),
+                metrics);
     }
 }

@@ -23,9 +23,10 @@ async def choose_solution(page, kind, name):
         await expect(dialog.get_by_role("checkbox", name="结构迁移", exact=True)).to_be_enabled()
         await expect(dialog.get_by_role("checkbox", name="全量同步", exact=True)).to_be_checked()
     else:
-        for checkbox in await dialog.get_by_role("checkbox").all():
-            await expect(checkbox).to_be_checked()
-            await expect(checkbox).to_be_disabled()
+        await expect(dialog.get_by_role("checkbox", name="全量同步", exact=True)).to_be_checked()
+        await expect(dialog.get_by_role("checkbox", name="全量同步", exact=True)).to_be_enabled()
+        await expect(dialog.get_by_role("checkbox", name="增量同步", exact=True)).to_be_checked()
+        await expect(dialog.get_by_role("checkbox", name="增量同步", exact=True)).to_be_disabled()
     await dialog.get_by_role("button", name="下一步", exact=True).click()
 
 
@@ -328,7 +329,8 @@ async def verify_realtime_stages(page):
     for step in ("全量同步", "增量同步"):
         field = dialog.get_by_role("checkbox", name=step, exact=True)
         await expect(field).to_be_checked()
-        await expect(field).to_be_disabled()
+    await expect(dialog.get_by_role("checkbox", name="全量同步", exact=True)).to_be_enabled()
+    await expect(dialog.get_by_role("checkbox", name="增量同步", exact=True)).to_be_disabled()
     await dialog.get_by_role("button", name="下一步", exact=True).click()
     await pick_datasources(page)
     for table in ("batch_a", "batch_b"):

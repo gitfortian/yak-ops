@@ -100,7 +100,9 @@ final class DataSyncTaskHandle implements TaskHandle {
                         : null;
                 boolean continuous = !config.solutionType().supportsScheduling()
                         && config.steps().contains(Step.INCREMENTAL);
-                String dataStep = incremental == null || incremental.initialLoad() ? "FULL" : "INCREMENTAL";
+                String dataStep = continuous
+                        ? (config.steps().contains(Step.FULL) ? "FULL" : "INCREMENTAL")
+                        : (incremental == null || incremental.initialLoad() ? "FULL" : "INCREMENTAL");
                 progress = new TableExecutionProgress(plan.tables(), new TableMetrics(), continuous, dataStep);
                 status = JobStatus.RUNNING;
                 if (config.steps().contains(Step.SCHEMA)) {

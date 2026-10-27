@@ -1,5 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
@@ -23,14 +24,26 @@ public final class MySqlSourceReader
 
     private final MySqlCdcSplitReader splitReader;
     private final SchemaChangeHandler schemaChanges;
+    private final TableMetrics metrics;
+    private final long generation;
 
     public MySqlSourceReader(MySqlCdcSourceConfig config, String fingerprint, SourceReaderContext context) {
-        this(new MySqlCdcSplitReader(config, fingerprint), context, new SchemaChangeHandler(context));
+        this(config, fingerprint, context, new TableMetrics());
+    }
+
+    public MySqlSourceReader(
+            MySqlCdcSourceConfig config, String fingerprint, SourceReaderContext context, TableMetrics metrics) {
+        this(new MySqlCdcSplitReader(config, fingerprint), context, new SchemaChangeHandler(context), metrics);
     }
 
     private MySqlSourceReader(
-            MySqlCdcSplitReader splitReader, SourceReaderContext context, SchemaChangeHandler schemaChanges) {
-        super(() -> splitReader, new MySqlCdcRecordEmitter(schemaChanges), context);
+            MySqlCdcSplitReader splitReader,
+            SourceReaderContext context,
+            SchemaChangeHandler schemaChanges,
+            TableMetrics metrics) {
+        super(() -> splitReader, new MySqlCdcRecordEmitter(schemaChanges, metrics), context);
+        this.metrics = metrics;
+        generation = metrics.generation();
         this.splitReader = splitReader;
         this.schemaChanges = schemaChanges;
     }
@@ -55,6 +68,20 @@ public final class MySqlSourceReader
     @Override
     public void start() {
         context.sendSplitRequest();
+    }
+
+    @Override
+    public void notifyCheckpointComplete(long checkpointId) {
+        metrics.checkpointCompleted(generation, checkpointId, false);
+    }
+
+    @Override
+    public void close() throws Exception {
+        try {
+            super.close();
+        } finally {
+            metrics.sourceClosed(generation);
+        }
     }
 
     @Override

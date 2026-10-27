@@ -387,7 +387,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             mappings={mappings}
             updateMappings={updateMappings}
             writeMode={combination?.writeModes[0]}
-            allowChunkKey={usesChangelog && !batch && draft.sourceType === "MYSQL"}
+            allowChunkKey={usesChangelog && initialLoad && !batch && draft.sourceType === "MYSQL"}
             usesChangelog={usesChangelog}
             useIncremental={useIncremental}
             initialLoad={initialLoad}

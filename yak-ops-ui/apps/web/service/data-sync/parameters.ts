@@ -75,7 +75,7 @@ export function parseSyncParameters(schemaVersion: number, content: unknown): Da
     !value.source.tables.length ||
     value.source.tables.length > 100 ||
     value.source.tables.length !== value.sink.tables.length ||
-    !allowed(value.source, ["datasourceId", "tables"]) ||
+    !allowed(value.source, ["datasourceId", "tables", "startup"]) ||
     !allowed(value.sink, ["datasourceId", "tables", "schemaPolicy"])
   ) {
     throw new Error("不支持的同步任务定义");
@@ -143,7 +143,10 @@ export function validateSyncParameters(value: DataSyncParameters): void {
   if (
     new Set(steps).size !== steps.length ||
     steps.some((step) => step !== "FULL" && step !== "INCREMENTAL") ||
-    (realtime && (steps.length !== 2 || steps[0] !== "FULL" || steps[1] !== "INCREMENTAL")) ||
+    (realtime &&
+      ![["FULL", "INCREMENTAL"], ["INCREMENTAL"]].some(
+        (candidate) => JSON.stringify(candidate) === JSON.stringify(steps),
+      )) ||
     (!realtime &&
       ![["FULL"], ["INCREMENTAL"], ["FULL", "INCREMENTAL"]].some(
         (candidate) => JSON.stringify(candidate) === JSON.stringify(steps),
@@ -151,6 +154,17 @@ export function validateSyncParameters(value: DataSyncParameters): void {
     (!supportsMultipleTables(value.solutionType) && value.source.tables.length !== 1)
   )
     throw new Error("不支持的同步步骤或表数量");
+  const startup = value.source.startup;
+  if (
+    (realtime &&
+      (steps.includes("FULL")
+        ? startup !== undefined &&
+          (startup?.mode !== "initial" || Object.keys(startup).some((key) => key !== "mode"))
+        : startup?.mode !== "latest-offset" ||
+          Object.keys(startup).some((key) => key !== "mode"))) ||
+    (!realtime && startup !== undefined)
+  )
+    throw new Error("CDC 启动位置与同步步骤不匹配");
   const policy = value.sink.schemaPolicy;
   if (
     !policy ||
@@ -178,6 +192,7 @@ export function validateSyncParameters(value: DataSyncParameters): void {
     if (
       source.snapshot !== undefined &&
       (solutionSyncType(value.solutionType) !== "REALTIME" ||
+        !steps.includes("FULL") ||
         typeof source.snapshot?.chunkKeyColumn !== "string" ||
         !source.snapshot.chunkKeyColumn.trim() ||
         source.snapshot.chunkKeyColumn.length > 128 ||

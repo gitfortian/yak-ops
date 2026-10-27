@@ -143,7 +143,7 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
         }
         return startupMode == StartupMode.INITIAL
                 ? builder.buildHybrid(options.get(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE), first.metrics())
-                : builder.build();
+                : builder.build(first.metrics());
     }
 
     /**

@@ -1,5 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
+import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlSourceEnumerator;
@@ -36,12 +37,15 @@ import java.util.Objects;
 public final class MySqlCdcSource implements Source<TableRecord, MySqlBinlogSplit, MySqlPendingSplitsState> {
 
     private final MySqlCdcSourceConfig config;
+    private final TableMetrics metrics;
     private final String fingerprint;
     private final MySqlBinlogSplitSerializer splitSerializer = new MySqlBinlogSplitSerializer();
     private final MySqlPendingSplitsStateSerializer stateSerializer = new MySqlPendingSplitsStateSerializer();
 
-    MySqlCdcSource(MySqlCdcSourceConfig config) {
+    MySqlCdcSource(MySqlCdcSourceConfig config, TableMetrics metrics) {
         this.config = Objects.requireNonNull(config, "config");
+        this.metrics = Objects.requireNonNull(metrics, "metrics");
+        config.schemas().keySet().forEach(metrics::register);
         fingerprint = fingerprint(config);
     }
 
@@ -80,6 +84,7 @@ public final class MySqlCdcSource implements Source<TableRecord, MySqlBinlogSpli
     public SplitEnumerator<MySqlBinlogSplit, MySqlPendingSplitsState> createEnumerator(
             SplitEnumeratorContext<MySqlBinlogSplit> context) {
         requirePhysicalPrimaryKeys();
+        metrics.beginSnapshot(false);
         return new MySqlSourceEnumerator(context, fingerprint, null);
     }
 
@@ -87,6 +92,7 @@ public final class MySqlCdcSource implements Source<TableRecord, MySqlBinlogSpli
     public SplitEnumerator<MySqlBinlogSplit, MySqlPendingSplitsState> restoreEnumerator(
             SplitEnumeratorContext<MySqlBinlogSplit> context, MySqlPendingSplitsState checkpointState) {
         requirePhysicalPrimaryKeys();
+        metrics.beginSnapshot(true);
         return new MySqlSourceEnumerator(context, fingerprint, Objects.requireNonNull(checkpointState, "checkpoint"));
     }
 
@@ -96,7 +102,7 @@ public final class MySqlCdcSource implements Source<TableRecord, MySqlBinlogSpli
         if (context.currentParallelism() != 1 || context.getIndexOfSubtask() != 0) {
             throw new IllegalArgumentException("MySQL Binlog Source requires exactly one SourceReader");
         }
-        return new MySqlSourceReader(config.withRuntimeState(context), fingerprint, context);
+        return new MySqlSourceReader(config.withRuntimeState(context), fingerprint, context, metrics);
     }
 
     @Override
