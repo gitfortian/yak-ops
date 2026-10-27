@@ -196,7 +196,7 @@ public final class JdbcSourceEnumerator implements SplitEnumerator<JdbcSourceSpl
         if (!started || planning || nextTableIndex < tables.size() || !pending.isEmpty() || closed) {
             return;
         }
-        for (int id : context.registeredReaders()) {
+        for (int id : context.registeredReaders().keySet()) {
             if (finishedReaders.add(id)) {
                 context.signalNoMoreSplits(id);
             }
