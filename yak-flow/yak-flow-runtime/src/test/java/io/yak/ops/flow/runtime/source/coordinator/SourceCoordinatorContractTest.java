@@ -362,7 +362,7 @@ class SourceCoordinatorContractTest {
                         if (batchAssignments) {
                             context.assignSplits(new SplitsAssignment<>(java.util.Map.of(subtaskId,
                                     List.of(new TestSplit("batch-" + subtaskId + "-a"),
-                                            new TestSplit("batch-" + subtaskId + "-b"))));
+                                            new TestSplit("batch-" + subtaskId + "-b")))));
                         } else {
                             context.assignSplit(new TestSplit("split-" + subtaskId), subtaskId);
                         }
