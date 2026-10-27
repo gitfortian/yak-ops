@@ -127,7 +127,7 @@ class MySqlChangeEventIdsTest {
                 .build().config();
         try (var splitReader = new MySqlSplitReader(config)) {
             var emitter = new MySqlRecordEmitter(
-                    new MySqlSourceReaderContext(context()), splitReader, new TableMetrics());
+                    new MySqlSourceReaderContext(context()), splitReader, new TableMetrics(), config.topicPrefix());
             var rows = List.of(
                     new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L)),
                     new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L)));
@@ -137,9 +137,9 @@ class MySqlChangeEventIdsTest {
             var output = new ArrayList<TableRecord>();
             emitter.emitRecord(MySqlFetchedRecord.prepared(prepared), output::add, state);
             assertEquals(2, output.size());
-            assertEquals(ChangeEventId.snapshot("stable-definition", "chunk-0", 0),
+            assertEquals(ChangeEventId.snapshot("identity-test", "chunk-0", 0),
                     output.getFirst().changeEventId());
-            assertEquals(ChangeEventId.snapshot("stable-definition", "chunk-0", 1),
+            assertEquals(ChangeEventId.snapshot("identity-test", "chunk-0", 1),
                     output.getLast().changeEventId());
             var serializer = new MySqlSplitSerializer();
             var restored = (MySqlSnapshotSplit) serializer.deserialize(
@@ -160,7 +160,7 @@ class MySqlChangeEventIdsTest {
                 .build().config();
         try (var splitReader = new MySqlSplitReader(config)) {
             var emitter = new MySqlRecordEmitter(
-                    new MySqlSourceReaderContext(context()), splitReader, new TableMetrics());
+                    new MySqlSourceReaderContext(context()), splitReader, new TableMetrics(), config.topicPrefix());
             var rows = List.of(
                     new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L)),
                     new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(2L)));
@@ -205,12 +205,12 @@ class MySqlChangeEventIdsTest {
                 .username("user")
                 .password("secret")
                 .serverId(9002)
-                .topicPrefix("hybrid-emitter-contract")
+                .topicPrefix("emission-test")
                 .table(TABLE, schema)
                 .build()
                 .config();
         try (var splitReader = new MySqlSplitReader(config)) {
-            var emitter = new MySqlRecordEmitter(new MySqlSourceReaderContext(context()), splitReader, new TableMetrics());
+            var emitter = new MySqlRecordEmitter(new MySqlSourceReaderContext(context()), splitReader, new TableMetrics(), config.topicPrefix());
             List<TableRecord> hybridOutput = new ArrayList<>();
             var event = MySqlFetchedRecord.binlog(new BinlogEvent(rows, offset));
             emitter.emitRecord(event, hybridOutput::add, hybridState);
@@ -257,7 +257,7 @@ class MySqlChangeEventIdsTest {
                 .build()
                 .config();
         var readerContext = context();
-        return new MySqlRecordEmitter(new MySqlSourceReaderContext(readerContext), new MySqlSplitReader(config), new TableMetrics());
+        return new MySqlRecordEmitter(new MySqlSourceReaderContext(readerContext), new MySqlSplitReader(config), new TableMetrics(), config.topicPrefix());
     }
 
     private static TableRecord row(RowKind kind, String value) {
