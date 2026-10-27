@@ -111,18 +111,12 @@ class MySqlKeylessBackfillTest {
 
         var serializer = new MySqlSplitSerializer();
         var frozen = MySqlSnapshotSplit.typed("large-group", "fp", RANGE).withOutput(output);
-        byte[] bytes = serializer.serialize(frozen);
-        assertTrue(bytes.length < 4096, "Same-row multiplicity must not inflate the split checkpoint");
-        var restored = (MySqlSnapshotSplit) serializer.deserialize(serializer.getVersion(), bytes);
-        assertEquals(200_000, restored.output().rows().size());
-        assertEquals("edited", restored.output().rows().getLast().row().getString(1));
-
-        var partiallyEmitted = restored.withOutputPosition(120_000);
-        var resumed = (MySqlSnapshotSplit)
-                serializer.deserialize(serializer.getVersion(), serializer.serialize(partiallyEmitted));
-        assertEquals(120_000, resumed.outputPosition());
-        assertEquals("same", resumed.output().rows().get(120_000).row().getString(1));
-        assertEquals("edited", resumed.output().rows().getLast().row().getString(1));
+        assertThrows(java.io.IOException.class, () -> serializer.serialize(frozen));
+        var completed = frozen.withOutputPosition(output.rows().size());
+        var restored = (MySqlSnapshotSplit) serializer.deserialize(
+                serializer.getVersion(), serializer.serialize(completed));
+        assertEquals(offset(200), restored.finished().highWatermark());
+        assertEquals(null, restored.output());
     }
 
     @Test

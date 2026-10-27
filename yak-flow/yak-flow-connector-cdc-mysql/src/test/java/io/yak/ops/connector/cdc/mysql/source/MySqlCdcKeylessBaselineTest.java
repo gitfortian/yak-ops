@@ -94,23 +94,22 @@ class MySqlCdcKeylessBaselineTest {
     }
 
     @Test
-    void durableSnapshotTransportPreservesIdenticalKeylessRows() throws Exception {
-        // Snapshot transport preserves repeated physical rows across durable checkpoints.
-        // An ordinary Map<RowData, RowData> must not replace this list.
+    void inMemorySnapshotPreservesIdenticalKeylessRowsWithoutSerializingImages() throws Exception {
         var duplicate = new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(7L, "same"));
         var other = new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(8L, "other"));
-        var prepared = new MySqlSnapshotSplit("chunk", "fingerprint", TABLE, null, null, null)
-                .withOutput(new MySqlSnapshotOutput(offset(100), offset(200), List.of(duplicate, duplicate, other)));
+        var raw = new MySqlSnapshotSplit("chunk", "fingerprint", TABLE, null, null, null);
+        var prepared = raw.withOutput(new MySqlSnapshotOutput(
+                offset(100), offset(200), List.of(duplicate, duplicate, other)));
+        assertEquals(3, prepared.output().rows().size());
+        assertEquals("same", prepared.output().rows().get(0).row().getString(1));
+        assertEquals("same", prepared.output().rows().get(1).row().getString(1));
         var serializer = new MySqlSplitSerializer();
-        var restored = (MySqlSnapshotSplit)
-                serializer.deserialize(serializer.getVersion(), serializer.serialize(prepared));
-
-        assertEquals(3, restored.output().rows().size());
-        assertEquals("same", restored.output().rows().get(0).row().getString(1));
-        assertEquals("same", restored.output().rows().get(1).row().getString(1));
-        assertEquals(7L, restored.output().rows().get(0).row().getLong(0));
-        assertEquals(7L, restored.output().rows().get(1).row().getLong(0));
-        assertEquals(prepared, restored);
+        assertThrows(java.io.IOException.class, () -> serializer.serialize(prepared));
+        var finished = prepared.withOutputPosition(3);
+        var restored = (MySqlSnapshotSplit) serializer.deserialize(
+                serializer.getVersion(), serializer.serialize(finished));
+        assertEquals(offset(200), restored.finished().highWatermark());
+        assertEquals(null, restored.output());
     }
 
     private static DebeziumOffset offset(long position) {
