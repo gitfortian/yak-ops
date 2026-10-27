@@ -1,12 +1,16 @@
-package io.yak.ops.connector.cdc.mysql.debezium;
+package io.yak.ops.connector.cdc.mysql.debezium.task;
 
 import io.debezium.embedded.Connect;
+import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
+import io.yak.ops.connector.cdc.mysql.debezium.CheckpointOffsetBackingStore;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogConfigurationValidator;
+import io.yak.ops.connector.cdc.mysql.debezium.task.context.StatefulTaskContext;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.RecordChangeEvent;
 import io.debezium.engine.format.ChangeEventFormat;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
-import io.yak.ops.connector.cdc.mysql.debezium.MySqlDebeziumRecordConverter;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.core.data.TableId;
 import java.io.IOException;
@@ -15,10 +19,6 @@ import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,15 +30,13 @@ import org.slf4j.LoggerFactory;
  * It only enqueues detached complete change events. Its private volatile offsets may run
  * ahead of emission, but are never promoted to a completed YakFlow checkpoint.
  */
-public final class MySqlBinlogEngine implements AutoCloseable {
+public final class MySqlBinlogSplitReadTask implements AutoCloseable {
 
-    private static final Logger LOG = LoggerFactory.getLogger(MySqlBinlogEngine.class);
+    private static final Logger LOG = LoggerFactory.getLogger(MySqlBinlogSplitReadTask.class);
 
     private final MySqlSourceConfig config;
     private final int serverId;
-    private final MySqlDebeziumRecordConverter converter;
-    private final BlockingQueue<BinlogEvent> queue;
-    private final AtomicReference<Throwable> failure = new AtomicReference<>();
+    private final StatefulTaskContext context;
 
     private DebeziumEngine<RecordChangeEvent<SourceRecord>> engine;
     private Thread worker;
@@ -51,18 +49,16 @@ public final class MySqlBinlogEngine implements AutoCloseable {
     private boolean awaitingSchemaSnapshot;
     private final Set<TableId> bootstrapTables = new HashSet<>();
 
-    public MySqlBinlogEngine(MySqlSourceConfig config) {
+    public MySqlBinlogSplitReadTask(MySqlSourceConfig config) {
         this(config, config.serverId());
     }
 
     /** Uses a distinct replication connection while retaining the source partition and table contract. */
-    public MySqlBinlogEngine(MySqlSourceConfig config, int serverId) {
+    public MySqlBinlogSplitReadTask(MySqlSourceConfig config, int serverId) {
         if (serverId < 1) throw new IllegalArgumentException("Replication server ID must be positive");
         this.serverId = serverId;
         this.config = Objects.requireNonNull(config, "config");
-        converter = new MySqlDebeziumRecordConverter(
-                config.schemas(), config.physicalSchemas(), config.schemaEvolutionEnabled());
-        queue = new ArrayBlockingQueue<>(config.queueCapacity());
+        context = new StatefulTaskContext(config, serverId);
     }
 
     /** Starts the engine, optionally seeding its offset and Schema History from a checkpoint. */
@@ -75,12 +71,13 @@ public final class MySqlBinlogEngine implements AutoCloseable {
         if (started || stopped) {
             throw new IllegalStateException("MySQL Binlog engine cannot start twice");
         }
+        context.configure(split);
         started = true;
-        lastQueuedOffset = split.offset();
+        lastQueuedOffset = context.restoredOffset();
         awaitingSchemaSnapshot = split.offset() == null;
         directory = Files.createTempDirectory("yakflow-binlog-");
         historyPath = directory.resolve("schema-history.dat");
-        byte[] history = split.schemaHistory();
+        byte[] history = context.restoredSchemaHistory();
         if (split.offset() != null && history.length == 0) {
             throw new IllegalArgumentException("A restored MySQL Binlog offset requires Schema History");
         }
@@ -99,9 +96,7 @@ public final class MySqlBinlogEngine implements AutoCloseable {
                 .using((success, message, error) -> {
                     if (!success && !stopped) {
                         // Preserve the original driver exception instead of only reporting an engine stop.
-                        failure.compareAndSet(
-                                null,
-                                error != null
+                        context.recordFailure(error != null
                                         ? error
                                         : new IllegalStateException("Debezium MySQL connector failed: " + message));
                     }
@@ -111,12 +106,11 @@ public final class MySqlBinlogEngine implements AutoCloseable {
             try {
                 engine.run();
                 if (!stopped) {
-                    failure.compareAndSet(
-                            null, new IllegalStateException("Debezium MySQL Binlog engine stopped unexpectedly"));
+                    context.recordFailure(new IllegalStateException("Debezium MySQL Binlog engine stopped unexpectedly"));
                 }
             } catch (Throwable error) {
                 if (!stopped) {
-                    failure.compareAndSet(null, error);
+                    context.recordFailure(error);
                 }
             }
         });
@@ -148,7 +142,7 @@ public final class MySqlBinlogEngine implements AutoCloseable {
                         if (snapshotHistory().length == 0) {
                             throw new IllegalStateException("MySQL CDC initial schema snapshot has no Schema History");
                         }
-                        BinlogEvent anchor = Objects.requireNonNull(converter.convert(source), "snapshot heartbeat");
+                        BinlogEvent anchor = Objects.requireNonNull(context.converter().convert(source), "snapshot heartbeat");
                         enqueue(anchor);
                         lastQueuedOffset = anchor.offset();
                         awaitingSchemaSnapshot = false;
@@ -156,21 +150,21 @@ public final class MySqlBinlogEngine implements AutoCloseable {
                                 "MySQL CDC initial schema snapshot completed, tables={}",
                                 config.schemas().size());
                     } else {
-                        converter.applyInitialSchemaTables(source, bootstrapTables);
+                        context.converter().applyInitialSchemaTables(source, bootstrapTables);
                     }
                 } else {
-                    TableId changed = converter.schemaMismatch(source);
+                    TableId changed = context.converter().schemaMismatch(source);
                     if (changed != null) {
                         // Some MySQL DDLs carry no tableChanges. Only the Debezium row
                         // schema at THIS Binlog position may prove a safe change.
                         // Current JDBC catalog metadata could already describe later DDL.
                         // Hold the preceding offset until SchemaCoordinator accepts the
                         // transition, so recovery cannot skip the discovering row.
-                        BinlogEvent transition = converter.reconcileRowSchema(source, lastQueuedOffset);
+                        BinlogEvent transition = context.converter().reconcileRowSchema(source, lastQueuedOffset);
                         LOG.info("MySQL CDC row schema reconciliation: table={}", changed);
                         enqueue(transition);
                     }
-                    BinlogEvent converted = converter.convert(source);
+                    BinlogEvent converted = context.converter().convert(source);
                     if (converted != null) {
                         if (converted.schemaChange() != null) {
                             LOG.info(
@@ -184,7 +178,7 @@ public final class MySqlBinlogEngine implements AutoCloseable {
             } catch (InterruptedException interrupted) {
                 throw interrupted;
             } catch (Exception error) {
-                failure.compareAndSet(null, error);
+                context.recordFailure(error);
                 throw new IllegalStateException("MySQL CDC event conversion failed", error);
             }
             // The engine may stage this offset, but the YakFlow checkpoint uses only
@@ -199,7 +193,7 @@ public final class MySqlBinlogEngine implements AutoCloseable {
     }
 
     private void enqueue(BinlogEvent record) throws InterruptedException {
-        while (!stopped && !queue.offer(record, 250, TimeUnit.MILLISECONDS)) {
+        while (!stopped && !context.offer(record)) {
             // Bounded handover: preserve strict schema-event / row order.
         }
         if (stopped) {
@@ -208,16 +202,7 @@ public final class MySqlBinlogEngine implements AutoCloseable {
     }
 
     public BinlogEvent poll() throws InterruptedException {
-        Throwable error = failure.get();
-        if (error != null) {
-            throw new IllegalStateException("MySQL Binlog Debezium engine failed", error);
-        }
-        BinlogEvent record = queue.poll(250, TimeUnit.MILLISECONDS);
-        error = failure.get();
-        if (error != null) {
-            throw new IllegalStateException("MySQL Binlog Debezium engine failed", error);
-        }
-        return record;
+        return context.poll();
     }
 
     /**
