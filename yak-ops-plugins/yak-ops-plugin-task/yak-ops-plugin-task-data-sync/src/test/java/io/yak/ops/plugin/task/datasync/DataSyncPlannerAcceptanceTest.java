@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.connector.base.factory.FactoryUtil;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
@@ -83,9 +83,9 @@ class DataSyncPlannerAcceptanceTest {
         var route = plan.tables().getFirst();
         assertEquals("MYSQL_CDC", route.sourceParameters().getSourceMap().get("type"));
         assertEquals("JDBC", route.sinkParameters().getSourceMap().get("type"));
-        assertTrue(route.sourceOptions().contains(MySqlCdcSourceOptions.SERVER_ID));
-        assertTrue(route.sourceOptions().contains(MySqlCdcSourceOptions.TOPIC_PREFIX));
-        assertFalse(route.sinkParameters().contains(MySqlCdcSourceOptions.SERVER_ID));
+        assertTrue(route.sourceOptions().contains(MySqlSourceOptions.SERVER_ID));
+        assertTrue(route.sourceOptions().contains(MySqlSourceOptions.TOPIC_PREFIX));
+        assertFalse(route.sinkParameters().contains(MySqlSourceOptions.SERVER_ID));
         assertFalse(route.sinkParameters().contains(JdbcSinkOptions.XA_INSTANCE_ID));
         assertEquals(2, plan.admissionPlan().exclusiveResources().size());
         assertEquals(0, resources.connectionReads);

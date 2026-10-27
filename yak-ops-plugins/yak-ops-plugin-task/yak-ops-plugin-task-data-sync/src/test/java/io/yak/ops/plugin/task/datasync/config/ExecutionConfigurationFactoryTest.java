@@ -13,7 +13,7 @@ import io.yak.ops.core.configuration.SchemaEvolutionOptions;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.configuration.ReadonlyConfig;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -50,8 +50,8 @@ class ExecutionConfigurationFactoryTest {
         assertEquals(1, configuration.get(CheckpointingOptions.MAX_CONCURRENT_CHECKPOINTS));
         assertEquals(3, configuration.get(ExecutionOptions.MAX_RESTART_ATTEMPTS));
         assertEquals(false, configuration.get(CheckpointingOptions.RESTORE_LATEST));
-        assertEquals(false, configuration.contains(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE));
-        assertEquals(false, configuration.contains(MySqlCdcSourceOptions.QUEUE_CAPACITY));
+        assertEquals(false, configuration.contains(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE));
+        assertEquals(false, configuration.contains(MySqlSourceOptions.QUEUE_CAPACITY));
         assertEquals(2, options.get(EnvironmentOptions.SOURCE_PARALLELISM));
         assertEquals(1, options.get(EnvironmentOptions.SINK_PARALLELISM));
     }
