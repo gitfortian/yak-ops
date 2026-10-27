@@ -16,8 +16,7 @@ class MySqlSplitSerializerTest {
     @Test
     void roundTripsUnfinishedSnapshotBoundariesWithoutCursorImages() throws Exception {
         var serializer = new MySqlSplitSerializer();
-        var original = new MySqlSnapshotSplit(
-                "snapshot-0", "fingerprint", new TableId("shop", null, "orders"), 100L, 200L, null);
+        var original = new MySqlSnapshotSplit("snapshot-0", new TableId("shop", null, "orders"), 100L, 200L, null);
         MySqlSnapshotSplit restored =
                 (MySqlSnapshotSplit) serializer.deserialize(serializer.getVersion(), serializer.serialize(original));
         assertEquals(original, restored);
@@ -33,7 +32,7 @@ class MySqlSplitSerializerTest {
         var serializer = new MySqlSplitSerializer();
         var low = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000010", "pos", 100L));
         var high = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000010", "pos", 300L));
-        var bootstrap = MySqlBinlogSplit.forInitialSnapshot("fingerprint");
+        var bootstrap = MySqlBinlogSplit.forInitialSnapshot();
         var paused = bootstrap.withAnchor(low, new byte[] {1, 2, 3});
         var running = paused.startStreaming(high, completed(high)).withEmittedOffset(high, new byte[] {1, 2, 3});
         var restored = (MySqlBinlogSplit) serializer.deserialize(serializer.getVersion(), serializer.serialize(running));
