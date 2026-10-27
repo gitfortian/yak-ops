@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Objects;
 
 /** One mailbox step: a prepared chunk, bounded output batch, complete Binlog change, or bootstrap anchor. */
-public record MySqlHybridFetchedRecord(
+public record MySqlFetchedRecord(
         List<TableRecord> rows,
         Long snapshotKey,
         DebeziumOffset binlogOffset,
@@ -17,7 +17,7 @@ public record MySqlHybridFetchedRecord(
         Integer snapshotRowsEmitted,
         SourceSchemaChange schemaChange) {
 
-    public MySqlHybridFetchedRecord(
+    public MySqlFetchedRecord(
             List<TableRecord> rows,
             Long snapshotKey,
             DebeziumOffset binlogOffset,
@@ -27,12 +27,12 @@ public record MySqlHybridFetchedRecord(
         this(rows, snapshotKey, binlogOffset, lowWatermark, preparedSnapshot, snapshotRowsEmitted, null);
     }
 
-    public MySqlHybridFetchedRecord(
+    public MySqlFetchedRecord(
             List<TableRecord> rows, Long snapshotKey, DebeziumOffset binlogOffset, boolean lowWatermark) {
         this(rows, snapshotKey, binlogOffset, lowWatermark, null, null);
     }
 
-    public MySqlHybridFetchedRecord {
+    public MySqlFetchedRecord {
         rows = List.copyOf(Objects.requireNonNull(rows, "rows"));
         int kinds = (snapshotKey == null ? 0 : 1)
                 + (binlogOffset == null ? 0 : 1)
@@ -43,25 +43,24 @@ public record MySqlHybridFetchedRecord(
                 || (preparedSnapshot != null && (preparedSnapshot.output() == null || !rows.isEmpty()))
                 || (lowWatermark && (binlogOffset == null || !rows.isEmpty()))
                 || (schemaChange != null && (binlogOffset == null || !rows.isEmpty() || lowWatermark))) {
-            throw new IllegalArgumentException("Inconsistent Hybrid fetched record kind");
+            throw new IllegalArgumentException("Inconsistent MySQL fetched record kind");
         }
     }
 
-    public static MySqlHybridFetchedRecord binlog(BinlogEvent event) {
-        return new MySqlHybridFetchedRecord(
-                event.records(), null, event.offset(), false, null, null, event.schemaChange());
+    public static MySqlFetchedRecord binlog(BinlogEvent event) {
+        return new MySqlFetchedRecord(event.records(), null, event.offset(), false, null, null, event.schemaChange());
     }
 
-    public static MySqlHybridFetchedRecord prepared(MySqlSnapshotSplit split) {
-        return new MySqlHybridFetchedRecord(List.of(), null, null, false, split, null);
+    public static MySqlFetchedRecord prepared(MySqlSnapshotSplit split) {
+        return new MySqlFetchedRecord(List.of(), null, null, false, split, null);
     }
 
-    public static MySqlHybridFetchedRecord snapshotRows(List<TableRecord> rows, int position) {
-        return new MySqlHybridFetchedRecord(rows, null, null, false, null, position);
+    public static MySqlFetchedRecord snapshotRows(List<TableRecord> rows, int position) {
+        return new MySqlFetchedRecord(rows, null, null, false, null, position);
     }
 
     @Override
     public String toString() {
-        return "MySqlHybridFetchedRecord{rowCount=" + rows.size() + ", values=redacted}";
+        return "MySqlFetchedRecord{rowCount=" + rows.size() + ", values=redacted}";
     }
 }

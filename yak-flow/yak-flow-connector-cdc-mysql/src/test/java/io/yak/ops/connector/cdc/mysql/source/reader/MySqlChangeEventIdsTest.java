@@ -81,10 +81,10 @@ class MySqlChangeEventIdsTest {
         BinlogEvent update = new BinlogEvent(
                 List.of(row(RowKind.UPDATE_BEFORE, "same"), row(RowKind.UPDATE_AFTER, "same")),
                 position);
-        var state = new MySqlCdcSplitState(new MySqlBinlogSplit("task-definition", null, new byte[0]));
-        var emitter = new MySqlCdcRecordEmitter(new SchemaChangeHandler(context()));
+        var state = new MySqlSplitState(new MySqlBinlogSplit("task-definition", null, new byte[0]));
+        var emitter = binlogEmitter();
         List<TableRecord> delivered = new ArrayList<>();
-        emitter.emitRecord(update, delivered::add, state);
+        emitter.emitRecord(MySqlFetchedRecord.binlog(update), delivered::add, state);
         assertEquals(2, delivered.size());
         ChangeEventId before = delivered.getFirst().changeEventId();
         ChangeEventId after = delivered.getLast().changeEventId();
@@ -93,23 +93,23 @@ class MySqlChangeEventIdsTest {
         assertEquals(1, after.imageIndex());
         assertEquals(2, before.imageCount());
         assertEquals(2, after.imageCount());
-        assertEquals(position, state.checkpoint(new byte[] {1}).offset());
+        assertEquals(position, ((MySqlBinlogSplit) state.checkpoint(new byte[] {1})).offset());
 
-        var restored = new MySqlCdcSplitState(
+        var restored = new MySqlSplitState(
                 new MySqlBinlogSplit("task-definition", position(42, 1), new byte[] {1}));
         List<TableRecord> replayed = new ArrayList<>();
-        emitter.emitRecord(update, replayed::add, restored);
+        emitter.emitRecord(MySqlFetchedRecord.binlog(update), replayed::add, restored);
         assertEquals(before, replayed.getFirst().changeEventId());
         assertEquals(after, replayed.getLast().changeEventId());
-        assertEquals(position, restored.checkpoint(new byte[] {1}).offset());
+        assertEquals(position, ((MySqlBinlogSplit) restored.checkpoint(new byte[] {1})).offset());
         assertEquals("same", replayed.getFirst().row().getString(0));
 
-        var failed = new MySqlCdcSplitState(
+        var failed = new MySqlSplitState(
                 new MySqlBinlogSplit("task-definition", position(42, 1), new byte[] {1}));
-        assertThrows(IllegalStateException.class, () -> emitter.emitRecord(update, record -> {
+        assertThrows(IllegalStateException.class, () -> emitter.emitRecord(MySqlFetchedRecord.binlog(update), record -> {
             if (record.rowKind() == RowKind.UPDATE_AFTER) throw new IllegalStateException("sink failed");
         }, failed));
-        assertEquals(position(42, 1), failed.checkpoint(new byte[] {1}).offset());
+        assertEquals(position(42, 1), ((MySqlBinlogSplit) failed.checkpoint(new byte[] {1})).offset());
     }
 
 
@@ -126,33 +126,33 @@ class MySqlChangeEventIdsTest {
                 .table(TABLE, schema)
                 .build()
                 .config();
-        var splitReader = new MySqlHybridSplitReader(config);
-        var emitter = new MySqlHybridRecordEmitter(
+        var splitReader = new MySqlSplitReader(config);
+        var emitter = new MySqlRecordEmitter(
                 context(), splitReader, new TableMetrics(), new SchemaChangeHandler(context()));
         var rows = List.of(
                 new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L)),
                 new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L)));
         var original = new MySqlSnapshotSplit("chunk-0", "stable-definition", TABLE, null, null, null)
                 .withOutput(new MySqlSnapshotOutput(position(10, 0), position(20, 0), rows));
-        var state = new MySqlHybridSplitState(original);
+        var state = new MySqlSplitState(original);
         List<TableRecord> first = new ArrayList<>();
-        emitter.emitRecord(MySqlHybridFetchedRecord.snapshotRows(original.output().rows().subList(0, 1), 1),
+        emitter.emitRecord(MySqlFetchedRecord.snapshotRows(original.output().rows().subList(0, 1), 1),
                 first::add, state);
         assertEquals(ChangeEventId.snapshot("stable-definition", "chunk-0", 0), first.getFirst().changeEventId());
 
         var serializer = new MySqlHybridSplitSerializer();
         var checkpoint = (MySqlSnapshotSplit)
-                serializer.deserialize(serializer.getVersion(), serializer.serialize(state.checkpoint(null)));
+                serializer.deserialize(serializer.getVersion(), serializer.serialize((io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit) state.checkpoint(null)));
         assertEquals(1, checkpoint.outputPosition());
-        var resumed = new MySqlHybridSplitState(checkpoint);
+        var resumed = new MySqlSplitState(checkpoint);
         List<TableRecord> next = new ArrayList<>();
-        emitter.emitRecord(MySqlHybridFetchedRecord.snapshotRows(checkpoint.output().rows().subList(1, 2), 2),
+        emitter.emitRecord(MySqlFetchedRecord.snapshotRows(checkpoint.output().rows().subList(1, 2), 2),
                 next::add, resumed);
         assertEquals(ChangeEventId.snapshot("stable-definition", "chunk-0", 1), next.getFirst().changeEventId());
         assertFalse(first.getFirst().changeEventId().sameEvent(next.getFirst().changeEventId()));
         List<TableRecord> replay = new ArrayList<>();
-        emitter.emitRecord(MySqlHybridFetchedRecord.snapshotRows(original.output().rows().subList(0, 1), 1),
-                replay::add, new MySqlHybridSplitState(original));
+        emitter.emitRecord(MySqlFetchedRecord.snapshotRows(original.output().rows().subList(0, 1), 1),
+                replay::add, new MySqlSplitState(original));
         assertEquals(first.getFirst().changeEventId(), replay.getFirst().changeEventId());
         splitReader.close();
     }
@@ -164,10 +164,10 @@ class MySqlChangeEventIdsTest {
         DebeziumOffset high = position(50, 5);
         List<TableRecord> rows = List.of(row(RowKind.UPDATE_BEFORE, "same"), row(RowKind.UPDATE_AFTER, "same"));
 
-        var cdcState = new MySqlCdcSplitState(new MySqlBinlogSplit("task-definition", previous, new byte[] {1}));
+        var cdcState = new MySqlSplitState(new MySqlBinlogSplit("task-definition", previous, new byte[] {1}));
         List<TableRecord> cdcOutput = new ArrayList<>();
-        new MySqlCdcRecordEmitter(new SchemaChangeHandler(context()))
-                .emitRecord(new BinlogEvent(rows, offset), cdcOutput::add, cdcState);
+        binlogEmitter()
+                .emitRecord(MySqlFetchedRecord.binlog(new BinlogEvent(rows, offset)), cdcOutput::add, cdcState);
 
         var finished = new FinishedSnapshotSplitInfo(TABLE, "chunk-0", null, null, high);
         var streaming = new MySqlHybridBinlogSplit(
@@ -175,7 +175,7 @@ class MySqlChangeEventIdsTest {
                 MySqlHybridBinlogSplit.Phase.STREAMING,
                 high,
                 List.of(finished));
-        var hybridState = new MySqlHybridSplitState(streaming);
+        var hybridState = new MySqlSplitState(streaming);
         var schema = new TableSchema(
                 List.of(
                         new Column("id", LogicalTypes.BIGINT.copy(false)),
@@ -190,20 +190,20 @@ class MySqlChangeEventIdsTest {
                 .table(TABLE, schema)
                 .build()
                 .config();
-        try (var splitReader = new MySqlHybridSplitReader(config)) {
-            var emitter = new MySqlHybridRecordEmitter(
+        try (var splitReader = new MySqlSplitReader(config)) {
+            var emitter = new MySqlRecordEmitter(
                     context(), splitReader, new TableMetrics(), new SchemaChangeHandler(context()));
             List<TableRecord> hybridOutput = new ArrayList<>();
-            var event = new MySqlHybridFetchedRecord(rows, null, offset, false, null, null);
+            var event = new MySqlFetchedRecord(rows, null, offset, false, null, null);
             emitter.emitRecord(event, hybridOutput::add, hybridState);
 
             assertEquals(
                     cdcOutput.stream().map(TableRecord::changeEventId).toList(),
                     hybridOutput.stream().map(TableRecord::changeEventId).toList());
-            assertEquals(offset, cdcState.checkpoint(new byte[] {1}).offset());
+            assertEquals(offset, ((MySqlBinlogSplit) cdcState.checkpoint(new byte[] {1})).offset());
             assertEquals(offset, ((MySqlHybridBinlogSplit) hybridState.checkpoint(new byte[] {1})).binlog().offset());
 
-            var failedState = new MySqlHybridSplitState(streaming);
+            var failedState = new MySqlSplitState(streaming);
             assertThrows(IllegalStateException.class, () -> emitter.emitRecord(event, record -> {
                 if (record.rowKind() == RowKind.UPDATE_AFTER) {
                     throw new IllegalStateException("downstream failed");
@@ -217,13 +217,30 @@ class MySqlChangeEventIdsTest {
 
     @Test
     void keyedLegacyOffsetsDeliverWithoutInventingIdentity() throws Exception {
-        var state = new MySqlCdcSplitState(new MySqlBinlogSplit("task-definition", null, new byte[0]));
+        var state = new MySqlSplitState(new MySqlBinlogSplit("task-definition", null, new byte[0]));
         var output = new ArrayList<TableRecord>();
         BinlogEvent update = new BinlogEvent(List.of(row(RowKind.INSERT, "legacy")),
                 new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.1", "pos", 8)));
-        new MySqlCdcRecordEmitter(new SchemaChangeHandler(context())).emitRecord(update, output::add, state);
+        binlogEmitter().emitRecord(MySqlFetchedRecord.binlog(update), output::add, state);
         assertNull(output.getFirst().changeEventId());
-        assertEquals(update.offset(), state.checkpoint(new byte[] {1}).offset());
+        assertEquals(update.offset(), ((MySqlBinlogSplit) state.checkpoint(new byte[] {1})).offset());
+    }
+
+    private static MySqlRecordEmitter binlogEmitter() {
+        var schema = new TableSchema(
+                List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
+        var config = MySqlSource.builder()
+                .hostname("localhost")
+                .username("user")
+                .password("secret")
+                .serverId(9020)
+                .topicPrefix("emission-test")
+                .table(TABLE, schema)
+                .build()
+                .config();
+        var readerContext = context();
+        return new MySqlRecordEmitter(readerContext, new MySqlSplitReader(config),
+                new TableMetrics(), new SchemaChangeHandler(readerContext));
     }
 
     private static TableRecord row(RowKind kind, String value) {

@@ -1,9 +1,10 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import java.util.Objects;
 
 /**
@@ -12,29 +13,35 @@ import java.util.Objects;
  * <p>Fetcher prefetch never mutates checkpoint state. Each UPDATE pair advances the
  * Binlog offset only after both TableRecords have been emitted in one mailbox step.
  */
-public final class MySqlHybridSplitState {
+public final class MySqlSplitState {
 
     private MySqlSnapshotSplit snapshot;
     private MySqlHybridBinlogSplit binlog;
+    private MySqlBinlogSplit standalone;
     private DebeziumOffset emittedOffset;
     private Long outputCheckpoint;
     private boolean outputDurable;
 
-    public MySqlHybridSplitState(MySqlHybridSplit initial) {
+    public MySqlSplitState(MySqlSplit initial) {
         if (initial instanceof MySqlSnapshotSplit range) {
             snapshot = range;
             outputDurable = range.prepared();
         } else if (initial instanceof MySqlHybridBinlogSplit stream) {
             binlog = stream;
             emittedOffset = stream.binlog().offset();
+        } else if (initial instanceof MySqlBinlogSplit stream) {
+            standalone = stream;
+            emittedOffset = stream.offset();
         } else {
-            throw new IllegalArgumentException("Unknown MySQL hybrid split");
+            throw new IllegalArgumentException("Unknown MySQL split");
         }
     }
 
     /** Stable source scope from the original durable split, independent of physical attempts. */
     public String sourceId() {
-        return snapshot != null ? snapshot.fingerprint() : binlog.binlog().definitionFingerprint();
+        return snapshot != null
+                ? snapshot.fingerprint()
+                : binlog != null ? binlog.binlog().definitionFingerprint() : standalone.definitionFingerprint();
     }
 
     /** Snapshot identity is based on the original split and frozen output ordinal. */
@@ -113,6 +120,10 @@ public final class MySqlHybridSplitState {
     }
 
     public void emitBinlog(DebeziumOffset position) {
+        if (standalone != null) {
+            emittedOffset = Objects.requireNonNull(position, "position");
+            return;
+        }
         if (binlog == null || binlog.phase() != MySqlHybridBinlogSplit.Phase.STREAMING) {
             throw new IllegalStateException("Binlog changes cannot be emitted before snapshot handoff");
         }
@@ -120,12 +131,18 @@ public final class MySqlHybridSplitState {
     }
 
     public boolean binlog() {
-        return binlog != null;
+        return binlog != null || standalone != null;
     }
 
-    public MySqlHybridSplit checkpoint(byte[] history) {
+    public MySqlSplit checkpoint(byte[] history) {
         if (snapshot != null) {
             return snapshot;
+        }
+        if (standalone != null) {
+            if (emittedOffset == null || history == null || history.length == 0) {
+                throw new IllegalStateException("MySQL Binlog has no complete offset/schema-history checkpoint yet");
+            }
+            return standalone.withProgress(emittedOffset, history);
         }
         if (binlog.phase() == MySqlHybridBinlogSplit.Phase.BOOTSTRAP) {
             return binlog;

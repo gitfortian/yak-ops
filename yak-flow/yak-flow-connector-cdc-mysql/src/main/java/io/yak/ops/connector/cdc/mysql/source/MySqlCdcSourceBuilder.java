@@ -1,11 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.TableSchema;
@@ -99,7 +95,7 @@ public final class MySqlCdcSourceBuilder {
     }
 
     /** Creates the initial Snapshot + Binlog Source from the same validated connection plan. */
-    public MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> buildHybrid(int chunkSize) {
+    public MySqlSource buildHybrid(int chunkSize) {
         return MySqlSource.initial(
                 config(),
                 chunkSize,
@@ -108,18 +104,18 @@ public final class MySqlCdcSourceBuilder {
     }
 
     /** Builds the shared snapshot and Binlog source with generation-scoped measurements. */
-    public MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> buildHybrid(int chunkSize, TableMetrics metrics) {
+    public MySqlSource buildHybrid(int chunkSize, TableMetrics metrics) {
         return MySqlSource.initial(
                 config(), chunkSize, metrics, startupOptions == null ? StartupOptions.initial() : startupOptions);
     }
 
     /** Builds a reusable Source definition without opening a database connection. */
-    public MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> build() {
+    public MySqlSource build() {
         return build(new TableMetrics());
     }
 
     /** Shares pipeline measurements with a standalone Binlog source. */
-    public MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> build(TableMetrics metrics) {
+    public MySqlSource build(TableMetrics metrics) {
         return MySqlSource.latestOffset(
                 config(), metrics, startupOptions == null ? StartupOptions.latest() : startupOptions);
     }

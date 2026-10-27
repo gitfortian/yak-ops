@@ -7,9 +7,10 @@ import io.yak.ops.connector.base.source.reader.splitreader.SplitReader;
 import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogEngine;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.core.data.TableId;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -25,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>A prepared result waits for a completed checkpoint before any output batch is released.
  * Restored results are replayed verbatim, not recomputed from a later database snapshot.
  */
-public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetchedRecord, MySqlHybridSplit> {
+public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, MySqlSplit> {
     private static final int OUTPUT_BATCH_SIZE = 256;
     private final MySqlCdcSourceConfig config;
     private final MySqlSnapshotBackfillReader snapshots;
@@ -39,6 +40,8 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
     private volatile MySqlResumeBinlogEvent resume;
     private volatile boolean cancelled;
     private MySqlHybridBinlogSplit binlogSplit;
+    private MySqlBinlogSplit standalone;
+    private final String fingerprint;
     private MySqlBinlogSplitFilter filter;
     private MySqlSnapshotSplit active;
     private int outputPosition;
@@ -49,15 +52,20 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
     private boolean closed;
     private BinlogEvent bootstrapCandidate;
 
-    public MySqlHybridSplitReader(MySqlCdcSourceConfig config) {
-        this(config, new TableMetrics(), 0);
+    public MySqlSplitReader(MySqlCdcSourceConfig config) {
+        this(config, new TableMetrics(), 0, null);
     }
 
-    public MySqlHybridSplitReader(MySqlCdcSourceConfig config, TableMetrics metrics) {
-        this(config, metrics, 0);
+    public MySqlSplitReader(MySqlCdcSourceConfig config, TableMetrics metrics) {
+        this(config, metrics, 0, null);
     }
 
-    public MySqlHybridSplitReader(MySqlCdcSourceConfig config, TableMetrics metrics, int reader) {
+    public MySqlSplitReader(MySqlCdcSourceConfig config, TableMetrics metrics, int reader) {
+        this(config, metrics, reader, null);
+    }
+
+    public MySqlSplitReader(MySqlCdcSourceConfig config, TableMetrics metrics, int reader, String fingerprint) {
+        this.fingerprint = fingerprint;
         this.config = Objects.requireNonNull(config, "config");
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         generation = metrics.generation();
@@ -66,8 +74,8 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
     }
 
     @Override
-    public void addSplits(List<MySqlHybridSplit> splits) throws Exception {
-        for (MySqlHybridSplit split : splits) {
+    public void addSplits(List<MySqlSplit> splits) throws Exception {
+        for (MySqlSplit split : splits) {
             if (split instanceof MySqlSnapshotSplit snapshot) {
                 // Typed backfill freezes every range before emitting rows; checkpointed
                 // output positions preserve both keyed updates and keyless duplicates.
@@ -79,12 +87,23 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
                 history = stream.binlog().schemaHistory();
                 if (stream.phase() == MySqlHybridBinlogSplit.Phase.BOOTSTRAP) startBinlog(stream);
                 else if (stream.phase() == MySqlHybridBinlogSplit.Phase.STREAMING) startStreaming(stream);
-            } else throw new IllegalArgumentException("Unknown MySQL Hybrid split");
+            } else if (split instanceof MySqlBinlogSplit stream) {
+                if (binlogSplit != null || standalone != null) {
+                    throw new IllegalStateException("MySQL Binlog Reader already has a stream");
+                }
+                if (fingerprint == null || !fingerprint.equals(stream.definitionFingerprint())) {
+                    throw new IllegalArgumentException("MySQL Binlog split belongs to another source");
+                }
+                standalone = stream;
+                binlog = new MySqlBinlogEngine(config);
+                binlog.start(stream);
+                streaming = true;
+            } else throw new IllegalArgumentException("Unknown MySQL split");
         }
     }
 
     @Override
-    public RecordsWithSplitIds<MySqlHybridFetchedRecord> fetch() throws Exception {
+    public RecordsWithSplitIds<MySqlFetchedRecord> fetch() throws Exception {
         try {
             var result = fetchRecords();
             metrics.observed(generation);
@@ -98,7 +117,7 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
         }
     }
 
-    private RecordsWithSplitIds<MySqlHybridFetchedRecord> fetchRecords() throws Exception {
+    private RecordsWithSplitIds<MySqlFetchedRecord> fetchRecords() throws Exception {
         if (closed || cancelled) throw new IllegalStateException("MySQL hybrid reader is closed or cancelled");
         if (binlogSplit != null && binlogSplit.phase() == MySqlHybridBinlogSplit.Phase.BOOTSTRAP) {
             if (bootstrapCandidate == null) bootstrapCandidate = binlog.poll();
@@ -115,16 +134,14 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
             binlogSplit = binlogSplit.withAnchor(first.offset(), history);
             bootstrapCandidate = null;
             return records(
-                    MySqlHybridBinlogSplit.ID,
-                    new MySqlHybridFetchedRecord(List.of(), null, first.offset(), true),
-                    false);
+                    MySqlHybridBinlogSplit.ID, new MySqlFetchedRecord(List.of(), null, first.offset(), true), false);
         }
         if (active == null && !pending.isEmpty()) {
             active = pending.removeFirst();
             outputPosition = active.outputPosition();
             if (!active.prepared()) {
                 active = snapshots.read(active);
-                return records(active.splitId(), MySqlHybridFetchedRecord.prepared(active), false);
+                return records(active.splitId(), MySqlFetchedRecord.prepared(active), false);
             }
         }
         if (active != null) {
@@ -140,8 +157,7 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
             }
             List<io.yak.ops.core.data.TableRecord> rows = active.output().rows();
             int next = Math.min(rows.size(), outputPosition + OUTPUT_BATCH_SIZE);
-            MySqlHybridFetchedRecord batch =
-                    MySqlHybridFetchedRecord.snapshotRows(rows.subList(outputPosition, next), next);
+            MySqlFetchedRecord batch = MySqlFetchedRecord.snapshotRows(rows.subList(outputPosition, next), next);
             outputPosition = next;
             boolean complete = next == rows.size();
             if (complete) {
@@ -160,8 +176,8 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
         if (streaming) {
             BinlogEvent event = binlog.poll();
             if (event != null) {
-                BinlogEvent filtered = filter.filter(event);
-                return records(MySqlHybridBinlogSplit.ID, MySqlHybridFetchedRecord.binlog(filtered), false);
+                BinlogEvent filtered = filter == null ? event : filter.filter(event);
+                return records(MySqlHybridBinlogSplit.ID, MySqlFetchedRecord.binlog(filtered), false);
             }
         } else Thread.sleep(20);
         return empty();
@@ -260,12 +276,12 @@ public final class MySqlHybridSplitReader implements SplitReader<MySqlHybridFetc
         if (failure != null) throw failure;
     }
 
-    private static RecordsWithSplitIds<MySqlHybridFetchedRecord> empty() {
+    private static RecordsWithSplitIds<MySqlFetchedRecord> empty() {
         return new RecordsBySplits<>(Map.of(), Set.of());
     }
 
-    private static RecordsWithSplitIds<MySqlHybridFetchedRecord> records(
-            String id, MySqlHybridFetchedRecord record, boolean complete) {
+    private static RecordsWithSplitIds<MySqlFetchedRecord> records(
+            String id, MySqlFetchedRecord record, boolean complete) {
         return new RecordsBySplits<>(Map.of(id, List.of(record)), complete ? Set.of(id) : Set.of());
     }
 }

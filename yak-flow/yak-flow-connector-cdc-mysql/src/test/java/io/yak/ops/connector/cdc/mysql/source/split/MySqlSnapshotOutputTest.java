@@ -3,7 +3,7 @@ package io.yak.ops.connector.cdc.mysql.source.split;
 import static org.junit.jupiter.api.Assertions.*;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
-import io.yak.ops.connector.cdc.mysql.source.reader.MySqlHybridSplitState;
+import io.yak.ops.connector.cdc.mysql.source.reader.MySqlSplitState;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
@@ -26,7 +26,7 @@ class MySqlSnapshotOutputTest {
     @Test
     void preparationMustBeCoveredByCompletedCheckpointBeforeEmission() throws Exception {
         MySqlSnapshotSplit prepared = prepared();
-        MySqlHybridSplitState state = new MySqlHybridSplitState(range());
+        MySqlSplitState state = new MySqlSplitState(range());
         state.prepareSnapshot(prepared);
         assertThrows(IllegalStateException.class, () -> state.emitSnapshotRows(1));
         state.snapshotCheckpoint(10);
@@ -38,19 +38,19 @@ class MySqlSnapshotOutputTest {
         assertEquals(1, partial.outputPosition());
         assertEquals(2, partial.output().rows().size());
         assertEquals("original", partial.output().rows().getFirst().row().getString(1));
-        MySqlHybridSplitState recovered = new MySqlHybridSplitState(roundTrip(partial));
+        MySqlSplitState recovered = new MySqlSplitState(roundTrip(partial));
         recovered.emitSnapshotRows(2);
         MySqlSnapshotSplit done = (MySqlSnapshotSplit) recovered.checkpoint(null);
         assertNull(done.output());
         assertEquals(offset(200), done.finished().highWatermark());
         assertEquals(done, roundTrip(done));
-        assertNull(((MySqlSnapshotSplit) new MySqlHybridSplitState(roundTrip(done)).checkpoint(null)).output());
+        assertNull(((MySqlSnapshotSplit) new MySqlSplitState(roundTrip(done)).checkpoint(null)).output());
     }
 
     @Test
     void emptyChunkStillRequiresDurablePreparationAndRetainsItsHigh() {
         var prepared = range().withOutput(new MySqlSnapshotOutput(offset(100), offset(100), List.of()));
-        var state = new MySqlHybridSplitState(range());
+        var state = new MySqlSplitState(range());
         state.prepareSnapshot(prepared);
         assertThrows(IllegalStateException.class, () -> state.emitSnapshotRows(0));
         state.snapshotCheckpoint(3);
@@ -158,7 +158,7 @@ class MySqlSnapshotOutputTest {
     @Test
     void invalidOutputPositionsAndConflictingRangesAreRejected() {
         assertThrows(IllegalArgumentException.class, () -> prepared().withOutputPosition(3));
-        var state = new MySqlHybridSplitState(range());
+        var state = new MySqlSplitState(range());
         var other = new MySqlSnapshotSplit("other", "fp", TABLE, null, null, null).withOutput(prepared().output());
         assertThrows(IllegalStateException.class, () -> state.prepareSnapshot(other));
         assertThrows(IllegalArgumentException.class, () -> new MySqlSnapshotOutput(offset(200), offset(100), List.of()));

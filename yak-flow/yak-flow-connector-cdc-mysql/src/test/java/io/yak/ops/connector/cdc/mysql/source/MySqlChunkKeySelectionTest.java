@@ -11,7 +11,7 @@ import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.connector.cdc.mysql.table.MySqlCdcSourceFactory;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
@@ -88,9 +88,8 @@ class MySqlChunkKeySelectionTest {
                 measurements);
         var selected = assertInstanceOf(MySqlSource.class, factory.createSource(List.of(first, second)));
         assertEquals(StartupMode.INITIAL, selected.startupMode());
-        @SuppressWarnings("unchecked")
-        MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> source =
-                (MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState>) selected;
+                MySqlSource source =
+                selected;
 
         // A matching Source can restore the same checkpoint without inspecting its private config.
         var original = source.createEnumerator(new CoordinatorContext());
@@ -167,7 +166,7 @@ class MySqlChunkKeySelectionTest {
                 .topicPrefix("chunk-test");
     }
 
-    private static final class CoordinatorContext implements SplitEnumeratorContext<MySqlHybridSplit> {
+    private static final class CoordinatorContext implements SplitEnumeratorContext<MySqlSplit> {
         @Override
         public int currentParallelism() {
             return 1;
@@ -179,7 +178,7 @@ class MySqlChunkKeySelectionTest {
         }
 
         @Override
-        public void assignSplit(MySqlHybridSplit split, int subtaskId) {
+        public void assignSplit(MySqlSplit split, int subtaskId) {
             throw new AssertionError("Checkpoint identity test must not assign a split");
         }
 

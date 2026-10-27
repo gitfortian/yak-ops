@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
 import io.yak.ops.core.data.TableId;
@@ -25,7 +26,7 @@ class MySqlCdcSourceTest {
 
     @Test
     void assignsOneContinuousSplitAndRestoresItsEnumerationState() throws Exception {
-        MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> source = definition();
+        MySqlSource source = definition();
         assertEquals(Boundedness.CONTINUOUS_UNBOUNDED, source.getBoundedness());
         FakeContext context = new FakeContext();
         var enumerator = source.createEnumerator(context);
@@ -35,7 +36,7 @@ class MySqlCdcSourceTest {
         assertNotNull(context.last);
         enumerator.handleSplitRequest(0);
         assertEquals(1, context.assignments);
-        MySqlPendingSplitsState state = enumerator.snapshotState(1L);
+        MySqlPendingSplitsState state = (MySqlPendingSplitsState) enumerator.snapshotState(1L);
         assertTrue(state.splitAssigned());
 
         FakeContext restoredContext = new FakeContext();
@@ -49,7 +50,7 @@ class MySqlCdcSourceTest {
 
     @Test
     void rejectsChangedSourceConfigurationAndInvalidTables() throws Exception {
-        MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> source = definition();
+        MySqlSource source = definition();
         var state = new MySqlPendingSplitsState("other-checkpoint", true, null);
         assertThrows(IllegalArgumentException.class, () -> source.restoreEnumerator(new FakeContext(), state));
         assertThrows(IllegalArgumentException.class, () -> MySqlSource.builder()
@@ -65,13 +66,13 @@ class MySqlCdcSourceTest {
 
     @Test
     void explicitChunkKeyCannotRestoreCheckpointCreatedWithoutAnOverride() throws Exception {
-        MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> implicit = definition();
+        MySqlSource implicit = definition();
         var enumerator = implicit.createEnumerator(new FakeContext());
         enumerator.start();
-        MySqlPendingSplitsState checkpoint = enumerator.snapshotState(1L);
+        MySqlPendingSplitsState checkpoint = (MySqlPendingSplitsState) enumerator.snapshotState(1L);
         enumerator.close();
 
-        MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> explicit = definition("ID");
+        MySqlSource explicit = definition("ID");
         assertThrows(
                 IllegalArgumentException.class,
                 () -> explicit.restoreEnumerator(new FakeContext(), checkpoint));
@@ -81,11 +82,11 @@ class MySqlCdcSourceTest {
         restored.close();
     }
 
-    private static MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> definition() {
+    private static MySqlSource definition() {
         return definition(null);
     }
 
-    private static MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> definition(String chunkKey) {
+    private static MySqlSource definition(String chunkKey) {
         return MySqlSource.builder()
                 .hostname("localhost")
                 .username("yak")
@@ -103,7 +104,7 @@ class MySqlCdcSourceTest {
                 .build();
     }
 
-    private static final class FakeContext implements SplitEnumeratorContext<MySqlBinlogSplit> {
+    private static final class FakeContext implements SplitEnumeratorContext<MySqlSplit> {
         private int assignments;
         private MySqlBinlogSplit last;
 
@@ -118,9 +119,9 @@ class MySqlCdcSourceTest {
         }
 
         @Override
-        public void assignSplit(MySqlBinlogSplit split, int subtaskId) {
+        public void assignSplit(MySqlSplit split, int subtaskId) {
             assertEquals(0, subtaskId);
-            last = split;
+            last = (MySqlBinlogSplit) split;
             assignments++;
         }
 

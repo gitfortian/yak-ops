@@ -9,6 +9,7 @@ import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.core.api.connector.source.InputStatus;
 import io.yak.ops.core.api.connector.source.ReaderOutput;
 import io.yak.ops.core.api.connector.source.SourceReader;
@@ -100,7 +101,7 @@ class MySqlBinlogIT {
                         new Column("ID", LogicalTypes.BIGINT.copy(false)),
                         new Column("NAME", LogicalTypes.varchar(100))),
                 List.of("ID"));
-        MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> source = MySqlSource.builder()
+        MySqlSource source = MySqlSource.builder()
                 .hostname(DATABASE_RESOURCE.metadata().host())
                 .port(DATABASE_RESOURCE.metadata().port())
                 .username(USER)
@@ -113,7 +114,7 @@ class MySqlBinlogIT {
 
         List<TableRecord> firstEvents = new ArrayList<>();
         MySqlBinlogSplit checkpoint;
-        try (SourceReader<TableRecord, MySqlBinlogSplit> reader = createReader(source, null)) {
+        try (SourceReader<TableRecord, MySqlSplit> reader = createReader(source, null)) {
             // Bootstrap captures table schemas but no table rows, then starts the Binlog stream.
             awaitReaderReady(reader);
             execute(password, "INSERT INTO orders VALUES(1, 'first')");
@@ -136,16 +137,16 @@ class MySqlBinlogIT {
             assertNotNull(firstEvents.get(2).changeEventId());
             assertNotNull(firstEvents.get(3).changeEventId());
             assertFalse(firstEvents.get(2).changeEventId().sameEvent(firstEvents.get(3).changeEventId()));
-            checkpoint = reader.snapshotState(1L).getFirst();
+            checkpoint = (MySqlBinlogSplit) reader.snapshotState(1L).getFirst();
             assertTrue(checkpoint.schemaHistory().length > 0);
             assertTrue(checkpoint.offset() != null);
             byte[] bytes = source.getSplitSerializer().serialize(checkpoint);
-            checkpoint = source.getSplitSerializer()
+            checkpoint = (MySqlBinlogSplit) source.getSplitSerializer()
                     .deserialize(source.getSplitSerializer().getVersion(), bytes);
         }
 
         List<TableRecord> recoveredEvents = new ArrayList<>();
-        try (SourceReader<TableRecord, MySqlBinlogSplit> reader = createReader(source, checkpoint)) {
+        try (SourceReader<TableRecord, MySqlSplit> reader = createReader(source, checkpoint)) {
             awaitReaderReady(reader);
             execute(password, "UPDATE orders SET NAME='changed' WHERE ID=1");
             execute(password, "DELETE FROM items WHERE ID=10");
@@ -191,7 +192,7 @@ class MySqlBinlogIT {
                 .table(ORDERS, schema)
                 .build();
 
-        try (SourceReader<TableRecord, MySqlBinlogSplit> reader = createReader(source, null)) {
+        try (SourceReader<TableRecord, MySqlSplit> reader = createReader(source, null)) {
             awaitReaderReady(reader);
             execute(password, "INSERT INTO orders VALUES (110, 'same'), (111, 'same'), (112, 'same')");
             List<TableRecord> rows = new ArrayList<>();
@@ -210,7 +211,7 @@ class MySqlBinlogIT {
             assertEquals(5, new java.util.HashSet<>(
                     rows.stream().map(TableRecord::changeEventId).toList()).size());
 
-            MySqlBinlogSplit checkpoint = reader.snapshotState(22L).getFirst();
+            MySqlBinlogSplit checkpoint = (MySqlBinlogSplit) reader.snapshotState(22L).getFirst();
             assertNotNull(checkpoint.offset());
             assertFalse(checkpoint.schemaHistory().length == 0);
         }
@@ -221,7 +222,7 @@ class MySqlBinlogIT {
      * <p>A server-wide SHOW PROCESSLIST Binlog Dump belongs to an arbitrary replication
      * client and is not evidence that this Reader has finished its schema snapshot.
      */
-    private static void awaitReaderReady(SourceReader<TableRecord, MySqlBinlogSplit> reader) throws Exception {
+    private static void awaitReaderReady(SourceReader<TableRecord, MySqlSplit> reader) throws Exception {
         long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
         while (System.nanoTime() < deadline) {
             if (reader.pollNext(record -> {
@@ -230,10 +231,10 @@ class MySqlBinlogIT {
                 throw new AssertionError("Unbounded Binlog Reader ended during bootstrap");
             }
             try {
-                List<MySqlBinlogSplit> splits = reader.snapshotState(0L);
+                List<MySqlSplit> splits = reader.snapshotState(0L);
                 if (splits.size() == 1
-                        && splits.getFirst().offset() != null
-                        && splits.getFirst().schemaHistory().length > 0) {
+                        && ((MySqlBinlogSplit) splits.getFirst()).offset() != null
+                        && ((MySqlBinlogSplit) splits.getFirst()).schemaHistory().length > 0) {
                     return;
                 }
             } catch (IllegalStateException notReady) {
@@ -247,10 +248,10 @@ class MySqlBinlogIT {
         throw new AssertionError("Own MySQL CDC Reader did not complete no-data bootstrap");
     }
 
-    private static SourceReader<TableRecord, MySqlBinlogSplit> createReader(
-            MySqlSource<MySqlBinlogSplit, MySqlPendingSplitsState> source, MySqlBinlogSplit restored) throws Exception {
+    private static SourceReader<TableRecord, MySqlSplit> createReader(
+            MySqlSource source, MySqlBinlogSplit restored) throws Exception {
         var context = new TestReaderContext();
-        SourceReader<TableRecord, MySqlBinlogSplit> reader = source.createReader(context);
+        SourceReader<TableRecord, MySqlSplit> reader = source.createReader(context);
         reader.start();
         MySqlBinlogSplit split;
         if (restored == null) {
@@ -258,7 +259,7 @@ class MySqlBinlogIT {
             var enumerator = source.createEnumerator(coordinator);
             enumerator.start();
             enumerator.handleSplitRequest(0);
-            MySqlPendingSplitsState state = enumerator.snapshotState(1L);
+            MySqlPendingSplitsState state = (MySqlPendingSplitsState) enumerator.snapshotState(1L);
             assertTrue(state.splitAssigned());
             split = coordinator.assigned;
             enumerator.close();
@@ -278,7 +279,7 @@ class MySqlBinlogIT {
     }
 
     private static void receive(
-            SourceReader<TableRecord, MySqlBinlogSplit> reader, List<TableRecord> rows, int minimum, Duration timeout)
+            SourceReader<TableRecord, MySqlSplit> reader, List<TableRecord> rows, int minimum, Duration timeout)
             throws Exception {
         Instant deadline = Instant.now().plus(timeout);
         ReaderOutput<TableRecord> collector = rows::add;
@@ -316,7 +317,7 @@ class MySqlBinlogIT {
         }
     }
 
-    private static final class TestEnumeratorContext implements SplitEnumeratorContext<MySqlBinlogSplit> {
+    private static final class TestEnumeratorContext implements SplitEnumeratorContext<MySqlSplit> {
         private MySqlBinlogSplit assigned;
 
         @Override
@@ -330,8 +331,8 @@ class MySqlBinlogIT {
         }
 
         @Override
-        public void assignSplit(MySqlBinlogSplit split, int subtaskId) {
-            assigned = split;
+        public void assignSplit(MySqlSplit split, int subtaskId) {
+            assigned = (MySqlBinlogSplit) split;
         }
 
         @Override

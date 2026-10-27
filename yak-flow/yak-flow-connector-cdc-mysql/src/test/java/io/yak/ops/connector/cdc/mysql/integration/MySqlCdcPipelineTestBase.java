@@ -7,7 +7,7 @@ import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.sink.writer.BatchFlushPolicy;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
@@ -113,7 +113,7 @@ abstract class MySqlCdcPipelineTestBase {
                 sql(sourceConnection, "INSERT INTO cdc_rt_orders VALUES (1,'old'),(100,'deleted')");
                 sql(sourceConnection, "INSERT INTO cdc_rt_items VALUES (10,'ten',2)");
 
-                MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> source = MySqlSource.builder()
+                MySqlSource source = MySqlSource.builder()
                         .hostname(SOURCE.metadata().host())
                         .port(SOURCE.metadata().port())
                         .username("root")
@@ -229,7 +229,7 @@ abstract class MySqlCdcPipelineTestBase {
                 sql(sourceConnection, "INSERT INTO " + tableName + " VALUES (1,'before')");
 
                 TableMetrics sourceMetrics = new TableMetrics();
-                MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> source = MySqlSource.builder()
+                MySqlSource source = MySqlSource.builder()
                         .hostname(SOURCE.metadata().host())
                         .port(SOURCE.metadata().port())
                         .username("root")
@@ -474,7 +474,7 @@ abstract class MySqlCdcPipelineTestBase {
                 .set(CheckpointingOptions.RESTORE_LATEST, restore);
     }
 
-    private static StreamGraph graph(MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> source, JdbcSink sink, Configuration config) {
+    private static StreamGraph graph(MySqlSource source, JdbcSink sink, Configuration config) {
         SourceTransformation<TableRecord> input =
                 new SourceTransformation<>("mysql-cdc-source", source, TableRecord.class, 2);
         SinkTransformation<TableRecord> output = new SinkTransformation<>(input, "jdbc-upsert-sink", sink, 1);

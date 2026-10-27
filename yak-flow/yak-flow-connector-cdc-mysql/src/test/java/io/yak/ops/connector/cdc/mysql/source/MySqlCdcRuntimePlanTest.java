@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.connector.jdbc.sink.JdbcSink;
 import io.yak.ops.connector.jdbc.sink.JdbcTableWritePlan;
@@ -80,7 +80,7 @@ class MySqlCdcRuntimePlanTest {
                 List.of("ID"));
         TableId sourceA = new TableId("sample", null, "orders");
         TableId sourceB = new TableId("sample", null, "items");
-        MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> source = MySqlSource.builder()
+        MySqlSource source = MySqlSource.builder()
                 .hostname("unused")
                 .username("replication")
                 .password("not-used")

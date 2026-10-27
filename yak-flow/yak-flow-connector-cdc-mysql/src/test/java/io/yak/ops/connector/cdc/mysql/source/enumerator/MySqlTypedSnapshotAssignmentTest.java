@@ -12,7 +12,7 @@ import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedEvent;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialects;
@@ -82,7 +82,7 @@ class MySqlTypedSnapshotAssignmentTest {
         assertEquals(new BigDecimal("3.00000000"), first.chunkRange().end());
 
         var saved = SERIALIZER.deserialize(
-                SERIALIZER.getVersion(), SERIALIZER.serialize(enumerator.snapshotState(5)));
+                SERIALIZER.getVersion(), SERIALIZER.serialize((MySqlHybridEnumeratorState) enumerator.snapshotState(5)));
         assertEquals(0, saved.nextTableIndex());
         assertEquals(1, saved.nextChunkIndex());
         assertEquals(first.chunkRange().end(), saved.nextChunkRange().start());
@@ -105,7 +105,7 @@ class MySqlTypedSnapshotAssignmentTest {
                 new MySqlSnapshotFinishedEvent(new FinishedSnapshotSplitInfo(
                         ORDERS, first.splitId(), null, null, offset(150), first.chunkRange())));
         var resumed = SERIALIZER.deserialize(
-                SERIALIZER.getVersion(), SERIALIZER.serialize(recovered.snapshotState(6)));
+                SERIALIZER.getVersion(), SERIALIZER.serialize((MySqlHybridEnumeratorState) recovered.snapshotState(6)));
         assertEquals(first.chunkRange(), resumed.finishedSplitInfos().getFirst().chunkRange());
         assertEquals(offset(150), resumed.finishedSplitInfos().getFirst().highWatermark());
         recovered.close();
@@ -137,7 +137,7 @@ class MySqlTypedSnapshotAssignmentTest {
                 ORDERS, "bucket", LogicalTypeRoot.DECIMAL, first.chunkRange().end(), null);
         assigner.appendPlan(first, 1);
         var saved = SERIALIZER.deserialize(
-                SERIALIZER.getVersion(), SERIALIZER.serialize(assigner.snapshotState(9)));
+                SERIALIZER.getVersion(), SERIALIZER.serialize((MySqlHybridEnumeratorState) assigner.snapshotState(9)));
         var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), FINGERPRINT, saved);
         MySqlSnapshotSplit last = planner.planNext(
                 ORDERS, FINGERPRINT, restored.nextTableIndex(), restored.nextChunkIndex(),
@@ -195,16 +195,16 @@ class MySqlTypedSnapshotAssignmentTest {
         assertEquals(LogicalTypeRoot.BIGINT, first.chunkRange().type());
         assertEquals(5L, first.chunkRange().end());
         var checkpoint = enumerator.snapshotState(1);
-        assertEquals(5L, checkpoint.nextChunkRange().start());
+        assertEquals(5L, ((MySqlHybridEnumeratorState) checkpoint).nextChunkRange().start());
         enumerator.close();
     }
 
-    private static MySqlHybridSourceEnumerator enumerator(
+    private static MySqlSourceEnumerator enumerator(
             Coordinator context,
             MySqlCdcSourceConfig config,
             String url,
             MySqlHybridEnumeratorState restored) {
-        return new MySqlHybridSourceEnumerator(
+        return new MySqlSourceEnumerator(
                 StartupOptions.initial(),
                 context,
                 config,
@@ -250,9 +250,9 @@ class MySqlTypedSnapshotAssignmentTest {
         return new DebeziumOffset(Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", pos));
     }
 
-    private static final class Coordinator implements SplitEnumeratorContext<MySqlHybridSplit> {
+    private static final class Coordinator implements SplitEnumeratorContext<MySqlSplit> {
         private final ArrayDeque<Runnable> actions = new ArrayDeque<>();
-        private final Map<Integer, List<MySqlHybridSplit>> assigned = new java.util.HashMap<>();
+        private final Map<Integer, List<MySqlSplit>> assigned = new java.util.HashMap<>();
 
         @Override
         public int currentParallelism() {
@@ -265,7 +265,7 @@ class MySqlTypedSnapshotAssignmentTest {
         }
 
         @Override
-        public void assignSplit(MySqlHybridSplit split, int reader) {
+        public void assignSplit(MySqlSplit split, int reader) {
             assigned.computeIfAbsent(reader, key -> new ArrayList<>()).add(split);
         }
 
@@ -298,7 +298,7 @@ class MySqlTypedSnapshotAssignmentTest {
             return actions.size();
         }
 
-        List<MySqlHybridSplit> assignments(int reader) {
+        List<MySqlSplit> assignments(int reader) {
             return assigned.getOrDefault(reader, List.of());
         }
 

@@ -30,8 +30,8 @@ class MySqlRecordDiagnosticsTest {
 
     @Test
     void hybridDiagnosticsRedactRowsAndSnapshotCursor() {
-        MySqlHybridFetchedRecord record =
-                new MySqlHybridFetchedRecord(List.of(tableRecord()), 987654321L, null, false);
+        MySqlFetchedRecord record =
+                new MySqlFetchedRecord(List.of(tableRecord()), 987654321L, null, false);
         String diagnostic = record.toString();
 
         assertTrue(diagnostic.contains("rowCount=1"));

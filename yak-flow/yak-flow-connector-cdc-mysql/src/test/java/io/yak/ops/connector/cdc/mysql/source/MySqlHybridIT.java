@@ -7,7 +7,8 @@ import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.table.MySqlCdcSourceFactory;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
@@ -220,7 +221,7 @@ class MySqlHybridIT {
         private final String prefix = "hybrid_" + UUID.randomUUID().toString().replace("-", "");
         private final int tableCount;
         private final TableMetrics metrics = new TableMetrics();
-        private final MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> source;
+        private final MySqlSource source;
         private final List<JdbcTableWritePlan> plans = new ArrayList<>();
         private Fixture(int tableCount, int chunkSize) throws Exception {
             this(tableCount, chunkSize, false);
@@ -255,9 +256,8 @@ class MySqlHybridIT {
             }
             var selected = assertInstanceOf(MySqlSource.class, new MySqlCdcSourceFactory().createSource(contexts));
             assertEquals(StartupMode.INITIAL, selected.startupMode());
-            @SuppressWarnings("unchecked")
-            MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> typed =
-                    (MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState>) selected;
+                        MySqlSource typed =
+                    selected;
             source = typed;
         }
         private String source(int i) { return prefix + "_s" + i; }
@@ -299,8 +299,8 @@ class MySqlHybridIT {
     private static final class Harness implements AutoCloseable {
         private final Fixture fixture;
         private final Deque<CheckedAction> events = new ArrayDeque<>();
-        private final List<SourceReader<TableRecord,MySqlHybridSplit>> readers = new ArrayList<>();
-        private final SplitEnumerator<MySqlHybridSplit,MySqlHybridEnumeratorState> enumerator;
+        private final List<SourceReader<TableRecord,MySqlSplit>> readers = new ArrayList<>();
+        private final SplitEnumerator<MySqlSplit,PendingSplitsState> enumerator;
         private final JdbcOutputFormat output;
         private final List<TableRecord> observed = new ArrayList<>();
         private final Set<String> checkpointedPreparation = new java.util.HashSet<>();
@@ -319,7 +319,7 @@ class MySqlHybridIT {
                 var reader=source.createReader(new ReaderContext(i));
                 readers.add(reader);
                 if(saved!=null) {
-                    List<MySqlHybridSplit> splits=new ArrayList<>();
+                    List<MySqlSplit> splits=new ArrayList<>();
                     for(byte[] bytes:saved.readers().get(i)) splits.add(source.getSplitSerializer().deserialize(source.getSplitSerializer().getVersion(),bytes));
                     reader.addSplits(splits);
                 }
@@ -329,7 +329,7 @@ class MySqlHybridIT {
             enumerator.start();
             for(int i=0;i<readers.size();i++) { enumerator.addReader(i); readers.get(i).start(); }
         }
-        private MySqlHybridEnumeratorState state() throws Exception { return enumerator.snapshotState(checkpoint+1); }
+        private MySqlHybridEnumeratorState state() throws Exception { return (MySqlHybridEnumeratorState) enumerator.snapshotState(checkpoint+1); }
         private boolean streaming() throws Exception { return state().phase()==MySqlHybridEnumeratorState.Phase.STREAMING; }
         private boolean hasPreparedOutput() throws Exception {
             for(var reader:readers) for(var split:reader.snapshotState(checkpoint+1)) {
@@ -394,10 +394,10 @@ class MySqlHybridIT {
             @Override public void sendSplitRequest(){events.addLast(()->enumerator.handleSplitRequest(id));}
             @Override public void sendSourceEventToCoordinator(SourceEvent event){events.addLast(()->enumerator.handleSourceEvent(id,event));}
         }
-        private final class EnumeratorContext implements SplitEnumeratorContext<MySqlHybridSplit> {
+        private final class EnumeratorContext implements SplitEnumeratorContext<MySqlSplit> {
             @Override public int currentParallelism(){return 2;}
             @Override public Set<Integer> registeredReaders(){return Set.of(0,1);}
-            @Override public void assignSplit(MySqlHybridSplit split,int reader){events.addLast(()->readers.get(reader).addSplits(List.of(split)));}
+            @Override public void assignSplit(MySqlSplit split,int reader){events.addLast(()->readers.get(reader).addSplits(List.of(split)));}
             @Override public void signalNoMoreSplits(int reader){throw new AssertionError("Unbounded Hybrid reader cannot finish");}
             @Override public void sendEventToSourceReader(int reader,SourceEvent event){events.addLast(()->readers.get(reader).handleSourceEvents(event));}
             @Override public <V> void callAsync(Callable<V> action,BiConsumer<V,Throwable> handler){

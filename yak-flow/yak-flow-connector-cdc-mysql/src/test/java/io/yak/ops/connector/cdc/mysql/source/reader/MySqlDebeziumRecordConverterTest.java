@@ -7,7 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.configuration.Configuration;
+import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
+import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
@@ -57,37 +60,19 @@ class MySqlDebeziumRecordConverterTest {
                 event.records().stream().map(TableRecord::rowKind).toList());
         assertEquals("new", event.records().getLast().row().getString(1));
 
-        var state = new MySqlCdcSplitState(new io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit(
+        var state = new MySqlSplitState(new io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit(
                 "fingerprint", null, new byte[0]));
         var delivered = new ArrayList<TableRecord>();
-        var emitter = new MySqlCdcRecordEmitter(new SchemaChangeHandler(new SourceReaderContext() {
-            @Override
-            public Configuration getConfiguration() {
-                return new Configuration();
-            }
-
-            @Override
-            public int getIndexOfSubtask() {
-                return 0;
-            }
-
-            @Override
-            public int currentParallelism() {
-                return 1;
-            }
-
-            @Override
-            public void sendSplitRequest() {}
-        }));
+        var emitter = binlogEmitter();
         assertThrows(IllegalStateException.class, () -> state.checkpoint(new byte[] {1}));
-        emitter.emitRecord(event, delivered::add, state);
+        emitter.emitRecord(MySqlFetchedRecord.binlog(event), delivered::add, state);
         assertEquals(2, delivered.size());
-        assertEquals(event.offset(), state.checkpoint(new byte[] {1}).offset());
+        assertEquals(event.offset(), ((MySqlBinlogSplit) state.checkpoint(new byte[] {1})).offset());
 
-        var failedState = new MySqlCdcSplitState(new io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit(
+        var failedState = new MySqlSplitState(new io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit(
                 "fingerprint", null, new byte[0]));
         assertThrows(IllegalStateException.class,
-                () -> emitter.emitRecord(event, row -> {
+                () -> emitter.emitRecord(MySqlFetchedRecord.binlog(event), row -> {
                     if (row.rowKind() == RowKind.UPDATE_AFTER) {
                         throw new IllegalStateException("downstream failed");
                     }
@@ -130,6 +115,26 @@ class MySqlDebeziumRecordConverterTest {
     void withoutPropagatedMetadataFallsBackToColumnNames() {
         var converter = new MySqlDebeziumRecordConverter(Map.of(TABLE, YAK_SCHEMA), Map.of(), true);
         assertNull(converter.schemaMismatch(recordWithRow(row(1L, "normal"))));
+    }
+
+    private static MySqlRecordEmitter binlogEmitter() {
+        var context = new SourceReaderContext() {
+            @Override public Configuration getConfiguration() { return new Configuration(); }
+            @Override public int getIndexOfSubtask() { return 0; }
+            @Override public int currentParallelism() { return 1; }
+            @Override public void sendSplitRequest() {}
+        };
+        var config = MySqlSource.builder()
+                .hostname("localhost")
+                .username("test")
+                .password("test")
+                .serverId(9120)
+                .topicPrefix("converter-test")
+                .table(TABLE, YAK_SCHEMA)
+                .build()
+                .config();
+        return new MySqlRecordEmitter(context, new MySqlSplitReader(config),
+                new TableMetrics(), new SchemaChangeHandler(context));
     }
 
     private static Struct rowWithCapacity(int length, String name) {

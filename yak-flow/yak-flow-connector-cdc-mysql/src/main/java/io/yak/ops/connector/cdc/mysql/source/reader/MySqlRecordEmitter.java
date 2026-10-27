@@ -15,19 +15,18 @@ import java.util.Objects;
  * <p>The initial low-watermark event has no rows. Only after its Schema History and offset
  * are recorded does the coordinator receive a signal to begin planning snapshot splits.
  */
-public final class MySqlHybridRecordEmitter
-        implements RecordEmitter<MySqlHybridFetchedRecord, TableRecord, MySqlHybridSplitState> {
+public final class MySqlRecordEmitter implements RecordEmitter<MySqlFetchedRecord, TableRecord, MySqlSplitState> {
 
     private final SourceReaderContext context;
     private final SchemaChangeHandler schemaChanges;
-    private final MySqlHybridSplitReader splits;
+    private final MySqlSplitReader splits;
     private final TableMetrics metrics;
     private final long generation;
     private final MySqlRecordBatchEmitter recordBatchEmitter;
 
-    public MySqlHybridRecordEmitter(
+    public MySqlRecordEmitter(
             SourceReaderContext context,
-            MySqlHybridSplitReader splits,
+            MySqlSplitReader splits,
             TableMetrics metrics,
             SchemaChangeHandler schemaChanges) {
         this.schemaChanges = Objects.requireNonNull(schemaChanges, "schemaChanges");
@@ -39,8 +38,7 @@ public final class MySqlHybridRecordEmitter
     }
 
     @Override
-    public void emitRecord(
-            MySqlHybridFetchedRecord event, ReaderOutput<TableRecord> output, MySqlHybridSplitState state)
+    public void emitRecord(MySqlFetchedRecord event, ReaderOutput<TableRecord> output, MySqlSplitState state)
             throws Exception {
         if (event.schemaChange() != null) {
             schemaChanges.submitSchemaChange(event.schemaChange(), () -> state.emitBinlog(event.binlogOffset()));
