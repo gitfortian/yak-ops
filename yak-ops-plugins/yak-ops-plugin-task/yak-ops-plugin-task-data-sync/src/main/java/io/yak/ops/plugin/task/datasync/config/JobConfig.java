@@ -5,6 +5,7 @@ import io.yak.ops.configuration.Options;
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.configuration.rule.ConfigValidator;
 import io.yak.ops.configuration.rule.OptionRule;
+import io.yak.ops.connector.cdc.mysql.source.StartupMode;
 import io.yak.ops.plugin.task.datasync.solution.SolutionType;
 import io.yak.ops.plugin.task.datasync.solution.Step;
 import java.util.ArrayList;
@@ -18,6 +19,11 @@ import java.util.Set;
 /** The single version-four public job contract and its admitted Source/Sink routes. */
 public final class JobConfig {
     public static final int MAX_TABLES = 100;
+
+    private static final Option<Map<String, Object>> STARTUP =
+            Options.key("startup").mapObjectType().noDefaultValue();
+    private static final Option<String> MODE = Options.key("mode").stringType().noDefaultValue();
+    private static final OptionRule STARTUP_RULE = OptionRule.builder().required(MODE).build();
 
     private static final Option<List<Object>> TABLES =
             Options.key("tables").listType(Object.class).noDefaultValue();
@@ -33,7 +39,7 @@ public final class JobConfig {
             Options.key("allowDropColumns").booleanType().noDefaultValue();
 
     private static final OptionRule SOURCE_RULE =
-            OptionRule.builder().required(JobOptions.DATASOURCE_ID, TABLES).build();
+            OptionRule.builder().required(JobOptions.DATASOURCE_ID, TABLES).optional(STARTUP).build();
     private static final OptionRule SINK_RULE = OptionRule.builder()
             .required(JobOptions.DATASOURCE_ID, TABLES, SCHEMA_POLICY)
             .build();
@@ -80,8 +86,10 @@ public final class JobConfig {
             }
             dataSteps.add(step);
         }
-        if (!type.supportsScheduling() && !dataSteps.equals(List.of(Step.FULL, Step.INCREMENTAL))) {
-            throw new IllegalArgumentException("Realtime requires FULL and INCREMENTAL");
+        if (!type.supportsScheduling()
+                && !List.of(List.of(Step.FULL, Step.INCREMENTAL), List.of(Step.INCREMENTAL))
+                        .contains(dataSteps)) {
+            throw new IllegalArgumentException("Realtime requires INCREMENTAL with optional FULL");
         }
         if (type.supportsScheduling()
                 && !List.of(List.of(Step.FULL), List.of(Step.INCREMENTAL), List.of(Step.FULL, Step.INCREMENTAL))
@@ -97,6 +105,25 @@ public final class JobConfig {
         ReadonlyConfig to = ReadonlyConfig.fromMap(parameters.get(SolutionOptions.SINK));
         validate(from, SOURCE_RULE, "source");
         validate(to, SINK_RULE, "sink");
+        Map<String, Object> startupSettings = from.get(STARTUP);
+        StartupMode startupMode = null;
+        if (type.supportsScheduling()) {
+            if (startupSettings != null) {
+                throw new IllegalArgumentException("CDC startup settings require realtime synchronization");
+            }
+        } else {
+            if (startupSettings != null) {
+                ReadonlyConfig startup = ReadonlyConfig.fromMap(startupSettings);
+                validate(startup, STARTUP_RULE, "source.startup");
+                startupMode = StartupMode.from(startup.get(MODE));
+            } else {
+                startupMode = StartupMode.INITIAL;
+            }
+            StartupMode expected = dataSteps.contains(Step.FULL) ? StartupMode.INITIAL : StartupMode.LATEST_OFFSET;
+            if (startupMode != expected || (startupSettings == null && expected != StartupMode.INITIAL)) {
+                throw new IllegalArgumentException("CDC startup mode differs from realtime synchronization steps");
+            }
+        }
         String fromId = from.get(JobOptions.DATASOURCE_ID);
         String toId = to.get(JobOptions.DATASOURCE_ID);
         if (fromId == null || fromId.isBlank() || toId == null || toId.isBlank()) {
@@ -152,7 +179,7 @@ public final class JobConfig {
             }
             ReadonlyConfig target = targets.remove(id);
             if (target == null) throw new IllegalArgumentException("Sink input must reference a Source table");
-            SourceConfig input = SourceConfig.from(source, fromId, type, dataSteps, evolve);
+            SourceConfig input = SourceConfig.from(source, fromId, type, dataSteps, startupMode);
             SinkConfig output = SinkConfig.from(target, toId, type, dataSteps, evolve);
             if (!sourceTables.add(tableKey(source)) || !sinkTables.add(tableKey(target))) {
                 throw new IllegalArgumentException("Duplicate physical table route");
