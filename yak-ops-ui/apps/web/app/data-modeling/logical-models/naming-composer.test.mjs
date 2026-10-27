@@ -46,6 +46,13 @@ test("drops a layer prefix already typed into the suffix", () => {
   assert.equal(stripLayerPrefix("trade_order", ""), "trade_order");
 });
 
+test("strips an upper-cased prefix without rewriting the rest of the name", () => {
+  assert.equal(stripLayerPrefix("DWD_trade_order", "dwd"), "trade_order");
+  assert.equal(stripLayerPrefix("Dwd_DWD_trade_order", "dwd"), "trade_order");
+  // The tail keeps its case so the suffix rule can report it instead of silently rewriting it.
+  assert.equal(stripLayerPrefix("DWD_Trade_Order", "dwd"), "Trade_Order");
+});
+
 test("caps the qualifier so the suffix stays within 41 characters", () => {
   // The budget covers the suffix only; the layer prefix is stored beside it, not inside it.
   assert.equal(qualifierMaxLength("dwd", "trade", "order"), 41 - "trade_order".length - 1);
