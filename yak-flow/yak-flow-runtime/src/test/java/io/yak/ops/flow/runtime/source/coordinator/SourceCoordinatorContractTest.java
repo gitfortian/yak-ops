@@ -324,7 +324,7 @@ class SourceCoordinatorContractTest {
                 }
 
                 @Override
-                public void handleSplitRequest(int subtaskId) {
+                public void handleSplitRequest(int subtaskId, String requesterHostname) {
                     requests.incrementAndGet();
                     if (assignSplits) {
                         context.assignSplit(new TestSplit("split-" + subtaskId), subtaskId);
