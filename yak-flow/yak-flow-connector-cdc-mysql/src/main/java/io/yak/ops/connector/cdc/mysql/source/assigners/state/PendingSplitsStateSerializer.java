@@ -118,7 +118,7 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
 
     private void writeHybrid(DataOutputStream out, HybridPendingSplitsState state) throws IOException {
         out.writeByte(state.phase().ordinal());
-        out.writeBoolean(state.binlogAssigned());
+        out.writeBoolean(state.isBinlogSplitAssigned());
         if (state.pendingBinlog() != null) {
             writeSplit(out, state.pendingBinlog());
         }
