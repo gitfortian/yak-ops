@@ -433,15 +433,35 @@ public class MySqlSourceConfigFactory implements Serializable {
         props.setProperty("database.server.id", Integer.toString(serverIdRange.getServerId(subtaskId)));
         props.setProperty("topic.prefix", topic);
         props.setProperty("database.include.list", String.join(",", effectiveDatabases));
-        props.setProperty("table.include.list", String.join(",", effectiveTables));
-        if (excludeTableList != null && !excludeTableList.isBlank()) {
-            props.setProperty("table.exclude.list", excludeTableList);
-        }
+        props.setProperty(
+                "table.include.list", String.join(",", includeTablesExcept(effectiveTables, excludeTableList)));
         if (dbzProperties != null) props.putAll(dbzProperties);
         return new MySqlSourceConfig(
                 hostname, port, username, password, serverIdRange.getStartServerId(),
                 topic, schemas, queueCapacity, connectionProperties, chunkKeyColumns, null,
                 false, sourceSettings(props, effectiveDatabases, effectiveTables));
+    }
+
+    /**
+     * Debezium 2.7 does not permit table.include.list together with table.exclude.list.
+     * Apply exclusions to the include expressions instead of sending both properties.
+     * Each pattern is matched against the entire qualified table name.
+     */
+    static List<String> includeTablesExcept(List<String> inclusions, String exclusions) {
+        if (exclusions == null || exclusions.isBlank()) {
+            return List.copyOf(inclusions);
+        }
+        String excluded = Arrays.stream(exclusions.split(","))
+                .map(String::trim)
+                .filter(pattern -> !pattern.isEmpty())
+                .collect(java.util.stream.Collectors.joining("|"));
+        if (excluded.isEmpty()) {
+            return List.copyOf(inclusions);
+        }
+        String notExcluded = "(?!(?:" + excluded + ")$)";
+        return inclusions.stream()
+                .map(inclusion -> notExcluded + "(?:" + inclusion + ")")
+                .toList();
     }
 
     static SourceSettings defaultSettings(int serverId) {

@@ -489,9 +489,13 @@ public final class MySqlSourceConfig {
                 databaseNames.stream().map(Pattern::quote).collect(Collectors.joining(",")));
         properties.setProperty(
                 "table.include.list",
-                schemas.keySet().stream()
-                        .map(table -> Pattern.quote(table.catalog()) + "\\." + Pattern.quote(table.table()))
-                        .collect(Collectors.joining(",")));
+                String.join(
+                        ",",
+                        MySqlSourceConfigFactory.includeTablesExcept(
+                                schemas.keySet().stream()
+                                        .map(table -> Pattern.quote(table.catalog()) + "\\\\." + Pattern.quote(table.table()))
+                                        .toList(),
+                                excludeTableList)));
         properties.setProperty("snapshot.mode", "no_data");
         properties.setProperty("include.schema.changes", Boolean.toString(schemaEvolutionEnabled));
         // Debezium's row schemas normally omit VARCHAR capacity. Propagate the
