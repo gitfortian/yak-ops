@@ -44,7 +44,7 @@ class MySqlSplitAssignerContractTest {
         assertFalse(assigner.snapshotState(3).splitAssigned());
         assertEquals(split, assigner.getNext(0));
         assertThrows(IllegalStateException.class, () -> assigner.addSplitsBack(List.of(split), 1));
-        assertThrows(IllegalArgumentException.class, () -> new MySqlBinlogSplitAssigner(StartupOptions.latest(), assigned));
+        assertNull(new MySqlBinlogSplitAssigner(StartupOptions.latest(), assigned).getNext(0));
     }
 
 
