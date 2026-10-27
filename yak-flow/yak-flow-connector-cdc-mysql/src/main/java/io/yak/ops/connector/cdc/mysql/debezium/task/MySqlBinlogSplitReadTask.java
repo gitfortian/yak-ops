@@ -33,8 +33,6 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(MySqlBinlogSplitReadTask.class);
 
-    private final MySqlSourceConfig config;
-    private final int serverId;
     private final StatefulTaskContext context;
 
     private DebeziumEngine<RecordChangeEvent<SourceRecord>> engine;
@@ -54,15 +52,16 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
 
     /** Uses a distinct replication connection while retaining the source partition and table contract. */
     public MySqlBinlogSplitReadTask(MySqlSourceConfig config, int serverId) {
-        if (serverId < 1) throw new IllegalArgumentException("Replication server ID must be positive");
-        this.serverId = serverId;
-        this.config = Objects.requireNonNull(config, "config");
-        context = new StatefulTaskContext(config, serverId);
+        context = new StatefulTaskContext(Objects.requireNonNull(config, "config"), serverId);
+    }
+
+    private MySqlSourceConfig getSourceConfig() {
+        return context.getSourceConfig();
     }
 
     /** Starts the engine, optionally seeding its offset and Schema History from a checkpoint. */
     public void start(MySqlBinlogSplit split) throws IOException {
-        try (var connection = config.openSnapshotConnection()) {
+        try (var connection = getSourceConfig().openSnapshotConnection()) {
             MySqlBinlogConfigurationValidator.validate(connection);
         } catch (java.sql.SQLException | IllegalArgumentException error) {
             throw new IOException("MySQL CDC Binlog settings validation failed: " + error.getMessage(), error);
@@ -73,22 +72,19 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
         context.configure(split);
         started = true;
         lastQueuedOffset = context.restoredOffset();
-        awaitingSchemaSnapshot = split.offset() == null;
+        awaitingSchemaSnapshot = lastQueuedOffset == null;
         directory = Files.createTempDirectory("yakflow-binlog-");
         historyPath = directory.resolve("schema-history.dat");
         byte[] history = context.restoredSchemaHistory();
-        if (split.offset() != null && history.length == 0) {
-            throw new IllegalArgumentException("A restored MySQL Binlog offset requires Schema History");
-        }
         if (history.length != 0) {
             Files.write(historyPath, history);
         }
-        String connectorName = "yakflow-cdc-" + config.topicPrefix();
-        sessionId = CheckpointOffsetBackingStore.register(connectorName, split.offset());
-        var properties = config.debeziumProperties(sessionId, historyPath);
-        properties.setProperty("database.server.id", Integer.toString(serverId));
+        String connectorName = "yakflow-cdc-" + getSourceConfig().topicPrefix();
+        sessionId = CheckpointOffsetBackingStore.register(connectorName, context.restoredOffset());
+        var properties = getSourceConfig().debeziumProperties(sessionId, historyPath);
+        properties.setProperty("database.server.id", Integer.toString(context.getServerId()));
         // Snapshot readers share a logical source but must own distinct JMX registrations.
-        properties.setProperty("custom.metric.tags", "reader=" + serverId);
+        properties.setProperty("custom.metric.tags", "reader=" + context.getServerId());
         engine = DebeziumEngine.create(ChangeEventFormat.of(Connect.class))
                 .using(properties)
                 .notifying(this::handleBatch)
@@ -130,11 +126,11 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
                     // The forced heartbeat is emitted only after postSnapshot(), with the
                     // completed snapshot offset. Earlier records must never anchor Hybrid.
                     if (isHeartbeat(source)) {
-                        if (config.schemaEvolutionEnabled()
-                                && !bootstrapTables.containsAll(config.schemas().keySet())) {
+                        if (getSourceConfig().schemaEvolutionEnabled()
+                                && !bootstrapTables.containsAll(getSourceConfig().schemas().keySet())) {
                             throw new IllegalStateException(
                                     "MySQL CDC initial schema snapshot did not register all selected tables: "
-                                            + config.schemas().keySet().stream()
+                                            + getSourceConfig().schemas().keySet().stream()
                                                     .filter(table -> !bootstrapTables.contains(table))
                                                     .toList());
                         }
@@ -147,7 +143,7 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
                         awaitingSchemaSnapshot = false;
                         LOG.info(
                                 "MySQL CDC initial schema snapshot completed, tables={}",
-                                config.schemas().size());
+                                getSourceConfig().schemas().size());
                     } else {
                         context.converter().applyInitialSchemaTables(source, bootstrapTables);
                     }
