@@ -42,7 +42,6 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     private final MySqlHybridSplitAssigner assigner;
     private final MySqlBinlogSplitAssigner streamAssigner;
     private final boolean initial;
-    private final String fingerprint;
     private final List<TableId> tables;
     private final Set<Integer> waitingReaders = new LinkedHashSet<>();
     private final TableMetrics metrics;
@@ -56,17 +55,15 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             StartupOptions startupOptions,
             SplitEnumeratorContext<MySqlSplit> context,
             MySqlSourceConfig config,
-            String fingerprint,
             int chunkSize,
             PendingSplitsState restored) {
-        this(startupOptions, context, config, fingerprint, chunkSize, restored, new TableMetrics());
+        this(startupOptions, context, config, chunkSize, restored, new TableMetrics());
     }
 
     public MySqlSourceEnumerator(
             StartupOptions startupOptions,
             SplitEnumeratorContext<MySqlSplit> context,
             MySqlSourceConfig config,
-            String fingerprint,
             int chunkSize,
             PendingSplitsState restored,
             TableMetrics metrics) {
@@ -74,7 +71,6 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                 startupOptions,
                 context,
                 config,
-                fingerprint,
                 chunkSize,
                 restored,
                 metrics,
@@ -86,7 +82,6 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             StartupOptions startupOptions,
             SplitEnumeratorContext<MySqlSplit> context,
             MySqlSourceConfig config,
-            String fingerprint,
             int chunkSize,
             PendingSplitsState restored,
             TableMetrics metrics,
@@ -94,7 +89,6 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         this.context = Objects.requireNonNull(context, "context");
         Objects.requireNonNull(startupOptions, "startupOptions");
         this.metrics = Objects.requireNonNull(metrics, "metrics");
-        this.fingerprint = Objects.requireNonNull(fingerprint, "fingerprint");
         tables = List.copyOf(config.schemas().keySet());
         this.initial = startupOptions.startupMode() == StartupMode.INITIAL;
         if (initial && restored != null && !(restored instanceof MySqlHybridEnumeratorState)) {
@@ -122,10 +116,10 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         tables.forEach(metrics::register);
         generation = metrics.beginSnapshot(restored != null);
         splitter = planner;
-        assigner = initial ? new MySqlHybridSplitAssigner(startupOptions, fingerprint, restoredHybrid) : null;
+        assigner = initial ? new MySqlHybridSplitAssigner(startupOptions, restoredHybrid) : null;
         streamAssigner = initial
                 ? null
-                : new MySqlBinlogSplitAssigner(startupOptions, fingerprint, (MySqlPendingSplitsState) restored);
+                : new MySqlBinlogSplitAssigner(startupOptions, (MySqlPendingSplitsState) restored);
         restoredHandoff = restoredHybrid != null && restoredHybrid.phase() == MySqlHybridEnumeratorState.Phase.HANDOFF;
         if (context.currentParallelism() < 1
                 || context.currentParallelism() > (initial ? 16 : 1)
@@ -278,7 +272,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         }
         planning = true;
         context.callAsync(
-                () -> splitter.planNext(table, fingerprint, tableIndex, chunkIndex, cursor), (split, failure) -> {
+                () -> splitter.planNext(table, tableIndex, chunkIndex, cursor), (split, failure) -> {
                     planning = false;
                     if (closed) return;
                     if (failure != null) {
