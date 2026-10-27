@@ -48,7 +48,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Tests actual Enumerator async callbacks, durable cursors and reader assignments. */
 class MySqlTypedSnapshotAssignmentTest {
     private static final TableId ORDERS = new TableId("shop", null, "orders");
-    private static final String FINGERPRINT = "typed-enumerator-test";
     private static final PendingSplitsStateSerializer SERIALIZER =
             new PendingSplitsStateSerializer(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE);
 
@@ -210,7 +209,6 @@ class MySqlTypedSnapshotAssignmentTest {
                 StartupOptions.initial(),
                 context,
                 config,
-                FINGERPRINT,
                 2,
                 restored,
                 new TableMetrics(),
