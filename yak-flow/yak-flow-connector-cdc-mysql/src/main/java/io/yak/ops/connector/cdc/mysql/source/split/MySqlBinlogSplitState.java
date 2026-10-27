@@ -19,11 +19,6 @@ public final class MySqlBinlogSplitState extends MySqlSplitState {
     }
 
     @Override
-    public String sourceId() {
-        return binlog.definitionFingerprint();
-    }
-
-    @Override
     public void captureLow(DebeziumOffset low, byte[] schemaHistory) {
         binlog = binlog.withAnchor(Objects.requireNonNull(low, "low"), schemaHistory);
         emittedOffset = low;
