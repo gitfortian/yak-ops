@@ -2,7 +2,7 @@
 
 Status: Discussion
 
-Discussion: Pending — proposal pull request not yet opened
+Discussion: https://github.com/gitfortian/yak-ops/pull/43
 
 Decision: Pending
 
