@@ -62,7 +62,29 @@ class MySqlCdcSourceTest {
         assertTrue(!source.config().toString().contains("secret"));
     }
 
+    @Test
+    void explicitChunkKeyCannotRestoreCheckpointCreatedWithoutAnOverride() throws Exception {
+        MySqlCdcSource implicit = definition();
+        var enumerator = implicit.createEnumerator(new FakeContext());
+        enumerator.start();
+        MySqlPendingSplitsState checkpoint = enumerator.snapshotState(1L);
+        enumerator.close();
+
+        MySqlCdcSource explicit = definition("ID");
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> explicit.restoreEnumerator(new FakeContext(), checkpoint));
+
+        var restored = implicit.restoreEnumerator(new FakeContext(), checkpoint);
+        restored.start();
+        restored.close();
+    }
+
     private static MySqlCdcSource definition() {
+        return definition(null);
+    }
+
+    private static MySqlCdcSource definition(String chunkKey) {
         return MySqlCdcSource.builder()
                 .hostname("localhost")
                 .username("yak")
@@ -75,7 +97,8 @@ class MySqlCdcSourceTest {
                                 List.of(
                                         new Column("ID", LogicalTypes.BIGINT.copy(false)),
                                         new Column("NAME", LogicalTypes.varchar(50))),
-                                List.of("ID")))
+                                List.of("ID")),
+                        chunkKey)
                 .build();
     }
 

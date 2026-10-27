@@ -1,5 +1,10 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.TABLE;
+import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.event;
+import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.offset;
+import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.row;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -23,7 +28,6 @@ import org.junit.jupiter.api.Test;
 /** Verifies per-chunk filtering and atomic primary-key move handling. */
 class MySqlBinlogSplitFilterTest {
 
-    private static final TableId TABLE = new TableId("shop", null, "orders");
     private static final TableSchema SCHEMA = new TableSchema(
             List.of(
                     new Column("id", LogicalTypes.BIGINT.copy(false)),
@@ -187,15 +191,5 @@ class MySqlBinlogSplitFilterTest {
                         new FinishedSnapshotSplitInfo(TABLE, "second", 100L, null, offset(300))));
     }
 
-    private static TableRecord row(RowKind kind, long id, String name) {
-        return new TableRecord(TABLE, kind, GenericRowData.of(id, name));
-    }
 
-    private static BinlogEvent event(long position, TableRecord... records) {
-        return new BinlogEvent(List.of(records), offset(position));
-    }
-
-    private static BinlogOffset offset(long position) {
-        return new BinlogOffset(Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", position));
-    }
 }

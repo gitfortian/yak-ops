@@ -1,10 +1,14 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.TABLE;
+import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.event;
+import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.offset;
+import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.row;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlBinlogSplitFilter.FinishedChunk;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
@@ -27,7 +31,6 @@ import org.junit.jupiter.api.Test;
 
 /** Proves chunk-key Binlog fencing without enabling uncheckpointed typed source execution. */
 class MySqlTypedBinlogSplitFilterTest {
-    private static final TableId TABLE = new TableId("shop", null, "orders");
     private static final TableSchema KEYLESS = new TableSchema(
             List.of(
                     new Column("bucket", LogicalTypes.BIGINT.copy(false)),
@@ -232,19 +235,7 @@ class MySqlTypedBinlogSplitFilterTest {
                                 offset(200))));
     }
 
-    private static TableRecord row(RowKind kind, long bucket, String name) {
-        return new TableRecord(TABLE, kind, GenericRowData.of(bucket, name));
-    }
-
     private static TableRecord decimal(String amount) {
         return new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(new BigDecimal(amount), "money"));
-    }
-
-    private static BinlogEvent event(long position, TableRecord... changes) {
-        return new BinlogEvent(List.of(changes), offset(position));
-    }
-
-    private static BinlogOffset offset(long position) {
-        return new BinlogOffset(Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", position));
     }
 }
