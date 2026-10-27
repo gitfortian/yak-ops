@@ -57,7 +57,7 @@ class MySqlBackfillIT {
                         "INSERT INTO " + other + " VALUES(7,'not-this-chunk')");
                 return null;
             })) {
-                var split = reader.read(MySqlSnapshotSplit.typed("chunk", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, 100L)));
+                var split = reader.read(MySqlSnapshotSplit.typed("chunk", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, 100L)));
                 Map<Long,String> values = new LinkedHashMap<>();
                 for (var row : split.output().rows()) {
                     assertEquals(RowKind.INSERT, row.rowKind());
@@ -76,11 +76,11 @@ class MySqlBackfillIT {
         execute("CREATE TABLE " + table + "(id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL)");
         TableId id = new TableId("yak_cdc_it", null, table);
         try (var reader = new MySqlSnapshotSplitReadTask(config(Map.of(id, SCHEMA), 6601, table), 0)) {
-            var empty = reader.read(MySqlSnapshotSplit.typed("empty", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, 10L)));
+            var empty = reader.read(MySqlSnapshotSplit.typed("empty", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, 10L)));
             assertTrue(empty.output().rows().isEmpty());
             assertEquals(0, empty.output().low().compareTo(empty.output().high()));
             execute("INSERT INTO " + table + " VALUES(20,'present')");
-            var second = reader.read(MySqlSnapshotSplit.typed("second", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, 10L, null)));
+            var second = reader.read(MySqlSnapshotSplit.typed("second", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, 10L, null)));
             assertEquals(1, second.output().rows().size());
             assertEquals(20L, second.output().rows().getFirst().row().getLong(0));
         } finally { execute("DROP TABLE " + table); }
@@ -164,8 +164,7 @@ class MySqlBackfillIT {
                     return null;
                 },
                 () -> null)) {
-            var prepared = reader.read(MySqlSnapshotSplit.typed(
-                    "typed-transaction", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, 100L)));
+            var prepared = reader.read(MySqlSnapshotSplit.typed("typed-transaction", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, 100L)));
             Map<Long, String> actual = new LinkedHashMap<>();
             for (var row : prepared.output().rows()) {
                 assertEquals(RowKind.INSERT, row.rowKind());
@@ -198,7 +197,7 @@ class MySqlBackfillIT {
             }
             try (var reader = new MySqlSnapshotSplitReadTask(config(Map.of(id, schema), 6821, table), 0)) {
                 var failure = assertThrows(IllegalStateException.class, () -> reader.read(
-                        MySqlSnapshotSplit.typed("wide", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null))));
+                        MySqlSnapshotSplit.typed("wide", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null))));
                 assertTrue(failure.getMessage().contains("buffer limit"), failure.getMessage());
             }
         } finally {
@@ -225,7 +224,7 @@ class MySqlBackfillIT {
             // Debezium no_data schema bootstrap has separate locking requirements and is
             // deliberately not part of this JDBC privilege-boundary assertion.
             try (var snapshots = new SnapshotSplitReader(config)) {
-                snapshots.open(MySqlSnapshotSplit.typed("typed", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null)));
+                snapshots.open(MySqlSnapshotSplit.typed("typed", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null)));
                 var batch = snapshots.fetch();
                 assertEquals("typed", batch.nextSplit());
                 var record = batch.nextRecordFromSplit();
@@ -239,8 +238,7 @@ class MySqlBackfillIT {
             // Ordinary SELECT plus Binlog position access is sufficient for this JDBC boundary.
             try (var reader = new MySqlSnapshotSplitReadTask(config, 1)) {
                 reader.openTypedSnapshotReadView(
-                        MySqlSnapshotSplit.typed(
-                                "typed", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null)));
+                        MySqlSnapshotSplit.typed("typed", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null)));
             }
         } finally {
             execute("DROP USER IF EXISTS '" + user + "'@'%'", "DROP TABLE " + table);
