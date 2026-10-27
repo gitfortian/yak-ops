@@ -27,7 +27,7 @@ class MySqlBinlogSplitCheckpointTest {
         original.put("gtids", "uuid:1-20");
         DebeziumOffset offset = new DebeziumOffset(Map.of("server", "yak"), original);
         byte[] history = {1, 2, 3};
-        MySqlBinlogSplit split = new MySqlBinlogSplit("fingerprint", offset, history);
+        MySqlBinlogSplit split = new MySqlBinlogSplit(offset, history);
         history[0] = 99;
 
         MySqlSplitSerializer serializer = new MySqlSplitSerializer();
@@ -43,13 +43,13 @@ class MySqlBinlogSplitCheckpointTest {
     void roundTripsPendingAndAssignedEnumeratorStates() throws Exception {
         PendingSplitsStateSerializer serializer = new PendingSplitsStateSerializer(MySqlSplitSerializer.INSTANCE);
         MySqlPendingSplitsState pending =
-                new MySqlPendingSplitsState("fingerprint", false, new MySqlBinlogSplit("fingerprint", null, new byte[0]));
+                new MySqlPendingSplitsState(false, new MySqlBinlogSplit(null, new byte[0]));
         MySqlPendingSplitsState restored = (MySqlPendingSplitsState) serializer.deserialize(serializer.getVersion(), serializer.serialize(pending));
         assertEquals("fingerprint", restored.sourceFingerprint());
         assertEquals(false, restored.splitAssigned());
         assertEquals(null, restored.pendingSplit().offset());
 
-        MySqlPendingSplitsState assigned = new MySqlPendingSplitsState("fingerprint", true, null);
+        MySqlPendingSplitsState assigned = new MySqlPendingSplitsState(true, null);
         MySqlPendingSplitsState restoredAssigned = (MySqlPendingSplitsState) serializer.deserialize(serializer.getVersion(), serializer.serialize(assigned));
         assertEquals(true, restoredAssigned.splitAssigned());
         assertEquals(null, restoredAssigned.pendingSplit());
@@ -59,7 +59,7 @@ class MySqlBinlogSplitCheckpointTest {
     void rejectsIncompleteRestoredOffsetAndCorruptData() throws Exception {
         MySqlSplitSerializer serializer = new MySqlSplitSerializer();
         var offset = new DebeziumOffset(Map.of("server", "yak"), Map.of("pos", 5L));
-        var missingHistory = new MySqlBinlogSplit("fingerprint", offset, new byte[0]);
+        var missingHistory = new MySqlBinlogSplit(offset, new byte[0]);
         assertThrows(IOException.class, () -> serializer.deserialize(serializer.getVersion(), serializer.serialize(missingHistory)));
         assertThrows(IOException.class, () -> serializer.deserialize(serializer.getVersion(), new byte[] {0, 1}));
     }
