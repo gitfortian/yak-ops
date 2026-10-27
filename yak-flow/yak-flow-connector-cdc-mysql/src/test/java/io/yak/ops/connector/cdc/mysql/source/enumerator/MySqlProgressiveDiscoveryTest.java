@@ -23,21 +23,21 @@ class MySqlProgressiveDiscoveryTest {
     @Test
     void restoresDiscoveryPositionWithoutReplanningCompletedChunks() throws Exception {
         var original = assigner();
-        var first = MySqlSnapshotSplit.typed("table-0-chunk-0", "fp", range(null, 10L));
+        var first = MySqlSnapshotSplit.typed("table-0-chunk-0", range(null, 10L));
         original.appendPlan(first, 1);
         assertEquals(first, original.nextSnapshot());
         original.finishSnapshot(finished(first, 150));
         assertFalse(original.snapshotComplete());
         var serializer = new PendingSplitsStateSerializer(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE);
         var saved = (MySqlHybridEnumeratorState) serializer.deserialize(serializer.getVersion(), serializer.serialize(original.snapshotState(1)));
-        var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fp", saved);
+        var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), saved);
         assertEquals(0, restored.nextTableIndex());
         assertEquals(1, restored.nextChunkIndex());
         assertEquals(range(10L, null), restored.nextChunkRange());
         assertNull(restored.nextSnapshot());
         assertEquals(java.util.List.of(finished(first,150)), restored.finishedSplits());
 
-        var last = MySqlSnapshotSplit.typed("table-0-chunk-1", "fp", range(10L, null));
+        var last = MySqlSnapshotSplit.typed("table-0-chunk-1", range(10L, null));
         restored.appendPlan(last, 1);
         assertEquals(last, restored.nextSnapshot());
         restored.finishSnapshot(finished(last,250));
@@ -52,7 +52,7 @@ class MySqlProgressiveDiscoveryTest {
     @Test
     void rejectsWrongRangeAndConflictingCompletionWithoutChangingAccounting() {
         var assigner = assigner();
-        var split = MySqlSnapshotSplit.typed("chunk", "fp", range(null, null));
+        var split = MySqlSnapshotSplit.typed("chunk", range(null, null));
         assigner.appendPlan(split, 1);
         assigner.nextSnapshot();
         assertThrows(IllegalArgumentException.class, () -> assigner.finishSnapshot(
@@ -74,7 +74,7 @@ class MySqlProgressiveDiscoveryTest {
     }
 
     private static MySqlHybridSplitAssigner assigner() {
-        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fp",null);
+        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
         assigner.nextBinlog(0);
         assigner.captureLow(offset(100));
         return assigner;
