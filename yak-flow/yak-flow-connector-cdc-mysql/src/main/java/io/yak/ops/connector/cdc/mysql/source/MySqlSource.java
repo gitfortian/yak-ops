@@ -42,8 +42,8 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
     private final int snapshotChunkSize;
     private final String fingerprint;
     private final TableMetrics metrics;
-    private final MySqlSplitSerializer splitSerializer = new MySqlSplitSerializer();
-    private final PendingSplitsStateSerializer stateSerializer = new PendingSplitsStateSerializer();
+    private final MySqlSplitSerializer splitSerializer = MySqlSplitSerializer.INSTANCE;
+    private final PendingSplitsStateSerializer stateSerializer = new PendingSplitsStateSerializer(splitSerializer);
 
     private MySqlSource(
             StartupOptions options,
