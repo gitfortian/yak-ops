@@ -93,7 +93,7 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
                 if (split.chunkRange() == null) {
                     var batch = snapshots.fetch();
                     while (batch.nextSplit() != null) {
-                        MySqlHybridFetchedRecord record;
+                        MySqlFetchedRecord record;
                         while ((record = batch.nextRecordFromSplit()) != null) {
                             for (var row : record.rows()) buffer.addSnapshot(row);
                         }
