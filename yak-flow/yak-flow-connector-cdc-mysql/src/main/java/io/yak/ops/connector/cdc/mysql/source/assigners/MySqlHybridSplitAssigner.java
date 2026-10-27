@@ -22,7 +22,6 @@ import java.util.Objects;
 public final class MySqlHybridSplitAssigner
         implements MySqlSplitAssigner<MySqlSplit, MySqlHybridEnumeratorState> {
 
-    private final String fingerprint;
     private final MySqlSnapshotSplitAssigner snapshots;
     private MySqlBinlogSplit pendingBinlog;
     private boolean binlogAssigned;
@@ -36,21 +35,17 @@ public final class MySqlHybridSplitAssigner
     private ChunkRange nextChunkRange;
 
     public MySqlHybridSplitAssigner(
-            StartupOptions startupOptions, String fingerprint, MySqlHybridEnumeratorState restored) {
+            StartupOptions startupOptions, MySqlHybridEnumeratorState restored) {
         Objects.requireNonNull(startupOptions, "startupOptions");
         if (startupOptions.startupMode() != StartupMode.INITIAL) {
             throw new UnsupportedOperationException("MySQL Hybrid Source requires initial startup");
         }
-        this.fingerprint = Objects.requireNonNull(fingerprint, "fingerprint");
         if (restored == null) {
             snapshots = new MySqlSnapshotSplitAssigner();
-            pendingBinlog = MySqlBinlogSplit.forInitialSnapshot(fingerprint);
+            pendingBinlog = MySqlBinlogSplit.forInitialSnapshot();
             binlogAssigned = false;
             phase = MySqlHybridEnumeratorState.Phase.BOOTSTRAP;
         } else {
-            if (!fingerprint.equals(restored.fingerprint())) {
-                throw new IllegalArgumentException("MySQL hybrid source definition changed since checkpoint");
-            }
             restored.finishedSplitInfos().forEach(info -> completed.put(info.splitId(), info));
             nextTableIndex = restored.nextTableIndex();
             nextChunkIndex = restored.nextChunkIndex();
@@ -253,7 +248,6 @@ public final class MySqlHybridSplitAssigner
             handoffCheckpointId = checkpointId;
         }
         return new MySqlHybridEnumeratorState(
-                fingerprint,
                 phase,
                 pendingBinlog,
                 binlogAssigned,
