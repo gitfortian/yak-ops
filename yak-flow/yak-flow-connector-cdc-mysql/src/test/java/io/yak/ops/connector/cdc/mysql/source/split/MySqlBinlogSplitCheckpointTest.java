@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.BinlogPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer;
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -42,14 +42,14 @@ class MySqlBinlogSplitCheckpointTest {
     @Test
     void roundTripsPendingAndAssignedEnumeratorStates() throws Exception {
         PendingSplitsStateSerializer serializer = new PendingSplitsStateSerializer(MySqlSplitSerializer.INSTANCE);
-        MySqlPendingSplitsState pending =
-                new MySqlPendingSplitsState(false, new MySqlBinlogSplit(null, new byte[0]));
-        MySqlPendingSplitsState restored = (MySqlPendingSplitsState) serializer.deserialize(serializer.getVersion(), serializer.serialize(pending));
+        BinlogPendingSplitsState pending =
+                new BinlogPendingSplitsState(false, new MySqlBinlogSplit(null, new byte[0]));
+        BinlogPendingSplitsState restored = (BinlogPendingSplitsState) serializer.deserialize(serializer.getVersion(), serializer.serialize(pending));
         assertEquals(false, restored.splitAssigned());
         assertEquals(null, restored.pendingSplit().offset());
 
-        MySqlPendingSplitsState assigned = new MySqlPendingSplitsState(true, null);
-        MySqlPendingSplitsState restoredAssigned = (MySqlPendingSplitsState) serializer.deserialize(serializer.getVersion(), serializer.serialize(assigned));
+        BinlogPendingSplitsState assigned = new BinlogPendingSplitsState(true, null);
+        BinlogPendingSplitsState restoredAssigned = (BinlogPendingSplitsState) serializer.deserialize(serializer.getVersion(), serializer.serialize(assigned));
         assertEquals(true, restoredAssigned.splitAssigned());
         assertEquals(null, restoredAssigned.pendingSplit());
     }
