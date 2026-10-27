@@ -2,8 +2,6 @@ package io.yak.ops.connector.cdc.mysql.source;
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlSourceEnumerator;
@@ -46,8 +44,12 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
     private final MySqlSplitSerializer splitSerializer = new MySqlSplitSerializer();
     private final PendingSplitsStateSerializer stateSerializer = new PendingSplitsStateSerializer();
 
-    private MySqlSource(StartupOptions options, MySqlCdcSourceConfig config,
-            int chunkSize, String fingerprint, TableMetrics metrics) {
+    private MySqlSource(
+            StartupOptions options,
+            MySqlCdcSourceConfig config,
+            int chunkSize,
+            String fingerprint,
+            TableMetrics metrics) {
         this.startupOptions = Objects.requireNonNull(options, "startupOptions");
         this.config = Objects.requireNonNull(config, "config");
         this.snapshotChunkSize = chunkSize;
@@ -59,16 +61,17 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
         return new MySqlCdcSourceBuilder();
     }
 
-    public static MySqlSource create(MySqlCdcSourceBuilder builder, StartupOptions startupOptions,
-            int snapshotChunkSize, TableMetrics metrics) {
+    public static MySqlSource create(
+            MySqlCdcSourceBuilder builder, StartupOptions startupOptions, int snapshotChunkSize, TableMetrics metrics) {
         Objects.requireNonNull(builder, "builder");
         Objects.requireNonNull(startupOptions, "startupOptions").requireSupported();
         builder.startupOptions(startupOptions);
         return switch (startupOptions.startupMode()) {
             case INITIAL -> builder.buildHybrid(snapshotChunkSize, metrics);
             case LATEST_OFFSET -> builder.build(metrics);
-            default -> throw new UnsupportedOperationException(
-                    "MySQL CDC startup mode is not implemented: " + startupOptions.asModeString());
+            default ->
+                throw new UnsupportedOperationException(
+                        "MySQL CDC startup mode is not implemented: " + startupOptions.asModeString());
         };
     }
 
@@ -81,8 +84,8 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
         return new MySqlSource(options, config, 0, fingerprint(config), metrics);
     }
 
-    static MySqlSource initial(MySqlCdcSourceConfig config, int chunkSize,
-            TableMetrics metrics, StartupOptions options) {
+    static MySqlSource initial(
+            MySqlCdcSourceConfig config, int chunkSize, TableMetrics metrics, StartupOptions options) {
         if (options.startupMode() != StartupMode.INITIAL) {
             throw new UnsupportedOperationException("MySQL Snapshot Source requires initial startup");
         }
@@ -90,16 +93,25 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
         if (chunkSize < 1 || chunkSize > 100_000) {
             throw new IllegalArgumentException("Snapshot chunk size must be between 1 and 100000");
         }
-        config.schemas().forEach((table, schema) ->
-                ChunkUtils.requireSupportedSnapshot(schema, config.chunkKeyColumns().get(table)));
+        config.schemas()
+                .forEach((table, schema) -> ChunkUtils.requireSupportedSnapshot(
+                        schema, config.chunkKeyColumns().get(table)));
         config.schemas().keySet().forEach(metrics::register);
-        return new MySqlSource(options, config, chunkSize,
-                fingerprint(config) + "-hybrid-typed-backfill-v3-" + chunkSize, metrics);
+        return new MySqlSource(
+                options, config, chunkSize, fingerprint(config) + "-hybrid-typed-backfill-v3-" + chunkSize, metrics);
     }
 
-    public StartupOptions startupOptions() { return startupOptions; }
-    public StartupMode startupMode() { return startupOptions.startupMode(); }
-    public MySqlCdcSourceConfig config() { return config; }
+    public StartupOptions startupOptions() {
+        return startupOptions;
+    }
+
+    public StartupMode startupMode() {
+        return startupOptions.startupMode();
+    }
+
+    public MySqlCdcSourceConfig config() {
+        return config;
+    }
 
     public int snapshotChunkSize() {
         if (startupOptions.startupMode() != StartupMode.INITIAL) {
@@ -109,7 +121,9 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
     }
 
     @Override
-    public Boundedness getBoundedness() { return Boundedness.CONTINUOUS_UNBOUNDED; }
+    public Boundedness getBoundedness() {
+        return Boundedness.CONTINUOUS_UNBOUNDED;
+    }
 
     @Override
     public SplitEnumerator<MySqlSplit, PendingSplitsState> createEnumerator(
@@ -125,8 +139,8 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
 
     private MySqlSourceEnumerator createEnumerator(
             SplitEnumeratorContext<MySqlSplit> context, PendingSplitsState checkpointState) {
-        return new MySqlSourceEnumerator(startupOptions, context, config, fingerprint,
-                snapshotChunkSize, checkpointState, metrics);
+        return new MySqlSourceEnumerator(
+                startupOptions, context, config, fingerprint, snapshotChunkSize, checkpointState, metrics);
     }
 
     @Override
@@ -135,15 +149,19 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
         if (!initial && (context.currentParallelism() != 1 || context.getIndexOfSubtask() != 0)) {
             throw new IllegalArgumentException("Stream-only MySQL CDC requires one SourceReader");
         }
-        if (initial && context.getConfiguration()
-                .get(CheckpointingOptions.CHECKPOINTING_INTERVAL).isZero()) {
+        if (initial
+                && context.getConfiguration()
+                        .get(CheckpointingOptions.CHECKPOINTING_INTERVAL)
+                        .isZero()) {
             throw new IllegalArgumentException("MySQL Snapshot requires periodic durable checkpoints");
         }
         return new MySqlSourceReader(config.withRuntimeState(context), fingerprint, context, metrics, initial);
     }
 
     @Override
-    public SimpleVersionedSerializer<MySqlSplit> getSplitSerializer() { return splitSerializer; }
+    public SimpleVersionedSerializer<MySqlSplit> getSplitSerializer() {
+        return splitSerializer;
+    }
 
     @Override
     public SimpleVersionedSerializer<PendingSplitsState> getEnumeratorCheckpointSerializer() {
@@ -151,7 +169,8 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
     }
 
     private static void requirePhysicalPrimaryKeys(MySqlCdcSourceConfig config) {
-        if (config.schemas().values().stream().anyMatch(schema -> schema.primaryKeys().isEmpty())) {
+        if (config.schemas().values().stream()
+                .anyMatch(schema -> schema.primaryKeys().isEmpty())) {
             throw new UnsupportedOperationException(
                     "Keyless MySQL CDC is not executable until Binlog handoff and RETRACT are supported");
         }

@@ -13,8 +13,14 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private final MySqlBinlogSplitSerializer binlog = new MySqlBinlogSplitSerializer();
     private final MySqlHybridSplitSerializer hybrid = new MySqlHybridSplitSerializer();
-    @Override public int getVersion() { return VERSION; }
-    @Override public byte[] serialize(MySqlSplit split) throws IOException {
+
+    @Override
+    public int getVersion() {
+        return VERSION;
+    }
+
+    @Override
+    public byte[] serialize(MySqlSplit split) throws IOException {
         final int kind;
         final byte[] payload;
         if (split instanceof MySqlBinlogSplit stream) {
@@ -27,14 +33,17 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
             throw new IOException("Unknown MySQL split: " + split.getClass().getName());
         }
         if (payload.length > MAX_BYTES - 5) throw new IOException("Oversized MySQL split");
-        try (var buffer = new ByteArrayOutputStream(); var out = new DataOutputStream(buffer)) {
+        try (var buffer = new ByteArrayOutputStream();
+                var out = new DataOutputStream(buffer)) {
             out.writeByte(kind);
             out.writeInt(payload.length);
             out.write(payload);
             return buffer.toByteArray();
         }
     }
-    @Override public MySqlSplit deserialize(int version, byte[] bytes) throws IOException {
+
+    @Override
+    public MySqlSplit deserialize(int version, byte[] bytes) throws IOException {
         if (bytes == null || bytes.length > MAX_BYTES) throw new IOException("Invalid split bytes");
         if (version == 1) return binlog.deserialize(1, bytes);
         if (version >= 2 && version <= 5) return hybrid.deserialize(version, bytes);

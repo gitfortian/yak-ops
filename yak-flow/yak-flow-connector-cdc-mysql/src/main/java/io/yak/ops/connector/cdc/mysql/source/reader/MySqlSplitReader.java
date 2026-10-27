@@ -7,10 +7,10 @@ import io.yak.ops.connector.base.source.reader.splitreader.SplitReader;
 import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogEngine;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.core.data.TableId;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -134,9 +134,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             binlogSplit = binlogSplit.withAnchor(first.offset(), history);
             bootstrapCandidate = null;
             return records(
-                    MySqlHybridBinlogSplit.ID,
-                    new MySqlFetchedRecord(List.of(), null, first.offset(), true),
-                    false);
+                    MySqlHybridBinlogSplit.ID, new MySqlFetchedRecord(List.of(), null, first.offset(), true), false);
         }
         if (active == null && !pending.isEmpty()) {
             active = pending.removeFirst();
@@ -159,8 +157,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             }
             List<io.yak.ops.core.data.TableRecord> rows = active.output().rows();
             int next = Math.min(rows.size(), outputPosition + OUTPUT_BATCH_SIZE);
-            MySqlFetchedRecord batch =
-                    MySqlFetchedRecord.snapshotRows(rows.subList(outputPosition, next), next);
+            MySqlFetchedRecord batch = MySqlFetchedRecord.snapshotRows(rows.subList(outputPosition, next), next);
             outputPosition = next;
             boolean complete = next == rows.size();
             if (complete) {

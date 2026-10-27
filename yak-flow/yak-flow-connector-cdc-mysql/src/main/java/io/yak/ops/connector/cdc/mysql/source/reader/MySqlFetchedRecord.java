@@ -48,8 +48,7 @@ public record MySqlFetchedRecord(
     }
 
     public static MySqlFetchedRecord binlog(BinlogEvent event) {
-        return new MySqlFetchedRecord(
-                event.records(), null, event.offset(), false, null, null, event.schemaChange());
+        return new MySqlFetchedRecord(event.records(), null, event.offset(), false, null, null, event.schemaChange());
     }
 
     public static MySqlFetchedRecord prepared(MySqlSnapshotSplit split) {

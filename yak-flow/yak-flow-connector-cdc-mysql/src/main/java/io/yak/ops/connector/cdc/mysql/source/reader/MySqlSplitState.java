@@ -1,10 +1,10 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import java.util.Objects;
 
 /**
@@ -39,7 +39,9 @@ public final class MySqlSplitState {
 
     /** Stable source scope from the original durable split, independent of physical attempts. */
     public String sourceId() {
-        return snapshot != null ? snapshot.fingerprint() : binlog != null ? binlog.binlog().definitionFingerprint() : standalone.definitionFingerprint();
+        return snapshot != null
+                ? snapshot.fingerprint()
+                : binlog != null ? binlog.binlog().definitionFingerprint() : standalone.definitionFingerprint();
     }
 
     /** Snapshot identity is based on the original split and frozen output ordinal. */

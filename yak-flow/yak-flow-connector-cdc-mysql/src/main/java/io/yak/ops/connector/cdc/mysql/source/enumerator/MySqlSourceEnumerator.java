@@ -3,15 +3,12 @@ package io.yak.ops.connector.cdc.mysql.source.enumerator;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlBinlogSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
-import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlBinlogSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
-import io.yak.ops.connector.cdc.mysql.table.StartupMode;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
@@ -19,9 +16,12 @@ import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedAckEven
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlStopSnapshotEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
+import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SplitEnumerator;
@@ -35,8 +35,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /** Coordinates bounded progressive chunk discovery, durable completion metadata, and the Binlog handoff. */
-public final class MySqlSourceEnumerator
-        implements SplitEnumerator<MySqlSplit, PendingSplitsState> {
+public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, PendingSplitsState> {
     private static final int MAX_PENDING_CHUNKS = 32;
     private final SplitEnumeratorContext<MySqlSplit> context;
     private final MySqlChunkSplitter splitter;
@@ -71,7 +70,14 @@ public final class MySqlSourceEnumerator
             int chunkSize,
             PendingSplitsState restored,
             TableMetrics metrics) {
-        this(startupOptions, context, config, fingerprint, chunkSize, restored, metrics,
+        this(
+                startupOptions,
+                context,
+                config,
+                fingerprint,
+                chunkSize,
+                restored,
+                metrics,
                 startupOptions.startupMode() == StartupMode.INITIAL ? new MySqlChunkSplitter(config, chunkSize) : null);
     }
 
@@ -117,7 +123,8 @@ public final class MySqlSourceEnumerator
         generation = metrics.beginSnapshot(restored != null);
         splitter = planner;
         assigner = initial ? new MySqlHybridSplitAssigner(startupOptions, fingerprint, restoredHybrid) : null;
-        streamAssigner = initial ? null
+        streamAssigner = initial
+                ? null
                 : new MySqlBinlogSplitAssigner(startupOptions, fingerprint, (MySqlPendingSplitsState) restored);
         restoredHandoff = restoredHybrid != null && restoredHybrid.phase() == MySqlHybridEnumeratorState.Phase.HANDOFF;
         if (context.currentParallelism() < 1
@@ -137,7 +144,10 @@ public final class MySqlSourceEnumerator
                     complete);
             Map<TableId, Integer> counts = new LinkedHashMap<>();
             restoredHybrid.pendingSnapshots().forEach(split -> counts.merge(split.tableId(), 1, Integer::sum));
-            restoredHybrid.assignedSnapshots().values().forEach(split -> counts.merge(split.tableId(), 1, Integer::sum));
+            restoredHybrid
+                    .assignedSnapshots()
+                    .values()
+                    .forEach(split -> counts.merge(split.tableId(), 1, Integer::sum));
             restoredHybrid.finishedSplitInfos().forEach(info -> {
                 counts.merge(info.tableId(), 1, Integer::sum);
                 metrics.splitFinished(generation, info.splitId(), info.tableId());
@@ -213,10 +223,12 @@ public final class MySqlSourceEnumerator
         if (closed || reader < 0 || reader >= context.currentParallelism())
             throw new IllegalStateException("Invalid split return");
         if (initial) {
-            assigner.addSplitsBack(splits.stream().map(split -> (MySqlHybridSplit) split).toList(), reader);
+            assigner.addSplitsBack(
+                    splits.stream().map(split -> (MySqlHybridSplit) split).toList(), reader);
             assignAvailable();
         } else {
-            streamAssigner.addSplitsBack(splits.stream().map(split -> (MySqlBinlogSplit) split).toList(), reader);
+            streamAssigner.addSplitsBack(
+                    splits.stream().map(split -> (MySqlBinlogSplit) split).toList(), reader);
         }
     }
 

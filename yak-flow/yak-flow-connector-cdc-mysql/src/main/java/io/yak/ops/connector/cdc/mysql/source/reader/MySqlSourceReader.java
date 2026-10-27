@@ -7,8 +7,8 @@ import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedAckEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import java.util.ArrayList;
@@ -24,8 +24,7 @@ import java.util.Objects;
  * the Enumerator confirms receipt of their completion. The Binlog gate opens only through
  * a coordinator event after the snapshot handoff checkpoint completes.
  */
-public final class MySqlSourceReader
-        extends MySqlSourceReaderBase<MySqlFetchedRecord, MySqlSplit, MySqlSplitState> {
+public final class MySqlSourceReader extends MySqlSourceReaderBase<MySqlFetchedRecord, MySqlSplit, MySqlSplitState> {
 
     private final MySqlSplitReader splits;
     private final boolean initial;
@@ -34,21 +33,36 @@ public final class MySqlSourceReader
     private final java.util.Set<String> acknowledged = new java.util.HashSet<>();
     private final Map<String, Long> finishedCheckpoint = new LinkedHashMap<>();
 
-    public MySqlSourceReader(MySqlCdcSourceConfig config, String fingerprint,
-            SourceReaderContext context, TableMetrics metrics, boolean initial) {
-        this(new MySqlSplitReader(config, metrics, context.getIndexOfSubtask(), fingerprint),
-                context, metrics, initial);
+    public MySqlSourceReader(
+            MySqlCdcSourceConfig config,
+            String fingerprint,
+            SourceReaderContext context,
+            TableMetrics metrics,
+            boolean initial) {
+        this(
+                new MySqlSplitReader(config, metrics, context.getIndexOfSubtask(), fingerprint),
+                context,
+                metrics,
+                initial);
     }
 
-    private MySqlSourceReader(MySqlSplitReader splits, SourceReaderContext context,
-            TableMetrics metrics, boolean initial) {
+    private MySqlSourceReader(
+            MySqlSplitReader splits, SourceReaderContext context, TableMetrics metrics, boolean initial) {
         this(splits, context, metrics, new SchemaChangeHandler(context), initial);
     }
 
-    private MySqlSourceReader(MySqlSplitReader splits, SourceReaderContext context,
-            TableMetrics metrics, SchemaChangeHandler schemaChanges, boolean initial) {
-        super(() -> splits, new MySqlRecordEmitter(context, splits, metrics, schemaChanges),
-                context, schemaChanges, metrics);
+    private MySqlSourceReader(
+            MySqlSplitReader splits,
+            SourceReaderContext context,
+            TableMetrics metrics,
+            SchemaChangeHandler schemaChanges,
+            boolean initial) {
+        super(
+                () -> splits,
+                new MySqlRecordEmitter(context, splits, metrics, schemaChanges),
+                context,
+                schemaChanges,
+                metrics);
         this.splits = splits;
         this.initial = initial;
     }

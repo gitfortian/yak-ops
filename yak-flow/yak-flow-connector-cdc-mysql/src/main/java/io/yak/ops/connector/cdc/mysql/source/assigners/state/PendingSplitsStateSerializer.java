@@ -13,8 +13,14 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private final MySqlHybridEnumeratorStateSerializer hybrid = new MySqlHybridEnumeratorStateSerializer();
     private final MySqlPendingSplitsStateSerializer stream = new MySqlPendingSplitsStateSerializer();
-    @Override public int getVersion() { return VERSION; }
-    @Override public byte[] serialize(PendingSplitsState state) throws IOException {
+
+    @Override
+    public int getVersion() {
+        return VERSION;
+    }
+
+    @Override
+    public byte[] serialize(PendingSplitsState state) throws IOException {
         final int kind;
         final byte[] payload;
         if (state instanceof MySqlHybridEnumeratorState initial) {
@@ -27,14 +33,17 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
             throw new IOException("Unsupported MySQL pending state");
         }
         if (payload.length > MAX_BYTES - 5) throw new IOException("Oversized MySQL enumerator state");
-        try (var buffer = new ByteArrayOutputStream(); var out = new DataOutputStream(buffer)) {
+        try (var buffer = new ByteArrayOutputStream();
+                var out = new DataOutputStream(buffer)) {
             out.writeByte(kind);
             out.writeInt(payload.length);
             out.write(payload);
             return buffer.toByteArray();
         }
     }
-    @Override public PendingSplitsState deserialize(int version, byte[] bytes) throws IOException {
+
+    @Override
+    public PendingSplitsState deserialize(int version, byte[] bytes) throws IOException {
         if (bytes == null || bytes.length > MAX_BYTES) throw new IOException("Invalid state bytes");
         if (version == 1) return stream.deserialize(1, bytes);
         if (version == 4) return hybrid.deserialize(4, bytes);
