@@ -58,18 +58,34 @@ public final class FinishedSnapshotSplitInfo implements FinishedSnapshotSplit<De
 
 
     @Override
-    public TableId tableId() { return tableId; }
+    public TableId tableId() {
+        return tableId;
+    }
     @Override
-    public String splitId() { return splitId; }
-    public Long lowerInclusive() { return lowerInclusive; }
-    public Long upperExclusive() { return upperExclusive; }
+    public String splitId() {
+        return splitId;
+    }
+    public Long lowerInclusive() {
+        return lowerInclusive;
+    }
+    public Long upperExclusive() {
+        return upperExclusive;
+    }
     @Override
-    public DebeziumOffset highWatermark() { return highWatermark; }
-    public ChunkRange chunkRange() { return chunkRange; }
+    public DebeziumOffset highWatermark() {
+        return highWatermark;
+    }
+    public ChunkRange chunkRange() {
+        return chunkRange;
+    }
 
     // Flink CDC getter names and non-record value semantics.
-    public TableId getTableId() { return tableId; }
-    public String getSplitId() { return splitId; }
+    public TableId getTableId() {
+        return tableId;
+    }
+    public String getSplitId() {
+        return splitId;
+    }
     public Object[] getSplitStart() {
         Object start = chunkRange != null ? chunkRange.start() : lowerInclusive;
         return start == null ? null : new Object[] {start};
@@ -78,12 +94,18 @@ public final class FinishedSnapshotSplitInfo implements FinishedSnapshotSplit<De
         Object end = chunkRange != null ? chunkRange.end() : upperExclusive;
         return end == null ? null : new Object[] {end};
     }
-    public DebeziumOffset getHighWatermark() { return highWatermark; }
+    public DebeziumOffset getHighWatermark() {
+        return highWatermark;
+    }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof FinishedSnapshotSplitInfo that)) return false;
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof FinishedSnapshotSplitInfo that)) {
+            return false;
+        }
         return Objects.equals(tableId, that.tableId)
                 && Objects.equals(splitId, that.splitId)
                 && Objects.equals(lowerInclusive, that.lowerInclusive)

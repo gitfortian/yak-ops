@@ -1,6 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
 import io.yak.ops.connector.cdc.base.source.meta.split.SnapshotSplit;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.core.data.TableId;
 import java.util.Objects;
@@ -170,19 +171,41 @@ public final class MySqlSnapshotSplit implements MySqlHybridSplit, SnapshotSplit
 
 
     @Override
-    public String splitId() { return splitId; }
-    public String fingerprint() { return fingerprint; }
-    public TableId tableId() { return tableId; }
-    public Long lowerInclusive() { return lowerInclusive; }
-    public Long upperExclusive() { return upperExclusive; }
-    public Long lastEmittedKey() { return lastEmittedKey; }
-    public MySqlSnapshotOutput output() { return output; }
-    public int outputPosition() { return outputPosition; }
-    public FinishedSnapshotSplitInfo finished() { return finished; }
-    public ChunkRange chunkRange() { return chunkRange; }
+    public String splitId() {
+        return splitId;
+    }
+    public String fingerprint() {
+        return fingerprint;
+    }
+    public TableId tableId() {
+        return tableId;
+    }
+    public Long lowerInclusive() {
+        return lowerInclusive;
+    }
+    public Long upperExclusive() {
+        return upperExclusive;
+    }
+    public Long lastEmittedKey() {
+        return lastEmittedKey;
+    }
+    public MySqlSnapshotOutput output() {
+        return output;
+    }
+    public int outputPosition() {
+        return outputPosition;
+    }
+    public FinishedSnapshotSplitInfo finished() {
+        return finished;
+    }
+    public ChunkRange chunkRange() {
+        return chunkRange;
+    }
 
     // Names and split-boundary semantics follow Flink CDC's MySqlSnapshotSplit.
-    public TableId getTableId() { return tableId; }
+    public TableId getTableId() {
+        return tableId;
+    }
     public Object[] getSplitStart() {
         Object start = chunkRange != null ? chunkRange.start() : lowerInclusive;
         return start == null ? null : new Object[] {start};
@@ -191,15 +214,21 @@ public final class MySqlSnapshotSplit implements MySqlHybridSplit, SnapshotSplit
         Object end = chunkRange != null ? chunkRange.end() : upperExclusive;
         return end == null ? null : new Object[] {end};
     }
-    public io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset getHighWatermark() {
+    public DebeziumOffset getHighWatermark() {
         return finished == null ? null : finished.highWatermark();
     }
-    public boolean isSnapshotReadFinished() { return finished != null; }
+    public boolean isSnapshotReadFinished() {
+        return finished != null;
+    }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof MySqlSnapshotSplit that)) return false;
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof MySqlSnapshotSplit that)) {
+            return false;
+        }
         return outputPosition == that.outputPosition
                 && Objects.equals(splitId, that.splitId)
                 && Objects.equals(fingerprint, that.fingerprint)
