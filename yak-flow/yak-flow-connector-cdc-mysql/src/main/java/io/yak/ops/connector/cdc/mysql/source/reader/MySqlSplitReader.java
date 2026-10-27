@@ -41,7 +41,6 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     private volatile MySqlResumeBinlogEvent resume;
     private volatile boolean cancelled;
     private MySqlBinlogSplit binlogSplit;
-    private final String fingerprint;
     private BinlogSplitReader filter;
     private MySqlSnapshotSplit active;
     // Written by the fetcher and inspected by the source mailbox during checkpoints.
@@ -52,19 +51,14 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     private BinlogEvent bootstrapCandidate;
 
     public MySqlSplitReader(MySqlSourceConfig config) {
-        this(config, new TableMetrics(), 0, null);
+        this(config, new TableMetrics(), 0);
     }
 
     public MySqlSplitReader(MySqlSourceConfig config, TableMetrics metrics) {
-        this(config, metrics, 0, null);
+        this(config, metrics, 0);
     }
 
     public MySqlSplitReader(MySqlSourceConfig config, TableMetrics metrics, int reader) {
-        this(config, metrics, reader, null);
-    }
-
-    public MySqlSplitReader(MySqlSourceConfig config, TableMetrics metrics, int reader, String fingerprint) {
-        this.fingerprint = fingerprint;
         this.config = Objects.requireNonNull(config, "config");
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         generation = metrics.generation();
@@ -80,9 +74,6 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             } else if (split instanceof MySqlBinlogSplit stream) {
                 if (binlogSplit != null) {
                     throw new IllegalStateException("MySQL Reader already owns a Binlog split");
-                }
-                if (fingerprint != null && !fingerprint.equals(stream.definitionFingerprint())) {
-                    throw new IllegalArgumentException("MySQL Binlog split belongs to another source");
                 }
                 binlogSplit = stream;
                 history = stream.schemaHistory();
