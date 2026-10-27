@@ -148,7 +148,7 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
         if (position == output.rows().size()) {
             return new MySqlSnapshotSplit(
                     splitId,
-                        tableId,
+                    tableId,
                     lowerInclusive,
                     upperExclusive,
                     null,
