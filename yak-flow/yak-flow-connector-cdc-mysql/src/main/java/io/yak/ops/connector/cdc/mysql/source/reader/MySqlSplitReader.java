@@ -22,23 +22,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Fetches normalized chunks and a filtered Binlog stream without advancing mailbox checkpoint state.
  *
- * <p>A prepared result waits for a completed checkpoint before any output batch is released.
- * Restored results are replayed verbatim, not recomputed from a later database snapshot.
+ * <p>Normalized snapshot chunks are emitted in one reader mailbox step. Incomplete chunks
+ * are retried from their stable range after a failure, without checkpointing source row images.
  */
 public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, MySqlSplit> {
-    private static final int OUTPUT_BATCH_SIZE = 256;
     private final MySqlSourceConfig config;
     private final MySqlSnapshotSplitReadTask snapshots;
     private final TableMetrics metrics;
     private final long generation;
     private final Set<TableId> tables;
     private final Deque<MySqlSnapshotSplit> pending = new ArrayDeque<>();
-    private final Set<String> released = ConcurrentHashMap.newKeySet();
     private volatile MySqlBinlogEngine binlog;
     private volatile byte[] history = new byte[0];
     private volatile MySqlResumeBinlogEvent resume;
@@ -47,7 +44,6 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     private final String fingerprint;
     private BinlogSplitReader filter;
     private MySqlSnapshotSplit active;
-    private int outputPosition;
     // Written by the fetcher and inspected by the source mailbox during checkpoints.
     private volatile boolean streaming;
     private volatile boolean snapshotsFinished;
@@ -80,10 +76,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     public void addSplits(List<MySqlSplit> splits) throws Exception {
         for (MySqlSplit split : splits) {
             if (split instanceof MySqlSnapshotSplit snapshot) {
-                // Typed backfill freezes every range before emitting rows; checkpointed
-                // output positions preserve both keyed updates and keyless duplicates.
                 pending.addLast(snapshot);
-                if (snapshot.prepared()) released.add(snapshot.splitId());
             } else if (split instanceof MySqlBinlogSplit stream) {
                 if (binlogSplit != null) {
                     throw new IllegalStateException("MySQL Reader already owns a Binlog split");
@@ -142,33 +135,22 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
         }
         if (active == null && !pending.isEmpty()) {
             active = pending.removeFirst();
-            outputPosition = active.outputPosition();
             if (!active.prepared()) {
                 active = snapshots.read(active);
-                return records(active.splitId(), MySqlFetchedRecord.prepared(active), false);
             }
         }
         if (active != null) {
-            String id = active.splitId();
-            if (active.finished() != null) {
-                active = null;
-                released.remove(id);
-                return new RecordsBySplits<>(Map.of(), Set.of(id));
+            MySqlSnapshotSplit chunk = active;
+            active = null;
+            if (chunk.finished() != null) {
+                return new RecordsBySplits<>(Map.of(), Set.of(chunk.splitId()));
             }
-            if (!released.contains(id)) {
-                Thread.sleep(20);
-                return empty();
+            if (chunk.output() == null) {
+                throw new IllegalStateException("Snapshot chunk has no normalized output");
             }
-            List<io.yak.ops.core.data.TableRecord> rows = active.output().rows();
-            int next = Math.min(rows.size(), outputPosition + OUTPUT_BATCH_SIZE);
-            MySqlFetchedRecord batch = MySqlFetchedRecord.snapshotRows(rows.subList(outputPosition, next), next);
-            outputPosition = next;
-            boolean complete = next == rows.size();
-            if (complete) {
-                active = null;
-                released.remove(id);
-            }
-            return records(id, batch, complete);
+            // A chunk is emitted atomically in one mailbox operation. If interrupted,
+            // restoration starts from its typed range and repeats Low/High/Backfill.
+            return records(chunk.splitId(), MySqlFetchedRecord.prepared(chunk), true);
         }
         if (snapshotsFinished && !snapshotsClosed) {
             snapshots.close();
@@ -204,10 +186,6 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
 
     public void finishSnapshots() {
         snapshotsFinished = true;
-    }
-
-    public void releaseSnapshot(String splitId) {
-        if (!cancelled) released.add(splitId);
     }
 
     public void resumeBinlog(MySqlResumeBinlogEvent event) {
@@ -274,7 +252,6 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             else failure.addSuppressed(error);
         }
         pending.clear();
-        released.clear();
         active = null;
         if (failure != null) throw failure;
     }
