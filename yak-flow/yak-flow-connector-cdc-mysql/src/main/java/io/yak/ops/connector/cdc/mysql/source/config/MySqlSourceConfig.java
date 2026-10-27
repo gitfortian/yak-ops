@@ -412,7 +412,8 @@ public final class MySqlSourceConfig {
 
     /** Returns the reserved replication ID for one of at most sixteen snapshot readers. */
     public int snapshotServerId(int reader) {
-        if (reader < 0 || reader >= 16 || serverId > Integer.MAX_VALUE - 16) {
+        if (reader < 0 || reader >= 16 || serverId > Integer.MAX_VALUE - 16
+                || (serverIdRange != null && serverId + reader + 1 > serverIdRange.getEndServerId())) {
             throw new IllegalArgumentException("Hybrid source requires a reserved range of seventeen replication IDs");
         }
         return serverId + reader + 1;

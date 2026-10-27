@@ -442,9 +442,11 @@ public class MySqlSourceConfigFactory implements Serializable {
     }
 
     static SourceSettings defaultSettings(int serverId) {
-        return new MySqlSourceConfigFactory()
-                .serverId(serverId)
-                .sourceSettings(new Properties(), List.of(), List.of());
+        MySqlSourceConfigFactory factory = new MySqlSourceConfigFactory();
+        factory.serverIdRange = serverId <= Integer.MAX_VALUE - 16
+                ? new ServerIdRange(serverId, serverId + 16)
+                : new ServerIdRange(serverId, serverId);
+        return factory.sourceSettings(new Properties(), List.of(), List.of());
     }
 
     private SourceSettings sourceSettings(
