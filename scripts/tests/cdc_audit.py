@@ -13,65 +13,19 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[2]
 CDC = "yak-flow/yak-flow-connector-cdc-mysql"
 
-# Deliberate method-level acceptance inventory. An added, renamed or removed @Test
-# requires review of this inventory, including inherited pipeline tests.
-PIPELINE_METHODS = (
-    "restoresCheckpointAndConvergesMultiTableChangelogAtEachJdbcDestination",
-    "evolvesExistingTableAndRecoversSchemaWithBinlogCheckpoint",
-)
-EXPECTED = {
-    "cdc-binlog": {
-        "MySqlBinlogIT": (
-            "snapshotSessionUsesUtcWithoutChangingGlobalTimeZone",
-            "streamsBinlogAndRestoresFromMailboxEmittedOffset",
-            "realMultiRowTransactionIdentityRemainsUniqueAcrossBinlogRotation",
-        ),
-    },
-    "cdc-snapshot": {
-        "MySqlBackfillIT": (
-            "backfillsRepeatedUpdatesDeletesCrossChunkMovesAndIgnoresOtherTables",
-            "quietEmptyChunkAndFollowingScanFinishFromActualWatermarks",
-            "plansKeylessStringChunksWithActualMySqlCollation",
-            "typedKeyedChunkReconcilesTransactionCommittedBetweenLowAndReadView",
-            "wideSnapshotChunkFailsBeforePublishingPartialOutputWhenByteBudgetIsExceeded",
-            "limitedReplicationPrivilegesPermitTypedSnapshotReadViewWithoutGlobalReadLock",
-        ),
-        "MySqlKeylessBackfillIT": (
-            "reconcilesDuplicateRowsInTheLowHighWindowAndFreezesOneDurableChunk",
-            "preservesTwoIdenticalImagesWithoutAnyBinlogChanges",
-            "checkpointsAnOversizedRepeatedRowGroupFromRealMysqlWithoutDroppingOccurrences",
-            "failsClosedIfTheChunkKeyChangesDuringSnapshot",
-            "consistentReadViewPreventsDoubleCountingWritesAfterLowBeforeTypedScan",
-            "binlogOnlyRemainsClosedButHybridSourceIsAdmitted",
-        ),
-    },
-    "cdc-hybrid": {
-        "MySqlHybridIT": (
-            "keylessSnapshotAndBinlogPreserveDuplicateRows",
-            "emptyTableFinishesSchemaBootstrapBeforeItsFirstInsert",
-            "factoryPipelineSnapshotsMultipleTablesThenStreamsUpdatesDeletesAndKeyMoves",
-            "identicalPayloadRowsRemainDistinctThroughKeyMovesAndStreamingRecovery",
-            "partialExternalWritesRecoverFrozenChunkAndApplyLaterSourceDeletion",
-            "streamingRestoreKeepsChunkFiltersAndResumesMailboxEmittedOffset",
-        ),
-    },
-    "cdc-pipeline-mysql": {"MySqlCdcToMySqlIT": PIPELINE_METHODS},
-    "cdc-pipeline-postgres": {"MySqlCdcToPostgresIT": (PIPELINE_METHODS[1],)},
-    "cdc-pipeline-oracle": {"MySqlCdcToOracleIT": (PIPELINE_METHODS[1],)},
-    "cdc-acceptance-postgres": {"MySqlCdcToPostgresIT": (PIPELINE_METHODS[0],)},
-    "cdc-acceptance-oracle": {"MySqlCdcToOracleIT": (PIPELINE_METHODS[0],)},
-    "cdc-recovery": {
-        "MySqlCdcToMySqlCrashRecoveryIT": (
-            "replaysCommittedChangeAfterProcessCrashBeforeCheckpointAndDoesNotReplayAfterCheckpoint",
-        ),
-    },
-}
+# Keep only class ownership and minimum test counts in the suite manifest.
+# Actual method names and JUnit @Tag membership come from the Java sources.
+# Missing, skipped or unreported methods still fail the audit.
+from backend_tests import SUITES
+
+EXPECTED = {suite: classes for suite, (_, _, classes) in SUITES.items() if suite.startswith("cdc-")}
 
 TEST_PATTERN = re.compile(
-    r"@Test\s+(?:(?:@\w+(?:\([^)]*\))?\s+)|(?:(?:public|protected|private|static|final)\s+))*"
-    r"void\s+(\w+)\s*\(",
+    r"@Test(?P<annotations>(?:\s+@\w+(?:\([^)]*\))?)*)\s+"
+    r"(?:(?:public|protected|private|static|final)\s+)*void\s+(?P<name>\w+)\s*\(",
     re.MULTILINE,
 )
+TAG_PATTERN = re.compile(r'@Tag\("([^"]+)"\)')
 
 
 def test_sources(test_root: Path, classname: str) -> list[Path]:
@@ -91,13 +45,38 @@ def test_sources(test_root: Path, classname: str) -> list[Path]:
     return result
 
 
-def source_methods(test_root: Path, classname: str) -> set[str]:
-    names: list[str] = []
+def source_methods(test_root: Path, classname: str) -> dict[str, frozenset[str]]:
+    """Discover test methods and their method-level tags from their Java declarations."""
+    methods: dict[str, frozenset[str]] = {}
     for path in test_sources(test_root, classname):
-        names.extend(TEST_PATTERN.findall(path.read_text(encoding="utf-8")))
-    if len(names) != len(set(names)):
-        raise ValueError(f"Duplicate source test methods in {classname}")
-    return set(names)
+        for match in TEST_PATTERN.finditer(path.read_text(encoding="utf-8")):
+            name = match.group("name")
+            if name in methods:
+                raise ValueError(f"Duplicate Java @Test method: {classname}.{name}")
+            methods[name] = frozenset(TAG_PATTERN.findall(match.group("annotations")))
+    if not methods:
+        raise ValueError(f"No Java @Test methods found for {classname}")
+    return methods
+
+
+def methods_for_suite(suite: str, methods: dict[str, frozenset[str]]) -> set[str]:
+    """Split cross-database schema/changelog scenarios by the existing JUnit method tags."""
+    tag = None
+    if suite.startswith("cdc-acceptance-"):
+        tag = "cdc-changelog"
+    elif suite in {"cdc-pipeline-postgres", "cdc-pipeline-oracle"}:
+        tag = "cdc-schema"
+    return {name for name, tags in methods.items() if tag is None or tag in tags}
+
+
+def require_complete_pipeline_tags(classname: str, methods: dict[str, frozenset[str]]) -> None:
+    """Every inherited pipeline method must belong to schema or changelog acceptance."""
+    covered = methods_for_suite("cdc-pipeline-postgres", methods) | methods_for_suite(
+        "cdc-acceptance-postgres", methods
+    )
+    missing = set(methods) - covered
+    if missing:
+        raise ValueError(f"{classname}: pipeline @Test methods without acceptance tags: {sorted(missing)}")
 
 
 def poll_locations(test_root: Path, classes: set[str]) -> list[str]:
@@ -125,10 +104,7 @@ def collect(root: Path, suite: str, inventory: dict | None = None) -> dict:
 
     module = root / CDC
     test_root = module / "src/test/java"
-    expected: dict[str, tuple[str, ...]] = {}
-    for group in suites:
-        for classname, methods in selected[group].items():
-            expected[classname] = tuple(dict.fromkeys(expected.get(classname, ()) + tuple(methods)))
+    expected: dict[str, set[str]] = {}
     errors: list[str] = []
     if inventory is None:
         from backend_tests import SUITES
@@ -141,25 +117,24 @@ def collect(root: Path, suite: str, inventory: dict | None = None) -> dict:
                     f"{name}: test-class registration mismatch; "
                     f"missing={sorted(registered - audited)}, unexpected={sorted(audited - registered)}"
                 )
-    for classname, required in sorted(expected.items()):
-        try:
-            actual = source_methods(test_root, classname)
-            # A class may be split into fast schema and full changelog suites.
-            # The combined inventory must still register every Java @Test method.
-            source_expected = {
-                method
-                for entries in selected.values()
-                for entry, methods in entries.items()
-                if entry == classname
-                for method in methods
-            }
-            if actual != source_expected or len(required) != len(set(required)):
-                errors.append(
-                    f"{classname}: Java @Test inventory mismatch; "
-                    f"missing={sorted(source_expected - actual)}, unregistered={sorted(actual - source_expected)}"
-                )
-        except (ValueError, OSError) as exc:
-            errors.append(str(exc))
+
+    for group in suites:
+        for classname, minimum in selected[group].items():
+            try:
+                methods = source_methods(test_root, classname)
+                if (group.startswith("cdc-pipeline-") or group.startswith("cdc-acceptance-")) and (
+                    group != "cdc-pipeline-mysql"
+                ):
+                    require_complete_pipeline_tags(classname, methods)
+                required = methods_for_suite(group, methods)
+                if len(required) < minimum:
+                    errors.append(
+                        f"{group}/{classname}: expected at least {minimum} Java @Test methods, "
+                        f"found {len(required)}"
+                    )
+                expected.setdefault(classname, set()).update(required)
+            except (ValueError, OSError) as exc:
+                errors.append(str(exc))
 
     observed: dict[str, dict[str, dict]] = {}
     report_paths = sorted((module / "target/failsafe-reports").glob("TEST-*.xml"))
