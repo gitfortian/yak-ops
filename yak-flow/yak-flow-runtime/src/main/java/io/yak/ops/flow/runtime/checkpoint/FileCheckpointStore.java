@@ -50,6 +50,8 @@ public final class FileCheckpointStore implements AutoCloseable {
     private final FileChannel lockChannel;
     private final FileLock lock;
     private boolean closed;
+    private boolean latestCheckpointKnown;
+    private long lastCheckpointId;
 
     public FileCheckpointStore(Path directory) throws IOException {
         this.directory = Objects.requireNonNull(directory, "directory must not be null")
@@ -159,6 +161,17 @@ public final class FileCheckpointStore implements AutoCloseable {
     public void save(CheckpointSnapshot checkpoint) throws IOException {
         ensureOpen();
         Objects.requireNonNull(checkpoint, "checkpoint must not be null");
+        // Never overwrite a corrupt, incompatible or later durable checkpoint with a fresh run.
+        if (!latestCheckpointKnown) {
+            lastCheckpointId = loadLatest(checkpoint.graphSignature())
+                    .map(CheckpointSnapshot::checkpointId)
+                    .orElse(0L);
+            latestCheckpointKnown = true;
+        }
+        if (checkpoint.checkpointId() <= lastCheckpointId) {
+            throw new IOException("Checkpoint ID must advance beyond the latest durable checkpoint: "
+                    + lastCheckpointId);
+        }
         byte[] payload;
         try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
                 DataOutputStream out = new DataOutputStream(bytes)) {
@@ -210,6 +223,7 @@ public final class FileCheckpointStore implements AutoCloseable {
                         StandardCopyOption.ATOMIC_MOVE,
                         StandardCopyOption.REPLACE_EXISTING);
                 forceDirectory(directory);
+                lastCheckpointId = checkpoint.checkpointId();
             } catch (AtomicMoveNotSupportedException failure) {
                 // A non-atomic replacement could expose partial state; do not claim durability on unsupported storage.
                 throw new IOException("Checkpoint state directory does not support atomic publication", failure);
