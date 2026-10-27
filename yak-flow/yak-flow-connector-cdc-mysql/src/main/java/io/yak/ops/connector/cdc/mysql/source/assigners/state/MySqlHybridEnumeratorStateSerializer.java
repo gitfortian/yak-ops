@@ -29,7 +29,7 @@ import java.util.Set;
 public final class MySqlHybridEnumeratorStateSerializer
         implements SimpleVersionedSerializer<MySqlHybridEnumeratorState> {
 
-    private static final int VERSION = 5;
+    private static final int VERSION = 6;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final int MAX_SPLITS = 10_000;
     private final MySqlSplitSerializer splitSerializer = new MySqlSplitSerializer();
