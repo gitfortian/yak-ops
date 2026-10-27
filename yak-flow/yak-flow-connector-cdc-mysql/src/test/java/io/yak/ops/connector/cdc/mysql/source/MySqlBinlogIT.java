@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.core.api.connector.source.InputStatus;
@@ -65,7 +65,7 @@ class MySqlBinlogIT {
         var db = DATABASE_RESOURCE.metadata();
         var schema = new TableSchema(List.of(
                 new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
-        var config = new MySqlCdcSourceConfig(
+        var config = new MySqlSourceConfig(
                 db.host(), db.port(), db.username(), db.password(), 7001, "tz-test",
                 Map.of(ORDERS, schema), 256);
         String globalBefore;

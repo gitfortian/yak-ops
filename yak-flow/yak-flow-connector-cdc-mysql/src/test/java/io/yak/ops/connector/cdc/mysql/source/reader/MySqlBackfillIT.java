@@ -2,7 +2,7 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialects;
@@ -216,7 +216,7 @@ class MySqlBackfillIT {
         TableId id = new TableId("yak_cdc_it", null, table);
         try {
             var db = DATABASE.metadata();
-            var config = new MySqlCdcSourceConfig(
+            var config = new MySqlSourceConfig(
                     db.host(), db.port(), user, "test-only-snapshot", 6831, table, Map.of(id, SCHEMA), 256);
             // Verify the restricted account can scan real rows with ordinary JDBC SELECT.
             // Debezium no_data schema bootstrap has separate locking requirements and is
@@ -245,9 +245,9 @@ class MySqlBackfillIT {
         }
     }
 
-    private static MySqlCdcSourceConfig config(Map<TableId, TableSchema> schemas, int serverId, String topic) {
+    private static MySqlSourceConfig config(Map<TableId, TableSchema> schemas, int serverId, String topic) {
         var db = DATABASE.metadata();
-        return new MySqlCdcSourceConfig(db.host(), db.port(), db.username(), db.password(), serverId, topic, schemas, 256);
+        return new MySqlSourceConfig(db.host(), db.port(), db.username(), db.password(), serverId, topic, schemas, 256);
     }
     private static void execute(String... statements) throws Exception {
         var db = DATABASE.metadata();

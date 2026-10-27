@@ -12,7 +12,7 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedEvent;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
@@ -206,7 +206,7 @@ class MySqlTypedSnapshotAssignmentTest {
 
     private static MySqlSourceEnumerator enumerator(
             Coordinator context,
-            MySqlCdcSourceConfig config,
+            MySqlSourceConfig config,
             String url,
             MySqlHybridEnumeratorState restored) {
         return new MySqlSourceEnumerator(
@@ -234,7 +234,7 @@ class MySqlTypedSnapshotAssignmentTest {
                 2);
     }
 
-    private static MySqlCdcSourceConfig configuration(TableSchema schema, String chunkColumn) {
+    private static MySqlSourceConfig configuration(TableSchema schema, String chunkColumn) {
         var builder = MySqlSource.builder()
                 .hostname("localhost")
                 .username("user")

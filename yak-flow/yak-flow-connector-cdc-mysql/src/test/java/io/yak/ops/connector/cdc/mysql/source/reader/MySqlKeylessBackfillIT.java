@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -233,10 +233,10 @@ class MySqlKeylessBackfillIT {
                         .getBoundedness());
     }
 
-    private static MySqlCdcSourceConfig config(
+    private static MySqlSourceConfig config(
             Map<TableId, TableSchema> schemas, Map<TableId, String> keys, int serverId) {
         var db = DATABASE.metadata();
-        return new MySqlCdcSourceConfig(
+        return new MySqlSourceConfig(
                 db.host(), db.port(), db.username(), db.password(), serverId,
                 "keyless-backfill-" + serverId, schemas, 256, Map.of(), keys);
     }
