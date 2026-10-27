@@ -69,6 +69,32 @@ class MultiTableBatchContractTest {
     }
 
     @Test
+    void incrementalOnlyReportDoesNotInventFullStageOrHandoff() {
+        JobPlan plan = plan(1);
+        TableId table = plan.tables().getFirst().source().table();
+        TableMetrics metrics = new TableMetrics();
+        metrics.register(table);
+        long generation = metrics.beginSnapshot(false);
+        TableExecutionProgress progress = new TableExecutionProgress(plan.tables(), metrics, true, "INCREMENTAL");
+        var queued = JSONUtils.readTree(progress.report(JobStatus.RUNNING));
+        assertEquals(1, queued.path("stages").size());
+        assertEquals("INCREMENTAL", queued.path("stages").get(0).path("step").asText());
+        assertEquals("WAITING", queued.path("stages").get(0).path("status").asText());
+        metrics.phase(generation, TableMetrics.Phase.STREAMING, false);
+        metrics.read(generation, table, true);
+        metrics.committed(generation, table, 1);
+        metrics.checkpointCompleted(generation, 42, false);
+        var active = JSONUtils.readTree(progress.report(JobStatus.RUNNING));
+        assertEquals(1, active.path("stages").size());
+        assertEquals("INCREMENTAL", active.path("tables").get(0).path("stages").get(0).path("step").asText());
+        assertEquals("RUNNING", active.path("stages").get(0).path("status").asText());
+        assertEquals(1, active.path("stages").get(0).path("readRows").asLong());
+        assertEquals(1, active.path("stages").get(0).path("committedRows").asLong());
+        assertEquals(42, active.path("checkpoints").path("completedId").asLong());
+        assertTrue(active.path("checkpoints").path("handoffId").isNull());
+    }
+
+    @Test
     void sourceCompletionDoesNotPretendThatDestinationCommitHasCompleted() {
         JobPlan plan = plan(1);
         TableId table = plan.tables().getFirst().source().table();
