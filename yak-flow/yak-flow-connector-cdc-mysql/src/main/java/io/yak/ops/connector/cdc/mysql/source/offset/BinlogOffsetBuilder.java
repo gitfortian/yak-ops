@@ -88,6 +88,10 @@ public class BinlogOffsetBuilder {
         return new BinlogOffset(offsetMap);
     }
 
+    private static void checkArgument(boolean valid) {
+        checkArgument(valid, "Invalid binlog offset");
+    }
+
     private static void checkArgument(boolean valid, String message) {
         if (!valid) {
             throw new IllegalArgumentException(message);

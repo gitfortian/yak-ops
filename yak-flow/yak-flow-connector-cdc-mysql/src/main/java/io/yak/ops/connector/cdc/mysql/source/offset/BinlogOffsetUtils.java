@@ -108,8 +108,7 @@ public class BinlogOffsetUtils {
             if (binlogFiles.isEmpty()) {
                 return BinlogOffset.ofBinlogFilePosition("", 0);
             }
-            BinaryLogClient client =
-                    new BinaryLogClient(config.hostname(), config.port(), config.username(), config.password());
+            BinaryLogClient client = config.newBinlogLookupClient();
             client.setServerId(config.serverId());
             int startIdx = 0;
             int endIdx = binlogFiles.size() - 1;
