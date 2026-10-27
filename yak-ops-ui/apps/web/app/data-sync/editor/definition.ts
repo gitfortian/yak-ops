@@ -109,7 +109,8 @@ export function canSaveEditor({
       (form.source.sourceHasPrimaryKey !== undefined &&
         (form.source.sourceHasPrimaryKey
           ? form.sink.writeMode !== "RETRACT"
-          : initialLoad && draft.targetType === "MYSQL" &&
+          : initialLoad &&
+            draft.targetType === "MYSQL" &&
             !form.sink.schemaChangesEnabled &&
             Boolean(form.source.chunkKeyColumn.trim()) &&
             (form.sink.targetPrimaryKeys.length
