@@ -4,7 +4,7 @@ import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.split.ChunkRangeStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
@@ -157,18 +157,18 @@ public final class MySqlHybridEnumeratorStateSerializer
         return result;
     }
 
-    private void writeSplit(DataOutputStream out, MySqlHybridSplit split) throws IOException {
+    private void writeSplit(DataOutputStream out, MySqlSplit split) throws IOException {
         byte[] bytes = splitSerializer.serialize(split);
         out.writeInt(bytes.length);
         out.write(bytes);
     }
 
-    private MySqlHybridSplit readSplit(DataInputStream in) throws IOException {
+    private MySqlSplit readSplit(DataInputStream in) throws IOException {
         int length = in.readInt();
         if (length <= 0 || length > MAX_BYTES || length > in.available()) {
             throw new IOException("Invalid MySQL split length");
         }
-        return (MySqlHybridSplit) splitSerializer.deserialize(splitSerializer.getVersion(), in.readNBytes(length));
+        return (MySqlSplit) splitSerializer.deserialize(splitSerializer.getVersion(), in.readNBytes(length));
     }
 
     private static int boundedCount(DataInputStream in) throws IOException {

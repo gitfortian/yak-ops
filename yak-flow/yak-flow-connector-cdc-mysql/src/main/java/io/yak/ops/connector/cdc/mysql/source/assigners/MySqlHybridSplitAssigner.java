@@ -4,7 +4,7 @@ import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
@@ -20,7 +20,7 @@ import java.util.Objects;
  * containing all snapshot output, not by a final split delivery acknowledgment.
  */
 public final class MySqlHybridSplitAssigner
-        implements MySqlSplitAssigner<MySqlHybridSplit, MySqlHybridEnumeratorState> {
+        implements MySqlSplitAssigner<MySqlSplit, MySqlHybridEnumeratorState> {
 
     private final String fingerprint;
     private final MySqlSnapshotSplitAssigner snapshots;
@@ -67,7 +67,7 @@ public final class MySqlHybridSplitAssigner
     }
 
     @Override
-    public MySqlHybridSplit getNext(int subtaskId) {
+    public MySqlSplit getNext(int subtaskId) {
         MySqlHybridBinlogSplit next = nextBinlog(subtaskId);
         return next != null ? next : nextSnapshot();
     }
@@ -259,8 +259,8 @@ public final class MySqlHybridSplitAssigner
     }
 
     @Override
-    public void addSplitsBack(List<MySqlHybridSplit> splits, int subtaskId) {
-        for (MySqlHybridSplit split : splits) {
+    public void addSplitsBack(List<MySqlSplit> splits, int subtaskId) {
+        for (MySqlSplit split : splits) {
             if (split instanceof MySqlSnapshotSplit snapshot) {
                 addBack(snapshot);
             } else if (split instanceof MySqlHybridBinlogSplit binlogSplit) {

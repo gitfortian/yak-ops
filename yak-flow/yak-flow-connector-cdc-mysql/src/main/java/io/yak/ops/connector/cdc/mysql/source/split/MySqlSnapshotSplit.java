@@ -7,7 +7,7 @@ import io.yak.ops.core.data.TableId;
 import java.util.Objects;
 
 /** Frozen key range, durable normalized output, and mailbox-owned output position for one chunk. */
-public final class MySqlSnapshotSplit extends MySqlHybridSplit implements SnapshotSplit {
+public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSplit {
     private final String splitId;
     private final String fingerprint;
     private final TableId tableId;

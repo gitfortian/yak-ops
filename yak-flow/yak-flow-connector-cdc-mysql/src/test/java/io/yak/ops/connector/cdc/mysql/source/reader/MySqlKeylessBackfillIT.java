@@ -89,7 +89,7 @@ class MySqlKeylessBackfillIT {
                 assertEquals("keyless-chunk", state.completeCheckpoint(41));
                 state.emitSnapshotRows(1);
                 var checkpoint = (MySqlSnapshotSplit)
-                        serializer.deserialize(serializer.getVersion(), serializer.serialize((io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit) state.checkpoint(null)));
+                        serializer.deserialize(serializer.getVersion(), serializer.serialize((io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit) state.checkpoint(null)));
                 assertEquals(1, checkpoint.outputPosition());
                 assertEquals(3, checkpoint.output().rows().size());
                 var recovered = MySqlSplitState.fromSplit(checkpoint);

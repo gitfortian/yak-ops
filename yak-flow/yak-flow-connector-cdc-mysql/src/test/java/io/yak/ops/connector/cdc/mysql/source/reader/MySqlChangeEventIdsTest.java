@@ -146,7 +146,7 @@ class MySqlChangeEventIdsTest {
 
         var serializer = new MySqlSplitSerializer();
         var checkpoint = (MySqlSnapshotSplit)
-                serializer.deserialize(serializer.getVersion(), serializer.serialize((io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit) state.checkpoint(null)));
+                serializer.deserialize(serializer.getVersion(), serializer.serialize((io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit) state.checkpoint(null)));
         assertEquals(1, checkpoint.outputPosition());
         var resumed = MySqlSplitState.fromSplit(checkpoint);
         List<TableRecord> next = new ArrayList<>();
