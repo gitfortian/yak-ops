@@ -235,7 +235,7 @@ public final class FileCheckpointStore implements CompletedCheckpointStore {
         lastCheckpointId = checkpoint.checkpointId();
         try {
             discardSubsumedCheckpoints(checkpoint.checkpointId(), previousCheckpointId);
-        } catch (IOException cleanupFailure) {
+        } catch (IOException | RuntimeException cleanupFailure) {
             // A completed checkpoint must not become a failed one due to best-effort retention.
             LOG.warn("Completed checkpoint retention cleanup failed, checkpointId={}",
                     checkpoint.checkpointId(), cleanupFailure);
