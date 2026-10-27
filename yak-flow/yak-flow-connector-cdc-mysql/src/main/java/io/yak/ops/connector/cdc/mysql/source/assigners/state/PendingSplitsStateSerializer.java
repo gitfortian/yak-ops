@@ -33,7 +33,7 @@ import java.util.Set;
  * frames. Old checkpoints are rejected rather than reinterpreted.
  */
 public final class PendingSplitsStateSerializer implements SimpleVersionedSerializer<PendingSplitsState> {
-    private static final int VERSION = 8;
+    private static final int VERSION = 9;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final int MAX_SPLITS = 10_000;
     // Match Flink CDC's state discriminators. Snapshot-only is reserved for future use.
@@ -104,7 +104,6 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
     }
 
     private void writeBinlog(DataOutputStream out, MySqlPendingSplitsState state) throws IOException {
-        out.writeUTF(state.sourceFingerprint());
         out.writeBoolean(state.splitAssigned());
         if (!state.splitAssigned()) {
             writeSplit(out, state.pendingSplit());
@@ -112,14 +111,12 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
     }
 
     private MySqlPendingSplitsState readBinlog(DataInputStream in, int splitVersion) throws IOException {
-        String fingerprint = in.readUTF();
         boolean assigned = in.readBoolean();
         MySqlBinlogSplit pending = assigned ? null : (MySqlBinlogSplit) readSplit(in, splitVersion);
-        return new MySqlPendingSplitsState(fingerprint, assigned, pending);
+        return new MySqlPendingSplitsState(assigned, pending);
     }
 
     private void writeHybrid(DataOutputStream out, MySqlHybridEnumeratorState state) throws IOException {
-        out.writeUTF(state.fingerprint());
         out.writeByte(state.phase().ordinal());
         out.writeBoolean(state.binlogAssigned());
         if (state.pendingBinlog() != null) {
@@ -179,7 +176,6 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         int nextChunk = in.readInt();
         ChunkRange typedCursor = ChunkRangeStateSerializer.read(in);
         return new MySqlHybridEnumeratorState(
-                fingerprint,
                 MySqlHybridEnumeratorState.Phase.values()[phaseIndex],
                 pending, binlogAssigned, low, high, planned, total,
                 pendingSnapshots, assigned, finished, finishedInfos, nextTable, nextChunk, typedCursor);
