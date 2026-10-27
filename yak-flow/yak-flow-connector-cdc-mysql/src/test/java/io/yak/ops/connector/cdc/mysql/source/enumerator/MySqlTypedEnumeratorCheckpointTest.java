@@ -37,7 +37,7 @@ class MySqlTypedEnumeratorCheckpointTest {
         assigner.appendPlan(first, 1);
         assertEquals(first, assigner.nextSnapshot());
         assigner.finishSnapshot(finished(first, 150));
-        MySqlHybridEnumeratorState persisted = SERIALIZER.deserialize(
+        MySqlHybridEnumeratorState persisted = (MySqlHybridEnumeratorState) SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize(assigner.snapshotState(5)));
         assertEquals(boundary, persisted.nextChunkRange().start());
         assertEquals(1, persisted.finishedSplitInfos().size());
@@ -53,7 +53,7 @@ class MySqlTypedEnumeratorCheckpointTest {
         recovered.finishSnapshot(finished(last, 200));
         assertTrue(recovered.snapshotComplete());
         recovered.captureHigh(offset(200));
-        var handoff = SERIALIZER.deserialize(
+        var handoff = (MySqlHybridEnumeratorState) SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize(recovered.snapshotState(7)));
         var resumed = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fp", handoff);
         resumed.resumeRestoredHandoff();
