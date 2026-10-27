@@ -2,7 +2,7 @@ package io.yak.ops.connector.cdc.mysql.source.enumerator;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
@@ -36,7 +36,7 @@ class MySqlTypedEnumeratorCheckpointTest {
         assigner.appendPlan(first, 1);
         assertEquals(first, assigner.nextSnapshot());
         assigner.finishSnapshot(finished(first, 150));
-        MySqlHybridEnumeratorState persisted = (MySqlHybridEnumeratorState) SERIALIZER.deserialize(
+        HybridPendingSplitsState persisted = (HybridPendingSplitsState) SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize(assigner.snapshotState(5)));
         assertEquals(boundary, persisted.nextChunkRange().start());
         assertEquals(1, persisted.finishedSplitInfos().size());
@@ -51,11 +51,11 @@ class MySqlTypedEnumeratorCheckpointTest {
         recovered.finishSnapshot(finished(last, 200));
         assertTrue(recovered.snapshotComplete());
         recovered.captureHigh(offset(200));
-        var handoff = (MySqlHybridEnumeratorState) SERIALIZER.deserialize(
+        var handoff = (HybridPendingSplitsState) SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize(recovered.snapshotState(7)));
         var resumed = new MySqlHybridSplitAssigner(StartupOptions.initial(), handoff);
         resumed.resumeRestoredHandoff();
-        assertEquals(MySqlHybridEnumeratorState.Phase.STREAMING, resumed.phase());
+        assertEquals(HybridPendingSplitsState.Phase.STREAMING, resumed.phase());
     }
 
     @Test
