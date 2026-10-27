@@ -2,7 +2,7 @@ package io.yak.ops.connector.cdc.mysql.source.enumerator;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
@@ -29,7 +29,7 @@ class MySqlProgressiveDiscoveryTest {
         original.finishSnapshot(finished(first, 150));
         assertFalse(original.snapshotComplete());
         var serializer = new PendingSplitsStateSerializer(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE);
-        var saved = (MySqlHybridEnumeratorState) serializer.deserialize(serializer.getVersion(), serializer.serialize(original.snapshotState(1)));
+        var saved = (HybridPendingSplitsState) serializer.deserialize(serializer.getVersion(), serializer.serialize(original.snapshotState(1)));
         var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), saved);
         assertEquals(0, restored.nextTableIndex());
         assertEquals(1, restored.nextChunkIndex());
@@ -46,7 +46,7 @@ class MySqlProgressiveDiscoveryTest {
         restored.snapshotState(3);
         restored.snapshotState(4);
         assertTrue(restored.notifyCheckpointComplete(3), "A later pending checkpoint must not hide an earlier covering completion");
-        assertEquals(MySqlHybridEnumeratorState.Phase.STREAMING, restored.snapshotState(5).phase());
+        assertEquals(HybridPendingSplitsState.Phase.STREAMING, restored.snapshotState(5).phase());
     }
 
     @Test
