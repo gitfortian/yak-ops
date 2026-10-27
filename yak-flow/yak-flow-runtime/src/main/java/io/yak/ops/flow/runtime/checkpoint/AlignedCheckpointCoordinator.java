@@ -321,6 +321,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             throw new CheckpointDeclinedException(checkpointId, "Source has already reached EndOfData");
         }
         CheckpointPlan checkpointPlan = calculatePlan(checkpointId);
+        PendingCheckpoint pending = new PendingCheckpoint(checkpointId, checkpointPlan.tasksToAcknowledge());
         checkpointDeadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
         if (terminal) {
             checkpointDeadlineNanos = Math.min(checkpointDeadlineNanos, finalCheckpointDeadlineNanos);
@@ -383,6 +384,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
                 }
                 paused.add(sourceTask);
                 readerStates.put(sourceTask.taskInfo().subtaskIndex(), splits);
+                pending.acknowledgeTask(id);
             }
             SourceCoordinatorCheckpoint<SourceSplit, Object> sourceState =
                     await(coordinator.snapshotCoordinator(checkpointId));
@@ -413,6 +415,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
                 ensureActive();
                 await(CompletableFuture.anyOf(entry.getValue(), firstFailedAcknowledgement));
                 OneInputStreamTask.CheckpointState state = await(entry.getValue());
+                pending.acknowledgeTask(entry.getKey());
                 if (state.finished()) {
                     finishedReports.add(entry.getKey());
                 } else if (!state.operatorStates().isEmpty()) {
@@ -461,7 +464,11 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             if (snapshot.hasFinishedOperators() && !terminal) {
                 throw new CheckpointDeclinedException(checkpointId, "Finished state requires a terminal checkpoint");
             }
+            if (!pending.isFullyAcknowledged()) {
+                throw new IllegalStateException("Checkpoint has missing task acknowledgements");
+            }
             storage.save(snapshot);
+            pending.markPersisted(snapshot);
             stored = true;
             LOG.info("YakFlow checkpoint saved, jobId={}, checkpointId={}", jobGraph.jobID(), checkpointId);
             published.complete(snapshot);
@@ -481,7 +488,14 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
                     await(sourceTask.notifyCheckpointComplete(checkpointId));
                 }
             }
+            pending.complete();
         } catch (Exception | Error failure) {
+            if (pending.status() == PendingCheckpoint.Status.PERSISTED) {
+                // This checkpoint is already durable. Recovery, not abort, must resolve XA.
+                pending.failCompletion();
+            } else if (pending.status() == PendingCheckpoint.Status.PENDING) {
+                pending.abort();
+            }
             originalFailure = failure;
             throw failure;
         } finally {
