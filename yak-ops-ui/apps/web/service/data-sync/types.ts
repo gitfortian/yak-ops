@@ -128,6 +128,7 @@ export interface DataSyncParameters {
   steps: Array<"FULL" | "INCREMENTAL">;
   source: {
     datasourceId: string;
+    startup?: { mode: "initial" | "latest-offset" };
     tables: Array<
       DataSyncTablePath & {
         id: string;
