@@ -3,7 +3,7 @@ package io.yak.ops.connector.cdc.mysql.source.enumerator;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -23,8 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Enumerator resumes the single typed chunk discovery cursor and rejects older formats. */
 class MySqlTypedEnumeratorCheckpointTest {
     private static final TableId TABLE = new TableId("shop", null, "orders");
-    private static final MySqlHybridEnumeratorStateSerializer SERIALIZER =
-            new MySqlHybridEnumeratorStateSerializer();
+    private static final PendingSplitsStateSerializer SERIALIZER =
+            new PendingSplitsStateSerializer(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE);
 
     @Test
     void keepsTypedDiscoveryBoundaryAndCompletedChunkWatermarks() throws Exception {
