@@ -30,11 +30,8 @@ jobs:
         run: >
           bash mvnw -B -ntp -pl yak-flow/yak-flow-connector-cdc-mysql -am
           -Dmaven.test.skip=true -Dspotless.check.skip=true -Dcheckstyle.skip=true install
-      - name: Verify Debezium and MySQL CDC unit contracts
-        run: >
-          bash mvnw -B -ntp -pl yak-flow/yak-flow-connector-cdc-mysql
-          -Dtest=DebeziumRuntimeAlignmentTest,MySqlBinlogSplitCheckpointTest,MySqlDebeziumRecordConverterTest,MySqlSchemaChangeConverterTest
-          -Dsurefire.failIfNoSpecifiedTests=false test
+      - name: Verify all MySQL CDC unit tests
+        run: bash mvnw -B -ntp -pl yak-flow/yak-flow-connector-cdc-mysql test
       - name: Verify snapshot/backfill against real MySQL
         run: >
           bash mvnw -B -ntp -pl yak-flow/yak-flow-connector-cdc-mysql
