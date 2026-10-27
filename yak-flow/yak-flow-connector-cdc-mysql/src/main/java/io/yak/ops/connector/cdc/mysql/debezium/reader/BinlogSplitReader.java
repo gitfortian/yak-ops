@@ -6,6 +6,8 @@ import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlBinlogSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
+import io.yak.ops.connector.cdc.mysql.source.utils.ObjectUtils;
+import io.yak.ops.connector.cdc.mysql.source.utils.SplitKeyUtils;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
@@ -14,7 +16,6 @@ import io.yak.ops.core.types.LogicalTypeRoot;
 import io.yak.ops.core.types.TableSchema;
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,7 +44,7 @@ public final class BinlogSplitReader {
 
     private record ChunkColumn(String name, LogicalTypeRoot type, int position, int columnCount) {}
 
-    private final Map<TableId, List<FinishedChunk>> completed = new LinkedHashMap<>();
+    private final Map<TableId, List<FinishedSnapshotSplitInfo>> completed = new LinkedHashMap<>();
     private final Map<TableId, ChunkColumn> columns = new LinkedHashMap<>();
     private final Map<TableId, DebeziumOffset> maxHighWatermarks = new LinkedHashMap<>();
     private final Set<TableId> pureBinlogPhaseTables = new HashSet<>();
@@ -91,7 +92,7 @@ public final class BinlogSplitReader {
                 throw new IllegalArgumentException("Duplicate completed snapshot chunk identity");
             }
             TableId table = chunk.range().tableId();
-            List<FinishedChunk> chunks = completed.get(table);
+            List<FinishedSnapshotSplitInfo> chunks = completed.get(table);
             if (chunks == null) throw new IllegalArgumentException("Unknown completed snapshot table");
             TableSchema schema = schemas.get(table);
             ChunkRange range = chunk.range();
@@ -119,23 +120,21 @@ public final class BinlogSplitReader {
                 throw new IllegalArgumentException(
                         "Bounded string chunks require MySQL collation-aware Binlog comparisons");
             }
-            chunks.add(chunk);
+            chunks.add(new FinishedSnapshotSplitInfo(
+                    table, chunk.splitId(), null, null, chunk.highWatermark(), range));
         }
         completed.replaceAll((table, chunks) -> {
             if (chunks.isEmpty()) {
                 throw new IllegalArgumentException("Missing completed snapshot chunks for " + table);
             }
-            chunks.sort(Comparator.comparing(
-                    (FinishedChunk chunk) -> chunk.range().start(),
-                    Comparator.nullsFirst(
-                            (left, right) -> compare(columns.get(table).type(), left, right))));
-            if (chunks.getFirst().range().start() != null
-                    || chunks.getLast().range().end() != null) {
+            SplitKeyUtils.sortFinishedSplitInfos(chunks);
+            if (chunks.getFirst().chunkRange().start() != null
+                    || chunks.getLast().chunkRange().end() != null) {
                 throw new IllegalArgumentException("Finished snapshot ranges do not cover the entire keyspace");
             }
             for (int index = 1; index < chunks.size(); index++) {
-                Object upper = chunks.get(index - 1).range().end();
-                Object lower = chunks.get(index).range().start();
+                Object upper = chunks.get(index - 1).chunkRange().end();
+                Object lower = chunks.get(index).chunkRange().start();
                 if (upper == null || lower == null || compare(columns.get(table).type(), upper, lower) != 0) {
                     throw new IllegalArgumentException("Finished snapshot ranges have a gap or overlap");
                 }
@@ -252,7 +251,7 @@ public final class BinlogSplitReader {
     }
 
     private boolean shouldEmit(TableRecord record, BinlogEvent event) {
-        List<FinishedChunk> chunks = completed.get(record.tableId());
+        List<FinishedSnapshotSplitInfo> chunks = completed.get(record.tableId());
         ChunkColumn column = columns.get(record.tableId());
         if (chunks == null || column == null) {
             throw new IllegalArgumentException("Binlog event references an unregistered source table");
@@ -270,23 +269,10 @@ public final class BinlogSplitReader {
             pureBinlogPhaseTables.add(record.tableId());
             return true;
         }
-        int left = 0;
-        int right = chunks.size() - 1;
-        int found = 0;
-        // Find the greatest inclusive lower bound using only supported scalar semantics.
-        while (left <= right) {
-            int middle = left + (right - left) / 2;
-            Object lower = chunks.get(middle).range().start();
-            if (lower == null || compare(column.type(), lower, value) <= 0) {
-                found = middle;
-                left = middle + 1;
-            } else {
-                right = middle - 1;
-            }
-        }
-        FinishedChunk match = chunks.get(found);
-        Object upper = match.range().end();
-        if (upper != null && compare(column.type(), value, upper) >= 0) {
+        // The Flink CDC utility owns the sorted, half-open chunk lookup.
+        FinishedSnapshotSplitInfo match =
+                SplitKeyUtils.findSplitByKeyBinary(chunks, new Object[] {value});
+        if (match == null) {
             throw new IllegalStateException("Missing finished snapshot metadata for Binlog chunk key");
         }
         return event.offset().compareTo(match.highWatermark()) > 0;
@@ -311,8 +297,8 @@ public final class BinlogSplitReader {
 
     private static int compare(LogicalTypeRoot type, Object left, Object right) {
         return switch (type) {
-            case TINYINT, SMALLINT, INTEGER, BIGINT -> Long.compare(toLong(left), toLong(right));
-            case DECIMAL -> toDecimal(left).compareTo(toDecimal(right));
+            case TINYINT, SMALLINT, INTEGER, BIGINT -> ObjectUtils.compare(toLong(left), toLong(right));
+            case DECIMAL -> ObjectUtils.compare(toDecimal(left), toDecimal(right));
             default -> throw new IllegalArgumentException("Chunk key requires database-aware comparison: " + type);
         };
     }
