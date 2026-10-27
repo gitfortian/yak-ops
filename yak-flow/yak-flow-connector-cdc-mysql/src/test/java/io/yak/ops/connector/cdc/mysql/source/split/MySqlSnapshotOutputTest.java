@@ -3,7 +3,7 @@ package io.yak.ops.connector.cdc.mysql.source.split;
 import static org.junit.jupiter.api.Assertions.*;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
-import io.yak.ops.connector.cdc.mysql.source.reader.MySqlSplitState;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitState;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;

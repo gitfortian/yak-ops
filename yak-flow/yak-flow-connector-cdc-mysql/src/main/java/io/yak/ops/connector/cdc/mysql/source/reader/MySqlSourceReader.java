@@ -3,6 +3,7 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedAckEvent;
@@ -42,31 +43,28 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
     private final Map<String, Long> finishedCheckpoint = new LinkedHashMap<>();
 
     public MySqlSourceReader(
-            MySqlSourceConfig config,
+            MySqlCdcSourceConfig config,
             String fingerprint,
             SourceReaderContext context,
             TableMetrics metrics,
             boolean initial) {
         this(
                 new MySqlSplitReader(config, metrics, context.getIndexOfSubtask(), fingerprint),
-                context,
+                new MySqlSourceReaderContext(context),
                 metrics,
                 initial);
     }
 
     private MySqlSourceReader(
-            MySqlSplitReader splits, SourceReaderContext context, TableMetrics metrics, boolean initial) {
-        this(splits, context, metrics, new SchemaChangeHandler(context), initial);
-    }
-
-    private MySqlSourceReader(
             MySqlSplitReader splits,
-            SourceReaderContext context,
+            MySqlSourceReaderContext readerContext,
             TableMetrics metrics,
-            SchemaChangeHandler schemaChanges,
             boolean initial) {
-        super(() -> splits, new MySqlRecordEmitter(context, splits, metrics, schemaChanges), context);
-        this.schemaChanges = Objects.requireNonNull(schemaChanges, "schemaChanges");
+        super(
+                () -> splits,
+                new MySqlRecordEmitter(readerContext, splits, metrics),
+                readerContext.getSourceReaderContext());
+        this.schemaChanges = readerContext.schemaChanges();
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         this.generation = metrics.generation();
         this.splits = splits;

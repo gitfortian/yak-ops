@@ -1,5 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitState;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -8,7 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.metrics.TableMetrics;
-import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
@@ -133,8 +134,7 @@ class MySqlDebeziumRecordConverterTest {
                 .table(TABLE, YAK_SCHEMA)
                 .build()
                 .config();
-        return new MySqlRecordEmitter(context, new MySqlSplitReader(config),
-                new TableMetrics(), new SchemaChangeHandler(context));
+        return new MySqlRecordEmitter(new MySqlSourceReaderContext(context), new MySqlSplitReader(config), new TableMetrics());
     }
 
     private static Struct rowWithCapacity(int length, String name) {
