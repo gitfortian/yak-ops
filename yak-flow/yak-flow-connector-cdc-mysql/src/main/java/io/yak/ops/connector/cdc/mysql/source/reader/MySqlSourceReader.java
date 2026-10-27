@@ -49,12 +49,11 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
 
     public MySqlSourceReader(
             MySqlSourceConfig config,
-            String fingerprint,
             SourceReaderContext context,
             TableMetrics metrics,
             boolean initial) {
         this(
-                new MySqlSplitReader(config, metrics, context.getIndexOfSubtask(), fingerprint),
+                new MySqlSplitReader(config, metrics, context.getIndexOfSubtask()),
                 new MySqlSourceReaderContext(context),
                 metrics,
                 initial,
