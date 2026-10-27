@@ -2,17 +2,23 @@ package io.yak.ops.connector.cdc.mysql.source.split;
 
 import java.util.Objects;
 
-/** State of the snapshot split, including checkpoint-gated normalized output. */
+/**
+ * State of an incremental snapshot split.
+ *
+ * <p>Source row images are never stored in split state. A split is completed only
+ * after the entire Low/High/Backfill normalized chunk was emitted in one mailbox
+ * operation; incomplete splits are restored as their original scan boundaries.
+ */
 public final class MySqlSnapshotSplitState extends MySqlSplitState {
 
     private MySqlSnapshotSplit snapshot;
-    private Long outputCheckpoint;
-    private boolean outputDurable;
 
     public MySqlSnapshotSplitState(MySqlSnapshotSplit split) {
         super(split);
+        if (split.output() != null || split.outputPosition() != 0) {
+            throw new IllegalArgumentException("Prepared row images are not recoverable split state");
+        }
         snapshot = split;
-        outputDurable = split.prepared();
     }
 
     @Override
@@ -22,9 +28,6 @@ public final class MySqlSnapshotSplitState extends MySqlSplitState {
 
     @Override
     public String snapshotSplitId() {
-        if (!snapshot.prepared()) {
-            throw new IllegalStateException("Snapshot event identity requires frozen output");
-        }
         return snapshot.splitId();
     }
 
@@ -36,36 +39,12 @@ public final class MySqlSnapshotSplitState extends MySqlSplitState {
                 || !snapshot.fingerprint().equals(prepared.fingerprint())
                 || !Objects.equals(snapshot.lowerInclusive(), prepared.lowerInclusive())
                 || !Objects.equals(snapshot.upperExclusive(), prepared.upperExclusive())
-                || !Objects.equals(snapshot.chunkRange(), prepared.chunkRange())) {
-            throw new IllegalStateException("Prepared snapshot differs from its assigned range");
+                || !Objects.equals(snapshot.chunkRange(), prepared.chunkRange())
+                || prepared.output() == null) {
+            throw new IllegalStateException("Normalized chunk differs from assigned snapshot range");
         }
-        snapshot = prepared;
-        outputDurable = false;
-    }
-
-    @Override
-    public void snapshotCheckpoint(long checkpointId) {
-        if (snapshot.output() != null && !outputDurable && outputCheckpoint == null) {
-            outputCheckpoint = checkpointId;
-        }
-    }
-
-    @Override
-    public String completeCheckpoint(long checkpointId) {
-        if (outputCheckpoint != null && checkpointId >= outputCheckpoint) {
-            outputDurable = true;
-            outputCheckpoint = null;
-            return snapshot.splitId();
-        }
-        return null;
-    }
-
-    @Override
-    public void emitSnapshotRows(int position) {
-        if (!outputDurable) {
-            throw new IllegalStateException("Snapshot output has no completed preparation checkpoint");
-        }
-        snapshot = snapshot.withOutputPosition(position);
+        // Mark finished only after the emitter has published the complete normalized chunk.
+        snapshot = prepared.withOutputPosition(prepared.output().rows().size());
     }
 
     @Override
@@ -75,6 +54,9 @@ public final class MySqlSnapshotSplitState extends MySqlSplitState {
 
     @Override
     public MySqlSplit checkpoint(byte[] history) {
-        return toMySqlSplit();
+        if (snapshot.output() != null) {
+            throw new IllegalStateException("Checkpoint must never persist snapshot row images");
+        }
+        return snapshot;
     }
 }

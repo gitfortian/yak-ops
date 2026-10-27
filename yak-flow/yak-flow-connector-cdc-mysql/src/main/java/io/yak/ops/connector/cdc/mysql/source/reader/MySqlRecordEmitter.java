@@ -45,7 +45,19 @@ public final class MySqlRecordEmitter implements RecordEmitter<MySqlFetchedRecor
             return;
         }
         if (event.preparedSnapshot() != null) {
-            state.prepareSnapshot(event.preparedSnapshot());
+            // Incremental Snapshot commits the completed split after all normalized rows
+            // have been emitted together in this mailbox operation.
+            var prepared = event.preparedSnapshot();
+            var rows = prepared.output().rows();
+            for (int ordinal = 0; ordinal < rows.size(); ordinal++) {
+                TableRecord row = rows.get(ordinal);
+                ChangeEventId identity = ChangeEventId.snapshot(
+                        state.sourceId(), state.snapshotSplitId(), ordinal);
+                output.collect(row.withChangeEventId(identity));
+                metrics.read(generation, row.tableId(), false);
+            }
+            state.prepareSnapshot(prepared);
+            metrics.observed(generation);
             return;
         }
         int count = event.rows().size();

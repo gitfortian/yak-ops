@@ -150,8 +150,7 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
     public void notifyCheckpointComplete(long checkpointId) {
         if (!initial) metrics.checkpointCompleted(generation, checkpointId, false);
         forEachActiveSplitState(state -> {
-            String id = state.completeCheckpoint(checkpointId);
-            if (id != null) splits.releaseSnapshot(id);
+            state.completeCheckpoint(checkpointId);
         });
         finishedCheckpoint.entrySet().removeIf(entry -> {
             if (entry.getValue() > checkpointId) return false;
