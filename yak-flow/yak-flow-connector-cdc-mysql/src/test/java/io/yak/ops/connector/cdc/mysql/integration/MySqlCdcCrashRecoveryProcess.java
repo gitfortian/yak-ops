@@ -3,7 +3,9 @@ package io.yak.ops.connector.cdc.mysql.integration;
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.sink.writer.BatchFlushPolicy;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSource;
+import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
+import io.yak.ops.connector.cdc.mysql.source.StartupMode;
+import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.connector.jdbc.sink.JdbcSink;
 import io.yak.ops.connector.jdbc.sink.JdbcTableWritePlan;
@@ -38,7 +40,7 @@ public final class MySqlCdcCrashRecoveryProcess {
     private MySqlCdcCrashRecoveryProcess() {}
 
     public static void main(String[] args) throws Exception {
-        if (args.length != 11) throw new IllegalArgumentException("Expected 11 process arguments");
+        if (args.length != 12) throw new IllegalArgumentException("Expected 12 process arguments");
 
         String sourceHost = args[0];
         int sourcePort = Integer.parseInt(args[1]);
@@ -51,6 +53,7 @@ public final class MySqlCdcCrashRecoveryProcess {
         boolean restore = Boolean.parseBoolean(args[8]);
         int serverId = Integer.parseInt(args[9]);
         String topicPrefix = args[10];
+        StartupMode startupMode = StartupMode.from(args[11]);
 
         Files.createDirectories(stateDirectory);
         Files.createDirectories(controlDirectory);
@@ -67,15 +70,17 @@ public final class MySqlCdcCrashRecoveryProcess {
                 List.of("ID"));
         TableId sourceId = new TableId(SOURCE_DATABASE, null, sourceTable);
         TableMetrics metrics = new TableMetrics();
-        var source = MySqlCdcSource.builder()
+        var sourceBuilder = MySqlSource.builder()
                 .hostname(sourceHost)
                 .port(sourcePort)
                 .username(sourceUsername)
                 .password(sourcePassword)
                 .serverId(serverId)
                 .topicPrefix(topicPrefix)
-                .table(sourceId, schema)
-                .buildHybrid(1, metrics);
+                .table(sourceId, schema);
+        Source<TableRecord, ?, ?> source = startupMode.includesSnapshot()
+                ? sourceBuilder.buildHybrid(1, metrics)
+                : sourceBuilder.build(metrics);
 
         JdbcConnectionOptions targetOptions = new JdbcConnectionOptions(targetUrl, targetUsername, targetPassword);
         TableId targetId;
@@ -102,8 +107,12 @@ public final class MySqlCdcCrashRecoveryProcess {
         JobClient job = new EmbeddedPipelineExecutor().execute(graph, configuration).get(30, TimeUnit.SECONDS);
 
         try {
-            awaitStreaming(job, metrics);
-            Files.writeString(controlDirectory.resolve("ready-" + generation), "STREAMING");
+            if (startupMode.includesSnapshot()) {
+                awaitStreaming(job, metrics);
+            } else {
+                awaitRunning(job);
+            }
+            Files.writeString(controlDirectory.resolve("ready-" + generation), startupMode.value());
             while (true) {
                 JobStatus status = job.getJobStatus().get(5, TimeUnit.SECONDS);
                 if (status.isTerminalState()) {
@@ -139,6 +148,19 @@ public final class MySqlCdcCrashRecoveryProcess {
                 }
             }
         }
+    }
+
+    private static void awaitRunning(JobClient job) throws Exception {
+        long deadline = System.nanoTime() + Duration.ofSeconds(120).toNanos();
+        while (System.nanoTime() < deadline) {
+            JobStatus status = job.getJobStatus().get(5, TimeUnit.SECONDS);
+            if (status == JobStatus.RUNNING) return;
+            if (status.isTerminalState()) {
+                throw new IllegalStateException("Latest-offset CDC stopped before startup: " + status);
+            }
+            Thread.sleep(100);
+        }
+        throw new IllegalStateException("Latest-offset CDC did not start within 120 seconds");
     }
 
     private static void awaitStreaming(JobClient job, TableMetrics metrics) throws Exception {

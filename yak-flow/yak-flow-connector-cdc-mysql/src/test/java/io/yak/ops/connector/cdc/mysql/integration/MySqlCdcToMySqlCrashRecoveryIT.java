@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.yak.ops.connector.cdc.mysql.source.StartupMode;
 import io.yak.ops.testutils.DatabaseMetadata;
 import io.yak.ops.testutils.MySqlDatabase;
 import java.io.IOException;
@@ -45,6 +46,15 @@ class MySqlCdcToMySqlCrashRecoveryIT {
     @Test
     void replaysCommittedChangeAfterProcessCrashBeforeCheckpointAndDoesNotReplayAfterCheckpoint()
             throws Exception {
+        verifyCrashRecovery(StartupMode.INITIAL);
+    }
+
+    @Test
+    void latestOffsetReplaysOnlyBeyondItsDurableCheckpointAfterProcessCrash() throws Exception {
+        verifyCrashRecovery(StartupMode.LATEST_OFFSET);
+    }
+
+    private void verifyCrashRecovery(StartupMode startupMode) throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String sourceTable = "cdc_crash_src_" + suffix;
         String targetTable = "cdc_crash_dst_" + suffix;
@@ -80,8 +90,12 @@ class MySqlCdcToMySqlCrashRecoveryIT {
                         1,
                         false,
                         serverId,
-                        topicPrefix);
+                        topicPrefix,
+                        startupMode);
                 awaitReady(first, controlDirectory.resolve("ready-1"), artifacts.resolve("process-1.log"));
+                if (startupMode == StartupMode.LATEST_OFFSET) {
+                    awaitLatestBootstrap(source, target, sourceTable, targetTable, first, artifacts.resolve("process-1.log"));
+                }
                 awaitTargetValue(target, targetTable, "initial", first, artifacts.resolve("process-1.log"));
 
                 requestCheckpoint(first, controlDirectory, "g1-initial", artifacts.resolve("process-1.log"));
@@ -122,7 +136,8 @@ class MySqlCdcToMySqlCrashRecoveryIT {
                         2,
                         true,
                         serverId,
-                        topicPrefix);
+                        topicPrefix,
+                        startupMode);
                 awaitReady(second, controlDirectory.resolve("ready-2"), artifacts.resolve("process-2.log"));
                 awaitAuditCount(
                         target,
@@ -180,7 +195,8 @@ class MySqlCdcToMySqlCrashRecoveryIT {
                         3,
                         true,
                         serverId,
-                        topicPrefix);
+                        topicPrefix,
+                        startupMode);
                 awaitReady(third, controlDirectory.resolve("ready-3"), artifacts.resolve("process-3.log"));
                 awaitStableAuditCount(
                         target,
@@ -219,7 +235,8 @@ class MySqlCdcToMySqlCrashRecoveryIT {
             int generation,
             boolean restore,
             int serverId,
-            String topicPrefix)
+            String topicPrefix,
+            StartupMode startupMode)
             throws IOException {
         Files.createDirectories(log.getParent());
         String classPath = System.getProperty("surefire.test.class.path");
@@ -246,7 +263,8 @@ class MySqlCdcToMySqlCrashRecoveryIT {
                         Integer.toString(generation),
                         Boolean.toString(restore),
                         Integer.toString(serverId),
-                        topicPrefix)
+                        topicPrefix,
+                        startupMode.value())
                 .redirectErrorStream(true)
                 .redirectOutput(log.toFile());
         builder.environment().put("YAK_CDC_SOURCE_USERNAME", source.username());
@@ -287,6 +305,28 @@ class MySqlCdcToMySqlCrashRecoveryIT {
             Thread.sleep(100);
         }
         throw new AssertionError("Child CDC process did not reach STREAMING" + logContents(log));
+    }
+
+    /**
+     * Latest-offset does not copy the row inserted before its subscription.
+     * Generate distinct warmup updates until the real Debezium subscription is active,
+     * then establish the same initial Sink value used by the durable crash assertions.
+     */
+    private static void awaitLatestBootstrap(
+            Connection source, Connection target, String sourceTable, String targetTable, Process process, Path log)
+            throws Exception {
+        long deadline = System.nanoTime() + Duration.ofSeconds(90).toNanos();
+        int attempt = 0;
+        while (System.nanoTime() < deadline) {
+            assertProcessAlive(process, log);
+            updateSource(source, sourceTable, "bootstrap-" + attempt++);
+            if (targetValue(target, targetTable) != null) {
+                updateSource(source, sourceTable, "initial");
+                return;
+            }
+            Thread.sleep(300);
+        }
+        throw new AssertionError("Latest-offset Binlog subscription did not become ready" + logContents(log));
     }
 
     private static void awaitTargetValue(

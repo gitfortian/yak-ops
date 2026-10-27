@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSource;
+import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlChunkSplitter;
@@ -226,7 +226,7 @@ class MySqlTypedSnapshotAssignmentTest {
     }
 
     private static MySqlCdcSourceConfig configuration(TableSchema schema, String chunkColumn) {
-        var builder = MySqlCdcSource.builder()
+        var builder = MySqlSource.builder()
                 .hostname("localhost")
                 .username("user")
                 .password("secret")

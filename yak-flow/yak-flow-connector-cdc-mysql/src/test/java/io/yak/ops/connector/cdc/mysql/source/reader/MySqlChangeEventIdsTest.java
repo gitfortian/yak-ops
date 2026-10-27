@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.metrics.TableMetrics;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSource;
+import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
@@ -117,7 +117,7 @@ class MySqlChangeEventIdsTest {
     void frozenSnapshotIdentityUsesDurableSplitAndRowOrdinalsAfterRestore() throws Exception {
         var schema = new TableSchema(
                 List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
-        var config = MySqlCdcSource.builder()
+        var config = MySqlSource.builder()
                 .hostname("localhost")
                 .username("user")
                 .password("secret")
@@ -181,7 +181,7 @@ class MySqlChangeEventIdsTest {
                         new Column("id", LogicalTypes.BIGINT.copy(false)),
                         new Column("name", LogicalTypes.varchar(100).copy(false))),
                 List.of("id"));
-        var config = MySqlCdcSource.builder()
+        var config = MySqlSource.builder()
                 .hostname("localhost")
                 .username("user")
                 .password("secret")

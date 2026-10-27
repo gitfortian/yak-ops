@@ -9,6 +9,7 @@ import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlChunkSplitter;
+import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridEnumeratorState;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
@@ -84,7 +85,9 @@ class MySqlChunkKeySelectionTest {
                 measurements);
         var selected = assertInstanceOf(MySqlSource.class, factory.createSource(List.of(first, second)));
         assertEquals(StartupMode.INITIAL, selected.startupMode());
-        var source = assertInstanceOf(MySqlHybridCdcSource.class, selected.delegate());
+        @SuppressWarnings("unchecked")
+        MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState> source =
+                (MySqlSource<MySqlHybridSplit, MySqlHybridEnumeratorState>) selected;
 
         // A matching Source can restore the same checkpoint without inspecting its private config.
         var original = source.createEnumerator(new CoordinatorContext());
@@ -153,7 +156,7 @@ class MySqlChunkKeySelectionTest {
     }
 
     private static MySqlCdcSourceBuilder builder() {
-        return MySqlCdcSource.builder()
+        return MySqlSource.builder()
                 .hostname("localhost")
                 .username("user")
                 .password("password")
