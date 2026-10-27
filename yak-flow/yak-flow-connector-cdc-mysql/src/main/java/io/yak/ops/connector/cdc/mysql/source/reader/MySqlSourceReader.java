@@ -56,17 +56,19 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
                 new MySqlSplitReader(config, metrics, context.getIndexOfSubtask(), fingerprint),
                 new MySqlSourceReaderContext(context),
                 metrics,
-                initial);
+                initial,
+                config.topicPrefix());
     }
 
     private MySqlSourceReader(
             MySqlSplitReader splits,
             MySqlSourceReaderContext readerContext,
             TableMetrics metrics,
-            boolean initial) {
+            boolean initial,
+            String sourceId) {
         super(
                 () -> splits,
-                new MySqlRecordEmitter(readerContext, splits, metrics),
+                new MySqlRecordEmitter(readerContext, splits, metrics, sourceId),
                 readerContext.getSourceReaderContext());
         this.schemaChanges = readerContext.schemaChanges();
         this.metrics = Objects.requireNonNull(metrics, "metrics");
