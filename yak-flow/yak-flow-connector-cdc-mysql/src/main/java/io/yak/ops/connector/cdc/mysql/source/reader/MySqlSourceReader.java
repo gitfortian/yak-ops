@@ -5,7 +5,6 @@ import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
-import io.yak.ops.core.data.TableRecord;
 import java.util.Map;
 
 /**
@@ -14,8 +13,7 @@ import java.util.Map;
  * <p>All Debezium I/O is owned by the background SplitReader and never touches the Runtime
  * state backend. This reader emits an entire UPDATE pair before advancing progress.
  */
-public final class MySqlSourceReader
-        extends MySqlSourceReaderBase<BinlogEvent, MySqlBinlogSplit, MySqlCdcSplitState> {
+public final class MySqlSourceReader extends MySqlSourceReaderBase<BinlogEvent, MySqlBinlogSplit, MySqlCdcSplitState> {
 
     private final MySqlCdcSplitReader splitReader;
 

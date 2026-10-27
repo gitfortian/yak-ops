@@ -11,7 +11,6 @@ import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
-import io.yak.ops.core.data.TableRecord;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
