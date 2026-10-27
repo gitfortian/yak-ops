@@ -140,7 +140,7 @@ public final class MySqlSplitState {
         }
         if (standalone != null) {
             if (emittedOffset == null || history == null || history.length == 0) {
-                throw new IllegalStateException("MySQL Binlog requires emitted offset and Schema History");
+                throw new IllegalStateException("MySQL Binlog has no complete offset/schema-history checkpoint yet");
             }
             return standalone.withProgress(emittedOffset, history);
         }
