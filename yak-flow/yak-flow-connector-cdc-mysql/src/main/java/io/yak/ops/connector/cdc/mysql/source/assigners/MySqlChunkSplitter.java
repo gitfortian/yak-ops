@@ -1,6 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners;
 
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.connector.cdc.mysql.source.utils.StatementUtils;
@@ -38,7 +38,7 @@ public final class MySqlChunkSplitter {
     private volatile PreparedStatement planningStatement;
     private volatile boolean cancelled;
 
-    public MySqlChunkSplitter(MySqlCdcSourceConfig config, int chunkSize) {
+    public MySqlChunkSplitter(MySqlSourceConfig config, int chunkSize) {
         this(
                 config::openSnapshotConnection,
                 JdbcDialects.forUrl("jdbc:mysql:"),

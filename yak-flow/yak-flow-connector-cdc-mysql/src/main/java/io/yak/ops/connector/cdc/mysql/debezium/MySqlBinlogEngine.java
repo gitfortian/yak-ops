@@ -4,7 +4,7 @@ import io.debezium.embedded.Connect;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.RecordChangeEvent;
 import io.debezium.engine.format.ChangeEventFormat;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.reader.BinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlDebeziumRecordConverter;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
@@ -34,7 +34,7 @@ public final class MySqlBinlogEngine implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(MySqlBinlogEngine.class);
 
-    private final MySqlCdcSourceConfig config;
+    private final MySqlSourceConfig config;
     private final int serverId;
     private final MySqlDebeziumRecordConverter converter;
     private final BlockingQueue<BinlogEvent> queue;
@@ -51,12 +51,12 @@ public final class MySqlBinlogEngine implements AutoCloseable {
     private boolean awaitingSchemaSnapshot;
     private final Set<TableId> bootstrapTables = new HashSet<>();
 
-    public MySqlBinlogEngine(MySqlCdcSourceConfig config) {
+    public MySqlBinlogEngine(MySqlSourceConfig config) {
         this(config, config.serverId());
     }
 
     /** Uses a distinct replication connection while retaining the source partition and table contract. */
-    public MySqlBinlogEngine(MySqlCdcSourceConfig config, int serverId) {
+    public MySqlBinlogEngine(MySqlSourceConfig config, int serverId) {
         if (serverId < 1) throw new IllegalArgumentException("Replication server ID must be positive");
         this.serverId = serverId;
         this.config = Objects.requireNonNull(config, "config");

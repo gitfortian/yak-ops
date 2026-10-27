@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.yak.ops.connector.cdc.mysql.source.config;
 
 import com.github.shyiko.mysql.binlog.BinaryLogClient;
@@ -9,6 +26,13 @@ import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.types.TableSchema;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.List;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
+import io.debezium.config.Configuration;
+import io.debezium.connector.mysql.MySqlConnectorConfig;
+import io.debezium.relational.RelationalTableFilters;
+import java.util.function.Predicate;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -28,7 +52,7 @@ import java.util.stream.Collectors;
  * <p>Production credentials never appear in toString(), Split or Enumerator checkpoint state.
  * Exactly one Binlog reader is supported in the initial stream-only connector.
  */
-public final class MySqlCdcSourceConfig {
+public final class MySqlSourceConfig {
 
     private final String hostname;
     private final int port;
@@ -42,8 +66,36 @@ public final class MySqlCdcSourceConfig {
     private final Map<String, String> connectionProperties;
     private final Map<TableId, Schema> physicalSchemas;
     private final boolean schemaEvolutionEnabled;
+    private final MySqlSourceConfigFactory.SourceSettings sourceSettings;
+    private final List<String> databaseList;
+    private final List<String> tableList;
+    private final String excludeTableList;
+    private final ServerIdRange serverIdRange;
+    private final StartupOptions startupOptions;
+    private final int splitSize;
+    private final int splitMetaGroupSize;
+    private final int fetchSize;
+    private final String serverTimeZone;
+    private final Duration connectTimeout;
+    private final int connectMaxRetries;
+    private final int connectionPoolSize;
+    private final double distributionFactorUpper;
+    private final double distributionFactorLower;
+    private final boolean includeSchemaChanges;
+    private final boolean includeHeartbeatEvents;
+    private final boolean includeTransactionMetadataEvents;
+    private final boolean scanNewlyAddedTableEnabled;
+    private final boolean closeIdleReaders;
+    private final Properties jdbcProperties;
+    private final boolean skipSnapshotBackfill;
+    private final boolean parseOnLineSchemaChanges;
+    private final boolean treatTinyInt1AsBoolean;
+    private final boolean useLegacyJsonFormat;
+    private final boolean assignUnboundedChunkFirst;
+    private final boolean releaseSnapshotMetadataEnabled;
+    private final Properties dbzProperties;
 
-    public MySqlCdcSourceConfig(
+    public MySqlSourceConfig(
             String hostname,
             int port,
             String username,
@@ -55,7 +107,7 @@ public final class MySqlCdcSourceConfig {
         this(hostname, port, username, password, serverId, topicPrefix, schemas, queueCapacity, Map.of());
     }
 
-    public MySqlCdcSourceConfig(
+    public MySqlSourceConfig(
             String hostname,
             int port,
             String username,
@@ -78,7 +130,7 @@ public final class MySqlCdcSourceConfig {
                 Map.of());
     }
 
-    public MySqlCdcSourceConfig(
+    public MySqlSourceConfig(
             String hostname,
             int port,
             String username,
@@ -104,7 +156,7 @@ public final class MySqlCdcSourceConfig {
                 false);
     }
 
-    private MySqlCdcSourceConfig(
+    MySqlSourceConfig(
             String hostname,
             int port,
             String username,
@@ -117,6 +169,26 @@ public final class MySqlCdcSourceConfig {
             Map<TableId, String> chunkKeyColumns,
             Map<TableId, Schema> physicalSchemas,
             boolean schemaEvolutionEnabled) {
+        this(hostname, port, username, password, serverId, topicPrefix, schemas,
+                queueCapacity, connectionProperties, chunkKeyColumns, physicalSchemas,
+                schemaEvolutionEnabled,
+                MySqlSourceConfigFactory.defaultSettings(serverId));
+    }
+
+    MySqlSourceConfig(
+            String hostname,
+            int port,
+            String username,
+            String password,
+            int serverId,
+            String topicPrefix,
+            Map<TableId, TableSchema> schemas,
+            int queueCapacity,
+            Map<String, String> connectionProperties,
+            Map<TableId, String> chunkKeyColumns,
+            Map<TableId, Schema> physicalSchemas,
+            boolean schemaEvolutionEnabled,
+            MySqlSourceConfigFactory.SourceSettings settings) {
         this.schemaEvolutionEnabled = schemaEvolutionEnabled;
         this.hostname = requireText(hostname, "hostname");
         this.username = requireText(username, "username");
@@ -172,6 +244,34 @@ public final class MySqlCdcSourceConfig {
                         ? Schema.from(tableSchema, null, Map.of(), Map.of())
                         : Objects.requireNonNull(physicalSchemas.get(table), "Physical source schema is missing")));
         this.physicalSchemas = Collections.unmodifiableMap(shapes);
+        this.sourceSettings = Objects.requireNonNull(settings, "source settings");
+        this.databaseList = settings.databaseList();
+        this.tableList = settings.tableList();
+        this.excludeTableList = settings.excludeTableList();
+        this.serverIdRange = settings.serverIdRange();
+        this.startupOptions = settings.startupOptions();
+        this.splitSize = settings.splitSize();
+        this.splitMetaGroupSize = settings.splitMetaGroupSize();
+        this.fetchSize = settings.fetchSize();
+        this.serverTimeZone = settings.serverTimeZone();
+        this.connectTimeout = settings.connectTimeout();
+        this.connectMaxRetries = settings.connectMaxRetries();
+        this.connectionPoolSize = settings.connectionPoolSize();
+        this.distributionFactorUpper = settings.distributionFactorUpper();
+        this.distributionFactorLower = settings.distributionFactorLower();
+        this.includeSchemaChanges = settings.includeSchemaChanges();
+        this.includeHeartbeatEvents = settings.includeHeartbeatEvents();
+        this.includeTransactionMetadataEvents = settings.includeTransactionMetadataEvents();
+        this.scanNewlyAddedTableEnabled = settings.scanNewlyAddedTableEnabled();
+        this.closeIdleReaders = settings.closeIdleReaders();
+        this.jdbcProperties = settings.jdbcProperties();
+        this.skipSnapshotBackfill = settings.skipSnapshotBackfill();
+        this.parseOnLineSchemaChanges = settings.parseOnLineSchemaChanges();
+        this.treatTinyInt1AsBoolean = settings.treatTinyInt1AsBoolean();
+        this.useLegacyJsonFormat = settings.useLegacyJsonFormat();
+        this.assignUnboundedChunkFirst = settings.assignUnboundedChunkFirst();
+        this.releaseSnapshotMetadataEnabled = settings.releaseSnapshotMetadataEnabled();
+        this.dbzProperties = settings.dbzProperties();
     }
 
     private static String requireText(String value, String label) {
@@ -257,7 +357,7 @@ public final class MySqlCdcSourceConfig {
      * A checkpoint restores the same source schema and Debezium offset before the Reader starts.
      * A disabled evolution job retains its original schemas unchanged.
      */
-    public MySqlCdcSourceConfig withRuntimeState(SourceReaderContext context) {
+    public MySqlSourceConfig withRuntimeState(SourceReaderContext context) {
         Objects.requireNonNull(context, "context");
         boolean enabled = context.getConfiguration().get(SchemaEvolutionOptions.ENABLED);
         Map<TableId, Schema> models = new LinkedHashMap<>(physicalSchemas);
@@ -272,7 +372,7 @@ public final class MySqlCdcSourceConfig {
                 shape.put(table, restored.get().toTableSchema());
             }
         }
-        return new MySqlCdcSourceConfig(
+        return new MySqlSourceConfig(
                 hostname,
                 port,
                 username,
@@ -284,12 +384,13 @@ public final class MySqlCdcSourceConfig {
                 connectionProperties,
                 chunkKeyColumns,
                 models,
-                enabled);
+                enabled,
+                sourceSettings);
     }
 
     /** Disables DDL adoption in snapshot-backfill readers, where schema changes cannot be replayed safely. */
-    public MySqlCdcSourceConfig withoutSchemaEvolution() {
-        return new MySqlCdcSourceConfig(
+    public MySqlSourceConfig withoutSchemaEvolution() {
+        return new MySqlSourceConfig(
                 hostname,
                 port,
                 username,
@@ -301,7 +402,8 @@ public final class MySqlCdcSourceConfig {
                 connectionProperties,
                 chunkKeyColumns,
                 physicalSchemas,
-                false);
+                false,
+                sourceSettings);
     }
 
     public int queueCapacity() {
@@ -327,7 +429,8 @@ public final class MySqlCdcSourceConfig {
 
     /** Returns the reserved replication ID for one of at most sixteen snapshot readers. */
     public int snapshotServerId(int reader) {
-        if (reader < 0 || reader >= 16 || serverId > Integer.MAX_VALUE - 16) {
+        if (reader < 0 || reader >= 16 || serverId > Integer.MAX_VALUE - 16
+                || (serverIdRange != null && serverId + reader + 1 > serverIdRange.getEndServerId())) {
             throw new IllegalArgumentException("Hybrid source requires a reserved range of seventeen replication IDs");
         }
         return serverId + reader + 1;
@@ -415,6 +518,153 @@ public final class MySqlCdcSourceConfig {
 
     @Override
     public String toString() {
-        return "MySqlCdcSourceConfig{credentials=redacted, tables=" + schemas.size() + "}";
+        return "MySqlSourceConfig{credentials=redacted, tables=" + schemas.size() + "}";
+    }
+    public String getHostname() {
+        return hostname;
+    }
+
+    public int getPort() {
+        return port;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public List<String> getDatabaseList() {
+        return databaseList;
+    }
+
+    public List<String> getTableList() {
+        return tableList;
+    }
+
+    public ServerIdRange getServerIdRange() {
+        return serverIdRange;
+    }
+
+    public StartupOptions getStartupOptions() {
+        return startupOptions;
+    }
+
+    public int getSplitSize() {
+        return splitSize;
+    }
+
+    public int getSplitMetaGroupSize() {
+        return splitMetaGroupSize;
+    }
+
+    public double getDistributionFactorUpper() {
+        return distributionFactorUpper;
+    }
+
+    public double getDistributionFactorLower() {
+        return distributionFactorLower;
+    }
+
+    public int getFetchSize() {
+        return fetchSize;
+    }
+
+    public String getServerTimeZone() {
+        return serverTimeZone;
+    }
+
+    public Duration getConnectTimeout() {
+        return connectTimeout;
+    }
+
+    public int getConnectMaxRetries() {
+        return connectMaxRetries;
+    }
+
+    public int getConnectionPoolSize() {
+        return connectionPoolSize;
+    }
+
+    public boolean isIncludeSchemaChanges() {
+        return includeSchemaChanges;
+    }
+
+    public boolean isIncludeHeartbeatEvents() {
+        return includeHeartbeatEvents;
+    }
+
+    public boolean isIncludeTransactionMetadataEvents() {
+        return includeTransactionMetadataEvents;
+    }
+
+    public boolean isScanNewlyAddedTableEnabled() {
+        return scanNewlyAddedTableEnabled;
+    }
+
+    public boolean isReleaseSnapshotMetadataEnabled() {
+        return releaseSnapshotMetadataEnabled;
+    }
+
+    public boolean isCloseIdleReaders() {
+        return closeIdleReaders;
+    }
+
+    public boolean isParseOnLineSchemaChanges() {
+        return parseOnLineSchemaChanges;
+    }
+
+    public boolean isAssignUnboundedChunkFirst() {
+        return assignUnboundedChunkFirst;
+    }
+
+    public Properties getDbzProperties() {
+        return dbzProperties;
+    }
+
+    public Configuration getDbzConfiguration() {
+        return Configuration.from(dbzProperties);
+    }
+
+    public MySqlConnectorConfig getMySqlConnectorConfig() {
+        return new MySqlConnectorConfig(getDbzConfiguration());
+    }
+
+    @Deprecated
+    public RelationalTableFilters getTableFilters() {
+        return getMySqlConnectorConfig().getTableFilters();
+    }
+
+    public Predicate<String> getDatabaseFilter() {
+        RelationalTableFilters tableFilters = getMySqlConnectorConfig().getTableFilters();
+        return (String databaseName) -> tableFilters.databaseFilter().test(databaseName);
+    }
+
+    public Predicate<io.debezium.relational.TableId> getTableFilter() {
+        RelationalTableFilters tableFilters = getMySqlConnectorConfig().getTableFilters();
+        return tableId -> tableFilters.dataCollectionFilter().isIncluded(tableId);
+    }
+
+    public Properties getJdbcProperties() {
+        return jdbcProperties;
+    }
+
+    public Map<io.yak.ops.core.data.TableId, String> getChunkKeyColumns() {
+        return chunkKeyColumns;
+    }
+
+    public boolean isSkipSnapshotBackfill() {
+        return skipSnapshotBackfill;
+    }
+
+    public boolean isTreatTinyInt1AsBoolean() {
+        return treatTinyInt1AsBoolean;
+    }
+
+    /** Compatibility with Flink CDC's source configuration model; YakFlow owns the runtime schema. */
+    public boolean isSchemaEvolutionEnabled() {
+        return schemaEvolutionEnabled;
     }
 }

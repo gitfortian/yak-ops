@@ -5,7 +5,7 @@ import io.yak.ops.connector.base.source.reader.RecordsBySplits;
 import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
 import io.yak.ops.connector.base.source.reader.splitreader.SplitReader;
 import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogEngine;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
@@ -28,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, MySqlSplit> {
     private static final int OUTPUT_BATCH_SIZE = 256;
-    private final MySqlCdcSourceConfig config;
+    private final MySqlSourceConfig config;
     private final MySqlSnapshotBackfillReader snapshots;
     private final TableMetrics metrics;
     private final long generation;
@@ -52,19 +52,19 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     private boolean closed;
     private BinlogEvent bootstrapCandidate;
 
-    public MySqlSplitReader(MySqlCdcSourceConfig config) {
+    public MySqlSplitReader(MySqlSourceConfig config) {
         this(config, new TableMetrics(), 0, null);
     }
 
-    public MySqlSplitReader(MySqlCdcSourceConfig config, TableMetrics metrics) {
+    public MySqlSplitReader(MySqlSourceConfig config, TableMetrics metrics) {
         this(config, metrics, 0, null);
     }
 
-    public MySqlSplitReader(MySqlCdcSourceConfig config, TableMetrics metrics, int reader) {
+    public MySqlSplitReader(MySqlSourceConfig config, TableMetrics metrics, int reader) {
         this(config, metrics, reader, null);
     }
 
-    public MySqlSplitReader(MySqlCdcSourceConfig config, TableMetrics metrics, int reader, String fingerprint) {
+    public MySqlSplitReader(MySqlSourceConfig config, TableMetrics metrics, int reader, String fingerprint) {
         this.fingerprint = fingerprint;
         this.config = Objects.requireNonNull(config, "config");
         this.metrics = Objects.requireNonNull(metrics, "metrics");

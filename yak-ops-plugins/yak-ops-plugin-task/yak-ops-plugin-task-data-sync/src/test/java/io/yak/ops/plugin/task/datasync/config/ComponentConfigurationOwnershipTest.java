@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.configuration.ConfigParser;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -19,7 +19,7 @@ class ComponentConfigurationOwnershipTest {
         var job = JobConfig.from(saved);
         assertEquals(saved, job.parameters());
         assertFalse(job.source().getSourceMap().containsKey("keyless"));
-        assertEquals("bucket", job.source().get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
+        assertEquals("bucket", job.source().get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN));
         assertFalse(job.source().getSourceMap().containsKey("xa"));
         assertFalse(job.source().getSourceMap().containsKey("snapshot"));
         assertTrue(job.sink().get(JdbcSinkOptions.XA_ENABLED));

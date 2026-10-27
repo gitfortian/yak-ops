@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.configuration.ConfigParser;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceTable;
@@ -66,7 +66,7 @@ class DataSyncProductParametersTest {
         var parsed = plugin.parse(4, latest);
         var job = JobConfig.from(parsed);
         assertEquals(List.of(Step.INCREMENTAL), job.steps());
-        assertEquals("latest-offset", job.source().get(MySqlCdcSourceOptions.STARTUP_MODE));
+        assertEquals("latest-offset", job.source().get(MySqlSourceOptions.SCAN_STARTUP_MODE));
         assertFalse(plugin.supportsScheduling(parsed));
         assertEquals(parsed, plugin.parse(4, ConfigParser.toJson(parsed)));
         plugin.validateReferences(parsed, new DataSyncTaskPluginContractTest.Metadata());
@@ -156,7 +156,7 @@ class DataSyncProductParametersTest {
         String keyless = keyless("RETRACT", "\"transaction\":{\"mode\":\"CHECKPOINT_XA\"}");
         var config = JobConfig.from(plugin.parse(keyless));
         assertFalse(config.source().getSourceMap().containsKey("keyless"));
-        assertEquals("bucket", config.source().get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
+        assertEquals("bucket", config.source().get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN));
         assertTrue(config.sink().get(JdbcSinkOptions.XA_ENABLED));
         assertFalse(config.source().getSourceMap().containsKey("xa"));
         assertThrows(TaskPluginException.class, () -> plugin.parse(keyless.replace(

@@ -3,7 +3,7 @@ package io.yak.ops.boot.config;
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.configuration.rule.ConfigValidator;
 import io.yak.ops.connector.base.factory.FactoryUtil;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import io.yak.ops.core.execution.PipelineExecutor;
 import io.yak.ops.flow.runtime.execution.EmbeddedPipelineExecutor;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
@@ -60,9 +60,17 @@ public class TaskPluginConfiguration {
             @Value("${yak.task.data-sync.cdc.snapshot-chunk-size:1024}") int snapshotChunkSize,
             @Value("${yak.task.data-sync.cdc.queue-capacity:256}") int queueCapacity) {
         io.yak.ops.configuration.Configuration options = new io.yak.ops.configuration.Configuration()
-                .set(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE, snapshotChunkSize)
-                .set(MySqlCdcSourceOptions.QUEUE_CAPACITY, queueCapacity);
-        ConfigValidator.of(options.toReadonlyConfig()).validate(MySqlCdcSourceOptions.PHYSICAL_RULE);
+                .set(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, snapshotChunkSize)
+                .set(MySqlSourceOptions.QUEUE_CAPACITY, queueCapacity);
+        ConfigValidator.of(options.toReadonlyConfig()).validate(
+                io.yak.ops.configuration.rule.OptionRule.builder()
+                        .optional(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE,
+                                io.yak.ops.configuration.rule.Conditions.greaterOrEqual(
+                                        MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, 1))
+                        .optional(MySqlSourceOptions.QUEUE_CAPACITY,
+                                io.yak.ops.configuration.rule.Conditions.greaterOrEqual(
+                                        MySqlSourceOptions.QUEUE_CAPACITY, 1))
+                        .build());
         return options;
     }
 

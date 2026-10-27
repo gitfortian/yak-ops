@@ -9,7 +9,7 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedAckEvent;
@@ -55,7 +55,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     public MySqlSourceEnumerator(
             StartupOptions startupOptions,
             SplitEnumeratorContext<MySqlSplit> context,
-            MySqlCdcSourceConfig config,
+            MySqlSourceConfig config,
             String fingerprint,
             int chunkSize,
             PendingSplitsState restored) {
@@ -65,7 +65,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     public MySqlSourceEnumerator(
             StartupOptions startupOptions,
             SplitEnumeratorContext<MySqlSplit> context,
-            MySqlCdcSourceConfig config,
+            MySqlSourceConfig config,
             String fingerprint,
             int chunkSize,
             PendingSplitsState restored,
@@ -85,7 +85,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     MySqlSourceEnumerator(
             StartupOptions startupOptions,
             SplitEnumeratorContext<MySqlSplit> context,
-            MySqlCdcSourceConfig config,
+            MySqlSourceConfig config,
             String fingerprint,
             int chunkSize,
             PendingSplitsState restored,

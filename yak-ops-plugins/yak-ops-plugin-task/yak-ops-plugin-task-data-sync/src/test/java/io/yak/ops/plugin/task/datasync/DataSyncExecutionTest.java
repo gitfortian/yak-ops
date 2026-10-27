@@ -9,7 +9,7 @@ import io.yak.ops.configuration.ConfigParser;
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.connector.base.factory.FactoryUtil;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.connector.jdbc.JdbcSourceOptions;
@@ -268,8 +268,8 @@ class DataSyncExecutionTest {
                 Map.of(
                         "MYSQL_CDC",
                         new Configuration()
-                                .set(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE, 512)
-                                .set(MySqlCdcSourceOptions.QUEUE_CAPACITY, 64)
+                                .set(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, 512)
+                                .set(MySqlSourceOptions.QUEUE_CAPACITY, 64)
                                 .toReadonlyConfig()),
                 Map.of());
         ReadonlyConfig parameters = parameters(true);
@@ -278,16 +278,16 @@ class DataSyncExecutionTest {
         assertEquals(1, compiled.graph().getSinkNodes().getFirst().getParallelism());
         assertEquals(Duration.ofMillis(750), compiled.configuration().get(CheckpointingOptions.CHECKPOINTING_INTERVAL));
         assertEquals(2, compiled.configuration().get(ExecutionOptions.MAX_RESTART_ATTEMPTS));
-        assertEquals(false, compiled.configuration().contains(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE));
-        assertEquals(false, compiled.configuration().contains(MySqlCdcSourceOptions.QUEUE_CAPACITY));
+        assertEquals(false, compiled.configuration().contains(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE));
+        assertEquals(false, compiled.configuration().contains(MySqlSourceOptions.QUEUE_CAPACITY));
         Object source = compiled.graph().getSourceNodes().getFirst().getSource().orElseThrow();
         var mysql = assertInstanceOf(MySqlSource.class, source);
         assertEquals(512, mysql.snapshotChunkSize());
         var sourceConfig = mysql.config();
         assertEquals(64, sourceConfig.queueCapacity());
         JobPlan prepared = planner.plan(parameters, CONTEXT);
-        assertEquals(prepared.sourceOptions().get(MySqlCdcSourceOptions.SERVER_ID), sourceConfig.serverId());
-        assertEquals(prepared.sourceOptions().get(MySqlCdcSourceOptions.TOPIC_PREFIX), sourceConfig.topicPrefix());
+        assertEquals(prepared.sourceOptions().get(MySqlSourceOptions.SERVER_ID), sourceConfig.serverId());
+        assertEquals(prepared.sourceOptions().get(MySqlSourceOptions.TOPIC_PREFIX), sourceConfig.topicPrefix());
         assertEquals(false, compiled.configuration().get(CheckpointingOptions.RESTORE_LATEST));
         assertEquals(2, resources.connections.get());
         assertEquals(0, resources.openedConnections.get());

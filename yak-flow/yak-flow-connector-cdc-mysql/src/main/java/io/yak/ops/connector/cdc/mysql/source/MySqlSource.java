@@ -3,7 +3,8 @@ package io.yak.ops.connector.cdc.mysql.source;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfigFactory;
 import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlSourceEnumerator;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlSourceReader;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
@@ -37,7 +38,7 @@ import java.util.Objects;
  */
 public final class MySqlSource implements Source<TableRecord, MySqlSplit, PendingSplitsState> {
     private final StartupOptions startupOptions;
-    private final MySqlCdcSourceConfig config;
+    private final MySqlSourceConfig config;
     private final int snapshotChunkSize;
     private final String fingerprint;
     private final TableMetrics metrics;
@@ -46,7 +47,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
 
     private MySqlSource(
             StartupOptions options,
-            MySqlCdcSourceConfig config,
+            MySqlSourceConfig config,
             int chunkSize,
             String fingerprint,
             TableMetrics metrics) {
@@ -57,12 +58,12 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
         this.metrics = Objects.requireNonNull(metrics, "metrics");
     }
 
-    public static MySqlCdcSourceBuilder builder() {
-        return new MySqlCdcSourceBuilder();
+    public static MySqlSourceConfigFactory builder() {
+        return new MySqlSourceConfigFactory();
     }
 
     public static MySqlSource create(
-            MySqlCdcSourceBuilder builder, StartupOptions startupOptions, int snapshotChunkSize, TableMetrics metrics) {
+            MySqlSourceConfigFactory builder, StartupOptions startupOptions, int snapshotChunkSize, TableMetrics metrics) {
         Objects.requireNonNull(builder, "builder");
         Objects.requireNonNull(startupOptions, "startupOptions").requireSupported();
         builder.startupOptions(startupOptions);
@@ -75,7 +76,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
         };
     }
 
-    static MySqlSource latestOffset(MySqlCdcSourceConfig config, TableMetrics metrics, StartupOptions options) {
+    public static MySqlSource latestOffset(MySqlSourceConfig config, TableMetrics metrics, StartupOptions options) {
         if (options.startupMode() != StartupMode.LATEST_OFFSET) {
             throw new UnsupportedOperationException("MySQL Binlog Source requires latest-offset startup");
         }
@@ -84,8 +85,8 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
         return new MySqlSource(options, config, 0, fingerprint(config), metrics);
     }
 
-    static MySqlSource initial(
-            MySqlCdcSourceConfig config, int chunkSize, TableMetrics metrics, StartupOptions options) {
+    public static MySqlSource initial(
+            MySqlSourceConfig config, int chunkSize, TableMetrics metrics, StartupOptions options) {
         if (options.startupMode() != StartupMode.INITIAL) {
             throw new UnsupportedOperationException("MySQL Snapshot Source requires initial startup");
         }
@@ -109,7 +110,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
         return startupOptions.startupMode();
     }
 
-    public MySqlCdcSourceConfig config() {
+    public MySqlSourceConfig config() {
         return config;
     }
 
@@ -168,7 +169,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
         return stateSerializer;
     }
 
-    private static void requirePhysicalPrimaryKeys(MySqlCdcSourceConfig config) {
+    private static void requirePhysicalPrimaryKeys(MySqlSourceConfig config) {
         if (config.schemas().values().stream()
                 .anyMatch(schema -> schema.primaryKeys().isEmpty())) {
             throw new UnsupportedOperationException(
@@ -176,7 +177,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
         }
     }
 
-    private static String fingerprint(MySqlCdcSourceConfig config) {
+    private static String fingerprint(MySqlSourceConfig config) {
         StringBuilder definition = new StringBuilder(config.hostname())
                 .append('|')
                 .append(config.port())

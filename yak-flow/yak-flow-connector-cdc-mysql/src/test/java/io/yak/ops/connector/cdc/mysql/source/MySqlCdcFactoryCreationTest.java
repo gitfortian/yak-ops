@@ -2,8 +2,8 @@ package io.yak.ops.connector.cdc.mysql.source;
 
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import io.yak.ops.connector.cdc.mysql.table.MySqlCdcSourceFactory;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
@@ -31,12 +31,12 @@ class MySqlCdcFactoryCreationTest {
     void consumesPreparedReplicationParametersAndCustomUrlPort() {
         Configuration options = options();
         // The latest-offset source exposes the same configuration used by the initial snapshot path.
-        options.set(MySqlCdcSourceOptions.STARTUP_MODE, "latest-offset");
+        options.set(MySqlSourceOptions.SCAN_STARTUP_MODE, "latest-offset");
         var source = assertInstanceOf(
                 MySqlSource.class,
                 new MySqlCdcSourceFactory()
                         .createSource(new TableSourceFactoryContext(options.toReadonlyConfig(), TABLE, SCHEMA)));
-        MySqlCdcSourceConfig config = source.config();
+        MySqlSourceConfig config = source.config();
         assertEquals(8123, config.serverId());
         assertEquals("replication_8123", config.topicPrefix());
         assertEquals(3307, config.port());
@@ -51,12 +51,12 @@ class MySqlCdcFactoryCreationTest {
                         "connectionTimeZone", "Europe/Berlin",
                         "sslMode", "DISABLED",
                         "allowPublicKeyRetrieval", "true"));
-        options.set(MySqlCdcSourceOptions.STARTUP_MODE, "latest-offset");
+        options.set(MySqlSourceOptions.SCAN_STARTUP_MODE, "latest-offset");
         var source = assertInstanceOf(
                 MySqlSource.class,
                 new MySqlCdcSourceFactory()
                         .createSource(new TableSourceFactoryContext(options.toReadonlyConfig(), TABLE, SCHEMA)));
-        MySqlCdcSourceConfig config = source.config();
+        MySqlSourceConfig config = source.config();
         assertEquals("Asia/Shanghai", config.connectionProperties().get("connectionTimeZone"));
         assertEquals("REQUIRED", config.connectionProperties().get("sslMode"));
         assertEquals("12000", config.connectionProperties().get("socketTimeout"));
@@ -72,9 +72,9 @@ class MySqlCdcFactoryCreationTest {
     @Test
     void rejectsMissingReplicationParametersAndSshConnections() {
         Configuration options = options();
-        options.removeConfig(MySqlCdcSourceOptions.SERVER_ID);
+        options.removeConfig(MySqlSourceOptions.SERVER_ID);
         assertThrows(IllegalArgumentException.class, () -> new MySqlCdcSourceFactory().createSource(new TableSourceFactoryContext(options.toReadonlyConfig(), TABLE, SCHEMA)));
-        options.set(MySqlCdcSourceOptions.SERVER_ID, 8123).set(JdbcConnectionOptions.SSH_ENABLED, true);
+        options.set(MySqlSourceOptions.SERVER_ID, "8123").set(JdbcConnectionOptions.SSH_ENABLED, true);
         assertThrows(UnsupportedOperationException.class, () -> new MySqlCdcSourceFactory().createSource(new TableSourceFactoryContext(options.toReadonlyConfig(), TABLE, SCHEMA)));
     }
 
@@ -85,7 +85,7 @@ class MySqlCdcFactoryCreationTest {
         var second = new TableSourceFactoryContext(options().toReadonlyConfig(), new TableId("app", null, "items"), SCHEMA, metrics);
         var factory = new MySqlCdcSourceFactory();
         assertInstanceOf(MySqlSource.class, factory.createSource(List.of(first, second)));
-        var latest = options().set(MySqlCdcSourceOptions.STARTUP_MODE, "latest-offset").toReadonlyConfig();
+        var latest = options().set(MySqlSourceOptions.SCAN_STARTUP_MODE, "latest-offset").toReadonlyConfig();
         var binlog = assertInstanceOf(
                 MySqlSource.class,
                 factory.createSource(List.of(
@@ -94,7 +94,7 @@ class MySqlCdcFactoryCreationTest {
         assertEquals(StartupMode.LATEST_OFFSET, binlog.startupMode());
         assertEquals(2, binlog.config().schemas().size());
         assertTrue(binlog.config().schemas().containsKey(second.table()));
-        var changed = new TableSourceFactoryContext(options().set(MySqlCdcSourceOptions.SERVER_ID, 1234).toReadonlyConfig(), second.table(), SCHEMA, metrics);
+        var changed = new TableSourceFactoryContext(options().set(MySqlSourceOptions.SERVER_ID, "1234").toReadonlyConfig(), second.table(), SCHEMA, metrics);
         assertThrows(IllegalArgumentException.class, () -> factory.createSource(List.of(first, changed)));
         assertThrows(IllegalArgumentException.class, () -> factory.createSource(List.of(first, first)));
         assertThrows(IllegalArgumentException.class, () -> factory.validateSchema(new TableSchema(List.of(new Column("id", LogicalTypes.STRING.copy(false))), List.of("id"))));
@@ -108,7 +108,7 @@ class MySqlCdcFactoryCreationTest {
         var initial = factory.createSource(new TableSourceFactoryContext(options().toReadonlyConfig(), TABLE, SCHEMA));
         assertEquals(StartupMode.INITIAL, assertInstanceOf(MySqlSource.class, initial).startupMode());
 
-        var explicitInitial = options().set(MySqlCdcSourceOptions.STARTUP_MODE, "initial");
+        var explicitInitial = options().set(MySqlSourceOptions.SCAN_STARTUP_MODE, "initial");
         assertEquals(
                 StartupMode.INITIAL,
                 assertInstanceOf(
@@ -120,7 +120,7 @@ class MySqlCdcFactoryCreationTest {
         // A nonnumeric primary key can identify Binlog changes without serving as a snapshot Chunk Key.
         var textKey = new TableSchema(
                 List.of(new Column("code", LogicalTypes.varchar(64).copy(false))), List.of("code"));
-        var latest = options().set(MySqlCdcSourceOptions.STARTUP_MODE, "latest-offset");
+        var latest = options().set(MySqlSourceOptions.SCAN_STARTUP_MODE, "latest-offset");
         var binlog = factory.createSource(new TableSourceFactoryContext(latest.toReadonlyConfig(), TABLE, textKey));
         assertEquals(StartupMode.LATEST_OFFSET, assertInstanceOf(MySqlSource.class, binlog).startupMode());
     }
@@ -129,25 +129,25 @@ class MySqlCdcFactoryCreationTest {
     void latestStartupRejectsUnsupportedModesAndSnapshotOnlySettings() {
         var factory = new MySqlCdcSourceFactory();
         for (String mode : List.of("earliest-offset", "specific-offset", "timestamp", "snapshot")) {
-            var invalid = options().set(MySqlCdcSourceOptions.STARTUP_MODE, mode);
+            var invalid = options().set(MySqlSourceOptions.SCAN_STARTUP_MODE, mode);
             assertThrows(
                     UnsupportedOperationException.class,
                     () -> factory.createSource(
                             new TableSourceFactoryContext(invalid.toReadonlyConfig(), TABLE, SCHEMA)));
         }
-        var unknown = options().set(MySqlCdcSourceOptions.STARTUP_MODE, "unknown");
+        var unknown = options().set(MySqlSourceOptions.SCAN_STARTUP_MODE, "unknown");
         assertThrows(
                 IllegalArgumentException.class,
                 () -> factory.createSource(new TableSourceFactoryContext(unknown.toReadonlyConfig(), TABLE, SCHEMA)));
 
-        var latest = options().set(MySqlCdcSourceOptions.STARTUP_MODE, "latest-offset");
-        var withChunk = latest.set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "id");
+        var latest = options().set(MySqlSourceOptions.SCAN_STARTUP_MODE, "latest-offset");
+        var withChunk = latest.set(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN, "id");
         assertThrows(
                 IllegalArgumentException.class,
                 () -> factory.createSource(new TableSourceFactoryContext(withChunk.toReadonlyConfig(), TABLE, SCHEMA)));
 
         var keyless = new TableSchema(SCHEMA.columns(), List.of());
-        var latestWithoutChunk = options().set(MySqlCdcSourceOptions.STARTUP_MODE, "latest-offset");
+        var latestWithoutChunk = options().set(MySqlSourceOptions.SCAN_STARTUP_MODE, "latest-offset");
         assertThrows(
                 IllegalArgumentException.class,
                 () -> factory.createSource(
@@ -160,7 +160,7 @@ class MySqlCdcFactoryCreationTest {
         var metrics = new io.yak.ops.connector.base.metrics.TableMetrics();
         var initial = new TableSourceFactoryContext(options().toReadonlyConfig(), TABLE, SCHEMA, metrics);
         var latest = new TableSourceFactoryContext(
-                options().set(MySqlCdcSourceOptions.STARTUP_MODE, "latest-offset").toReadonlyConfig(),
+                options().set(MySqlSourceOptions.SCAN_STARTUP_MODE, "latest-offset").toReadonlyConfig(),
                 new TableId("app", null, "items"),
                 SCHEMA,
                 metrics);
@@ -170,6 +170,6 @@ class MySqlCdcFactoryCreationTest {
     private static Configuration options() {
         return new Configuration().set(JdbcConnectionOptions.URL, "jdbc:mysql://localhost:3307/app")
                 .set(JdbcConnectionOptions.USERNAME, "user").set(JdbcConnectionOptions.PASSWORD, "secret")
-                .set(MySqlCdcSourceOptions.SERVER_ID, 8123).set(MySqlCdcSourceOptions.TOPIC_PREFIX, "replication_8123");
+                .set(MySqlSourceOptions.SERVER_ID, "8123").set(MySqlSourceOptions.TOPIC_PREFIX, "replication_8123");
     }
 }

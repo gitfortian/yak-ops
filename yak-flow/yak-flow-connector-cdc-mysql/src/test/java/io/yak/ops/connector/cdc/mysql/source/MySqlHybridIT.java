@@ -11,7 +11,7 @@ import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -236,10 +236,10 @@ class MySqlHybridIT {
             var db=DATABASE.metadata();
             Configuration options = new Configuration().set(JdbcConnectionOptions.URL, db.url())
                     .set(JdbcConnectionOptions.USERNAME, db.username()).set(JdbcConnectionOptions.PASSWORD, db.password())
-                    .set(MySqlCdcSourceOptions.SERVER_ID, 7001).set(MySqlCdcSourceOptions.TOPIC_PREFIX, prefix)
-                    .set(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE, chunkSize);
+                    .set(MySqlSourceOptions.SERVER_ID, "7001").set(MySqlSourceOptions.TOPIC_PREFIX, prefix)
+                    .set(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, chunkSize);
             if (keyless) {
-                options.set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "bucket");
+                options.set(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN, "bucket");
             }
             List<TableSourceFactoryContext> contexts = new ArrayList<>();
             for (int i=0;i<tableCount;i++) {

@@ -2,7 +2,7 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogEngine;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
@@ -21,7 +21,7 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
     private static final int MAX_ROWS = 100_000;
     private static final long MAX_PAYLOAD_BYTES = 4L * 1024 * 1024;
     private static final long BINLOG_TIMEOUT_NANOS = Duration.ofSeconds(60).toNanos();
-    private final MySqlCdcSourceConfig config;
+    private final MySqlSourceConfig config;
     private final MySqlSnapshotSplitReader snapshots;
     private final MySqlBinlogEngine binlog;
     private final Callable<Void> afterSnapshot;
@@ -32,18 +32,18 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
     private boolean started;
     private Map<String, Object> partition;
 
-    public MySqlSnapshotBackfillReader(MySqlCdcSourceConfig config, int reader) {
+    public MySqlSnapshotBackfillReader(MySqlSourceConfig config, int reader) {
         this(config, reader, () -> null);
     }
 
     /** A package-local phase callback lets database tests place commits exactly inside the scan window. */
-    MySqlSnapshotBackfillReader(MySqlCdcSourceConfig config, int reader, Callable<Void> afterSnapshot) {
+    MySqlSnapshotBackfillReader(MySqlSourceConfig config, int reader, Callable<Void> afterSnapshot) {
         this(config, reader, afterSnapshot, () -> null, () -> null);
     }
 
     /** Executes after Low but before the consistent read view is established. */
     MySqlSnapshotBackfillReader(
-            MySqlCdcSourceConfig config,
+            MySqlSourceConfig config,
             int reader,
             Callable<Void> afterSnapshot,
             Callable<Void> afterLowWatermark,
@@ -58,7 +58,7 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
 
     /** Preserves the callback after the view is anchored for existing integration scenarios. */
     MySqlSnapshotBackfillReader(
-            MySqlCdcSourceConfig config, int reader, Callable<Void> afterSnapshot, Callable<Void> afterLow) {
+            MySqlSourceConfig config, int reader, Callable<Void> afterSnapshot, Callable<Void> afterLow) {
         this(config, reader, afterSnapshot, () -> null, afterLow);
     }
 
