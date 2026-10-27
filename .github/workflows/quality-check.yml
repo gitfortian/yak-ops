@@ -94,6 +94,7 @@ jobs:
         env:
           CI_MODULES: ${{ needs.scope.outputs.modules }}
         run: |
+          set -o pipefail
           test -n "${CI_MODULES}"
           bash mvnw -B -ntp -pl "${CI_MODULES}" -am verify 2>&1 | tee "${RUNNER_TEMP}/backend-quality-maven.log"
       - name: Classify backend failure
