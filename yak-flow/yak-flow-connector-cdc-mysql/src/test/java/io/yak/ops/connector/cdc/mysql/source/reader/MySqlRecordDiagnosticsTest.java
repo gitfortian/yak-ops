@@ -2,6 +2,8 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -34,12 +36,20 @@ class MySqlRecordDiagnosticsTest {
     @Test
     void snapshotBatchDiagnosticsRedactRowContents() {
         MySqlFetchedRecord record =
-                MySqlFetchedRecord.snapshotRows(List.of(tableRecord()), 1);
+                MySqlFetchedRecord.prepared(
+                        new MySqlSnapshotSplit("chunk", "source",
+                                tableRecord().tableId(), null, null, null)
+                                .withOutput(new MySqlSnapshotOutput(offset(100), offset(200),
+                                        List.of(tableRecord()))));
         String diagnostic = record.toString();
 
         assertTrue(diagnostic.contains("rowCount=1"));
         assertFalse(diagnostic.contains("secret-order-data"));
         assertFalse(diagnostic.contains("secret-order-data"));
+    }
+
+    private static DebeziumOffset offset(long pos) {
+        return new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.1", "pos", pos));
     }
 
     private static TableRecord tableRecord() {
