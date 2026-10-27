@@ -6,6 +6,7 @@ import { countLabel, getOverview } from "@/service/data-map/catalog";
 import { dataMapFailureMessage } from "@/service/data-map/request";
 
 import AssetTable from "../shared/asset-table";
+import DataMapEmptyState from "../shared/empty-state";
 import { dataMapKeys } from "../shared/keys";
 import { DATA_MAP_BASE } from "../shared/labels";
 import { useDataMapScope } from "../shared/scope";
@@ -30,6 +31,11 @@ export default function OverviewPage() {
     queryFn: ({ signal }) => getOverview(signal),
     enabled: ready,
   });
+
+  const assetCount = overview.data?.assetCount ?? 0;
+  const hotTables = overview.data?.hotTables ?? [];
+  /** Zero hot assets drops the grid entirely, so the empty state is not painted under a header. */
+  const hotTablesEmpty = overview.isSuccess && hotTables.length === 0;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -65,26 +71,35 @@ export default function OverviewPage() {
           <h2 className="mb-3 text-[13px] font-medium text-[var(--yak-components-panel-text)]">
             热门资产
           </h2>
-          <AssetTable
-            records={overview.data?.hotTables ?? []}
-            loading={overview.isPending}
-            emptyText={
-              overview.isSuccess && (overview.data?.assetCount ?? 0) === 0 ? (
-                <div className="flex flex-col items-center gap-3">
-                  <span>尚未采集任何资产</span>
+          {hotTablesEmpty ? (
+            assetCount === 0 ? (
+              <DataMapEmptyState
+                title="还没有采集任何资产"
+                description="发起一次采集，把数据源中的表和字段同步到资产目录，这里会显示访问最多的表。"
+                action={
                   <Button
                     size="small"
                     variant="primary"
                     onClick={() => navigate(`${DATA_MAP_BASE}/crawls?create=1`)}
                   >
-                    提交采集
+                    发起采集
                   </Button>
-                </div>
-              ) : (
-                "暂无访问记录"
-              )
-            }
-          />
+                }
+              />
+            ) : (
+              <DataMapEmptyState
+                title="暂无访问记录"
+                description="打开任意资产详情后，访问次数最多的表会出现在这里。"
+                action={
+                  <Button size="small" onClick={() => navigate(`${DATA_MAP_BASE}/catalog`)}>
+                    去资产目录
+                  </Button>
+                }
+              />
+            )
+          ) : (
+            <AssetTable records={hotTables} loading={overview.isPending} />
+          )}
         </section>
       </div>
     </div>

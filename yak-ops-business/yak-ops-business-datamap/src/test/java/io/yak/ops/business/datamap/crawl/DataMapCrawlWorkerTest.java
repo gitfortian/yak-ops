@@ -1,5 +1,6 @@
 package io.yak.ops.business.datamap.crawl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -21,11 +22,13 @@ import io.yak.ops.dao.mapper.datamap.DataMapColumnMapper;
 import io.yak.ops.dao.mapper.datamap.DataMapCrawlMapper;
 import io.yak.ops.dao.mapper.datamap.DataMapTableChangeMapper;
 import io.yak.ops.dao.mapper.datamap.DataMapTableMapper;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -108,6 +111,7 @@ class DataMapCrawlWorkerTest {
         verify(crawlMapper).insertFailure(any());
         verify(crawlMapper).finishSucceeded(eq("c1"), eq(1), eq(0), eq(0), eq(0), eq(0), eq(1), any());
         verify(tableMapper, never()).markMissing(any(), any(), any(), any(), any(), any());
+        verify(tableMapper, never()).markLegacyMissing(any(), any(), any(), any());
     }
 
     @Test
@@ -126,6 +130,26 @@ class DataMapCrawlWorkerTest {
         order.verify(changeMapper).insert(any());
         order.verify(columnMapper).deleteByTable("ws", "t1");
         order.verify(columnMapper).insert(any());
+    }
+
+    @Test
+    void theMissingBoundaryEqualsTheTimestampWrittenToEveryObservedAsset() {
+        // last_seen_time is DATETIME(3). If the run start kept its nanoseconds the stored value
+        // would round down while the boundary did not, and every asset observed by this run would
+        // satisfy last_seen_time < startedTime: the run would report additions and removals at once.
+        ArgumentCaptor<LocalDateTime> claimed = ArgumentCaptor.forClass(LocalDateTime.class);
+        ArgumentCaptor<LocalDateTime> boundary = ArgumentCaptor.forClass(LocalDateTime.class);
+        when(crawlMapper.claim(eq("c1"), claimed.capture())).thenReturn(1);
+        when(catalogService.listAllTables("ds", "demo", null)).thenReturn(List.of(catalogTable("orders")));
+        when(catalogService.listColumns(eq("ds"), any()))
+                .thenReturn(List.of(catalogColumn("id", "INT", null)));
+        when(tableMapper.markMissing(eq("ws"), eq("ds"), eq("demo"), eq(""), boundary.capture(), any()))
+                .thenReturn(1);
+
+        worker.run("c1");
+
+        assertEquals(0, claimed.getValue().getNano() % 1_000_000);
+        assertEquals(claimed.getValue(), boundary.getValue());
     }
 
     private static DataMapCrawlEntity run() {

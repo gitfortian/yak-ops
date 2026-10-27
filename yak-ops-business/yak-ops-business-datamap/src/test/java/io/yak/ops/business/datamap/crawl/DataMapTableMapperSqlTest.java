@@ -51,6 +51,20 @@ class DataMapTableMapperSqlTest {
         assertFalse(sql.contains("update_by"));
     }
 
+    /**
+     * Adopting a pre-requirement asset rewrites only its catalog slot.
+     *
+     * <p>It is part of the crawler's identity handling, so it must not become a second way to
+     * write a curated or observed column.
+     */
+    @Test
+    void legacyAdoptionRewritesTheCatalogSlotOnly() throws NoSuchMethodException {
+        String sql = sqlOf("adoptScope", String.class, String.class, String.class);
+        assertEquals(Set.of("database_name"), assignedColumns(sql));
+        CURATED.forEach(column -> assertFalse(sql.contains(column), column));
+        OBSERVED.forEach(column -> assertFalse(sql.contains(column), column));
+    }
+
     /** Reads the left-hand sides of {@code SET} so a column mention elsewhere cannot mask a write. */
     private static Set<String> assignedColumns(String sql) {
         String assignment = sql.substring(sql.indexOf(" SET ") + 5, sql.indexOf(" WHERE "));

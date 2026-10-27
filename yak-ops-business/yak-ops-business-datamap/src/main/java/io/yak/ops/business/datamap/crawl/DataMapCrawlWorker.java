@@ -22,6 +22,7 @@ import io.yak.ops.dao.mapper.datamap.DataMapCrawlMapper;
 import io.yak.ops.dao.mapper.datamap.DataMapTableChangeMapper;
 import io.yak.ops.dao.mapper.datamap.DataMapTableMapper;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,7 +92,7 @@ public class DataMapCrawlWorker {
         }
         WorkspaceContext.bind(run.getWorkspaceId());
         try {
-            LocalDateTime started = DateUtils.now();
+            LocalDateTime started = runClock();
             if (crawlMapper.claim(crawlId, started) == 0) return;
             run.setStartedTime(started);
             execute(run);
@@ -173,6 +174,7 @@ public class DataMapCrawlWorker {
                     scope.databaseName(),
                     scope.schemaName(),
                     table.getName());
+            if (existing == null) existing = adoptLegacyScope(run, scope, table.getName());
             LocalDateTime now = DateUtils.now();
             String tableId;
             boolean inserted = existing == null;
@@ -221,6 +223,28 @@ public class DataMapCrawlWorker {
         return Boolean.TRUE.equals(created);
     }
 
+    /**
+     * Re-keys an asset that was stored before a database became mandatory.
+     *
+     * <p>Those rows carry an empty catalog slot because the run enumerated every visible catalog.
+     * Re-keying instead of inserting keeps one row per physical table and preserves the curated
+     * description, owner and domain that were attached to the legacy row.
+     *
+     * @param run claimed run
+     * @param scope namespace resolved for this run
+     * @param tableName unqualified table name
+     * @return the adopted asset, or null when the run has no database or no legacy row exists
+     */
+    private DataMapTableEntity adoptLegacyScope(DataMapCrawlEntity run, DataMapScope scope, String tableName) {
+        if (scope.databaseName().isEmpty()) return null;
+        DataMapTableEntity legacy = tableMapper.findLegacyIdentity(
+                run.getWorkspaceId(), run.getDatasourceId(), scope.schemaName(), tableName);
+        if (legacy == null) return null;
+        if (tableMapper.adoptScope(run.getWorkspaceId(), legacy.getId(), scope.databaseName()) != 1) return null;
+        legacy.setDatabaseName(scope.databaseName());
+        return legacy;
+    }
+
     private void record(DataMapTableEntity table, DataMapTableChangeType type, String detail, LocalDateTime now) {
         DataMapTableChangeEntity change = new DataMapTableChangeEntity();
         change.setId(IdUtils.nextId());
@@ -232,14 +256,29 @@ public class DataMapCrawlWorker {
         changeMapper.insert(change);
     }
 
+    /**
+     * Marks everything this run did not observe as absent, in one transaction.
+     *
+     * <p>Two sets qualify: assets of the crawled namespace whose last sighting predates the run,
+     * and assets stored before a database was required. The second set is only reachable from a
+     * scoped run until it is re-keyed, so a scoped run that finished cleanly retires whatever is
+     * left of it — otherwise those rows would stay ACTIVE with no crawl able to refresh them.
+     */
     private int markMissing(DataMapCrawlEntity run, DataMapScope scope) {
-        Integer removed = transactions.execute(status -> tableMapper.markMissing(
-                run.getWorkspaceId(),
-                run.getDatasourceId(),
-                scope.databaseName(),
-                scope.schemaName(),
-                run.getStartedTime(),
-                DateUtils.now()));
+        Integer removed = transactions.execute(status -> {
+            LocalDateTime now = DateUtils.now();
+            int scoped = tableMapper.markMissing(
+                    run.getWorkspaceId(),
+                    run.getDatasourceId(),
+                    scope.databaseName(),
+                    scope.schemaName(),
+                    run.getStartedTime(),
+                    now);
+            if (scope.databaseName().isEmpty()) return scoped;
+            int legacy = tableMapper.markLegacyMissing(
+                    run.getWorkspaceId(), run.getDatasourceId(), run.getStartedTime(), now);
+            return scoped + legacy;
+        });
         return removed == null ? 0 : removed;
     }
 
@@ -314,5 +353,21 @@ public class DataMapCrawlWorker {
 
     private static String emptyToNull(String value) {
         return value == null || value.isEmpty() ? null : value;
+    }
+
+    /**
+     * Returns the run clock truncated to the precision of the {@code DATETIME(3)} columns.
+     *
+     * <p>The run start is written verbatim to {@code last_seen_time} and later used as the
+     * {@code markMissing} boundary. {@link DateUtils#now()} carries nanoseconds, which MySQL rounds
+     * when storing into {@code DATETIME(3)} but keeps when comparing against the column value, so
+     * {@code last_seen_time < startedTime} would hold for assets observed by this very run and mark
+     * them missing on a successful crawl. Truncating both sides to milliseconds keeps the write and
+     * the comparison bit-identical.
+     *
+     * @return current time with sub-millisecond precision removed
+     */
+    private static LocalDateTime runClock() {
+        return DateUtils.now().truncatedTo(ChronoUnit.MILLIS);
     }
 }

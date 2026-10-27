@@ -18,12 +18,18 @@ const isActive = (status: string | undefined) => status === "PENDING" || status 
 
 const ACTIVE_POLL_MS = 3000;
 
-const Counter = ({ label, value }: { label: string; value: number | undefined }) => (
-  <div className="flex flex-col gap-0.5">
-    <span className="text-xs text-[var(--yak-components-muted-text)]">{label}</span>
-    <span className="text-sm font-medium text-[var(--yak-components-panel-text)]">
+/**
+ * Renders one metric cell of the result grid.
+ *
+ * <p>Label and value share a row, right-aligned and tabular, so six numbers read as one block
+ * instead of six stacked pairs.
+ */
+const Metric = ({ label, value }: { label: string; value: number | undefined }) => (
+  <div className="flex items-baseline justify-between gap-2 bg-white px-3 py-2">
+    <dt className="text-xs text-[var(--yak-components-muted-text)]">{label}</dt>
+    <dd className="text-sm font-medium tabular-nums text-[var(--yak-components-panel-text)]">
       {value ?? "-"}
-    </span>
+    </dd>
   </div>
 );
 
@@ -64,14 +70,14 @@ export default function CrawlDetailDialog({ crawlId, onClose }: Props) {
 
         {crawl && (
           <>
-            <div className="mt-4 grid grid-cols-3 gap-3">
-              <Counter label="表" value={crawl.tableCount} />
-              <Counter label="字段" value={crawl.columnCount} />
-              <Counter label="失败表" value={crawl.failedCount} />
-              <Counter label="新增" value={crawl.addedCount} />
-              <Counter label="更新" value={crawl.updatedCount} />
-              <Counter label="标记缺失" value={crawl.removedCount} />
-            </div>
+            <dl className="mt-4 grid grid-cols-3 gap-px overflow-hidden rounded border border-[var(--yak-components-panel-border)] bg-[var(--yak-components-panel-border)]">
+              <Metric label="表" value={crawl.tableCount} />
+              <Metric label="字段" value={crawl.columnCount} />
+              <Metric label="失败表" value={crawl.failedCount} />
+              <Metric label="新增" value={crawl.addedCount} />
+              <Metric label="更新" value={crawl.updatedCount} />
+              <Metric label="标记缺失" value={crawl.removedCount} />
+            </dl>
 
             <dl className="mt-4 space-y-1 text-xs text-[var(--yak-components-muted-text)]">
               <div className="flex gap-2">

@@ -15,7 +15,13 @@ public class DataMapCrawlSubmitDTO {
     @Size(max = 64)
     private String datasourceId;
 
-    /** Catalog slot to crawl; null or blank uses the datasource binding. */
+    /**
+     * Catalog slot to crawl.
+     *
+     * <p>Required: a run that inherits the datasource binding would enumerate every catalog the
+     * account can see and collapse distinct namespaces onto the same asset identity.
+     */
+    @NotBlank
     @Size(max = 128)
     private String database;
 

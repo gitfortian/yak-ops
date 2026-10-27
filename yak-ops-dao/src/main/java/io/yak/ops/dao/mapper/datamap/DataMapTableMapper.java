@@ -43,6 +43,30 @@ public interface DataMapTableMapper {
     @Select(DataMapTableSqlProvider.PROJECTION + " WHERE t.workspace_id=#{workspaceId} AND t.id=#{id}")
     DataMapTableEntity findById(@Param("workspaceId") String workspaceId, @Param("id") String id);
 
+    /**
+     * Finds an asset stored before a database was required, i.e. one whose catalog slot is empty.
+     *
+     * <p>Runs submitted without a database wrote {@code database_name=''} while enumerating every
+     * visible catalog. Once a database is mandatory the same physical table would be inserted a
+     * second time under its real database, so the crawler adopts the legacy row instead.
+     */
+    @Select(DataMapTableSqlProvider.PROJECTION + " WHERE t.workspace_id=#{workspaceId} "
+            + "AND t.datasource_id=#{datasourceId} AND t.database_name='' "
+            + "AND t.schema_name=#{schemaName} AND t.name=#{name}")
+    DataMapTableEntity findLegacyIdentity(
+            @Param("workspaceId") String workspaceId,
+            @Param("datasourceId") String datasourceId,
+            @Param("schemaName") String schemaName,
+            @Param("name") String name);
+
+    /** Rewrites the catalog slot of a legacy asset so its identity matches the observed namespace. */
+    @Update("UPDATE yak_ops_data_map_table SET database_name=#{databaseName} "
+            + "WHERE workspace_id=#{workspaceId} AND id=#{id}")
+    int adoptScope(
+            @Param("workspaceId") String workspaceId,
+            @Param("id") String id,
+            @Param("databaseName") String databaseName);
+
     @Select("<script>" + DataMapTableSqlProvider.PROJECTION + " WHERE t.workspace_id=#{workspaceId} "
             + "AND t.id IN <foreach collection=\"ids\" item=\"id\" open=\"(\" separator=\",\" close=\")\">#{id}"
             + "</foreach></script>")
@@ -81,6 +105,23 @@ public interface DataMapTableMapper {
             @Param("datasourceId") String datasourceId,
             @Param("databaseName") String databaseName,
             @Param("schemaName") String schemaName,
+            @Param("startedTime") LocalDateTime startedTime,
+            @Param("now") LocalDateTime now);
+
+    /**
+     * Marks assets stored before a database was required as absent, after a scoped run succeeds.
+     *
+     * <p>Those rows carry an empty catalog slot, so a scoped run can never address them again. The
+     * ones this run did observe were re-keyed into the run's database, which refreshed their
+     * {@code last_seen_time}; anything still empty and older is no longer reachable from any
+     * database-scoped crawl and would otherwise stay ACTIVE forever.
+     */
+    @Update("UPDATE yak_ops_data_map_table SET status='MISSING',update_time=#{now} "
+            + "WHERE workspace_id=#{workspaceId} AND datasource_id=#{datasourceId} "
+            + "AND database_name='' AND status='ACTIVE' AND last_seen_time<#{startedTime}")
+    int markLegacyMissing(
+            @Param("workspaceId") String workspaceId,
+            @Param("datasourceId") String datasourceId,
             @Param("startedTime") LocalDateTime startedTime,
             @Param("now") LocalDateTime now);
 

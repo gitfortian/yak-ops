@@ -137,6 +137,7 @@ export interface CrawlDetail {
 
 export interface CrawlSubmission {
   datasourceId: string;
-  database?: string;
+  /** Required: a run always targets exactly one database. */
+  database: string;
   schema?: string;
 }
