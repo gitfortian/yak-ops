@@ -66,6 +66,14 @@ bash scripts/tests/run.sh full
 python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
 ```
 
+### Test quality
+
+Cover the smallest stable behavior contract that can catch a real regression. Choose a deterministic unit test for pure logic or serialized state; choose a real database integration test for JDBC/CDC semantics; reserve process E2E for submission, durable recovery and cross-component guarantees. Do not mirror each production class with its own test by default or reproduce the same fixtures across every database. Shared behavior belongs in reusable test bases; vendor-specific behavior stays in the owning tests.
+
+Before adding tests, identify the distinct failure they would detect and check existing unit, IT and E2E scenarios. Prefer outcome assertions over private-field reflection and Mockito invocation checks, except where the interaction is an observable requirement. For failed CDC, checkpoint or XA scenarios, validate the production behavior rather than weakening assertions or simply deleting tests. For test removal, keep an explicit replacement/coverage mapping in the PR.
+
+The CDC report audit discovers `@Test` method names (including inherited methods) from Java sources and matches them to JUnit XML results. The suite manifest keeps class ownership and minimum method counts. PostgreSQL/Oracle schema and changelog scenarios are assigned by their existing method-level `@Tag` annotations. Missing, skipped, untagged or incompletely reported selected scenarios fail; method renames do not require a second handwritten name inventory.
+
 Each command is one Maven invocation. Failsafe discovers `*IT` classes by JUnit tags; ordinary tests use `*Test`. Register every concrete IT in `scripts/tests/backend_tests.py`. Selected classes must produce complete XML reports with no failed, skipped or missing cases. IDE execution of one IT class remains available; Backend E2E requires a freshly packaged Boot JAR.
 
 Common Source/Sink behavior belongs in reusable Connector test bases, database-specific types and DDL in their subclasses. Connector and Runtime tests do not depend on HTTP or Boot. Cross-database cases retain the supported MySQL/PostgreSQL/Oracle routes without multiplying every common scenario by every pair. Transaction and concurrency checks belong in business database tests; only API wiring and process lifecycle require Backend E2E.

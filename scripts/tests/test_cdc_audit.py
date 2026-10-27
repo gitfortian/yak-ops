@@ -17,13 +17,18 @@ class CdcAuditTest(unittest.TestCase):
         self.sources.mkdir(parents=True)
         self.reports = self.module / "target/failsafe-reports"
         self.reports.mkdir(parents=True)
-        self.inventory = {"cdc": {"ExampleIT": ("first", "second")}}
+        self.inventory = {"cdc": {"ExampleIT": 2}}
         self.write_source("ExampleIT", ("first", "second"))
         self.write_report(("first", "second"))
 
-    def write_source(self, classname, methods, parent=None):
+    def write_source(self, classname, methods, parent=None, tags=None):
         extension = f" extends {parent}" if parent else ""
-        body = "\n".join(f"@Test\n    void {method}() {{}}" for method in methods)
+        tags = tags or {}
+        body = "\n".join(
+            '@Test\n    ' + (f'@Tag("{tags[method]}")\n    ' if method in tags else '')
+            + f"void {method}() {{}}"
+            for method in methods
+        )
         (self.sources / f"{classname}.java").write_text(
             f"class {classname}{extension} {{\n{body}\n}}\n", encoding="utf-8"
         )
@@ -65,9 +70,22 @@ class CdcAuditTest(unittest.TestCase):
         (self.reports / "TEST-ExampleIT.xml").unlink()
         self.assertEqual("FAIL", self.collect()["status"])
 
-    def test_java_inventory_catches_accidental_test_deletion(self):
+    def test_minimum_count_catches_accidental_test_deletion(self):
         self.write_source("ExampleIT", ("first",))
-        self.assertTrue(any("Java @Test inventory mismatch" in error for error in self.collect()["errors"]))
+        result = self.collect()
+        self.assertEqual("FAIL", result["status"])
+        self.assertTrue(any("expected at least 2 Java @Test methods" in error for error in result["errors"]))
+
+    def test_renamed_method_needs_no_second_name_inventory(self):
+        self.write_source("ExampleIT", ("renamed", "second"))
+        self.write_report(("renamed", "second"))
+        self.assertEqual("PASS", self.collect()["status"])
+
+    def test_new_test_must_appear_in_execution_report(self):
+        self.write_source("ExampleIT", ("first", "second", "added"))
+        self.assertTrue(any("missing=['added']" in error for error in self.collect()["errors"]))
+        self.write_report(("first", "second", "added"))
+        self.assertEqual("PASS", self.collect()["status"])
 
     def test_inherited_test_methods_are_checked(self):
         self.write_source("ExampleIT", (), "SharedITBase")
@@ -76,11 +94,13 @@ class CdcAuditTest(unittest.TestCase):
         self.write_source("SharedITBase", ("first",))
         self.assertEqual("FAIL", self.collect()["status"])
 
-    def test_split_suites_audit_only_selected_method_but_require_full_source_inventory(self):
+    def test_split_suites_audit_only_tagged_methods(self):
         self.inventory = {
-            "cdc-pipeline-postgres": {"ExampleIT": ("first",)},
-            "cdc-acceptance-postgres": {"ExampleIT": ("second",)},
+            "cdc-pipeline-postgres": {"ExampleIT": 1},
+            "cdc-acceptance-postgres": {"ExampleIT": 1},
         }
+        tags = {"first": "cdc-schema", "second": "cdc-changelog"}
+        self.write_source("ExampleIT", ("first", "second"), tags=tags)
         self.write_report(("first",))
         fast = audit.collect(self.root, "cdc-pipeline-postgres", self.inventory)
         self.assertEqual("PASS", fast["status"])
@@ -89,19 +109,34 @@ class CdcAuditTest(unittest.TestCase):
         full = audit.collect(self.root, "cdc-acceptance-postgres", self.inventory)
         self.assertEqual("PASS", full["status"])
         self.assertEqual((1, 1), (full["observedMethods"], full["expectedMethods"]))
-        # A missing test in either half remains a source inventory failure.
-        self.write_source("ExampleIT", ("first",))
-        self.assertEqual("FAIL", audit.collect(self.root, "cdc-pipeline-postgres", self.inventory)["status"])
+        self.write_source("ExampleIT", ("first",), tags=tags)
+        self.assertEqual("FAIL", audit.collect(self.root, "cdc-acceptance-postgres", self.inventory)["status"])
 
     def test_full_inventory_combines_split_suite_methods(self):
         self.inventory = {
-            "cdc-pipeline-postgres": {"ExampleIT": ("first",)},
-            "cdc-acceptance-postgres": {"ExampleIT": ("second",)},
+            "cdc-pipeline-postgres": {"ExampleIT": 1},
+            "cdc-acceptance-postgres": {"ExampleIT": 1},
         }
+        self.write_source("ExampleIT", ("first", "second"), tags={
+            "first": "cdc-schema", "second": "cdc-changelog"
+        })
         self.write_report(("first", "second"))
         report = audit.collect(self.root, "full", self.inventory)
         self.assertEqual("PASS", report["status"])
         self.assertEqual((2, 2), (report["observedMethods"], report["expectedMethods"]))
+
+    def test_untagged_pipeline_method_is_not_silently_excluded(self):
+        self.inventory = {
+            "cdc-pipeline-postgres": {"ExampleIT": 1},
+            "cdc-acceptance-postgres": {"ExampleIT": 1},
+        }
+        self.write_source("ExampleIT", ("first", "second", "untagged"), tags={
+            "first": "cdc-schema", "second": "cdc-changelog"
+        })
+        self.write_report(("first",))
+        result = audit.collect(self.root, "cdc-pipeline-postgres", self.inventory)
+        self.assertEqual("FAIL", result["status"])
+        self.assertTrue(any("without acceptance tags" in e for e in result["errors"]))
 
     def test_duplicate_result_cannot_replace_missing_test(self):
         self.write_report(("first", "first"))
