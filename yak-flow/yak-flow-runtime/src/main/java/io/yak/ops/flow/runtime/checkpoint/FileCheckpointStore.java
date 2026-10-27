@@ -209,6 +209,7 @@ public final class FileCheckpointStore implements AutoCloseable {
                         directory.resolve(FILE_NAME),
                         StandardCopyOption.ATOMIC_MOVE,
                         StandardCopyOption.REPLACE_EXISTING);
+                forceDirectory(directory);
             } catch (AtomicMoveNotSupportedException failure) {
                 // A non-atomic replacement could expose partial state; do not claim durability on unsupported storage.
                 throw new IOException("Checkpoint state directory does not support atomic publication", failure);
