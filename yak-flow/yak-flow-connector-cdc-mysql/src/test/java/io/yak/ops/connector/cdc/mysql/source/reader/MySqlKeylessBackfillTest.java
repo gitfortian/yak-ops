@@ -110,7 +110,7 @@ class MySqlKeylessBackfillTest {
         assertEquals("edited", output.rows().getLast().row().getString(1));
 
         var serializer = new MySqlSplitSerializer();
-        var frozen = MySqlSnapshotSplit.typed("large-group", "fp", RANGE).withOutput(output);
+        var frozen = MySqlSnapshotSplit.typed("large-group", RANGE).withOutput(output);
         assertThrows(java.io.IOException.class, () -> serializer.serialize(frozen));
         var completed = frozen.withOutputPosition(output.rows().size());
         var restored = (MySqlSnapshotSplit) serializer.deserialize(
