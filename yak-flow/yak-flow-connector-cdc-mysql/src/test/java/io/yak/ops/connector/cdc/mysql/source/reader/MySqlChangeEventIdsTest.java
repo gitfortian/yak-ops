@@ -18,7 +18,7 @@ import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.types.Column;
@@ -144,7 +144,7 @@ class MySqlChangeEventIdsTest {
                 first::add, state);
         assertEquals(ChangeEventId.snapshot("stable-definition", "chunk-0", 0), first.getFirst().changeEventId());
 
-        var serializer = new MySqlHybridSplitSerializer();
+        var serializer = new MySqlSplitSerializer();
         var checkpoint = (MySqlSnapshotSplit)
                 serializer.deserialize(serializer.getVersion(), serializer.serialize((io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit) state.checkpoint(null)));
         assertEquals(1, checkpoint.outputPosition());

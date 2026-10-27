@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
@@ -78,7 +78,7 @@ class MySqlKeylessBackfillIT {
                 assertTrue(results.stream().allMatch(r -> r.rowKind() == RowKind.INSERT));
                 assertTrue(results.stream().allMatch(r -> r.row().getLong(0) == 1L));
 
-                var serializer = new MySqlHybridSplitSerializer();
+                var serializer = new MySqlSplitSerializer();
                 var restored = (MySqlSnapshotSplit)
                         serializer.deserialize(serializer.getVersion(), serializer.serialize(prepared));
                 assertEquals(prepared, restored);
@@ -139,7 +139,7 @@ class MySqlKeylessBackfillIT {
                         "large-duplicates", "fp", new ChunkRange(id, "bucket", LogicalTypeRoot.BIGINT, null, null));
                 var prepared = reader.read(raw);
                 assertEquals(16_384, prepared.output().rows().size());
-                var serializer = new MySqlHybridSplitSerializer();
+                var serializer = new MySqlSplitSerializer();
                 byte[] checkpoint = serializer.serialize(prepared);
                 assertTrue(checkpoint.length < 8192, "Repeated physical images must use a counted checkpoint");
                 var restored = (MySqlSnapshotSplit)

@@ -13,7 +13,7 @@ import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.debezium.reader.BinlogSplitReader;
 import io.yak.ops.connector.cdc.mysql.source.utils.RecordUtils;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.table.MySqlCdcSourceFactory;
@@ -101,7 +101,7 @@ class MySqlCdcKeylessBaselineTest {
         var other = new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(8L, "other"));
         var prepared = new MySqlSnapshotSplit("chunk", "fingerprint", TABLE, null, null, null)
                 .withOutput(new MySqlSnapshotOutput(offset(100), offset(200), List.of(duplicate, duplicate, other)));
-        var serializer = new MySqlHybridSplitSerializer();
+        var serializer = new MySqlSplitSerializer();
         var restored = (MySqlSnapshotSplit)
                 serializer.deserialize(serializer.getVersion(), serializer.serialize(prepared));
 

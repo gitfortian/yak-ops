@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.data.GenericRowData;
@@ -80,7 +80,7 @@ class MySqlTypedKeyedBackfillTest {
                         GenericRowData.of(new BigDecimal("9223372036854775808.0"), "new"))));
         var frozen = MySqlSnapshotSplit.typed("typed-decimal", "fingerprint", range)
                 .withOutput(new MySqlSnapshotOutput(offset(100), offset(200), buffer.finish()));
-        var serializer = new MySqlHybridSplitSerializer();
+        var serializer = new MySqlSplitSerializer();
         var restored = (MySqlSnapshotSplit)
                 serializer.deserialize(serializer.getVersion(), serializer.serialize(frozen));
         assertEquals(1, restored.output().rows().size());

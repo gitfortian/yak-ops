@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotRows;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -109,7 +109,7 @@ class MySqlKeylessBackfillTest {
         assertEquals("same", output.rows().getFirst().row().getString(1));
         assertEquals("edited", output.rows().getLast().row().getString(1));
 
-        var serializer = new MySqlHybridSplitSerializer();
+        var serializer = new MySqlSplitSerializer();
         var frozen = MySqlSnapshotSplit.typed("large-group", "fp", RANGE).withOutput(output);
         byte[] bytes = serializer.serialize(frozen);
         assertTrue(bytes.length < 4096, "Same-row multiplicity must not inflate the split checkpoint");
