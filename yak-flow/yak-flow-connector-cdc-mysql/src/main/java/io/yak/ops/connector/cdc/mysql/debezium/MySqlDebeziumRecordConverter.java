@@ -1,4 +1,4 @@
-package io.yak.ops.connector.cdc.mysql.source.reader;
+package io.yak.ops.connector.cdc.mysql.debezium;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.core.data.GenericRowData;

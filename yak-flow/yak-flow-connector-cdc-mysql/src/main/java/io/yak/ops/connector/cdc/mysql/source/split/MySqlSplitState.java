@@ -1,4 +1,4 @@
-package io.yak.ops.connector.cdc.mysql.source.reader;
+package io.yak.ops.connector.cdc.mysql.source.split;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
@@ -50,13 +50,6 @@ public final class MySqlSplitState {
             throw new IllegalStateException("Snapshot event identity requires frozen output");
         }
         return snapshot.splitId();
-    }
-
-    public void emitSnapshotKey(Long key) {
-        if (snapshot == null || key == null) {
-            throw new IllegalStateException("Snapshot progress must contain a key");
-        }
-        snapshot = snapshot.withLastEmittedKey(key);
     }
 
     /** Anchors the Binlog BEFORE any JDBC snapshot split may be assigned. */

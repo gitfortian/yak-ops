@@ -64,7 +64,7 @@
     <logger name="io.yak.ops.connector.jdbc.source.reader.JdbcSourceSplitReader" level="DEBUG"/>
     <logger name="io.yak.ops.connector.jdbc.internal.JdbcOutputFormat" level="DEBUG"/>
     <logger name="io.yak.ops.connector.jdbc.internal.executor.TableSimpleStatementExecutor" level="DEBUG"/>
-    <logger name="io.yak.ops.connector.cdc.mysql.source.reader.MySqlSnapshotSplitReader" level="DEBUG"/>
+    <logger name="io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotSplitReader" level="DEBUG"/>
     <logger name="io.yak.ops.connector.cdc.mysql.source.reader.MySqlHybridSplitReader" level="DEBUG"/>
     <logger name="io.yak.ops.connector.cdc.mysql.source.reader.MySqlCdcSplitReader" level="DEBUG"/>
 

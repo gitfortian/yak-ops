@@ -1,6 +1,9 @@
-package io.yak.ops.connector.cdc.mysql.source.reader;
+package io.yak.ops.connector.cdc.mysql.debezium.reader;
+
+import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogEngine;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.core.data.RowKind;
@@ -23,11 +26,9 @@ import java.util.Set;
  * Filters changes already reflected in the normalized snapshot using the matched chunk's High
  * watermark, independently for the before and after images of an UPDATE.
  *
- * <p>The legacy constructor reads BIGINT primary-key checkpoint metadata without changing its
- * wire format. The typed factory consumes the same versioned FinishedSnapshotSplitInfo
- * checkpoints and compares numeric or DECIMAL Chunk Keys without treating them as row identity.
+ * <p>Only typed snapshot chunk ranges are accepted; a Chunk Key is not necessarily row identity.
  */
-public final class MySqlBinlogSplitFilter {
+public final class BinlogSplitReader {
 
     /** Completed chunk fence, derived from the versioned persisted Split metadata. */
     public record FinishedChunk(String splitId, ChunkRange range, DebeziumOffset highWatermark) {
@@ -46,13 +47,7 @@ public final class MySqlBinlogSplitFilter {
     private final Map<TableId, ChunkColumn> columns = new LinkedHashMap<>();
     private final Map<TableId, DebeziumOffset> maxHighWatermarks = new LinkedHashMap<>();
     private final Set<TableId> pureBinlogPhaseTables = new HashSet<>();
-    private final boolean legacyPrimaryKey;
     private final Set<TableId> schemasWithPrimaryKey = new HashSet<>();
-
-    /** Existing checkpoint-backed path; its BIGINT primary-key admission remains unchanged. */
-    public MySqlBinlogSplitFilter(Map<TableId, TableSchema> schemas, List<FinishedSnapshotSplitInfo> finished) {
-        this(schemas, legacyChunks(schemas, finished), true);
-    }
 
     /**
      * Filters using the explicitly chosen chunk column rather than a source physical primary key.
@@ -60,47 +55,32 @@ public final class MySqlBinlogSplitFilter {
      * <p>Bounded strings remain unsupported because Java string comparison does not implement
      * MySQL's collation. A single unbounded string chunk is valid without comparing strings.
      */
-    public static MySqlBinlogSplitFilter forChunks(Map<TableId, TableSchema> schemas, List<FinishedChunk> finished) {
-        return new MySqlBinlogSplitFilter(schemas, finished, false);
+    public static BinlogSplitReader forChunks(Map<TableId, TableSchema> schemas, List<FinishedChunk> finished) {
+        return new BinlogSplitReader(schemas, finished);
     }
 
-    /**
-     * Creates the checkpoint-backed handoff filter for legacy and typed chunks together.
-     * A mixed multi-table Source must retain every table's completed chunk fences.
-     */
-    public static MySqlBinlogSplitFilter fromFinishedSplits(
+    /** Creates the checkpoint-backed handoff filter for typed chunks across all selected tables. */
+    public static BinlogSplitReader fromFinishedSplits(
             Map<TableId, TableSchema> schemas, List<FinishedSnapshotSplitInfo> finished) {
-        if (finished.stream().noneMatch(info -> info.chunkRange() != null)) {
-            return new MySqlBinlogSplitFilter(schemas, finished);
-        }
+        Objects.requireNonNull(finished, "finished");
         List<FinishedChunk> converted = new ArrayList<>(finished.size());
         for (FinishedSnapshotSplitInfo info : finished) {
             ChunkRange range = info.chunkRange();
             if (range == null) {
-                TableSchema schema = Objects.requireNonNull(schemas.get(info.tableId()), "finished table schema");
-                if (schema.primaryKeys().size() != 1) {
-                    throw new IllegalArgumentException("Legacy completed chunk requires one source primary key");
-                }
-                range = new ChunkRange(
-                        info.tableId(),
-                        schema.primaryKeys().getFirst(),
-                        LogicalTypeRoot.BIGINT,
-                        info.lowerInclusive(),
-                        info.upperExclusive());
+                throw new IllegalArgumentException("Legacy BIGINT snapshot metadata cannot be used for Binlog handoff");
             }
             converted.add(new FinishedChunk(info.splitId(), range, info.highWatermark()));
         }
         return forChunks(schemas, converted);
     }
 
-    private MySqlBinlogSplitFilter(
-            Map<TableId, TableSchema> schemas, List<FinishedChunk> finished, boolean legacyPrimaryKey) {
+    private BinlogSplitReader(
+            Map<TableId, TableSchema> schemas, List<FinishedChunk> finished) {
         Objects.requireNonNull(schemas, "schemas");
         Objects.requireNonNull(finished, "finished");
         if (schemas.isEmpty() || finished.isEmpty()) {
             throw new IllegalArgumentException("Binlog filtering requires completed snapshot metadata");
         }
-        this.legacyPrimaryKey = legacyPrimaryKey;
         for (var entry : schemas.entrySet()) {
             completed.put(entry.getKey(), new ArrayList<>());
             if (!entry.getValue().primaryKeys().isEmpty()) schemasWithPrimaryKey.add(entry.getKey());
@@ -128,12 +108,6 @@ public final class MySqlBinlogSplitFilter {
                     position = i;
                     break;
                 }
-            }
-            if (legacyPrimaryKey
-                    && (schema.primaryKeys().size() != 1
-                            || !schema.primaryKeys().getFirst().equals(range.column())
-                            || range.type() != LogicalTypeRoot.BIGINT)) {
-                throw new IllegalArgumentException("Binlog filtering requires exactly one BIGINT primary key");
             }
             ChunkColumn previous = columns.putIfAbsent(
                     table, new ChunkColumn(range.column(), range.type(), position, schema.columnCount()));
@@ -176,28 +150,10 @@ public final class MySqlBinlogSplitFilter {
         });
     }
 
-    private static List<FinishedChunk> legacyChunks(
-            Map<TableId, TableSchema> schemas, List<FinishedSnapshotSplitInfo> finished) {
-        Objects.requireNonNull(schemas, "schemas");
-        Objects.requireNonNull(finished, "finished");
-        List<FinishedChunk> result = new ArrayList<>(finished.size());
-        for (FinishedSnapshotSplitInfo item : finished) {
-            if (item.chunkRange() != null) {
-                throw new IllegalArgumentException("Typed completed chunks require the typed Binlog filter");
-            }
-            TableSchema schema = schemas.get(item.tableId());
-            if (schema == null) throw new IllegalArgumentException("Unknown completed snapshot table");
-            if (schema.primaryKeys().size() != 1) {
-                throw new IllegalArgumentException("Binlog filtering requires exactly one primary key");
-            }
-            String key = schema.primaryKeys().getFirst();
-            result.add(new FinishedChunk(
-                    item.splitId(),
-                    new ChunkRange(
-                            item.tableId(), key, LogicalTypeRoot.BIGINT, item.lowerInclusive(), item.upperExclusive()),
-                    item.highWatermark()));
-        }
-        return result;
+    /** Poll the Debezium engine and apply the completed snapshot chunk watermarks. */
+    public BinlogEvent poll(MySqlBinlogEngine engine) throws Exception {
+        BinlogEvent event = Objects.requireNonNull(engine, "engine").poll();
+        return event == null ? null : filter(event);
     }
 
     /** An empty result retains the original offset so the caller can advance progress. */
@@ -220,8 +176,7 @@ public final class MySqlBinlogSplitFilter {
             // A keyless Chunk Key is not a stable row identity; moving it while
             // different completed chunks have different High watermarks is unsafe.
             ChunkColumn chunk = columns.get(before.tableId());
-            if (!legacyPrimaryKey
-                    && chunk != null
+            if (chunk != null
                     && chunkValueDiffers(chunk, before, after)
                     && !schemasWithPrimaryKey.contains(before.tableId())) {
                 throw new UnsupportedOperationException(
@@ -265,13 +220,11 @@ public final class MySqlBinlogSplitFilter {
 
     private void validateSchemaChange(BinlogEvent event) {
         var change = event.schemaChange();
-        if (!legacyPrimaryKey && !schemasWithPrimaryKey.contains(change.tableId())) {
+        if (!schemasWithPrimaryKey.contains(change.tableId())) {
             throw new UnsupportedOperationException("Keyless CDC schema change requires coordinated acceptance");
         }
         ChunkColumn previous = columns.get(change.tableId());
-        if (previous == null
-                || !change.before().primaryKeys().equals(change.after().primaryKeys())
-                || (legacyPrimaryKey && change.after().primaryKeys().size() != 1)) {
+        if (previous == null || !change.before().primaryKeys().equals(change.after().primaryKeys())) {
             throw new UnsupportedOperationException("MySQL CDC cannot change Binlog filter primary keys");
         }
         int position = -1;
@@ -339,7 +292,7 @@ public final class MySqlBinlogSplitFilter {
         return event.offset().compareTo(match.highWatermark()) > 0;
     }
 
-    boolean isPureBinlogPhase(TableId tableId) {
+    public boolean isPureBinlogPhase(TableId tableId) {
         return pureBinlogPhaseTables.contains(tableId);
     }
 

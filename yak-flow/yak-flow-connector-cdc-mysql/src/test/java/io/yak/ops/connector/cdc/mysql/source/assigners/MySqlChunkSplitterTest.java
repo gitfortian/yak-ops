@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.connector.cdc.mysql.source.reader.MySqlSnapshotSplitReader;
+import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotSplitReader;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypeRoot;
@@ -52,7 +52,7 @@ class MySqlChunkSplitterTest {
         // An incomplete Chunk is rescanned from its original half-open bounds.
         // It must not skip equal-key rows based on a previous emit position.
         var observed = new ArrayList<Long>();
-        try (var reader = new MySqlSnapshotSplitReader(
+        try (var reader = new SnapshotSplitReader(
                 () -> DriverManager.getConnection(url), dialect, Map.of(table, schema))) {
             reader.open(first);
             var partial = reader.fetchTyped();
@@ -60,7 +60,7 @@ class MySqlChunkSplitterTest {
             var row = partial.nextRecordFromSplit();
             observed.add(row.row().getLong(0));
         }
-        try (var restarted = new MySqlSnapshotSplitReader(
+        try (var restarted = new SnapshotSplitReader(
                 () -> DriverManager.getConnection(url), dialect, Map.of(table, schema))) {
             restarted.open(first);
             var whole = restarted.fetchTyped();

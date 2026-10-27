@@ -1,5 +1,10 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
+import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlSnapshotSplitReadTask;
+import io.yak.ops.connector.cdc.mysql.debezium.reader.BinlogSplitReader;
+
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.RecordsBySplits;
 import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
@@ -29,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, MySqlSplit> {
     private static final int OUTPUT_BATCH_SIZE = 256;
     private final MySqlSourceConfig config;
-    private final MySqlSnapshotBackfillReader snapshots;
+    private final MySqlSnapshotSplitReadTask snapshots;
     private final TableMetrics metrics;
     private final long generation;
     private final Set<TableId> tables;
@@ -42,7 +47,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     private MySqlHybridBinlogSplit binlogSplit;
     private MySqlBinlogSplit standalone;
     private final String fingerprint;
-    private MySqlBinlogSplitFilter filter;
+    private BinlogSplitReader filter;
     private MySqlSnapshotSplit active;
     private int outputPosition;
     // Written by the fetcher and inspected by the source mailbox during checkpoints.
@@ -70,7 +75,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         generation = metrics.generation();
         tables = Set.copyOf(config.schemas().keySet());
-        snapshots = new MySqlSnapshotBackfillReader(config, reader);
+        snapshots = new MySqlSnapshotSplitReadTask(config, reader);
     }
 
     @Override
@@ -134,7 +139,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             binlogSplit = binlogSplit.withAnchor(first.offset(), history);
             bootstrapCandidate = null;
             return records(
-                    MySqlHybridBinlogSplit.ID, new MySqlFetchedRecord(List.of(), null, first.offset(), true), false);
+                    MySqlHybridBinlogSplit.ID, MySqlFetchedRecord.lowWatermark(first.offset()), false);
         }
         if (active == null && !pending.isEmpty()) {
             active = pending.removeFirst();
@@ -174,10 +179,9 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             startStreaming(binlogSplit.startStreaming(resume.highWatermark(), resume.finishedSplits()));
         }
         if (streaming) {
-            BinlogEvent event = binlog.poll();
+            BinlogEvent event = filter == null ? binlog.poll() : filter.poll(binlog);
             if (event != null) {
-                BinlogEvent filtered = filter == null ? event : filter.filter(event);
-                return records(MySqlHybridBinlogSplit.ID, MySqlFetchedRecord.binlog(filtered), false);
+                return records(MySqlHybridBinlogSplit.ID, MySqlFetchedRecord.binlog(event), false);
             }
         } else Thread.sleep(20);
         return empty();
@@ -189,7 +193,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     }
 
     private void startStreaming(MySqlHybridBinlogSplit split) throws Exception {
-        filter = MySqlBinlogSplitFilter.fromFinishedSplits(config.schemas(), split.finishedSplits());
+        filter = BinlogSplitReader.fromFinishedSplits(config.schemas(), split.finishedSplits());
         if (binlog != null) throw new IllegalStateException("Bootstrap Binlog was not closed before handoff");
         // Snapshot backfill connections are no longer needed once this Reader enters streaming.
         snapshots.close();

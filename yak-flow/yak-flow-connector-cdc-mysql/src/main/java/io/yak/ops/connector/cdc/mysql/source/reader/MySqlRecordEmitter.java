@@ -1,11 +1,16 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
+import io.yak.ops.connector.cdc.mysql.source.utils.MySqlChangeEventIds;
+
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.RecordEmitter;
 import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitState;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.core.api.connector.source.ReaderOutput;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
+import io.yak.ops.core.data.ChangeEventId;
 import io.yak.ops.core.data.TableRecord;
 import java.util.Objects;
 
@@ -22,18 +27,13 @@ public final class MySqlRecordEmitter implements RecordEmitter<MySqlFetchedRecor
     private final MySqlSplitReader splits;
     private final TableMetrics metrics;
     private final long generation;
-    private final MySqlRecordBatchEmitter recordBatchEmitter;
 
     public MySqlRecordEmitter(
-            SourceReaderContext context,
-            MySqlSplitReader splits,
-            TableMetrics metrics,
-            SchemaChangeHandler schemaChanges) {
-        this.schemaChanges = Objects.requireNonNull(schemaChanges, "schemaChanges");
-        this.metrics = metrics;
+            MySqlSourceReaderContext readerContext, MySqlSplitReader splits, TableMetrics metrics) {
+        this.schemaChanges = Objects.requireNonNull(readerContext, "readerContext").schemaChanges();
+        this.metrics = Objects.requireNonNull(metrics, "metrics");
         generation = metrics.generation();
-        recordBatchEmitter = new MySqlRecordBatchEmitter(metrics);
-        this.context = Objects.requireNonNull(context, "context");
+        this.context = readerContext.getSourceReaderContext();
         this.splits = Objects.requireNonNull(splits, "splits");
     }
 
@@ -56,17 +56,19 @@ public final class MySqlRecordEmitter implements RecordEmitter<MySqlFetchedRecor
         if (firstSnapshotRow < 0 && event.snapshotRowsEmitted() != null) {
             throw new IllegalStateException("Snapshot output ordinal is smaller than the emitted batch");
         }
-        if (event.snapshotRowsEmitted() != null) {
-            recordBatchEmitter.emitSnapshotRows(
-                    event.rows(), state.sourceId(), state.snapshotSplitId(), firstSnapshotRow, output);
-        } else {
-            recordBatchEmitter.emitBinlogRows(event.rows(), state.sourceId(), eventPosition, state.binlog(), output);
+        for (int index = 0; index < count; index++) {
+            TableRecord row = event.rows().get(index);
+            ChangeEventId identity = event.snapshotRowsEmitted() != null
+                    ? ChangeEventId.snapshot(state.sourceId(), state.snapshotSplitId(), firstSnapshotRow + index)
+                    : eventPosition == null
+                            ? null
+                            : new ChangeEventId(state.sourceId(), eventPosition, index, count);
+            output.collect(identity == null ? row : row.withChangeEventId(identity));
+            metrics.read(generation, row.tableId(), event.snapshotRowsEmitted() == null && state.binlog());
         }
         metrics.observed(generation);
         if (event.snapshotRowsEmitted() != null) {
             state.emitSnapshotRows(event.snapshotRowsEmitted());
-        } else if (event.snapshotKey() != null) {
-            state.emitSnapshotKey(event.snapshotKey());
         } else if (event.lowWatermark()) {
             state.captureLow(event.binlogOffset(), splits.snapshotHistory());
             context.sendSourceEventToCoordinator(new MySqlLowWatermarkEvent(event.binlogOffset()));

@@ -1,5 +1,11 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
+import io.yak.ops.connector.cdc.mysql.source.utils.MySqlChangeEventIds;
+
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitState;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -18,7 +24,6 @@ import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
-import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
@@ -127,8 +132,7 @@ class MySqlChangeEventIdsTest {
                 .build()
                 .config();
         var splitReader = new MySqlSplitReader(config);
-        var emitter = new MySqlRecordEmitter(
-                context(), splitReader, new TableMetrics(), new SchemaChangeHandler(context()));
+        var emitter = new MySqlRecordEmitter(new MySqlSourceReaderContext(context()), splitReader, new TableMetrics());
         var rows = List.of(
                 new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L)),
                 new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L)));
@@ -191,10 +195,9 @@ class MySqlChangeEventIdsTest {
                 .build()
                 .config();
         try (var splitReader = new MySqlSplitReader(config)) {
-            var emitter = new MySqlRecordEmitter(
-                    context(), splitReader, new TableMetrics(), new SchemaChangeHandler(context()));
+            var emitter = new MySqlRecordEmitter(new MySqlSourceReaderContext(context()), splitReader, new TableMetrics());
             List<TableRecord> hybridOutput = new ArrayList<>();
-            var event = new MySqlFetchedRecord(rows, null, offset, false, null, null);
+            var event = MySqlFetchedRecord.binlog(new BinlogEvent(rows, offset));
             emitter.emitRecord(event, hybridOutput::add, hybridState);
 
             assertEquals(
@@ -239,8 +242,7 @@ class MySqlChangeEventIdsTest {
                 .build()
                 .config();
         var readerContext = context();
-        return new MySqlRecordEmitter(readerContext, new MySqlSplitReader(config),
-                new TableMetrics(), new SchemaChangeHandler(readerContext));
+        return new MySqlRecordEmitter(new MySqlSourceReaderContext(readerContext), new MySqlSplitReader(config), new TableMetrics());
     }
 
     private static TableRecord row(RowKind kind, String value) {

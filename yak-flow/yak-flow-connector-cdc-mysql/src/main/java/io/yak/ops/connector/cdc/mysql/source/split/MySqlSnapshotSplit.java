@@ -157,17 +157,6 @@ public record MySqlSnapshotSplit(
                 chunkRange);
     }
 
-    public MySqlSnapshotSplit withLastEmittedKey(long key) {
-        if (chunkRange != null) {
-            throw new IllegalStateException(
-                    "Non-unique typed chunk keys cannot use the legacy exclusive BIGINT resume cursor");
-        }
-        if (prepared() || (lastEmittedKey != null && key <= lastEmittedKey)) {
-            throw new IllegalArgumentException("Snapshot key must advance before normalization only");
-        }
-        return new MySqlSnapshotSplit(splitId, fingerprint, tableId, lowerInclusive, upperExclusive, key);
-    }
-
     @Override
     public String toString() {
         return "MySqlSnapshotSplit{id=" + splitId + ", prepared=" + prepared() + ", finished=" + (finished != null)

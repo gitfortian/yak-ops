@@ -1,5 +1,8 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
+import io.yak.ops.connector.cdc.mysql.source.utils.RecordUtils;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
@@ -30,7 +33,7 @@ class MySqlChunkIdentityTest {
 
     @Test
     void keepsDistinctPrimaryKeysThatShareOneNonUniqueChunkKey() {
-        var backfill = new MySqlChunkBackfill(range(null, null), SCHEMA, 100);
+        var backfill = new RecordUtils.ChunkBackfill(range(null, null), SCHEMA, 100);
         backfill.addSnapshot(row(RowKind.INSERT, 1, "1.00", "one"));
         backfill.addSnapshot(row(RowKind.INSERT, 2, "1.00", "two"));
         backfill.apply(change(
@@ -44,8 +47,8 @@ class MySqlChunkIdentityTest {
 
     @Test
     void movesOnePhysicalRowBetweenChunksWithoutConflatingChunkKeyAndIdentity() {
-        var first = new MySqlChunkBackfill(range(null, "10.00"), SCHEMA, 100);
-        var second = new MySqlChunkBackfill(range("10.00", null), SCHEMA, 100);
+        var first = new RecordUtils.ChunkBackfill(range(null, "10.00"), SCHEMA, 100);
+        var second = new RecordUtils.ChunkBackfill(range("10.00", null), SCHEMA, 100);
         first.addSnapshot(row(RowKind.INSERT, 1, "1.00", "moving"));
         first.addSnapshot(row(RowKind.INSERT, 2, "1.00", "staying"));
         var move = change(

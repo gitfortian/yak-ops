@@ -141,7 +141,7 @@ def test_suites(path: str) -> set[str]:
         # Narrow only these verified snapshot-only implementation owners.
         snapshot_only = (
             "/source/assigners/MySqlChunkSplitter.java",
-            "/source/reader/MySqlSnapshotBackfillReader.java",
+            "/debezium/task/MySqlSnapshotSplitReadTask.java",
         )
         if any(path.endswith(suffix) for suffix in snapshot_only):
             suites = {"cdc-snapshot", "cdc-hybrid"} | set(CDC_PIPELINES) | {"cdc-recovery"}

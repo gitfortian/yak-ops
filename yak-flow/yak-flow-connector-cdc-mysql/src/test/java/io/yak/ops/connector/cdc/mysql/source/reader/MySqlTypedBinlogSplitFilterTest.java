@@ -1,5 +1,8 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
+import io.yak.ops.connector.cdc.mysql.debezium.reader.BinlogSplitReader;
+
 import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.TABLE;
 import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.event;
 import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.offset;
@@ -9,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
-import io.yak.ops.connector.cdc.mysql.source.reader.MySqlBinlogSplitFilter.FinishedChunk;
+import io.yak.ops.connector.cdc.mysql.debezium.reader.BinlogSplitReader.FinishedChunk;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
@@ -80,7 +83,7 @@ class MySqlTypedBinlogSplitFilterTest {
                 offset(150));
         var second = new FinishedChunk("second", new ChunkRange(TABLE, "amount", LogicalTypeRoot.DECIMAL, edge, null),
                 offset(300));
-        var filter = MySqlBinlogSplitFilter.forChunks(Map.of(TABLE, schema), List.of(second, first));
+        var filter = BinlogSplitReader.forChunks(Map.of(TABLE, schema), List.of(second, first));
         assertEquals(1, filter.filter(event(200, decimal("1.00"))).records().size());
         assertEquals(0, filter.filter(event(200, decimal("9223372036854775808.00000000"))).records().size());
         assertEquals(1, filter.filter(event(301, decimal("9223372036854775808.0"))).records().size());
@@ -96,7 +99,7 @@ class MySqlTypedBinlogSplitFilterTest {
                 List.of("tenant", "id"));
         var one = new FinishedChunk(
                 "all", new ChunkRange(TABLE, "bucket", LogicalTypeRoot.INTEGER, null, null), offset(100));
-        var filter = MySqlBinlogSplitFilter.forChunks(Map.of(TABLE, schema), List.of(one));
+        var filter = BinlogSplitReader.forChunks(Map.of(TABLE, schema), List.of(one));
         var record = new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L, 2L, 5));
         // Binlog offsets are monotonic; check the High boundary before crossing it.
         assertEquals(0, filter.filter(event(100, record)).records().size());
@@ -112,8 +115,8 @@ class MySqlTypedBinlogSplitFilterTest {
         var last = new FinishedChunk(
                 "last", new ChunkRange(TABLE, "code", LogicalTypeRoot.VARCHAR, "z", null), offset(200));
         assertThrows(IllegalArgumentException.class,
-                () -> MySqlBinlogSplitFilter.forChunks(Map.of(TABLE, schema), List.of(bounded, last)));
-        var full = MySqlBinlogSplitFilter.forChunks(
+                () -> BinlogSplitReader.forChunks(Map.of(TABLE, schema), List.of(bounded, last)));
+        var full = BinlogSplitReader.forChunks(
                 Map.of(TABLE, schema),
                 List.of(new FinishedChunk(
                         "full", new ChunkRange(TABLE, "code", LogicalTypeRoot.VARCHAR, null, null), offset(100))));
@@ -132,15 +135,15 @@ class MySqlTypedBinlogSplitFilterTest {
         var overlap = new FinishedChunk(
                 "overlap", new ChunkRange(TABLE, "bucket", LogicalTypeRoot.BIGINT, 9L, null), offset(200));
         assertThrows(IllegalArgumentException.class,
-                () -> MySqlBinlogSplitFilter.forChunks(Map.of(TABLE, KEYLESS), List.of(first, gap)));
+                () -> BinlogSplitReader.forChunks(Map.of(TABLE, KEYLESS), List.of(first, gap)));
         assertThrows(IllegalArgumentException.class,
-                () -> MySqlBinlogSplitFilter.forChunks(Map.of(TABLE, KEYLESS), List.of(first, overlap)));
+                () -> BinlogSplitReader.forChunks(Map.of(TABLE, KEYLESS), List.of(first, overlap)));
         assertThrows(IllegalArgumentException.class,
-                () -> MySqlBinlogSplitFilter.forChunks(Map.of(TABLE, KEYLESS), List.of(first, first)));
+                () -> BinlogSplitReader.forChunks(Map.of(TABLE, KEYLESS), List.of(first, first)));
         var wrong = new FinishedChunk(
                 "other", new ChunkRange(TABLE, "name", LogicalTypeRoot.VARCHAR, null, null), offset(200));
         assertThrows(IllegalArgumentException.class,
-                () -> MySqlBinlogSplitFilter.forChunks(Map.of(TABLE, KEYLESS), List.of(first, wrong)));
+                () -> BinlogSplitReader.forChunks(Map.of(TABLE, KEYLESS), List.of(first, wrong)));
 
         var filter = numericFilter();
         assertThrows(IllegalArgumentException.class,
@@ -191,7 +194,7 @@ class MySqlTypedBinlogSplitFilterTest {
                 new FinishedSnapshotSplitInfo(
                         TABLE, "second", null, null, offset(300),
                         new ChunkRange(TABLE, "bucket", LogicalTypeRoot.BIGINT, 10L, null)));
-        var filter = MySqlBinlogSplitFilter.fromFinishedSplits(Map.of(TABLE, KEYLESS), finished);
+        var filter = BinlogSplitReader.fromFinishedSplits(Map.of(TABLE, KEYLESS), finished);
         assertEquals(0, filter.filter(event(250, row(RowKind.INSERT, 10, "covered"))).records().size());
         assertEquals(1, filter.filter(event(250, row(RowKind.INSERT, 5, "new"))).records().size());
         assertEquals(offset(250), filter.filter(event(250, row(RowKind.INSERT, 10, "covered"))).offset());
@@ -206,15 +209,17 @@ class MySqlTypedBinlogSplitFilterTest {
     }
 
     @Test
-    void mixedKeyedAndKeylessTablesUseCheckpointRangesWithoutLosingLegacyFences() {
+    void mixedKeyedAndKeylessTablesUseTypedCheckpointRanges() {
         var keyedTable = new TableId("shop", null, "keyed");
         var keyedSchema = new TableSchema(KEYLESS.columns(), List.of("bucket"));
         var finished = List.of(
                 new FinishedSnapshotSplitInfo(
                         TABLE, "typed", null, null, offset(200),
                         new ChunkRange(TABLE, "bucket", LogicalTypeRoot.BIGINT, null, null)),
-                new FinishedSnapshotSplitInfo(keyedTable, "legacy", null, null, offset(300)));
-        var filter = MySqlBinlogSplitFilter.fromFinishedSplits(
+                new FinishedSnapshotSplitInfo(
+                        keyedTable, "keyed", null, null, offset(300),
+                        new ChunkRange(keyedTable, "bucket", LogicalTypeRoot.BIGINT, null, null)));
+        var filter = BinlogSplitReader.fromFinishedSplits(
                 Map.of(TABLE, KEYLESS, keyedTable, keyedSchema), finished);
         assertEquals(0, filter.filter(event(200, row(RowKind.INSERT, 5, "duplicate"))).records().size());
         assertEquals(1, filter.filter(event(201, row(RowKind.INSERT, 5, "duplicate"))).records().size());
@@ -223,8 +228,8 @@ class MySqlTypedBinlogSplitFilterTest {
         assertEquals(1, filter.filter(event(301, keyedRow)).records().size());
     }
 
-    private static MySqlBinlogSplitFilter numericFilter() {
-        return MySqlBinlogSplitFilter.forChunks(
+    private static BinlogSplitReader numericFilter() {
+        return BinlogSplitReader.forChunks(
                 Map.of(TABLE, KEYLESS),
                 List.of(
                         new FinishedChunk(

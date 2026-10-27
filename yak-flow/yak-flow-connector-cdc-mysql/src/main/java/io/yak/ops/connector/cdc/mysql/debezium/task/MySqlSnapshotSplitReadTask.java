@@ -1,4 +1,8 @@
-package io.yak.ops.connector.cdc.mysql.source.reader;
+package io.yak.ops.connector.cdc.mysql.debezium.task;
+
+import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
+import io.yak.ops.connector.cdc.mysql.source.utils.RecordUtils;
+import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotSplitReader;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogEngine;
@@ -17,12 +21,12 @@ import java.util.Objects;
 import java.util.concurrent.Callable;
 
 /** Fetcher-owned JDBC scan and bounded Binlog reconciliation for one chunk at a time. */
-public final class MySqlSnapshotBackfillReader implements AutoCloseable {
+public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
     private static final int MAX_ROWS = 100_000;
     private static final long MAX_PAYLOAD_BYTES = 4L * 1024 * 1024;
     private static final long BINLOG_TIMEOUT_NANOS = Duration.ofSeconds(60).toNanos();
     private final MySqlSourceConfig config;
-    private final MySqlSnapshotSplitReader snapshots;
+    private final SnapshotSplitReader snapshots;
     private final MySqlBinlogEngine binlog;
     private final Callable<Void> afterSnapshot;
     private final Callable<Void> afterLowWatermark;
@@ -32,17 +36,17 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
     private boolean started;
     private Map<String, Object> partition;
 
-    public MySqlSnapshotBackfillReader(MySqlSourceConfig config, int reader) {
+    public MySqlSnapshotSplitReadTask(MySqlSourceConfig config, int reader) {
         this(config, reader, () -> null);
     }
 
     /** A package-local phase callback lets database tests place commits exactly inside the scan window. */
-    MySqlSnapshotBackfillReader(MySqlSourceConfig config, int reader, Callable<Void> afterSnapshot) {
+    public MySqlSnapshotSplitReadTask(MySqlSourceConfig config, int reader, Callable<Void> afterSnapshot) {
         this(config, reader, afterSnapshot, () -> null, () -> null);
     }
 
     /** Executes after Low but before the consistent read view is established. */
-    MySqlSnapshotBackfillReader(
+    public MySqlSnapshotSplitReadTask(
             MySqlSourceConfig config,
             int reader,
             Callable<Void> afterSnapshot,
@@ -52,12 +56,12 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
         this.afterSnapshot = Objects.requireNonNull(afterSnapshot, "afterSnapshot");
         this.afterLowWatermark = Objects.requireNonNull(afterLowWatermark, "afterLowWatermark");
         this.afterLow = Objects.requireNonNull(afterLow, "afterLow");
-        snapshots = new MySqlSnapshotSplitReader(config);
+        snapshots = new SnapshotSplitReader(config);
         binlog = new MySqlBinlogEngine(config.withoutSchemaEvolution(), config.snapshotServerId(reader));
     }
 
     /** Preserves the callback after the view is anchored for existing integration scenarios. */
-    MySqlSnapshotBackfillReader(
+    public MySqlSnapshotSplitReadTask(
             MySqlSourceConfig config, int reader, Callable<Void> afterSnapshot, Callable<Void> afterLow) {
         this(config, reader, afterSnapshot, () -> null, afterLow);
     }
@@ -73,44 +77,28 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
         if (split.prepared() || split.lastEmittedKey() != null) {
             throw new IllegalArgumentException("Backfill requires an unprepared complete chunk range");
         }
+        if (split.chunkRange() == null) {
+            throw new IllegalArgumentException("MySQL snapshot execution requires a typed ChunkRange");
+        }
         ensureBinlog();
         var schema = Objects.requireNonNull(config.schemas().get(split.tableId()), "chunk schema");
-        MySqlChunkBackfill buffer = split.chunkRange() == null
-                ? new MySqlChunkBackfill(split, schema, MAX_ROWS, MAX_PAYLOAD_BYTES)
-                : new MySqlChunkBackfill(split.chunkRange(), schema, MAX_ROWS, MAX_PAYLOAD_BYTES);
+        RecordUtils.ChunkBackfill buffer =
+                new RecordUtils.ChunkBackfill(split.chunkRange(), schema, MAX_ROWS, MAX_PAYLOAD_BYTES);
         try {
-            DebeziumOffset low;
-            if (split.chunkRange() == null) {
-                low = watermark();
-                snapshots.open(split);
-            } else {
-                low = openConsistentSnapshot(split);
-                afterLow.call();
-            }
+            DebeziumOffset low = openConsistentSnapshot(split);
+            afterLow.call();
             boolean complete = false;
             while (!complete) {
                 checkCancelled();
-                if (split.chunkRange() == null) {
-                    var batch = snapshots.fetch();
-                    while (batch.nextSplit() != null) {
-                        MySqlFetchedRecord record;
-                        while ((record = batch.nextRecordFromSplit()) != null) {
-                            for (var row : record.rows()) buffer.addSnapshot(row);
-                        }
+                var batch = snapshots.fetch();
+                while (batch.nextSplit() != null) {
+                    io.yak.ops.core.data.TableRecord record;
+                    while ((record = batch.nextRecordFromSplit()) != null) {
+                        buffer.addSnapshot(record);
                     }
-                    complete = batch.finishedSplits().contains(split.splitId());
-                    batch.recycle();
-                } else {
-                    var batch = snapshots.fetchTyped();
-                    while (batch.nextSplit() != null) {
-                        io.yak.ops.core.data.TableRecord record;
-                        while ((record = batch.nextRecordFromSplit()) != null) {
-                            buffer.addSnapshot(record);
-                        }
-                    }
-                    complete = batch.finishedSplits().contains(split.splitId());
-                    batch.recycle();
                 }
+                complete = batch.finishedSplits().contains(split.splitId());
+                batch.recycle();
             }
             afterSnapshot.call();
             DebeziumOffset high = watermark();
@@ -125,8 +113,7 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
                     if (event == null) continue;
                     int highOrder = event.offset().compareTo(high);
                     if (event.offset().compareTo(low) > 0 && highOrder <= 0) {
-                        if (split.chunkRange() != null
-                                && event.schemaChange() != null
+                        if (event.schemaChange() != null
                                 && split.tableId().equals(event.schemaChange().tableId())) {
                             throw new UnsupportedOperationException(
                                     "Typed snapshot cannot reconcile schema changes during Backfill");
@@ -192,7 +179,7 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
     }
 
     /** Opens and pins the typed InnoDB view without requiring a global table lock. */
-    void openTypedSnapshotReadView(MySqlSnapshotSplit split) throws SQLException {
+    public void openTypedSnapshotReadView(MySqlSnapshotSplit split) throws SQLException {
         checkCancelled();
         Connection view = null;
         try {

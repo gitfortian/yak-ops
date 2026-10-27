@@ -1,5 +1,8 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
+import io.yak.ops.connector.cdc.mysql.debezium.reader.BinlogSplitReader;
+
 import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.TABLE;
 import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.event;
 import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.offset;
@@ -26,7 +29,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /** Verifies per-chunk filtering and atomic primary-key move handling. */
-class MySqlBinlogSplitFilterTest {
+class BinlogSplitReaderTest {
 
     private static final TableSchema SCHEMA = new TableSchema(
             List.of(
@@ -36,7 +39,7 @@ class MySqlBinlogSplitFilterTest {
 
     @Test
     void dropsOverlapsOnlyWhenAnEventIsWithinItsOwnChunkHighWatermark() {
-        MySqlBinlogSplitFilter filter = filter();
+        BinlogSplitReader filter = filter();
         assertEquals(List.of(), filter.filter(event(150, row(RowKind.INSERT, 1, "before high"))).records());
         assertEquals(List.of(RowKind.INSERT), filter.filter(event(250, row(RowKind.INSERT, 1, "after high")))
                 .records().stream().map(TableRecord::rowKind).toList());
@@ -49,7 +52,7 @@ class MySqlBinlogSplitFilterTest {
 
     @Test
     void entersPureBinlogPhaseOnlyAfterTheGreatestChunkHighWatermark() {
-        MySqlBinlogSplitFilter filter = filter();
+        BinlogSplitReader filter = filter();
         assertFalse(filter.isPureBinlogPhase(TABLE));
 
         assertEquals(1, filter.filter(event(250, row(RowKind.INSERT, 1, "past first high"))).records().size());
@@ -64,9 +67,9 @@ class MySqlBinlogSplitFilterTest {
     void unboundedStringChunkRemainsValidAfterPureBinlogTransition() {
         TableSchema schema = new TableSchema(
                 List.of(new Column("code", LogicalTypes.varchar(40).copy(false))), List.of());
-        var filter = MySqlBinlogSplitFilter.forChunks(
+        var filter = BinlogSplitReader.forChunks(
                 Map.of(TABLE, schema),
-                List.of(new MySqlBinlogSplitFilter.FinishedChunk(
+                List.of(new BinlogSplitReader.FinishedChunk(
                         "single",
                         new ChunkRange(TABLE, "code", LogicalTypeRoot.VARCHAR, null, null),
                         offset(200))));
@@ -78,7 +81,7 @@ class MySqlBinlogSplitFilterTest {
 
     @Test
     void projectsHalfOfCrossChunkKeyMoveIntoStandaloneChangelog() {
-        MySqlBinlogSplitFilter filter = filter();
+        BinlogSplitReader filter = filter();
         BinlogEvent move = event(250, row(RowKind.UPDATE_BEFORE, 1, "old"),
                 row(RowKind.UPDATE_AFTER, 101, "new"));
         BinlogEvent filtered = filter.filter(move);
@@ -97,7 +100,7 @@ class MySqlBinlogSplitFilterTest {
 
     @Test
     void refusesUnknownTableUncoveredKeyAndIncompleteUpdate() {
-        MySqlBinlogSplitFilter filter = filter();
+        BinlogSplitReader filter = filter();
         assertThrows(IllegalArgumentException.class,
                 () -> filter.filter(event(350, row(RowKind.UPDATE_BEFORE, 1, "old"))));
         assertThrows(IllegalArgumentException.class, () -> filter.filter(new BinlogEvent(
@@ -108,12 +111,12 @@ class MySqlBinlogSplitFilterTest {
 
     @Test
     void refusesGapsAndOverlapsInCheckpointedSplitMetadata() {
-        assertThrows(IllegalArgumentException.class, () -> new MySqlBinlogSplitFilter(
+        assertThrows(IllegalArgumentException.class, () -> typedRanges(
                 Map.of(TABLE, SCHEMA),
                 List.of(
                         new FinishedSnapshotSplitInfo(TABLE, "first", null, 100L, offset(200)),
                         new FinishedSnapshotSplitInfo(TABLE, "gap", 110L, null, offset(300)))));
-        assertThrows(IllegalArgumentException.class, () -> new MySqlBinlogSplitFilter(
+        assertThrows(IllegalArgumentException.class, () -> typedRanges(
                 Map.of(TABLE, SCHEMA),
                 List.of(
                         new FinishedSnapshotSplitInfo(TABLE, "first", null, 100L, offset(200)),
@@ -122,7 +125,7 @@ class MySqlBinlogSplitFilterTest {
 
     @Test
     void rejectsTwoUnboundedRangesBeforeConsumingAnyRecord() {
-        assertThrows(IllegalArgumentException.class, () -> new MySqlBinlogSplitFilter(Map.of(TABLE, SCHEMA),
+        assertThrows(IllegalArgumentException.class, () -> typedRanges(Map.of(TABLE, SCHEMA),
                 List.of(new FinishedSnapshotSplitInfo(TABLE, "a", null, null, offset(200)),
                         new FinishedSnapshotSplitInfo(TABLE, "b", null, null, offset(300)))));
     }
@@ -130,7 +133,7 @@ class MySqlBinlogSplitFilterTest {
     @Test
     void rejectsDuplicateSplitIdentityAcrossDifferentTables() {
         TableId other = new TableId("shop", null, "items");
-        assertThrows(IllegalArgumentException.class, () -> new MySqlBinlogSplitFilter(
+        assertThrows(IllegalArgumentException.class, () -> typedRanges(
                 Map.of(TABLE, SCHEMA, other, SCHEMA),
                 List.of(new FinishedSnapshotSplitInfo(TABLE, "same", null, null, offset(200)),
                         new FinishedSnapshotSplitInfo(other, "same", null, null, offset(300)))));
@@ -153,7 +156,7 @@ class MySqlBinlogSplitFilterTest {
                     index == 0 ? null : (long) index,
                     index == 1023 ? null : (long) index + 1, offset(100 + 2L * index)));
         }
-        var filter = new MySqlBinlogSplitFilter(Map.of(TABLE, SCHEMA), chunks);
+        var filter = typedRanges(Map.of(TABLE, SCHEMA), chunks);
         for (int index = 0; index < 1024; index++) {
             assertEquals(0, filter.filter(event(100 + 2L * index, row(RowKind.INSERT, index, "covered"))).records().size());
             assertEquals(1, filter.filter(event(101 + 2L * index, row(RowKind.INSERT, index, "new"))).records().size());
@@ -174,7 +177,7 @@ class MySqlBinlogSplitFilterTest {
     void binlogRotationDoesNotDiscardEventsAfterSnapshotHighWatermark() {
         DebeziumOffset high = new DebeziumOffset(
                 Map.of("server", "shop"), Map.of("file", "mysql-bin.9", "pos", 900L));
-        var filter = new MySqlBinlogSplitFilter(
+        var filter = typedRanges(
                 Map.of(TABLE, SCHEMA),
                 List.of(new FinishedSnapshotSplitInfo(TABLE, "single", null, null, high)));
         BinlogEvent later = new BinlogEvent(
@@ -183,13 +186,37 @@ class MySqlBinlogSplitFilterTest {
         assertEquals(1, filter.filter(later).records().size());
     }
 
-    private static MySqlBinlogSplitFilter filter() {
-        return new MySqlBinlogSplitFilter(
+    private static BinlogSplitReader filter() {
+        return typedRanges(
                 Map.of(TABLE, SCHEMA),
                 List.of(
                         new FinishedSnapshotSplitInfo(TABLE, "first", null, 100L, offset(200)),
                         new FinishedSnapshotSplitInfo(TABLE, "second", 100L, null, offset(300))));
     }
 
+
+    /** Convert old test fixture bounds into the current typed Split metadata. */
+    private static BinlogSplitReader typedRanges(
+            Map<TableId, TableSchema> schemas, List<FinishedSnapshotSplitInfo> fixtures) {
+        List<FinishedSnapshotSplitInfo> finished = fixtures.stream().map(info -> {
+            TableSchema schema = schemas.get(info.tableId());
+            if (schema == null || schema.primaryKeys().isEmpty()) {
+                throw new IllegalArgumentException("Test fixture requires a primary-key schema");
+            }
+            return new FinishedSnapshotSplitInfo(
+                    info.tableId(),
+                    info.splitId(),
+                    null,
+                    null,
+                    info.highWatermark(),
+                    new ChunkRange(
+                            info.tableId(),
+                            schema.primaryKeys().getFirst(),
+                            LogicalTypeRoot.BIGINT,
+                            info.lowerInclusive(),
+                            info.upperExclusive()));
+        }).toList();
+        return BinlogSplitReader.fromFinishedSplits(schemas, finished);
+    }
 
 }
