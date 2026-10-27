@@ -2,7 +2,7 @@ package io.yak.ops.plugin.task.datasync.plan;
 
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.connector.base.factory.FactoryUtil;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan;
 import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
 import io.yak.ops.core.data.TableId;
@@ -189,7 +189,7 @@ public final class JobPlanner {
             if (mapping.targetPrimaryKeys() != null)
                 binding += encodePart("targetPrimaryKeys") + encodePart(String.join(",", mapping.targetPrimaryKeys()));
             if ("MYSQL_CDC".equals(sourceFactory.factoryIdentifier())) {
-                String chunkKey = source.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN);
+                String chunkKey = source.get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);
                 if (chunkKey != null) binding += encodePart("chunkKey") + encodePart(chunkKey);
                 if (from.schema().primaryKeys().isEmpty()) binding += encodePart("noPhysicalPrimaryKey");
             }
@@ -205,9 +205,9 @@ public final class JobPlanner {
             Map<String, Object> prepared =
                     new LinkedHashMap<>(JobOptions.connectorOptions(source).getSourceMap());
             if (instanceId != null && "MYSQL_CDC".equals(sourceFactory.factoryIdentifier())) {
-                prepared.put(MySqlCdcSourceOptions.SERVER_ID.key(), MySqlCdcReplicationIdentity.serverId(instanceId));
+                prepared.put(MySqlSourceOptions.SERVER_ID.key(), Integer.toString(MySqlCdcReplicationIdentity.serverId(instanceId)));
                 prepared.put(
-                        MySqlCdcSourceOptions.TOPIC_PREFIX.key(), MySqlCdcReplicationIdentity.topicPrefix(instanceId));
+                        MySqlSourceOptions.TOPIC_PREFIX.key(), MySqlCdcReplicationIdentity.topicPrefix(instanceId));
                 if (tables.isEmpty()) claims.add(MySqlCdcReplicationIdentity.exclusiveResource(instanceId));
             }
             Map<String, Object> preparedSink = new LinkedHashMap<>(sink.getSourceMap());

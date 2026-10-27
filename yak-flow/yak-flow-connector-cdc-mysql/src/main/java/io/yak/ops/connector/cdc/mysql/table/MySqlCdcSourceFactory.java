@@ -8,7 +8,7 @@ import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.base.factory.TableSourceFactory;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.core.api.connector.source.Boundedness;
@@ -25,6 +25,16 @@ import java.util.Map;
 /** Creates an initial Snapshot + Binlog Source or a latest-position Binlog Source. */
 @AutoService(TableSourceFactory.class)
 public final class MySqlCdcSourceFactory implements TableSourceFactory {
+
+    private static final OptionRule PHYSICAL_RULE = OptionRule.builder()
+            .optional(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE,
+                    Conditions.greaterOrEqual(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, 1)
+                            .and(Conditions.lessOrEqual(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, 100_000)))
+            .optional(MySqlSourceOptions.QUEUE_CAPACITY,
+                    Conditions.greaterOrEqual(MySqlSourceOptions.QUEUE_CAPACITY, 1)
+                            .and(Conditions.lessOrEqual(MySqlSourceOptions.QUEUE_CAPACITY, 10_000)))
+            .build();
+
     @Override
     public String factoryIdentifier() {
         return "MYSQL_CDC";
@@ -34,9 +44,9 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
     public OptionRule optionRule() {
         return OptionRule.builder()
                 .optional(
-                        MySqlCdcSourceOptions.CHUNK_KEY_COLUMN,
-                        Conditions.notBlank(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN))
-                .optional(MySqlCdcSourceOptions.STARTUP_MODE)
+                        MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN,
+                        Conditions.notBlank(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN))
+                .optional(MySqlSourceOptions.SCAN_STARTUP_MODE)
                 .build();
     }
 
@@ -45,10 +55,9 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
         return OptionRule.builder()
                 .include(optionRule())
                 .include(JdbcConnectionOptions.RULE)
-                .include(MySqlCdcSourceOptions.PHYSICAL_RULE)
-                .required(
-                        MySqlCdcSourceOptions.SERVER_ID, Conditions.greaterOrEqual(MySqlCdcSourceOptions.SERVER_ID, 1))
-                .required(MySqlCdcSourceOptions.TOPIC_PREFIX, Conditions.notBlank(MySqlCdcSourceOptions.TOPIC_PREFIX))
+                .include(PHYSICAL_RULE)
+                .required(MySqlSourceOptions.SERVER_ID, Conditions.notBlank(MySqlSourceOptions.SERVER_ID))
+                .required(MySqlSourceOptions.TOPIC_PREFIX, Conditions.notBlank(MySqlSourceOptions.TOPIC_PREFIX))
                 .build();
     }
 
@@ -76,9 +85,9 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
 
     @Override
     public void validateSchema(ReadonlyConfig options, TableSchema schema) {
-        StartupOptions startup = StartupOptions.from(options.get(MySqlCdcSourceOptions.STARTUP_MODE));
+        StartupOptions startup = StartupOptions.from(options.get(MySqlSourceOptions.SCAN_STARTUP_MODE));
         startup.requireSupported();
-        String chunkKey = options.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN);
+        String chunkKey = options.get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);
         if (startup.startupMode() == StartupMode.INITIAL) {
             ChunkUtils.requireSupportedSnapshot(schema, chunkKey);
             return;
@@ -108,18 +117,18 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
         }
         var first = contexts.getFirst();
         ReadonlyConfig options = first.options();
-        StartupOptions startupOptions = StartupOptions.from(options.get(MySqlCdcSourceOptions.STARTUP_MODE));
+        StartupOptions startupOptions = StartupOptions.from(options.get(MySqlSourceOptions.SCAN_STARTUP_MODE));
         startupOptions.requireSupported();
         if (options.get(JdbcConnectionOptions.SSH_ENABLED)) {
             throw new UnsupportedOperationException("MySQL CDC requires a direct MySQL connection");
         }
         Map<String, Object> common = new LinkedHashMap<>(options.getSourceMap());
-        common.remove(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key());
+        common.remove(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key());
         for (var context : contexts) {
             FactoryUtil.validateCreation(context.options(), this);
             validateSchema(context.options(), context.schema());
             Map<String, Object> selected = new LinkedHashMap<>(context.options().getSourceMap());
-            selected.remove(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key());
+            selected.remove(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key());
             if (!common.equals(selected) || context.metrics() != first.metrics()) {
                 throw new IllegalArgumentException(
                         "MySQL CDC tables must share connection, replication and observation settings");
@@ -138,15 +147,15 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
                 .username(connection.username())
                 .password(connection.password())
                 .connectionProperties(mergedConnectionProperties(connection))
-                .serverId(options.get(MySqlCdcSourceOptions.SERVER_ID))
-                .topicPrefix(options.get(MySqlCdcSourceOptions.TOPIC_PREFIX))
-                .queueCapacity(options.get(MySqlCdcSourceOptions.QUEUE_CAPACITY));
+                .serverId(options.get(MySqlSourceOptions.SERVER_ID))
+                .topicPrefix(options.get(MySqlSourceOptions.TOPIC_PREFIX))
+                .queueCapacity(options.get(MySqlSourceOptions.QUEUE_CAPACITY));
         for (var context : contexts) {
             builder.table(
-                    context.table(), context.schema(), context.options().get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
+                    context.table(), context.schema(), context.options().get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN));
         }
         return MySqlSource.create(
-                builder, startupOptions, options.get(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE), first.metrics());
+                builder, startupOptions, options.get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE), first.metrics());
     }
 
     /**

@@ -6,7 +6,7 @@ import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.configuration.rule.Conditions;
 import io.yak.ops.configuration.rule.ConfigValidator;
 import io.yak.ops.configuration.rule.OptionRule;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.plugin.task.datasync.solution.SolutionType;
@@ -67,10 +67,10 @@ public record SourceConfig(ReadonlyConfig options, IncrementalConfig incremental
         }
         physical.put(JobOptions.DATASOURCE_ID.key(), datasourceId);
         physical.put(JobOptions.TYPE.key(), type.sourceIdentifier());
-        if (chunkKey != null) physical.put(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key(), chunkKey);
+        if (chunkKey != null) physical.put(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key(), chunkKey);
         if (startupMode != null)
             physical.put(
-                    MySqlCdcSourceOptions.STARTUP_MODE.key(),
+                    MySqlSourceOptions.SCAN_STARTUP_MODE.key(),
                     StartupOptions.of(startupMode).asModeString());
         return new SourceConfig(ReadonlyConfig.fromMap(physical), incremental);
     }

@@ -526,7 +526,6 @@ public final class MySqlSourceConfig {
         return tableList;
     }
 
-    @Nullable
     public ServerIdRange getServerIdRange() {
         return serverIdRange;
     }
@@ -625,7 +624,7 @@ public final class MySqlSourceConfig {
         return (String databaseName) -> tableFilters.databaseFilter().test(databaseName);
     }
 
-    public Predicate<TableId> getTableFilter() {
+    public Predicate<io.debezium.relational.TableId> getTableFilter() {
         RelationalTableFilters tableFilters = getMySqlConnectorConfig().getTableFilters();
         return tableId -> tableFilters.dataCollectionFilter().isIncluded(tableId);
     }
