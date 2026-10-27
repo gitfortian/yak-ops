@@ -6,6 +6,8 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import java.util.Map;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -44,6 +46,28 @@ class MySqlSplitAssignerContractTest {
         assertEquals(split, assigner.getNext(0));
         assertThrows(IllegalStateException.class, () -> assigner.addSplitsBack(List.of(split), 1));
         assertThrows(IllegalArgumentException.class, () -> new MySqlBinlogSplitAssigner(StartupOptions.latest(), "changed", assigned));
+    }
+
+
+    @Test
+    void returnedBinlogSplitKeepsItsOffsetAcrossEnumeratorCheckpoint() throws Exception {
+        var assigner = new MySqlBinlogSplitAssigner(StartupOptions.latest(), "fp", null);
+        assigner.getNext(0);
+        var offset = new DebeziumOffset(
+                Map.of("server", "yak"),
+                Map.of("file", "mysql-bin.000001", "pos", 256L));
+        var returned = new MySqlBinlogSplit("fp", offset, new byte[] {1, 2, 3});
+        assigner.addSplitsBack(List.of(returned), 0);
+
+        var serializer = new PendingSplitsStateSerializer(MySqlSplitSerializer.INSTANCE);
+        var state = (MySqlPendingSplitsState) serializer.deserialize(
+                serializer.getVersion(), serializer.serialize(assigner.snapshotState(4)));
+        var restored = new MySqlBinlogSplitAssigner(StartupOptions.latest(), "fp", state);
+        MySqlBinlogSplit resumed = restored.getNext(0);
+        assertEquals(offset, resumed.offset());
+        assertEquals(List.of((byte) 1, (byte) 2, (byte) 3),
+                java.util.stream.IntStream.range(0, resumed.schemaHistory().length)
+                        .mapToObj(i -> resumed.schemaHistory()[i]).toList());
     }
 
     @Test
