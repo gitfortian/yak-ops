@@ -49,7 +49,11 @@ export function buildSyncParameters(task: DataSyncTaskSavePayload): DataSyncPara
     source: {
       datasourceId: task.sourceDataSourceId,
       ...(realtime
-        ? { startup: { mode: task.steps.includes("FULL") ? ("initial" as const) : ("latest-offset" as const) } }
+        ? {
+            startup: {
+              mode: task.steps.includes("FULL") ? ("initial" as const) : ("latest-offset" as const),
+            },
+          }
         : {}),
       tables: mappings.map((mapping, index) => ({
         id: `table-${index + 1}`,
