@@ -1,10 +1,10 @@
-package io.yak.ops.connector.cdc.mysql.source.debezium;
+package io.yak.ops.connector.cdc.mysql.debezium;
 
 import io.debezium.embedded.Connect;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.RecordChangeEvent;
 import io.debezium.engine.format.ChangeEventFormat;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.reader.BinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlDebeziumRecordConverter;

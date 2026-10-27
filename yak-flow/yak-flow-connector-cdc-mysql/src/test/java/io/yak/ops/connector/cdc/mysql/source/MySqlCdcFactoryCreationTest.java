@@ -7,6 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.table.MySqlCdcSourceFactory;
+import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;

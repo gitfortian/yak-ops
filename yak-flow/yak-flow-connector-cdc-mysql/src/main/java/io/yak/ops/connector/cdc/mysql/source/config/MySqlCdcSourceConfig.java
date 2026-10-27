@@ -1,6 +1,6 @@
-package io.yak.ops.connector.cdc.mysql.source;
+package io.yak.ops.connector.cdc.mysql.source.config;
 
-import io.yak.ops.connector.cdc.mysql.source.debezium.CheckpointOffsetBackingStore;
+import io.yak.ops.connector.cdc.mysql.debezium.CheckpointOffsetBackingStore;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.configuration.SchemaEvolutionOptions;

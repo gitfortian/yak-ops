@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.configuration.ConfigParser;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
 import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceTable;

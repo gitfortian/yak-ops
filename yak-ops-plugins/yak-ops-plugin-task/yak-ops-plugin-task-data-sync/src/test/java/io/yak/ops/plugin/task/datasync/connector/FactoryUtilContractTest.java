@@ -12,7 +12,7 @@ import io.yak.ops.configuration.rule.OptionRule;
 import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.base.factory.TableSourceFactory;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceFactory;
+import io.yak.ops.connector.cdc.mysql.table.MySqlCdcSourceFactory;
 import io.yak.ops.connector.jdbc.sink.JdbcSinkFactory;
 import io.yak.ops.connector.jdbc.source.JdbcSourceFactory;
 import io.yak.ops.core.api.connector.source.Boundedness;

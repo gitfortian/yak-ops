@@ -9,7 +9,7 @@ import io.yak.ops.configuration.ConfigParser;
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.connector.base.factory.FactoryUtil;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.connector.jdbc.JdbcSourceOptions;

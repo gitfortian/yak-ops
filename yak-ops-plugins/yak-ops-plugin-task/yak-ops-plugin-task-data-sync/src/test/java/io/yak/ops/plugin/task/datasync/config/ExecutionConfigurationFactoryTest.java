@@ -13,7 +13,7 @@ import io.yak.ops.core.configuration.SchemaEvolutionOptions;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.configuration.ReadonlyConfig;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;

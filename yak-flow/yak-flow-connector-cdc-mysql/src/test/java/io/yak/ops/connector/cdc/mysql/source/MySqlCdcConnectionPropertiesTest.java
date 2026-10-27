@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.debezium.connector.mysql.jdbc.MySqlConnectionConfiguration;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;

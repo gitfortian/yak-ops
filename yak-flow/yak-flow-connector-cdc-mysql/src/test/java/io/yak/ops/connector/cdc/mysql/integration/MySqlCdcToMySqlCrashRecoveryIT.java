@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.connector.cdc.mysql.source.StartupMode;
+import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.testutils.DatabaseMetadata;
 import io.yak.ops.testutils.MySqlDatabase;
 import java.io.IOException;

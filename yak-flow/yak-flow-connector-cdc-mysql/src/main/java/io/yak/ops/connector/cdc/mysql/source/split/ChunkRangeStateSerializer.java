@@ -1,6 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
-import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.LogicalTypeRoot;
 import java.io.DataInputStream;

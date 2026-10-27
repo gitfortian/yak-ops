@@ -1,6 +1,6 @@
-package io.yak.ops.connector.cdc.mysql.source.assigner;
+package io.yak.ops.connector.cdc.mysql.source.assigners;
 
-import io.yak.ops.connector.cdc.mysql.source.enumerator.PendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import java.util.List;
 

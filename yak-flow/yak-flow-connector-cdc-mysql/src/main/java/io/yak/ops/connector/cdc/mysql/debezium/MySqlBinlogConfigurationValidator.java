@@ -1,4 +1,4 @@
-package io.yak.ops.connector.cdc.mysql.source.debezium;
+package io.yak.ops.connector.cdc.mysql.debezium;
 
 import java.sql.Connection;
 import java.sql.ResultSet;

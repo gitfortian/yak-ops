@@ -5,10 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
-import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridEnumeratorStateSerializer;
-import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
+import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;

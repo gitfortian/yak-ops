@@ -1,10 +1,11 @@
 package io.yak.ops.connector.cdc.mysql.source.enumerator;
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
-import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
-import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlChunkSplitter;
-import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlHybridSplitAssigner;
+import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
+import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedAckEvent;

@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.connector.base.factory.FactoryUtil;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
 import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;

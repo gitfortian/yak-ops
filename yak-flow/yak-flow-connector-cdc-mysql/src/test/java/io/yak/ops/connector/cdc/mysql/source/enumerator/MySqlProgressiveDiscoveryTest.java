@@ -2,8 +2,10 @@ package io.yak.ops.connector.cdc.mysql.source.enumerator;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
-import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlHybridSplitAssigner;
+import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;

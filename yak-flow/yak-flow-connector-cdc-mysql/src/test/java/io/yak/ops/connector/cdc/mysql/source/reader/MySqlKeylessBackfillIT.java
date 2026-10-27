@@ -6,8 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
-import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.data.RowKind;

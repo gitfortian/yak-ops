@@ -5,7 +5,7 @@ import io.yak.ops.configuration.Options;
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.configuration.rule.ConfigValidator;
 import io.yak.ops.configuration.rule.OptionRule;
-import io.yak.ops.connector.cdc.mysql.source.StartupMode;
+import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.plugin.task.datasync.solution.SolutionType;
 import io.yak.ops.plugin.task.datasync.solution.Step;
 import java.util.ArrayList;

@@ -1,6 +1,6 @@
-package io.yak.ops.connector.cdc.mysql.source.assigner;
+package io.yak.ops.connector.cdc.mysql.source.assigners;
 
-import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridEnumeratorState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;

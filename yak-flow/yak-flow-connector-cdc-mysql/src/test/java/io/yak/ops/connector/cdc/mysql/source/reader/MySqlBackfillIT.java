@@ -2,9 +2,9 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
-import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
-import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlChunkSplitter;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialects;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.data.RowKind;
