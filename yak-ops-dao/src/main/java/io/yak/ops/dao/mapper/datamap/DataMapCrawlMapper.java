@@ -21,13 +21,15 @@ import org.apache.ibatis.annotations.Update;
 public interface DataMapCrawlMapper {
 
     String COLUMNS = "id,workspace_id,datasource_id,datasource_revision,database_name,schema_name,status,"
-            + "active_scope,table_count,column_count,added_count,updated_count,removed_count,failed_count,error,"
+            + "active_scope,table_count,column_count,added_count,updated_count,removed_count,failed_count,"
+            + "filtered_count,trigger_type,exclude_pattern,retry_of,error,"
             + "created_time,started_time,finished_time,create_by";
 
     @Insert("INSERT INTO yak_ops_data_map_crawl (" + COLUMNS + ") VALUES "
             + "(#{id},#{workspaceId},#{datasourceId},#{datasourceRevision},#{databaseName},#{schemaName},#{status},"
             + "#{activeScope},#{tableCount},#{columnCount},#{addedCount},#{updatedCount},#{removedCount},"
-            + "#{failedCount},#{error},#{createdTime},#{startedTime},#{finishedTime},#{createBy})")
+            + "#{failedCount},#{filteredCount},#{triggerType},#{excludePattern},#{retryOf},"
+            + "#{error},#{createdTime},#{startedTime},#{finishedTime},#{createBy})")
     int insert(DataMapCrawlEntity row);
 
     @Select("SELECT " + COLUMNS + " FROM yak_ops_data_map_crawl WHERE id=#{id}")
@@ -42,7 +44,8 @@ public interface DataMapCrawlMapper {
 
     @Update("UPDATE yak_ops_data_map_crawl SET status='SUCCEEDED',active_scope=NULL,table_count=#{tableCount},"
             + "column_count=#{columnCount},added_count=#{addedCount},updated_count=#{updatedCount},"
-            + "removed_count=#{removedCount},failed_count=#{failedCount},finished_time=#{finishedTime} "
+            + "removed_count=#{removedCount},failed_count=#{failedCount},filtered_count=#{filteredCount},"
+            + "finished_time=#{finishedTime} "
             + "WHERE id=#{id} AND status='RUNNING'")
     int finishSucceeded(
             @Param("id") String id,
@@ -52,6 +55,7 @@ public interface DataMapCrawlMapper {
             @Param("updatedCount") int updatedCount,
             @Param("removedCount") int removedCount,
             @Param("failedCount") int failedCount,
+            @Param("filteredCount") int filteredCount,
             @Param("finishedTime") LocalDateTime finishedTime);
 
     @Update("UPDATE yak_ops_data_map_crawl SET status='FAILED',active_scope=NULL,error=#{error},"
@@ -73,8 +77,11 @@ public interface DataMapCrawlMapper {
             + "finished_time=#{finishedTime} WHERE id=#{id} AND status='PENDING'")
     int reject(@Param("id") String id, @Param("error") String error, @Param("finishedTime") LocalDateTime finishedTime);
 
-    /** Fails every active run after a restart and releases its scope lock in the same statement. */
-    @Update("UPDATE yak_ops_data_map_crawl SET status='FAILED',active_scope=NULL,error=#{error},"
+    /**
+     * Marks every active run as INTERRUPTED after a restart and releases its scope lock in the same
+     * statement, so the operator sees a distinct state from a genuine failure and can submit again.
+     */
+    @Update("UPDATE yak_ops_data_map_crawl SET status='INTERRUPTED',active_scope=NULL,error=#{error},"
             + "finished_time=#{finishedTime} WHERE active_scope IS NOT NULL")
     int sweepInterrupted(@Param("error") String error, @Param("finishedTime") LocalDateTime finishedTime);
 

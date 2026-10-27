@@ -146,7 +146,7 @@ class DataMapDatabaseIT {
     void successReleasesTheScopeLock() {
         crawlMapper.insert(run("run-1", DATASOURCE, "PENDING", 1));
         crawlMapper.claim("run-1", LocalDateTime.now());
-        crawlMapper.finishSucceeded("run-1", 10, 20, 3, 7, 0, 0, LocalDateTime.now());
+        crawlMapper.finishSucceeded("run-1", 10, 20, 3, 7, 0, 0, 0, LocalDateTime.now());
 
         assertNull(activeScope("run-1"));
         crawlMapper.insert(run("run-2", DATASOURCE, "PENDING", 1));
