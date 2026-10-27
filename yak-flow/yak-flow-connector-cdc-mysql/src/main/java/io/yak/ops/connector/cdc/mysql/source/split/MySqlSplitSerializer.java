@@ -1,7 +1,11 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 
 /** Single split serialization entry. Reads historical Hybrid v2-v5 and Binlog-only v1 checkpoints. */
 public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MySqlSplit> {

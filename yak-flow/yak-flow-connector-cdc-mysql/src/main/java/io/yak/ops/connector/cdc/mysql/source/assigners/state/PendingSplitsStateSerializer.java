@@ -1,7 +1,11 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 
 /** Shared enumerator state serialization; keeps historic INITIAL and LATEST checkpoint formats readable. */
 public final class PendingSplitsStateSerializer implements SimpleVersionedSerializer<PendingSplitsState> {
