@@ -53,7 +53,7 @@ class MySqlTypedCheckpointTest {
                                 GenericRowData.of(new BigDecimal("2.00"), "same")),
                         new TableRecord(TABLE, RowKind.INSERT,
                                 GenericRowData.of(new BigDecimal("2.00"), "same"))));
-        MySqlSplitState state = new MySqlSplitState(split);
+        MySqlSplitState state = MySqlSplitState.fromSplit(split);
         state.prepareSnapshot(split.withOutput(output));
         assertThrows(IllegalStateException.class, () -> state.emitSnapshotRows(1));
         state.snapshotCheckpoint(5);
@@ -64,7 +64,7 @@ class MySqlTypedCheckpointTest {
         assertEquals(range, frozen.chunkRange());
         assertEquals(1, frozen.outputPosition());
         assertEquals(2, frozen.output().rows().size());
-        MySqlSplitState recovered = new MySqlSplitState(frozen);
+        MySqlSplitState recovered = MySqlSplitState.fromSplit(frozen);
         recovered.emitSnapshotRows(2);
         MySqlSnapshotSplit completed = roundTrip((MySqlSnapshotSplit) recovered.checkpoint(null));
         assertEquals(range, completed.finished().chunkRange());
