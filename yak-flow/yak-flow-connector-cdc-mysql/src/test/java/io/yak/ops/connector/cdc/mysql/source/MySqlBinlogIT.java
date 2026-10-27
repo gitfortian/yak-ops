@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.configuration.Configuration;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.BinlogPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
@@ -265,7 +265,7 @@ class MySqlBinlogIT {
             var enumerator = source.createEnumerator(coordinator);
             enumerator.start();
             enumerator.handleSplitRequest(0, null);
-            MySqlPendingSplitsState state = (MySqlPendingSplitsState) enumerator.snapshotState(1L);
+            BinlogPendingSplitsState state = (BinlogPendingSplitsState) enumerator.snapshotState(1L);
             assertTrue(state.splitAssigned());
             split = coordinator.assigned;
             enumerator.close();
