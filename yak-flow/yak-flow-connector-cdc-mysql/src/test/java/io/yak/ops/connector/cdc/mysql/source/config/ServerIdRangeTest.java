@@ -19,6 +19,6 @@ class ServerIdRangeTest {
     @Test
     void rejectsInvalidRanges() {
         assertThrows(IllegalArgumentException.class, () -> new ServerIdRange(10, 9));
-        assertThrows(IllegalArgumentException.class, () -> ServerIdRange.from("foo"));
+        assertThrows(IllegalStateException.class, () -> ServerIdRange.from("foo"));
     }
 }

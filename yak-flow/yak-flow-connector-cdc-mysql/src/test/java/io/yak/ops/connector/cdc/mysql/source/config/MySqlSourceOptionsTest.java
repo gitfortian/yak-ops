@@ -10,7 +10,7 @@ class MySqlSourceOptionsTest {
     void retainsFlinkNamesTypesAndDefaults() {
         assertEquals("scan.incremental.snapshot.chunk.size",
                 MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE.key());
-        assertEquals(8096, MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE.defaultValue());
+        assertEquals(8096, (int) MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE.defaultValue());
         assertEquals("scan.startup.mode", MySqlSourceOptions.SCAN_STARTUP_MODE.key());
         assertEquals("initial", MySqlSourceOptions.SCAN_STARTUP_MODE.defaultValue());
         assertEquals("server-id", MySqlSourceOptions.SERVER_ID.key());
