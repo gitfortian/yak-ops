@@ -1,6 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners;
 
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.BinlogPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
@@ -8,13 +8,13 @@ import java.util.List;
 import java.util.Objects;
 
 /** Assigns the selected stream-only startup to the only replication reader. */
-public final class MySqlBinlogSplitAssigner implements MySqlSplitAssigner<MySqlBinlogSplit, MySqlPendingSplitsState> {
+public final class MySqlBinlogSplitAssigner implements MySqlSplitAssigner<MySqlBinlogSplit, BinlogPendingSplitsState> {
 
     private MySqlBinlogSplit pending;
     private boolean assigned;
 
     public MySqlBinlogSplitAssigner(
-            StartupOptions startupOptions, MySqlPendingSplitsState restored) {
+            StartupOptions startupOptions, BinlogPendingSplitsState restored) {
         Objects.requireNonNull(startupOptions, "startupOptions");
         if (startupOptions.startupMode() != StartupMode.LATEST_OFFSET) {
             throw new UnsupportedOperationException("MySQL Binlog Source requires latest-offset startup");
@@ -51,11 +51,11 @@ public final class MySqlBinlogSplitAssigner implements MySqlSplitAssigner<MySqlB
     }
 
     @Override
-    public MySqlPendingSplitsState snapshotState(long checkpointId) {
+    public BinlogPendingSplitsState snapshotState(long checkpointId) {
         if (checkpointId < 0) {
             throw new IllegalArgumentException("Checkpoint ID must not be negative");
         }
-        return new MySqlPendingSplitsState(assigned, pending);
+        return new BinlogPendingSplitsState(assigned, pending);
     }
 
     @Override
