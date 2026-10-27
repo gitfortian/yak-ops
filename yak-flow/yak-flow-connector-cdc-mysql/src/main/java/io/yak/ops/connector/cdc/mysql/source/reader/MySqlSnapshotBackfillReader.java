@@ -25,9 +25,9 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
     private final MySqlSnapshotSplitReader snapshots;
     private final MySqlBinlogEngine binlog;
     private final Callable<Void> afterSnapshot;
+    private final Callable<Void> afterLowWatermark;
     private final Callable<Void> afterLow;
     private volatile Statement watermarkStatement;
-    private volatile Statement readLockStatement;
     private volatile boolean cancelled;
     private boolean started;
     private Map<String, Object> partition;
@@ -38,17 +38,28 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
 
     /** A package-local phase callback lets database tests place commits exactly inside the scan window. */
     MySqlSnapshotBackfillReader(MySqlCdcSourceConfig config, int reader, Callable<Void> afterSnapshot) {
-        this(config, reader, afterSnapshot, () -> null);
+        this(config, reader, afterSnapshot, () -> null, () -> null);
     }
 
-    /** Executes after a keyless read view is anchored and the short global read lock is released. */
+    /** Executes after Low but before the consistent read view is established. */
     MySqlSnapshotBackfillReader(
-            MySqlCdcSourceConfig config, int reader, Callable<Void> afterSnapshot, Callable<Void> afterLow) {
+            MySqlCdcSourceConfig config,
+            int reader,
+            Callable<Void> afterSnapshot,
+            Callable<Void> afterLowWatermark,
+            Callable<Void> afterLow) {
         this.config = Objects.requireNonNull(config, "config");
         this.afterSnapshot = Objects.requireNonNull(afterSnapshot, "afterSnapshot");
+        this.afterLowWatermark = Objects.requireNonNull(afterLowWatermark, "afterLowWatermark");
         this.afterLow = Objects.requireNonNull(afterLow, "afterLow");
         snapshots = new MySqlSnapshotSplitReader(config);
         binlog = new MySqlBinlogEngine(config.withoutSchemaEvolution(), config.snapshotServerId(reader));
+    }
+
+    /** Preserves the callback after the view is anchored for existing integration scenarios. */
+    MySqlSnapshotBackfillReader(
+            MySqlCdcSourceConfig config, int reader, Callable<Void> afterSnapshot, Callable<Void> afterLow) {
+        this(config, reader, afterSnapshot, () -> null, afterLow);
     }
 
     /**
@@ -64,9 +75,6 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
         }
         ensureBinlog();
         var schema = Objects.requireNonNull(config.schemas().get(split.tableId()), "chunk schema");
-        if (split.chunkRange() != null && !schema.primaryKeys().isEmpty()) {
-            throw new UnsupportedOperationException("Typed backfill currently requires a keyless source table");
-        }
         MySqlChunkBackfill buffer = split.chunkRange() == null
                 ? new MySqlChunkBackfill(split, schema, MAX_ROWS, MAX_PAYLOAD_BYTES)
                 : new MySqlChunkBackfill(split.chunkRange(), schema, MAX_ROWS, MAX_PAYLOAD_BYTES);
@@ -121,7 +129,7 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
                                 && event.schemaChange() != null
                                 && split.tableId().equals(event.schemaChange().tableId())) {
                             throw new UnsupportedOperationException(
-                                    "Keyless snapshot cannot reconcile schema changes during Backfill");
+                                    "Typed snapshot cannot reconcile schema changes during Backfill");
                         }
                         if (!event.records().isEmpty()
                                 && split.tableId()
@@ -163,46 +171,41 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
     }
 
     /**
-     * Captures a Low watermark and starts a repeatable-read consistent snapshot while
-     * MySQL's global read lock prevents commits between those two operations.
+     * Captures Low before opening a repeatable-read consistent snapshot.
      *
-     * <p>The lock is released immediately after the JDBC SELECT has opened on the
-     * anchored read view. A failure always releases it before propagating.
+     * <p>Transactions committed between the Low watermark and read-view creation may be
+     * visible in both the snapshot and the Low-to-High Binlog interval. Chunk Backfill
+     * reconciles those changes; a global read lock is not required to close this window.
      */
-    private BinlogOffset openConsistentSnapshot(MySqlSnapshotSplit split) throws SQLException {
+    BinlogOffset openConsistentSnapshot(MySqlSnapshotSplit split) throws SQLException {
+        checkCancelled();
+        BinlogOffset low;
+        try {
+            low = watermark();
+            afterLowWatermark.call();
+            checkCancelled();
+        } catch (Exception failure) {
+            throw new SQLException("Cannot capture typed snapshot Low watermark", failure);
+        }
+        openTypedSnapshotReadView(split);
+        return low;
+    }
+
+    /** Opens and pins the typed InnoDB view without requiring a global table lock. */
+    void openTypedSnapshotReadView(MySqlSnapshotSplit split) throws SQLException {
         checkCancelled();
         Connection view = null;
-        BinlogOffset low;
-        try (Connection lockConnection = config.openSnapshotConnection();
-                Statement lock = lockConnection.createStatement()) {
-            readLockStatement = lock;
-            lock.setQueryTimeout(60);
-            boolean acquired = false;
-            try {
-                lock.execute("FLUSH TABLES WITH READ LOCK");
-                acquired = true;
-                checkCancelled();
-                low = watermark(lockConnection);
-                view = config.openSnapshotConnection();
-                view.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
-                view.setReadOnly(true);
-                view.setAutoCommit(false);
-                try (Statement transaction = view.createStatement()) {
-                    transaction.setQueryTimeout(60);
-                    transaction.execute("START TRANSACTION WITH CONSISTENT SNAPSHOT");
-                }
-            } finally {
-                try {
-                    if (acquired) {
-                        try (Statement unlock = lockConnection.createStatement()) {
-                            unlock.setQueryTimeout(60);
-                            unlock.execute("UNLOCK TABLES");
-                        }
-                    }
-                } finally {
-                    readLockStatement = null;
-                }
+        try {
+            view = config.openSnapshotConnection();
+            view.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
+            view.setReadOnly(true);
+            view.setAutoCommit(false);
+            try (Statement transaction = view.createStatement()) {
+                transaction.setQueryTimeout(60);
+                transaction.execute("START TRANSACTION WITH CONSISTENT SNAPSHOT");
             }
+            // SnapshotSplitReader takes ownership of the pinned connection on success.
+            snapshots.open(split, view);
         } catch (SQLException | RuntimeException failure) {
             if (view != null) {
                 try {
@@ -212,23 +215,10 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
                 }
             }
             throw new SQLException(
-                    "Cannot establish a consistent keyless snapshot read view; "
-                            + "MySQL FLUSH TABLES WITH READ LOCK and REPEATABLE READ privileges are required",
+                    "Cannot establish a consistent typed snapshot read view; "
+                            + "MySQL REPEATABLE READ and SELECT privileges are required",
                     failure);
         }
-        // A pinned InnoDB read view remains valid after UNLOCK TABLES. Never hold
-        // the global lock while executing or fetching the potentially large SELECT.
-        try {
-            snapshots.open(split, view);
-        } catch (SQLException | RuntimeException failure) {
-            try {
-                view.close();
-            } catch (SQLException closeFailure) {
-                failure.addSuppressed(closeFailure);
-            }
-            throw failure;
-        }
-        return low;
     }
 
     private BinlogOffset watermark(Connection connection) throws SQLException {
@@ -279,14 +269,12 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
         snapshots.cancel();
         binlog.requestStop();
         Statement running = watermarkStatement;
-        Statement lock = readLockStatement;
-        if (running != null || lock != null)
+        if (running != null)
             Thread.ofVirtual().name("yak-mysql-watermark-cancel").start(() -> {
                 try {
-                    if (running != null) running.cancel();
-                    if (lock != null && lock != running) lock.cancel();
+                    running.cancel();
                 } catch (SQLException ignored) {
-                    /* Owning fetcher releases global locks and JDBC resources in finally. */
+                    /* The owning fetcher releases JDBC resources in finally. */
                 }
             });
     }

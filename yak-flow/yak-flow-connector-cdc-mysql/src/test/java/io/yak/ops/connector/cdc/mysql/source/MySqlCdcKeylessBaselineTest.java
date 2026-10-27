@@ -13,6 +13,7 @@ import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.jdbc.sink.JdbcSinkSchemaValidator;
+import io.yak.ops.connector.jdbc.sink.JdbcWriteMode;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
@@ -25,9 +26,8 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
- * Records the current MySQL hybrid CDC admission boundary before typed chunk-key and keyless
- * snapshot support. Future changes must update these rejection tests alongside positive recovery
- * tests rather than silently weakening admission.
+ * Ensures unsupported source schemas and legacy BIGINT snapshot inputs fail closed
+ * without weakening supported typed split planning and durable snapshot transport.
  */
 class MySqlCdcKeylessBaselineTest {
     private static final TableId TABLE = new TableId("shop", null, "orders");
@@ -48,11 +48,11 @@ class MySqlCdcKeylessBaselineTest {
                 IllegalArgumentException.class,
                 () -> new MySqlCdcSourceConfig(
                         "localhost", 3306, "user", "secret", 6101, "baseline", Map.of(TABLE, KEYLESS), 256));
-        assertTrue(failure.getMessage().contains("Chunk Key"));
+        assertTrue(failure.getMessage().toLowerCase(java.util.Locale.ROOT).contains("chunk key"));
     }
 
     @Test
-    void rejectsNonBigintNullableAndCompositePhysicalPrimaryKeys() {
+    void admitsNumericCompositePrimaryKeysAndRejectsUnsafeTypes() {
         var varcharKey = new TableSchema(
                 List.of(new Column("id", LogicalTypes.varchar(64).copy(false))), List.of("id"));
         var nullableKey = new TableSchema(
@@ -64,9 +64,10 @@ class MySqlCdcKeylessBaselineTest {
                 List.of("tenant", "id"));
 
         var factory = new MySqlCdcSourceFactory();
-        for (TableSchema schema : List.of(varcharKey, nullableKey, compositeKey)) {
+        for (TableSchema schema : List.of(varcharKey, nullableKey)) {
             assertThrows(IllegalArgumentException.class, () -> factory.validateSchema(schema));
         }
+        factory.validateSchema(compositeKey);
         assertEquals("id", MySqlChunkSplitter.splitKey(KEYED));
         factory.validateSchema(KEYED);
     }
@@ -84,13 +85,13 @@ class MySqlCdcKeylessBaselineTest {
                         List.of(new FinishedSnapshotSplitInfo(TABLE, "chunk", null, null, high))));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> JdbcSinkSchemaValidator.validate(KEYLESS, KEYED, true));
+                () -> JdbcSinkSchemaValidator.validate(KEYLESS, KEYED, JdbcWriteMode.UPSERT));
     }
 
     @Test
     void durableSnapshotTransportPreservesIdenticalKeylessRows() throws Exception {
-        // The checkpoint transport already preserves multiplicity, even though backfill does not
-        // yet support keyless rows. An ordinary Map<RowData, RowData> must not replace this list.
+        // Snapshot transport preserves repeated physical rows across durable checkpoints.
+        // An ordinary Map<RowData, RowData> must not replace this list.
         var duplicate = new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(7L, "same"));
         var other = new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(8L, "other"));
         var prepared = new MySqlSnapshotSplit("chunk", "fingerprint", TABLE, null, null, null)

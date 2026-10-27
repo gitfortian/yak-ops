@@ -7,6 +7,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 NETWORK_IO = "yak-flow/yak-flow-runtime/src/main/java/io/yak/ops/flow/runtime/io/"
+OBSOLETE_DATA_SYNC_PACKAGES = (
+    "yak-ops-common/src/main/java/io/yak/ops/common/bean/dto/datasync",
+    "yak-ops-common/src/main/java/io/yak/ops/common/bean/vo/datasync",
+    "yak-ops-common/src/main/java/io/yak/ops/common/enums/datasync",
+)
 
 # Mask comments and literal contents while preserving newlines for actionable errors.
 JAVA_NON_CODE = re.compile(
@@ -90,6 +95,9 @@ def production_java_files(root: Path = ROOT) -> list[Path]:
 def verify_repository(root: Path = ROOT) -> tuple[int, list[str]]:
     files = production_java_files(root)
     errors = []
+    for folder in OBSOLETE_DATA_SYNC_PACKAGES:
+        if (root / folder).exists():
+            errors.append(f"Obsolete Data Sync contract package must not return: {folder}")
     for path in files:
         relative = path.relative_to(root).as_posix()
         for line, reason in verify_source(relative, path.read_text(encoding="utf-8")):

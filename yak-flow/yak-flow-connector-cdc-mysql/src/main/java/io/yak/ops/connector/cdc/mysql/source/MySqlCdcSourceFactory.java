@@ -7,7 +7,7 @@ import io.yak.ops.configuration.rule.OptionRule;
 import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.base.factory.TableSourceFactory;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
-import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlChunkSplitter;
+import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.Source;
@@ -20,7 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Creates a hybrid MySQL Source from direct connection and replication settings. */
+/** Creates an initial Snapshot + Binlog Source or a latest-position Binlog Source. */
 @AutoService(TableSourceFactory.class)
 public final class MySqlCdcSourceFactory implements TableSourceFactory {
     @Override
@@ -31,10 +31,10 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
     @Override
     public OptionRule optionRule() {
         return OptionRule.builder()
-                .optional(MySqlCdcSourceOptions.KEYLESS_ENABLED)
                 .optional(
                         MySqlCdcSourceOptions.CHUNK_KEY_COLUMN,
                         Conditions.notBlank(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN))
+                .optional(MySqlCdcSourceOptions.STARTUP_MODE)
                 .build();
     }
 
@@ -69,16 +69,28 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
 
     @Override
     public void validateSchema(TableSchema schema) {
-        MySqlChunkSplitter.splitKey(schema);
+        ChunkUtils.requireSupportedSnapshot(schema, null);
     }
 
     @Override
     public void validateSchema(ReadonlyConfig options, TableSchema schema) {
-        if (options.get(MySqlCdcSourceOptions.KEYLESS_ENABLED)) {
-            MySqlKeylessSourceContract.validate(schema, options.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
+        StartupMode startupMode = StartupMode.from(options.get(MySqlCdcSourceOptions.STARTUP_MODE));
+        String selected = options.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN);
+        if (startupMode == StartupMode.INITIAL) {
+            ChunkUtils.requireSupportedSnapshot(schema, selected);
             return;
         }
-        MySqlChunkSplitter.splitKey(schema, options.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
+        if (selected != null) {
+            throw new IllegalArgumentException("Snapshot Chunk Key is not supported for latest-offset startup");
+        }
+        if (schema.primaryKeys().isEmpty()) {
+            throw new IllegalArgumentException("Latest-offset MySQL CDC requires a physical primary key");
+        }
+        for (var column : schema.columns()) {
+            if (!column.dataType().isResolved()) {
+                throw new IllegalArgumentException("MySQL CDC requires resolved source column types");
+            }
+        }
     }
 
     @Override
@@ -93,18 +105,17 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
         }
         var first = contexts.getFirst();
         ReadonlyConfig options = first.options();
+        StartupMode startupMode = StartupMode.from(options.get(MySqlCdcSourceOptions.STARTUP_MODE));
         if (options.get(JdbcConnectionOptions.SSH_ENABLED)) {
             throw new UnsupportedOperationException("MySQL CDC requires a direct MySQL connection");
         }
         Map<String, Object> common = new LinkedHashMap<>(options.getSourceMap());
         common.remove(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key());
-        common.remove(MySqlCdcSourceOptions.KEYLESS_ENABLED.key());
         for (var context : contexts) {
             FactoryUtil.validateCreation(context.options(), this);
             validateSchema(context.options(), context.schema());
             Map<String, Object> selected = new LinkedHashMap<>(context.options().getSourceMap());
             selected.remove(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key());
-            selected.remove(MySqlCdcSourceOptions.KEYLESS_ENABLED.key());
             if (!common.equals(selected) || context.metrics() != first.metrics()) {
                 throw new IllegalArgumentException(
                         "MySQL CDC tables must share connection, replication and observation settings");
@@ -130,7 +141,9 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
             builder.table(
                     context.table(), context.schema(), context.options().get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
         }
-        return builder.buildHybrid(options.get(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE), first.metrics());
+        return startupMode == StartupMode.INITIAL
+                ? builder.buildHybrid(options.get(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE), first.metrics())
+                : builder.build();
     }
 
     /**

@@ -17,7 +17,13 @@ export function selectSourceSchema(
 ): EditorForm {
   return {
     ...form,
-    source: { ...form.source, schema, table: "", keylessEnabled: false, chunkKeyColumn: "" },
+    source: {
+      ...form.source,
+      schema,
+      table: "",
+      sourceHasPrimaryKey: undefined,
+      chunkKeyColumn: "",
+    },
     sink: clearTargetWriteIdentity(form, usesChangelog),
   };
 }
@@ -34,27 +40,25 @@ export function selectSourceTable(
       database: form.source.database || table.database || "",
       schema: form.source.schema || table.schema || "",
       table: table.name,
-      keylessEnabled: false,
+      sourceHasPrimaryKey: undefined,
       chunkKeyColumn: "",
     },
     sink: clearTargetWriteIdentity(form, usesChangelog),
   };
 }
 
-export function setKeylessSource(form: EditorForm, enabled: boolean): EditorForm {
+/** Real source metadata selects the write intent without a product-level keyless flag. */
+export function setSourcePrimaryKeys(form: EditorForm, hasPrimaryKey: boolean): EditorForm {
+  if (form.source.sourceHasPrimaryKey === hasPrimaryKey) return form;
+  const retract = !hasPrimaryKey && form.sink.targetPrimaryKeys.length === 0;
   return {
     ...form,
-    source: {
-      ...form.source,
-      keylessEnabled: enabled,
-      chunkKeyColumn: enabled ? form.source.chunkKeyColumn : "",
-    },
+    source: { ...form.source, sourceHasPrimaryKey: hasPrimaryKey },
     sink: {
       ...form.sink,
-      targetPrimaryKeys: [],
-      writeMode: enabled ? "RETRACT" : "UPSERT",
-      schemaChangesEnabled: enabled ? false : form.sink.schemaChangesEnabled,
-      allowDropColumns: enabled ? false : form.sink.allowDropColumns,
+      writeMode: retract ? "RETRACT" : "UPSERT",
+      schemaChangesEnabled: hasPrimaryKey ? form.sink.schemaChangesEnabled : false,
+      allowDropColumns: hasPrimaryKey ? form.sink.allowDropColumns : false,
     },
   };
 }

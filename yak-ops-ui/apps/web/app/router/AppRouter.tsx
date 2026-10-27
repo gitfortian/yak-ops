@@ -13,7 +13,7 @@ import ReverseModelingPage from "@/app/data-modeling/dimension-modeling/reverse"
 import LogicalModelEditorPage from "@/app/data-modeling/logical-models/editor";
 import { DataSyncTaskEditorPage } from "@/app/data-sync/editor/page";
 import { DataSyncTaskDetailPage } from "@/app/data-sync/detail";
-import { DataSyncRouteRedirect, DataSyncInstanceRedirect } from "./data-sync-redirects";
+import { DataSyncInstanceRedirect } from "./data-sync-instance-redirect";
 import {
   OfflineTaskOperationsPage,
   RealtimeTaskOperationsPage,
@@ -46,10 +46,6 @@ const AUTHENTICATED_PATHS = new Set([
   "/data-source",
   "/data-sync",
   "/data-sync/new",
-  "/offline-sync",
-  "/offline-sync/new",
-  "/realtime-sync",
-  "/realtime-sync/new",
   "/operations",
   "/operations/offline-tasks",
   "/operations/realtime-tasks",
@@ -60,8 +56,6 @@ const AUTHENTICATED_PATHS = new Set([
 const isAuthenticatedPath = (pathname: string) =>
   AUTHENTICATED_PATHS.has(pathname) ||
   pathname.startsWith("/data-sync/") ||
-  pathname.startsWith("/offline-sync/") ||
-  pathname.startsWith("/realtime-sync/") ||
   pathname.startsWith("/operations/") ||
   pathname.startsWith("/data-modeling/logical-models/");
 
@@ -171,22 +165,6 @@ export default function AppRouter() {
           <Route path="/data-sync/new" element={<DataSyncTaskEditorPage />} />
           <Route path="/data-sync/:id/edit" element={<DataSyncTaskEditorPage />} />
           <Route path="/data-sync/:id/detail" element={<DataSyncTaskDetailPage />} />
-          <Route path="/offline-sync" element={<DataSyncRouteRedirect kind="list" />} />
-          <Route path="/offline-sync/new" element={<DataSyncRouteRedirect kind="new" />} />
-          <Route path="/offline-sync/instances/:id" element={<DataSyncInstanceRedirect />} />
-          <Route
-            path="/offline-sync/:taskId/detail"
-            element={<DataSyncRouteRedirect kind="detail" />}
-          />
-          <Route path="/offline-sync/:id" element={<DataSyncRouteRedirect kind="edit" />} />
-          <Route path="/realtime-sync" element={<DataSyncRouteRedirect kind="list" />} />
-          <Route path="/realtime-sync/new" element={<DataSyncRouteRedirect kind="new" />} />
-          <Route path="/realtime-sync/instances/:id" element={<DataSyncInstanceRedirect />} />
-          <Route
-            path="/realtime-sync/:taskId/detail"
-            element={<DataSyncRouteRedirect kind="detail" />}
-          />
-          <Route path="/realtime-sync/:id" element={<DataSyncRouteRedirect kind="edit" />} />
         </Route>
 
         <Route

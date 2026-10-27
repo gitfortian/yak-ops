@@ -49,7 +49,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 /** CDC and JDBC runtime integration, independent of the Task platform. */
 @Tag("pipeline")
-@Tag("cdc-pipeline")
 @Timeout(360)
 abstract class MySqlCdcPipelineTestBase {
     @RegisterExtension
@@ -68,6 +67,7 @@ abstract class MySqlCdcPipelineTestBase {
     Path stateDirectory;
 
     @Test
+    @Tag("cdc-changelog")
     void restoresCheckpointAndConvergesMultiTableChangelogAtEachJdbcDestination() throws Exception {
 
         String password = SOURCE.metadata().password();
@@ -195,6 +195,7 @@ abstract class MySqlCdcPipelineTestBase {
     }
 
     @Test
+    @Tag("cdc-schema")
     void evolvesExistingTableAndRecoversSchemaWithBinlogCheckpoint() throws Exception {
         JdbcConnectionOptions sourceOptions =
                 new JdbcConnectionOptions(SOURCE.metadata().url(), "root", SOURCE.metadata().password());

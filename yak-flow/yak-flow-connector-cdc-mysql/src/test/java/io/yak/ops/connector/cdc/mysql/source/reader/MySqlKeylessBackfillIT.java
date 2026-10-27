@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 /** Real MySQL no-PK snapshot, Debezium events, watermarks and frozen Checkpoint transport. */
-@Tag("cdc")
+@Tag("cdc-snapshot")
 @Timeout(180)
 class MySqlKeylessBackfillIT {
     @RegisterExtension static final MySqlDatabase DATABASE = MySqlDatabase.cdc();

@@ -32,7 +32,9 @@ class SuiteSelectionTest(unittest.TestCase):
         selected = subject.select([subject.JDBC + "/src/main/java/reader/JdbcReader.java"])
         self.assertIn("jdbc-oracle", selected)
         self.assertIn("pipeline", selected)
-        self.assertIn("cdc-pipeline", selected)
+        self.assertIn("cdc-pipeline-mysql", selected)
+        self.assertIn("cdc-pipeline-postgres", selected)
+        self.assertIn("cdc-pipeline-oracle", selected)
 
     def test_mysql_change_does_not_select_postgres_leaf_tests(self):
         selected = subject.select([subject.JDBC + "/src/main/java/dialect/MySqlDialect.java"])
@@ -42,8 +44,13 @@ class SuiteSelectionTest(unittest.TestCase):
     def test_rename_includes_old_and_new_owner(self):
         selected = subject.select([subject.JDBC + "/src/main/java/MySqlDialect.java", subject.CDC + "/src/main/java/X.java"])
         self.assertIn("jdbc-mysql", selected)
-        self.assertIn("cdc", selected)
-        self.assertIn("cdc-pipeline", selected)
+        self.assertIn("cdc-binlog", selected)
+        self.assertIn("cdc-snapshot", selected)
+        self.assertIn("cdc-hybrid", selected)
+        self.assertIn("cdc-recovery", selected)
+        self.assertIn("cdc-pipeline-mysql", selected)
+        self.assertIn("cdc-pipeline-postgres", selected)
+        self.assertIn("cdc-pipeline-oracle", selected)
 
     def test_deleted_test_keeps_owner_selected(self):
         self.assertIn("pipeline", subject.select([subject.JDBC + "/src/test/java/integration/MySqlToMySqlIT.java"]))
@@ -59,8 +66,22 @@ class SuiteSelectionTest(unittest.TestCase):
     def test_unselected_is_not_pass(self):
         self.assertEqual("NOT SELECTED", subject.require_results([], "success", "skipped"))
         for result in ("skipped", "failure", "cancelled", ""):
-            self.assertRaises(ValueError, subject.require_results, ["cdc"], "success", result)
+            self.assertRaises(ValueError, subject.require_results, ["cdc-binlog"], "success", result)
         self.assertRaises(ValueError, subject.require_results, [], "failure", "skipped")
+
+
+class NightlyAcceptanceTest(unittest.TestCase):
+    def test_nightly_calls_full_suite_not_fast_or_selected_only(self):
+        workflow = (subject.ROOT / ".github/workflows/nightly-backend-acceptance.yml").read_text()
+        self.assertIn("schedule:", workflow)
+        self.assertIn("uses: ./.github/workflows/backend-tests.yml", workflow)
+        self.assertIn("suite: full", workflow)
+        self.assertNotIn("continue-on-error: true", workflow)
+
+    def test_release_full_retains_cross_db_acceptance(self):
+        self.assertIn("cdc-acceptance-postgres", subject.SUITES)
+        self.assertIn("cdc-acceptance-oracle", subject.SUITES)
+        self.assertIn("cdc-recovery", subject.SUITES)
 
 
 class MavenIntegrationProfileTest(unittest.TestCase):
@@ -92,7 +113,7 @@ class MavenIntegrationProfileTest(unittest.TestCase):
 
 
 class ReportTest(unittest.TestCase):
-    CDC_COUNTS = {"MySqlBinlogIT": 3, "MySqlHybridIT": 3, "MySqlBackfillIT": 2, "MySqlKeylessBackfillIT": 5}
+    CDC_COUNTS = {"MySqlBackfillIT": 6, "MySqlKeylessBackfillIT": 6}
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -113,8 +134,8 @@ class ReportTest(unittest.TestCase):
 
     def test_complete_reports_pass(self):
         self.complete_reports()
-        self.assertEqual(self.CDC_COUNTS, subject.SUITES["cdc"][2])
-        self.assertEqual(self.CDC_COUNTS, subject.check_reports(["cdc"], self.root))
+        self.assertEqual(self.CDC_COUNTS, subject.SUITES["cdc-snapshot"][2])
+        self.assertEqual(self.CDC_COUNTS, subject.check_reports(["cdc-snapshot"], self.root))
 
     def test_missing_zero_skipped_failed_or_partial_are_not_green(self):
         self.complete_reports()
@@ -124,36 +145,49 @@ class ReportTest(unittest.TestCase):
                      valid_case * 2 + '<testcase classname="sample.NAME"><failure/></testcase>',
                      valid_case * 2 + '<testcase classname="sample.NAME"><error/></testcase>'):
             with self.subTest(body=body):
-                self.write("MySqlHybridIT", body)
-                with self.assertRaisesRegex(ValueError, "MySqlHybridIT"):
-                    subject.check_reports(["cdc"], self.root)
-        (self.reports / "TEST-MySqlHybridIT.xml").unlink()
-        with self.assertRaisesRegex(ValueError, "MySqlHybridIT"):
-            subject.check_reports(["cdc"], self.root)
+                self.write("MySqlBackfillIT", body)
+                with self.assertRaisesRegex(ValueError, "MySqlBackfillIT"):
+                    subject.check_reports(["cdc-snapshot"], self.root)
+        (self.reports / "TEST-MySqlBackfillIT.xml").unlink()
+        with self.assertRaisesRegex(ValueError, "MySqlBackfillIT"):
+            subject.check_reports(["cdc-snapshot"], self.root)
 
     def test_backfill_reports_are_required_in_addition_to_hybrid_reports(self):
         self.complete_reports()
         self.write("MySqlBackfillIT")
         with self.assertRaisesRegex(ValueError, "MySqlBackfillIT"):
-            subject.check_reports(["cdc"], self.root)
+            subject.check_reports(["cdc-snapshot"], self.root)
         (self.reports / "TEST-MySqlBackfillIT.xml").unlink()
         with self.assertRaisesRegex(ValueError, "MySqlBackfillIT"):
-            subject.check_reports(["cdc"], self.root)
+            subject.check_reports(["cdc-snapshot"], self.root)
 
     def test_keyless_backfill_reports_are_required(self):
         self.complete_reports()
         self.write("MySqlKeylessBackfillIT")
         with self.assertRaisesRegex(ValueError, "MySqlKeylessBackfillIT"):
-            subject.check_reports(["cdc"], self.root)
+            subject.check_reports(["cdc-snapshot"], self.root)
         (self.reports / "TEST-MySqlKeylessBackfillIT.xml").unlink()
         with self.assertRaisesRegex(ValueError, "MySqlKeylessBackfillIT"):
-            subject.check_reports(["cdc"], self.root)
+            subject.check_reports(["cdc-snapshot"], self.root)
 
     def test_xml_summary_errors_block_even_without_testcase(self):
         self.complete_reports()
-        self.write("MySqlHybridIT", body='', attributes='errors="1"')
+        self.write("MySqlBackfillIT", body='', attributes='errors="1"')
         with self.assertRaisesRegex(ValueError, "Failed or skipped selected integration test"):
-            subject.check_reports(["cdc"], self.root)
+            subject.check_reports(["cdc-snapshot"], self.root)
+
+    def test_pipeline_and_crash_recovery_are_distinct_suites(self):
+        self.assertEqual({"MySqlCdcToMySqlIT": 2}, subject.SUITES["cdc-pipeline-mysql"][2])
+        self.assertEqual({"MySqlCdcToPostgresIT": 1}, subject.SUITES["cdc-pipeline-postgres"][2])
+        self.assertEqual({"MySqlCdcToOracleIT": 1}, subject.SUITES["cdc-pipeline-oracle"][2])
+        self.assertEqual({"MySqlCdcToPostgresIT": 1}, subject.SUITES["cdc-acceptance-postgres"][2])
+        self.assertEqual({"MySqlCdcToOracleIT": 1}, subject.SUITES["cdc-acceptance-oracle"][2])
+        self.assertEqual({"MySqlCdcToMySqlCrashRecoveryIT": 1}, subject.SUITES["cdc-recovery"][2])
+        owners = [classname for suite, spec in subject.SUITES.items()
+                  if suite.startswith("cdc-") for classname in spec[2]]
+        self.assertEqual(2, owners.count("MySqlCdcToPostgresIT"))
+        self.assertEqual(2, owners.count("MySqlCdcToOracleIT"))
+        self.assertEqual(len(owners) - 2, len(set(owners)))
 
     def test_new_unregistered_it_fails(self):
         with patch.object(subject, "SUITES", {"small": ("module", "tag", {"NamedIT": 1})}):

@@ -41,8 +41,8 @@ export function buildEditorPayload(
     ...(!batch && offlineIncremental(draft.solutionType, draft.steps) && form.source.incremental
       ? { incremental: { ...form.source.incremental } }
       : {}),
-    ...(usesChangelog && form.source.keylessEnabled && !batch
-      ? { keylessEnabled: true, chunkKeyColumn: form.source.chunkKeyColumn }
+    ...(usesChangelog && form.source.chunkKeyColumn && !batch
+      ? { chunkKeyColumn: form.source.chunkKeyColumn }
       : {}),
     ...(usesChangelog
       ? {
@@ -105,16 +105,16 @@ export function canSaveEditor({
     !solutionsLoading &&
     !solutionsError &&
     combination!.writeModes.includes(form.sink.writeMode) &&
-    (form.source.keylessEnabled
-      ? !batch &&
-        draft.solutionType === "SINGLE_TABLE_REALTIME" &&
-        draft.targetType === "MYSQL" &&
-        !form.sink.schemaChangesEnabled &&
-        (form.sink.targetPrimaryKeys?.length
-          ? form.sink.writeMode === "UPSERT" && form.sink.targetPrimaryKeys.every(Boolean)
-          : form.sink.writeMode === "RETRACT") &&
-        Boolean(form.source.chunkKeyColumn.trim())
-      : form.sink.writeMode !== "RETRACT") &&
+    (!(!batch && draft.solutionType === "SINGLE_TABLE_REALTIME") ||
+      (form.source.sourceHasPrimaryKey !== undefined &&
+        (form.source.sourceHasPrimaryKey
+          ? form.sink.writeMode !== "RETRACT"
+          : draft.targetType === "MYSQL" &&
+            !form.sink.schemaChangesEnabled &&
+            Boolean(form.source.chunkKeyColumn.trim()) &&
+            (form.sink.targetPrimaryKeys.length
+              ? form.sink.writeMode === "UPSERT" && form.sink.targetPrimaryKeys.every(Boolean)
+              : form.sink.writeMode === "RETRACT")))) &&
     (!useIncremental ||
       (batch
         ? mappings.every((mapping) => validIncrementalConfig(mapping.incremental, !initialLoad))

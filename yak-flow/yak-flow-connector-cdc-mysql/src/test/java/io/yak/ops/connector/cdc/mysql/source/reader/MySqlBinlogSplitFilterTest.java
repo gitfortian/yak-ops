@@ -1,8 +1,11 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.core.data.GenericRowData;
@@ -10,6 +13,7 @@ import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.types.Column;
+import io.yak.ops.core.types.LogicalTypeRoot;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
 import java.util.List;
@@ -37,6 +41,35 @@ class MySqlBinlogSplitFilterTest {
         assertEquals(List.of(), filter.filter(event(250, row(RowKind.INSERT, 101, "within high"))).records());
         assertEquals(List.of(RowKind.DELETE), filter.filter(event(350, row(RowKind.DELETE, 101, "after high")))
                 .records().stream().map(TableRecord::rowKind).toList());
+    }
+
+    @Test
+    void entersPureBinlogPhaseOnlyAfterTheGreatestChunkHighWatermark() {
+        MySqlBinlogSplitFilter filter = filter();
+        assertFalse(filter.isPureBinlogPhase(TABLE));
+
+        assertEquals(1, filter.filter(event(250, row(RowKind.INSERT, 1, "past first high"))).records().size());
+        assertFalse(filter.isPureBinlogPhase(TABLE), "The second Chunk has not reached its High yet");
+
+        assertEquals(1, filter.filter(event(301, row(RowKind.INSERT, 101, "past all highs"))).records().size());
+        assertTrue(filter.isPureBinlogPhase(TABLE));
+        assertEquals(1, filter.filter(event(302, row(RowKind.INSERT, 101, "pure binlog"))).records().size());
+    }
+
+    @Test
+    void unboundedStringChunkRemainsValidAfterPureBinlogTransition() {
+        TableSchema schema = new TableSchema(
+                List.of(new Column("code", LogicalTypes.varchar(40).copy(false))), List.of());
+        var filter = MySqlBinlogSplitFilter.forChunks(
+                Map.of(TABLE, schema),
+                List.of(new MySqlBinlogSplitFilter.FinishedChunk(
+                        "single",
+                        new ChunkRange(TABLE, "code", LogicalTypeRoot.VARCHAR, null, null),
+                        offset(200))));
+        BinlogEvent event = new BinlogEvent(
+                List.of(new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of("abc"))), offset(201));
+        assertEquals(1, filter.filter(event).records().size());
+        assertTrue(filter.isPureBinlogPhase(TABLE));
     }
 
     @Test

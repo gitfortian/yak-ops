@@ -54,7 +54,7 @@ export interface DataSyncIncrementalConfig {
 }
 
 export interface DataSyncTableMapping {
-  source: DataSyncTablePath & { keyless?: boolean; chunkKeyColumn?: string; xa?: boolean };
+  source: DataSyncTablePath & { chunkKeyColumn?: string };
   target: DataSyncTablePath & { primaryKeys?: string[] };
   writeMode: DataSyncWriteMode;
   incremental?: DataSyncIncrementalConfig;
@@ -123,61 +123,46 @@ export interface DataSyncStageReport extends DataSyncExecutionSummary {
 export type DataSyncExecutionReport = DataSyncBatchReport | DataSyncStageReport;
 
 export interface DataSyncParameters {
-  /** Optional for definitions created before runtime evolution was configurable. */
-  schemaChangesEnabled?: boolean;
-  allowDropColumns?: boolean;
   solutionType: DataSyncSolutionType;
-  steps: DataSyncStep[];
-  source: { datasourceId: string };
-  sink: { datasourceId: string };
-  tableSelection: { mode: "EXPLICIT" };
-  tableMappings: DataSyncTableMapping[];
+  /** Data steps only; SCHEMA is an execution stage derived from Sink policy. */
+  steps: Array<"FULL" | "INCREMENTAL">;
+  source: {
+    datasourceId: string;
+    tables: Array<
+      DataSyncTablePath & {
+        id: string;
+        snapshot?: { chunkKeyColumn: string };
+        incremental?: DataSyncIncrementalConfig;
+      }
+    >;
+  };
+  transform: [];
+  sink: {
+    datasourceId: string;
+    schemaPolicy: {
+      initial: "VERIFY" | "CREATE_OR_ALTER";
+      evolution: { enabled: boolean; allowDropColumns: boolean };
+    };
+    tables: Array<
+      DataSyncTablePath & {
+        input: string;
+        write: {
+          mode: DataSyncWriteMode;
+          primaryKeys?: string[];
+          transaction?: { mode: "CHECKPOINT_XA" };
+        };
+      }
+    >;
+  };
+  env: Record<string, never>;
 }
 
 export type DataSyncTaskStatus = "UNPUBLISHED" | "PUBLISHED";
-
-export type DataSyncRuntimePolicy = "AUTO" | "FIXED";
-
-export interface DataSyncRuntimeConfig {
-  policy?: DataSyncRuntimePolicy;
-  fetchSize: number;
-  readBatchSize: number;
-  writeBatchSize: number;
-  splitSize?: number;
-  sourceParallelism: number;
-  timeoutSeconds: number;
-}
-
-export interface DataSyncRealtimeConfig {
-  checkpointIntervalSeconds: number;
-  queueCapacity: number;
-  pollBatchSize: number;
-  writeBatchSize: number;
-  timeoutSeconds: number;
-}
-
-export type DataSyncRetryPolicyMode = "SMART" | "FIXED";
-
-export interface DataSyncRetryPolicy {
-  mode?: DataSyncRetryPolicyMode;
-  maxAttempts: number;
-  backoffSeconds: number;
-}
-
-export interface DataSyncColumnMapping {
-  source: string;
-  target: string;
-}
-
-export interface DataSyncMappingConfig {
-  columns: DataSyncColumnMapping[];
-}
 
 export interface DataSyncTaskRecord {
   id: string;
   /** Persisted definition can be displayed, but fails current static execution validation. */
   configurationError?: string;
-  keylessEnabled?: boolean;
   chunkKeyColumn?: string;
   targetPrimaryKeys?: string[];
   schemaChangesEnabled?: boolean;
@@ -199,10 +184,6 @@ export interface DataSyncTaskRecord {
   targetDatabase?: string;
   targetSchema?: string;
   targetTable: string;
-  runtimeConfig?: DataSyncRuntimeConfig;
-  offlineRuntimePlan?: DataSyncOfflineRuntimePlan;
-  realtimeConfig?: DataSyncRealtimeConfig;
-  retryPolicy?: DataSyncRetryPolicy;
   definitionVersion: number;
   remark?: string;
   updateBy?: string;
@@ -246,7 +227,7 @@ export interface TaskDefinitionRecord {
   status: DataSyncTaskStatus | string;
   definitionVersion: number;
   parameterSchemaVersion: number;
-  parameters: string;
+  parameters: DataSyncParameters;
   debug: boolean;
   remark?: string;
   createTime?: string;
@@ -274,7 +255,6 @@ interface DataSyncTaskSaveBase {
 }
 
 export interface DataSyncTaskSavePayload extends DataSyncTaskSaveBase {
-  keylessEnabled?: boolean;
   chunkKeyColumn?: string;
   targetPrimaryKeys?: string[];
   schemaChangesEnabled?: boolean;
@@ -290,25 +270,6 @@ export type DataSyncTaskUpdatePayload =
   | DataSyncTaskSavePayload
   | Pick<DataSyncTaskSaveBase, "name" | "remark" | "debug">;
 
-export interface SyncPipelineParameters {
-  source: {
-    type: "JDBC" | "MYSQL_CDC";
-    datasourceId: string;
-    database?: string;
-    schema?: string;
-    table: string;
-  };
-  transform: [];
-  sink: {
-    type: "JDBC";
-    datasourceId: string;
-    database?: string;
-    schema?: string;
-    table: string;
-    writeMode: DataSyncWriteMode;
-  };
-}
-
 export type DataSyncInstanceStatus = TaskInstanceStatus;
 
 export interface DataSyncEndpointSnapshot {
@@ -320,15 +281,6 @@ export interface DataSyncEndpointSnapshot {
   table: string;
 }
 
-export interface DataSyncOfflineRuntimePlan {
-  policy?: DataSyncRuntimePolicy;
-  sourceRowCount?: number;
-  estimatedRowBytes?: number;
-  splitColumn?: string;
-  splitCount?: number;
-  statisticsAvailable?: boolean;
-}
-
 export interface DataSyncDefinitionSnapshot {
   tableMappings?: DataSyncTableMapping[];
   taskId: string;
@@ -338,14 +290,8 @@ export interface DataSyncDefinitionSnapshot {
   taskVersion: number;
   syncType?: DataSyncType | string;
   writeMode?: DataSyncWriteMode | string;
-  autoCreateTable?: boolean;
-  mapping?: DataSyncMappingConfig;
   source: DataSyncEndpointSnapshot;
   target: DataSyncEndpointSnapshot;
-  runtimeConfig?: DataSyncRuntimeConfig;
-  offlineRuntimePlan?: DataSyncOfflineRuntimePlan;
-  realtimeConfig?: DataSyncRealtimeConfig;
-  retryPolicy?: DataSyncRetryPolicy;
 }
 
 export interface DataSyncInstanceRecord {
@@ -392,24 +338,4 @@ export interface DataSyncInstancePageParams {
 export interface DataSyncInstancePageResult {
   bizData: DataSyncInstanceRecord[];
   pagination: PaginationInfo;
-}
-
-export interface DataSyncSchemaPreview {
-  mappingIndex: number;
-  target: { catalog: string; schema: string | null; table: string };
-  action: "CREATE" | "ALTER" | "VERIFY" | "BLOCKED";
-  statements: string[];
-  differences: Array<{
-    column: string | null;
-    action:
-      | "COMPATIBLE"
-      | "CREATE_TABLE"
-      | "ADD_COLUMN"
-      | "ALTER_COLUMN_TYPE"
-      | "METADATA_DIFFERENCE"
-      | "INCOMPATIBLE";
-    reason: string;
-    sourceType: string | null;
-    targetType: string | null;
-  }>;
 }

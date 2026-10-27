@@ -44,6 +44,8 @@ public final class MySqlBinlogSplitFilter {
 
     private final Map<TableId, List<FinishedChunk>> completed = new LinkedHashMap<>();
     private final Map<TableId, ChunkColumn> columns = new LinkedHashMap<>();
+    private final Map<TableId, BinlogOffset> maxHighWatermarks = new LinkedHashMap<>();
+    private final Set<TableId> pureBinlogPhaseTables = new HashSet<>();
     private final boolean legacyPrimaryKey;
     private final Set<TableId> schemasWithPrimaryKey = new HashSet<>();
 
@@ -164,6 +166,12 @@ public final class MySqlBinlogSplitFilter {
                     throw new IllegalArgumentException("Finished snapshot ranges have a gap or overlap");
                 }
             }
+            maxHighWatermarks.put(
+                    table,
+                    chunks.stream()
+                            .map(FinishedChunk::highWatermark)
+                            .max(BinlogOffset::compareTo)
+                            .orElseThrow());
             return List.copyOf(chunks);
         });
     }
@@ -300,6 +308,15 @@ public final class MySqlBinlogSplitFilter {
             throw new IllegalArgumentException("Binlog row violates its frozen schema or chunk column");
         }
         Object value = record.row().getField(column.position());
+        // Validate the scalar type even after the fast path no longer needs a range lookup.
+        validateChunkValue(column.type(), value);
+        if (pureBinlogPhaseTables.contains(record.tableId())) {
+            return true;
+        }
+        if (event.offset().compareTo(maxHighWatermarks.get(record.tableId())) > 0) {
+            pureBinlogPhaseTables.add(record.tableId());
+            return true;
+        }
         int left = 0;
         int right = chunks.size() - 1;
         int found = 0;
@@ -320,6 +337,23 @@ public final class MySqlBinlogSplitFilter {
             throw new IllegalStateException("Missing finished snapshot metadata for Binlog chunk key");
         }
         return event.offset().compareTo(match.highWatermark()) > 0;
+    }
+
+    boolean isPureBinlogPhase(TableId tableId) {
+        return pureBinlogPhaseTables.contains(tableId);
+    }
+
+    private static void validateChunkValue(LogicalTypeRoot type, Object value) {
+        switch (type) {
+            case TINYINT, SMALLINT, INTEGER, BIGINT -> toLong(value);
+            case DECIMAL -> toDecimal(value);
+            case CHAR, VARCHAR -> {
+                if (!(value instanceof String)) {
+                    throw new IllegalArgumentException("String chunk key has an unexpected type");
+                }
+            }
+            default -> throw new IllegalArgumentException("Unsupported Binlog chunk key type: " + type);
+        }
     }
 
     private static int compare(LogicalTypeRoot type, Object left, Object right) {

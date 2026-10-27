@@ -10,21 +10,39 @@
 
 ## Task definition
 
-A keyless task must contain `xa: true`. This persisted protocol marker prevents an incompatible task definition from silently starting under a different transaction mechanism.
+The source table's physical primary key is discovered from authorized Catalog metadata. When no primary key exists, a non-null numeric snapshot Chunk Key is required. No persisted keyless flag or implicit row identity is accepted. The V4 job contract pins exact-row retraction under `sink.tables[].write.transaction.mode`, never under Source. The Schema Policy is owned by Sink. This example requires an authorized MySQL Source and Sink and verified target metadata.
 
 ```json
 {
   "solutionType": "SINGLE_TABLE_REALTIME",
   "steps": ["FULL", "INCREMENTAL"],
-  "schemaChangesEnabled": false,
-  "source": { "datasourceId": "source-mysql" },
-  "sink": { "datasourceId": "target-mysql" },
-  "tableSelection": { "mode": "EXPLICIT" },
-  "tableMappings": [{
-    "source": { "database": "app", "table": "events", "keyless": true, "chunkKeyColumn": "bucket", "xa": true },
-    "target": { "database": "ods", "table": "events" },
-    "writeMode": "RETRACT"
-  }]
+  "source": {
+    "datasourceId": "source-mysql",
+    "tables": [{
+      "id": "events",
+      "database": "app",
+      "table": "events",
+      "snapshot": { "chunkKeyColumn": "bucket" }
+    }]
+  },
+  "transform": [],
+  "sink": {
+    "datasourceId": "target-mysql",
+    "schemaPolicy": {
+      "initial": "VERIFY",
+      "evolution": { "enabled": false, "allowDropColumns": false }
+    },
+    "tables": [{
+      "input": "events",
+      "database": "ods",
+      "table": "events",
+      "write": {
+        "mode": "RETRACT",
+        "transaction": { "mode": "CHECKPOINT_XA" }
+      }
+    }]
+  },
+  "env": {}
 }
 ```
 
@@ -40,6 +58,6 @@ At each aligned Checkpoint the Sink prepares XA transactions. The Runtime persis
 
 `MySqlXaSinkIT` verifies prepared visibility, orphan cleanup and recovered commit acknowledgment. `RealtimeSyncIT` exercises the product MySQL-to-MySQL snapshot and Binlog path. The JDBC/CDC/process-recovery suites remain required. Isolated database tests do not prove every JVM crash boundary or distributed exactly-once semantics.
 
-Definitions missing the required XA marker are rejected. An incompatible previous execution and checkpoint are never implicitly upgraded or reinterpreted. After checking target data, explicitly create a new definition and execution rather than reusing stale state.
+Definitions missing the required Sink checkpoint XA transaction mode are rejected. An incompatible previous execution and checkpoint are never implicitly upgraded or reinterpreted. After checking target data, explicitly create a new definition and execution rather than reusing stale state.
 
 Unsupported cases include target schema changes, Chunk Key changes across snapshot ranges, unverified full-row comparisons, multiple Sink writers, remote/rescaled transactions and unbounded duplicate-row buffering.

@@ -1,4 +1,4 @@
-import { CollapseSection, Field, FieldLabel, Input, Switch, Textarea } from "@yak-ops/yak-ui";
+import { CollapseSection, Field, FieldLabel, Input, Textarea } from "@yak-ops/yak-ui";
 import { solutionSummary } from "../solution/presentation";
 import type { DataSyncDraft } from "@/service/data-sync";
 import type { EditorForm } from "./types";
@@ -37,14 +37,6 @@ export function BasicSection({ draft, form, patch }: Props) {
             className="min-h-[56px] resize-none"
             placeholder="可选"
             onValueChange={(value) => patch("remark", value)}
-          />
-        </Field>
-        <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
-          <FieldLabel>Debug</FieldLabel>
-          <Switch
-            size="small"
-            checked={form.debug}
-            onCheckedChange={(checked) => patch("debug", checked)}
           />
         </Field>
       </div>

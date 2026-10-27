@@ -71,6 +71,21 @@ class SinkCommitRecoveryTest {
     }
 
     @Test
+    void recoveryCommitsEveryPreparedTransactionFromTheLastCompletedCheckpoint() throws Exception {
+        RecordingSink sink = new RecordingSink();
+        TaskEnvironment context = context();
+        var backend = new OperatorStateBackend(java.util.Map.of(), context.taskInfo(), false);
+        backend.put("committable-0", 41L, SERIALIZER);
+        backend.put("committable-1", 42L, SERIALIZER);
+
+        new SinkWriterOperator<>(sink, context).recoverCommittables(backend);
+
+        assertEquals(List.of(List.of(41L, 42L)), sink.recovered);
+        assertEquals(List.of(List.of(41L, 42L)), sink.committed);
+        assertEquals(0, sink.writerCreations);
+    }
+
+    @Test
     void corruptedCommittableFailsBeforeAnyRecoveryOrCommit() throws Exception {
         RecordingSink sink = new RecordingSink();
         TaskEnvironment context = context();

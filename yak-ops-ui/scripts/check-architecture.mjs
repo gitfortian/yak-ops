@@ -71,9 +71,28 @@ const forbiddenFeatureForwarders = [
   "apps/web/app/schedule/schedule-dialog.tsx",
   "apps/web/app/schedule/schedule-form.tsx",
   "apps/web/app/schedule/schedule-fire-history.tsx",
+  "apps/web/app/router/data-sync-redirects.tsx",
 ];
 for (const path of forbiddenFeatureForwarders) {
   if (existsSync(join(root, path))) fail(`obsolete forwarding path exists: ${path}`);
+}
+
+const routerSource = readFileSync(join(root, "apps/web/app/router/AppRouter.tsx"), "utf8");
+if (/\/(?:offline|realtime)-sync\b/.test(routerSource)) {
+  fail("legacy offline/realtime sync routes must not be reintroduced");
+}
+
+const dataSyncTypes = readFileSync(join(root, "apps/web/service/data-sync/types.ts"), "utf8");
+for (const obsoleteType of [
+  "DataSyncRuntimeConfig",
+  "DataSyncRealtimeConfig",
+  "DataSyncRetryPolicy",
+  "DataSyncOfflineRuntimePlan",
+  "DataSyncMappingConfig",
+]) {
+  if (dataSyncTypes.includes(obsoleteType)) {
+    fail(`obsolete Data Sync type must not return: ${obsoleteType}`);
+  }
 }
 
 const packageRoot = join(root, "packages");

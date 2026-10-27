@@ -11,7 +11,7 @@ YOIPs record **long-lived architectural decisions** for significant subsystems, 
 | YOIP-3 | [Connector Creation and Datasource Lookup](YOIP-3-connector-creation-and-datasource-lookup.md) | Accepted (decision link not recorded) |
 | YOIP-5 | [Data Integration Synchronization Model](YOIP-5-data-integration-sync-product-model.md) | Accepted |
 | YOIP-6 | [MySQL Chunk Backfill and Durable Snapshot Output](YOIP-6-mysql-chunk-backfill-checkpoints.md) | Discussion (implementation merged) |
-| YOIP-20 | [Data Sync V4 Component-Owned Configuration Contract](YOIP-20-data-sync-v4-configuration-contract.md) | Discussion |
+| YOIP-20 | [Data Sync V4 Component-Owned Configuration Contract](YOIP-20-data-sync-v4-configuration-contract.md) | Accepted |
 
 YOIP-3 retains the original document's Accepted label, but no independent decision permalink was included in that historical record. YOIP-6 remains Discussion even though its implementation PR was merged. Merging implementation code or passing CI does not substitute for a design decision.
 

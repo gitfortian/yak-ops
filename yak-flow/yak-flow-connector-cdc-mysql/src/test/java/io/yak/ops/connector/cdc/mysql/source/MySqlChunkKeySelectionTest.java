@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-/** The configured chunk column is table-scoped, but unsupported hybrid execution still fails closed. */
+/** Chunk selection is table-scoped and never requires the physical primary key to be the split key. */
 class MySqlChunkKeySelectionTest {
     private static final TableId ORDERS = new TableId("shop", null, "orders");
     private static final TableId ITEMS = new TableId("shop", null, "items");
@@ -51,17 +51,15 @@ class MySqlChunkKeySelectionTest {
     }
 
     @Test
-    void hybridRuntimeStillRequiresTheSoleNonNullBigintPrimaryKey() {
+    void hybridRuntimeAcceptsTypedNumericAndNonPrimarySplitKeys() {
         assertEquals("id", MySqlChunkSplitter.splitKey(ORDERS_SCHEMA, null));
         assertEquals("id", MySqlChunkSplitter.splitKey(ORDERS_SCHEMA, "id"));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> MySqlChunkSplitter.splitKey(ORDERS_SCHEMA, "created_at"));
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new MySqlCdcSourceFactory().validateSchema(
-                        options().set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "created_at").toReadonlyConfig(),
-                        ORDERS_SCHEMA));
+        new MySqlCdcSourceFactory().validateSchema(
+                options().set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "created_at").toReadonlyConfig(),
+                ORDERS_SCHEMA);
         var keyless = new TableSchema(ORDERS_SCHEMA.columns(), List.of());
         assertThrows(IllegalArgumentException.class, () -> MySqlChunkSplitter.splitKey(keyless, "created_at"));
     }
@@ -110,7 +108,7 @@ class MySqlChunkKeySelectionTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> factory.createSource(new TableSourceFactoryContext(
-                        options().set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "created_at").toReadonlyConfig(),
+                        options().set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "name").toReadonlyConfig(),
                         ORDERS,
                         ORDERS_SCHEMA)));
     }

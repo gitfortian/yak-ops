@@ -53,7 +53,13 @@ final class SshTunnel implements AutoCloseable {
 
     @Override
     public void close() {
-        if (session.isConnected()) {
+        try {
+            // Stop the local listener before closing the SSH session. Disconnect alone
+            // can leave its forwarding acceptor briefly reachable during cleanup.
+            session.delPortForwardingL("127.0.0.1", localPort);
+        } catch (JSchException ignored) {
+            // The listener may already have been removed by session shutdown.
+        } finally {
             session.disconnect();
         }
     }

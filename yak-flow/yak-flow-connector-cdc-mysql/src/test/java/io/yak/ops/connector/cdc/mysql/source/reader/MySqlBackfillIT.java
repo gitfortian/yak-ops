@@ -10,6 +10,7 @@ import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
+import io.yak.ops.core.types.LogicalTypeRoot;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.testutils.MySqlDatabase;
@@ -25,7 +26,7 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 /** Real JDBC and Debezium with writes placed after scanning and before the per-chunk High. */
-@Tag("cdc")
+@Tag("cdc-snapshot")
 @Timeout(180)
 class MySqlBackfillIT {
     @RegisterExtension static final MySqlDatabase DATABASE = MySqlDatabase.cdc();
@@ -129,6 +130,118 @@ class MySqlBackfillIT {
             assertEquals(List.of(1, 2, 3, 4, 5), observed);
         } finally {
             execute("DROP TABLE " + table);
+        }
+    }
+
+
+    @Test
+    void typedKeyedChunkReconcilesTransactionCommittedBetweenLowAndReadView() throws Exception {
+        String table = "typed_tx_" + UUID.randomUUID().toString().replace("-", "");
+        execute(
+                "CREATE TABLE " + table + "(id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL)",
+                "INSERT INTO " + table + " VALUES (1,'before'),(2,'removed'),(50,'moved')");
+        TableId id = new TableId("yak_cdc_it", null, table);
+        try (var reader = new MySqlSnapshotBackfillReader(
+                config(Map.of(id, SCHEMA), 6811, table),
+                0,
+                () -> null,
+                () -> {
+                    // Commit after Low but before the repeatable-read view is established.
+                    // Snapshot may include these rows; Low-to-High Backfill must reconcile them.
+                    var db = DATABASE.metadata();
+                    try (var transaction = DriverManager.getConnection(db.url(), db.username(), db.password());
+                            var statement = transaction.createStatement()) {
+                        transaction.setAutoCommit(false);
+                        statement.executeUpdate("UPDATE " + table + " SET name='after' WHERE id=1");
+                        statement.executeUpdate("DELETE FROM " + table + " WHERE id=2");
+                        statement.executeUpdate("UPDATE " + table + " SET id=150 WHERE id=50");
+                        statement.executeUpdate("INSERT INTO " + table + " VALUES (3,'inserted')");
+                        transaction.commit();
+                    }
+                    return null;
+                },
+                () -> null)) {
+            var prepared = reader.read(MySqlSnapshotSplit.typed(
+                    "typed-transaction", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, 100L)));
+            Map<Long, String> actual = new LinkedHashMap<>();
+            for (var row : prepared.output().rows()) {
+                assertEquals(RowKind.INSERT, row.rowKind());
+                actual.put(row.row().getLong(0), row.row().getString(1));
+            }
+            assertEquals(Map.of(1L, "after", 3L, "inserted"), actual);
+            assertTrue(prepared.output().high().compareTo(prepared.output().low()) > 0);
+        } finally {
+            execute("DROP TABLE " + table);
+        }
+    }
+
+    @Test
+    void wideSnapshotChunkFailsBeforePublishingPartialOutputWhenByteBudgetIsExceeded() throws Exception {
+        String table = "wide_chunk_" + UUID.randomUUID().toString().replace("-", "");
+        execute(
+                "CREATE TABLE " + table + "(id BIGINT PRIMARY KEY AUTO_INCREMENT, payload VARCHAR(12000) NOT NULL)",
+                "INSERT INTO " + table + "(payload) VALUES (REPEAT('x', 12000))");
+        TableId id = new TableId("yak_cdc_it", null, table);
+        var schema = new TableSchema(
+                List.of(
+                        new Column("id", LogicalTypes.BIGINT.copy(false)),
+                        new Column("payload", LogicalTypes.varchar(12000).copy(false))),
+                List.of("id"));
+        try {
+            // Every INSERT doubles the number of rows; 256 wide rows exceed the 4 MiB
+            // retained-payload budget without approaching the 100,000-row cap.
+            for (int index = 0; index < 8; index++) {
+                execute("INSERT INTO " + table + "(payload) SELECT payload FROM " + table);
+            }
+            try (var reader = new MySqlSnapshotBackfillReader(config(Map.of(id, schema), 6821, table), 0)) {
+                var failure = assertThrows(IllegalStateException.class, () -> reader.read(
+                        new MySqlSnapshotSplit("wide", "fp", id, null, null, null)));
+                assertTrue(failure.getMessage().contains("buffer limit"), failure.getMessage());
+            }
+        } finally {
+            execute("DROP TABLE " + table);
+        }
+    }
+
+    @Test
+    void limitedReplicationPrivilegesPermitTypedSnapshotReadViewWithoutGlobalReadLock() throws Exception {
+        String table = "limited_" + UUID.randomUUID().toString().replace("-", "");
+        String user = "snap_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        execute(
+                "CREATE TABLE " + table + "(id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL)",
+                "INSERT INTO " + table + " VALUES (1,'original')",
+                "CREATE USER '" + user + "'@'%' IDENTIFIED BY 'test-only-snapshot'",
+                "GRANT SELECT ON yak_cdc_it.* TO '" + user + "'@'%'",
+                "GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO '" + user + "'@'%'");
+        TableId id = new TableId("yak_cdc_it", null, table);
+        try {
+            var db = DATABASE.metadata();
+            var config = new MySqlCdcSourceConfig(
+                    db.host(), db.port(), user, "test-only-snapshot", 6831, table, Map.of(id, SCHEMA), 256);
+            // Verify the restricted account can scan real rows with ordinary JDBC SELECT.
+            // Debezium no_data schema bootstrap has separate locking requirements and is
+            // deliberately not part of this JDBC privilege-boundary assertion.
+            try (var snapshots = new MySqlSnapshotSplitReader(config)) {
+                snapshots.open(new MySqlSnapshotSplit("bigint", "fp", id, null, null, null));
+                var batch = snapshots.fetch();
+                assertEquals("bigint", batch.nextSplit());
+                var record = batch.nextRecordFromSplit();
+                assertNotNull(record);
+                assertEquals(1, record.rows().size());
+                assertEquals(1L, record.rows().getFirst().row().getLong(0));
+                assertNull(batch.nextRecordFromSplit());
+                assertTrue(batch.finishedSplits().contains("bigint"));
+                batch.recycle();
+            }
+            // Exercise the actual typed read-view code with no global read-lock privilege.
+            // Ordinary SELECT plus Binlog position access is sufficient for this JDBC boundary.
+            try (var reader = new MySqlSnapshotBackfillReader(config, 1)) {
+                reader.openTypedSnapshotReadView(
+                        MySqlSnapshotSplit.typed(
+                                "typed", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null)));
+            }
+        } finally {
+            execute("DROP USER IF EXISTS '" + user + "'@'%'", "DROP TABLE " + table);
         }
     }
 

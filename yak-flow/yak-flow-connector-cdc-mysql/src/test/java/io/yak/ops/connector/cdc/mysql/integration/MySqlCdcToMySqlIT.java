@@ -5,7 +5,7 @@ import io.yak.ops.testutils.MySqlDatabase;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-@Tag("cdc-mysql")
+@Tag("cdc-pipeline-mysql")
 class MySqlCdcToMySqlIT extends MySqlCdcPipelineTestBase {
     @RegisterExtension
     static final MySqlDatabase TARGET = new MySqlDatabase("mysql-target", false, true);
