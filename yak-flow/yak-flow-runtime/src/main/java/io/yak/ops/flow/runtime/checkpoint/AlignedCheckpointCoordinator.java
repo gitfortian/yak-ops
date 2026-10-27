@@ -56,7 +56,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
     private final SchemaCoordinator schemaCoordinator;
     private final List<SourceOperatorStreamTask<Object, SourceSplit>> sourceTasks;
     private final List<OneInputStreamTask> inputTasks;
-    private final FileCheckpointStore storage;
+    private final CompletedCheckpointStore storage;
     private final String graphSignature;
     private final BooleanSupplier cancelled;
     private final Consumer<Throwable> onFailure;
@@ -78,7 +78,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             SourceCoordinator<SourceSplit, Object> coordinator,
             List<SourceOperatorStreamTask<Object, SourceSplit>> sourceTasks,
             List<OneInputStreamTask> inputTasks,
-            FileCheckpointStore storage,
+            CompletedCheckpointStore storage,
             CheckpointSnapshot restored,
             BooleanSupplier cancelled,
             Consumer<Throwable> onFailure) {
@@ -92,7 +92,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             SourceCoordinator<SourceSplit, Object> coordinator,
             List<SourceOperatorStreamTask<Object, SourceSplit>> sourceTasks,
             List<OneInputStreamTask> inputTasks,
-            FileCheckpointStore storage,
+            CompletedCheckpointStore storage,
             CheckpointSnapshot restored,
             BooleanSupplier cancelled,
             Consumer<Throwable> onFailure,
