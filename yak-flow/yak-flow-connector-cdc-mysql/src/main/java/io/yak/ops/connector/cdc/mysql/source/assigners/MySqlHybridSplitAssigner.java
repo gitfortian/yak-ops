@@ -2,6 +2,7 @@ package io.yak.ops.connector.cdc.mysql.source.assigners;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.SnapshotPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
@@ -46,24 +47,24 @@ public final class MySqlHybridSplitAssigner
             binlogAssigned = false;
             phase = HybridPendingSplitsState.Phase.BOOTSTRAP;
         } else {
-            restored.finishedSplitInfos().forEach(info -> completed.put(info.splitId(), info));
-            nextTableIndex = restored.nextTableIndex();
-            nextChunkIndex = restored.nextChunkIndex();
-            nextChunkRange = restored.nextChunkRange();
+            restored.getSnapshotPendingSplits().getFinishedSplitInfos().forEach(info -> completed.put(info.splitId(), info));
+            nextTableIndex = restored.getSnapshotPendingSplits().nextTableIndex();
+            nextChunkIndex = restored.getSnapshotPendingSplits().nextChunkIndex();
+            nextChunkRange = restored.getSnapshotPendingSplits().nextChunkRange();
             phase = restored.phase();
             low = restored.lowWatermark();
             high = restored.highWatermark();
             pendingBinlog = restored.pendingBinlog();
-            binlogAssigned = restored.binlogAssigned();
+            binlogAssigned = restored.isBinlogSplitAssigned();
             if (binlogAssigned == (pendingBinlog != null)) {
                 throw new IllegalArgumentException("Binlog assignment and pending split state conflict");
             }
             snapshots = new MySqlSnapshotSplitAssigner(
-                    restored.pendingSnapshots(),
-                    restored.assignedSnapshots(),
-                    restored.finishedSnapshots(),
-                    restored.totalSnapshotSplits(),
-                    restored.snapshotPlanned());
+                    restored.getSnapshotPendingSplits().getRemainingSplits(),
+                    restored.getSnapshotPendingSplits().getAssignedSplits(),
+                    restored.getSnapshotPendingSplits().getFinishedSplits(),
+                    restored.getSnapshotPendingSplits().totalSnapshotSplits(),
+                    restored.getSnapshotPendingSplits().snapshotPlanned());
         }
     }
 
@@ -248,20 +249,21 @@ public final class MySqlHybridSplitAssigner
             handoffCheckpointId = checkpointId;
         }
         return new HybridPendingSplitsState(
-                phase,
-                pendingBinlog,
+                new SnapshotPendingSplitsState(
+                        snapshots.planned(),
+                        snapshots.total(),
+                        snapshots.pending(),
+                        snapshots.assigned(),
+                        snapshots.finished(),
+                        finishedSplits(),
+                        nextTableIndex,
+                        nextChunkIndex,
+                        nextChunkRange),
                 binlogAssigned,
+                pendingBinlog,
+                phase,
                 low,
-                high,
-                snapshots.planned(),
-                snapshots.total(),
-                snapshots.pending(),
-                snapshots.assigned(),
-                snapshots.finished(),
-                finishedSplits(),
-                nextTableIndex,
-                nextChunkIndex,
-                nextChunkRange);
+                high);
     }
 
     @Override
