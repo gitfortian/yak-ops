@@ -1,4 +1,4 @@
-package io.yak.ops.connector.cdc.mysql.source.enumerator;
+package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 
 /**
  * Marker for the mode-specific MySQL split assignment state.

@@ -1,4 +1,4 @@
-package io.yak.ops.connector.cdc.mysql.source;
+package io.yak.ops.connector.cdc.mysql.table;
 
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.core.types.TableSchema;

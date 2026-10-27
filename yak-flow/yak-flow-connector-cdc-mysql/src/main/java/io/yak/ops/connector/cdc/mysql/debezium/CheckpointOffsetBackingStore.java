@@ -1,4 +1,4 @@
-package io.yak.ops.connector.cdc.mysql.source.debezium;
+package io.yak.ops.connector.cdc.mysql.debezium;
 
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import java.nio.ByteBuffer;

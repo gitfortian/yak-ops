@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlHybridSplitAssigner;
+import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.data.TableId;

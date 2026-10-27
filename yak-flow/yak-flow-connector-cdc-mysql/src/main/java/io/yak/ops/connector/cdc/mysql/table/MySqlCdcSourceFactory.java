@@ -1,4 +1,4 @@
-package io.yak.ops.connector.cdc.mysql.source;
+package io.yak.ops.connector.cdc.mysql.table;
 
 import com.google.auto.service.AutoService;
 import io.yak.ops.configuration.ReadonlyConfig;
@@ -7,6 +7,8 @@ import io.yak.ops.configuration.rule.OptionRule;
 import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.base.factory.TableSourceFactory;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
+import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.core.api.connector.source.Boundedness;

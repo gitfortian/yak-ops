@@ -4,7 +4,7 @@ import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.sink.writer.BatchFlushPolicy;
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
-import io.yak.ops.connector.cdc.mysql.source.StartupMode;
+import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.connector.jdbc.sink.JdbcSink;

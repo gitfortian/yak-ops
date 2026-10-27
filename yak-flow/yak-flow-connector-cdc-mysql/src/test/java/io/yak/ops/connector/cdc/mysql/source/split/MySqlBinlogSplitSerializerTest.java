@@ -6,8 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
-import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsState;
-import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsStateSerializer;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;

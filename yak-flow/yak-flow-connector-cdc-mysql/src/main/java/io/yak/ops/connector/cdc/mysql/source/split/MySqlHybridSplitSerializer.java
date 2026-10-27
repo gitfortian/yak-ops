@@ -1,6 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
-import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import io.yak.ops.core.data.TableId;

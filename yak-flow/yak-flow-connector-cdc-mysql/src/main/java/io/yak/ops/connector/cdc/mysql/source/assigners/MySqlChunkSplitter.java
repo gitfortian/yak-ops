@@ -1,6 +1,6 @@
-package io.yak.ops.connector.cdc.mysql.source.assigner;
+package io.yak.ops.connector.cdc.mysql.source.assigners;
 
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.connector.cdc.mysql.source.utils.StatementUtils;

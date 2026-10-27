@@ -1,4 +1,4 @@
-package io.yak.ops.connector.cdc.mysql.source.enumerator;
+package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import java.util.Objects;

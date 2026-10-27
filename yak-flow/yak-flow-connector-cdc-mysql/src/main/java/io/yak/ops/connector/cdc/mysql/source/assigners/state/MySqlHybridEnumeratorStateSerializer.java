@@ -1,6 +1,6 @@
-package io.yak.ops.connector.cdc.mysql.source.enumerator;
+package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 
-import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.ChunkRangeStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;

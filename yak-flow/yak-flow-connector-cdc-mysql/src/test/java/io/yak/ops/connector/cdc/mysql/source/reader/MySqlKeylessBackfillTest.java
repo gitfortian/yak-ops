@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;

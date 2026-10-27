@@ -12,7 +12,7 @@ import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.base.factory.TableSinkFactory;
 import io.yak.ops.connector.base.factory.TableSinkFactoryContext;
 import io.yak.ops.connector.base.metrics.TableMetrics;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceFactory;
+import io.yak.ops.connector.cdc.mysql.table.MySqlCdcSourceFactory;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.connector.jdbc.sink.JdbcSinkFactory;
 import io.yak.ops.connector.jdbc.source.JdbcSourceFactory;

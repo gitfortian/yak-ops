@@ -1,4 +1,4 @@
-package io.yak.ops.connector.cdc.mysql.source.assigner;
+package io.yak.ops.connector.cdc.mysql.source.assigners;
 
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;

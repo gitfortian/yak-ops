@@ -1,6 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
-import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowData;

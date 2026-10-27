@@ -124,7 +124,7 @@ class ImpactTest(unittest.TestCase):
 
     def test_snapshot_and_shared_cdc_change_preserve_recovery_coverage(self):
         snapshot = impact.select_suites([
-            impact.CDC + "src/main/java/io/yak/ops/connector/cdc/mysql/source/assigner/MySqlChunkSplitter.java"
+            impact.CDC + "src/main/java/io/yak/ops/connector/cdc/mysql/source/assigners/MySqlChunkSplitter.java"
         ])
         self.assertEqual(
             {"cdc-snapshot", "cdc-hybrid", "cdc-recovery", "recovery-e2e"} | set(impact.CDC_PIPELINES),

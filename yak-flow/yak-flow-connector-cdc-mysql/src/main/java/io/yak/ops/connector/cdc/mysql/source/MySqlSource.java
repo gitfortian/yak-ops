@@ -1,13 +1,14 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
-import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridEnumeratorState;
-import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridEnumeratorStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridSourceEnumerator;
-import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsState;
-import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlSourceEnumerator;
-import io.yak.ops.connector.cdc.mysql.source.enumerator.PendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlHybridSourceReader;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlSourceReader;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
@@ -16,6 +17,7 @@ import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
+import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.api.connector.source.SourceReader;

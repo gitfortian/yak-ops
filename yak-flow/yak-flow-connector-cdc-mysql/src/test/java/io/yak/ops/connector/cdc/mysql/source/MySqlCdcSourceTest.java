@@ -5,7 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;

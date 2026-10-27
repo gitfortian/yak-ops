@@ -1,4 +1,4 @@
-package io.yak.ops.connector.cdc.mysql.source.assigner;
+package io.yak.ops.connector.cdc.mysql.source.assigners;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -7,9 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsState;
-import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsStateSerializer;
-import io.yak.ops.connector.cdc.mysql.source.enumerator.PendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import java.util.List;

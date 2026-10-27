@@ -2,7 +2,7 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;

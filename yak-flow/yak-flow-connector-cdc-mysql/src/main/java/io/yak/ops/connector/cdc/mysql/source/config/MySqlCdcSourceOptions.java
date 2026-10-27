@@ -1,9 +1,10 @@
-package io.yak.ops.connector.cdc.mysql.source;
+package io.yak.ops.connector.cdc.mysql.source.config;
 
 import io.yak.ops.configuration.Option;
 import io.yak.ops.configuration.Options;
 import io.yak.ops.configuration.rule.Conditions;
 import io.yak.ops.configuration.rule.OptionRule;
+import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 
 /** Physical MySQL CDC snapshot and backpressure settings owned by the Connector. */
 public final class MySqlCdcSourceOptions {

@@ -4,8 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.configuration.Configuration;
-import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlChunkSplitter;
+import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
+import io.yak.ops.connector.cdc.mysql.table.MySqlCdcSourceFactory;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;

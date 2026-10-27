@@ -1,8 +1,9 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
-import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlHybridEnumeratorState;
-import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.core.data.TableId;

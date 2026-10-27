@@ -2,7 +2,7 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import java.util.Map;

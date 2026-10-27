@@ -140,7 +140,7 @@ def test_suites(path: str) -> set[str]:
     if path.startswith(CDC):
         # Narrow only these verified snapshot-only implementation owners.
         snapshot_only = (
-            "/source/assigner/MySqlChunkSplitter.java",
+            "/source/assigners/MySqlChunkSplitter.java",
             "/source/reader/MySqlSnapshotBackfillReader.java",
         )
         if any(path.endswith(suffix) for suffix in snapshot_only):

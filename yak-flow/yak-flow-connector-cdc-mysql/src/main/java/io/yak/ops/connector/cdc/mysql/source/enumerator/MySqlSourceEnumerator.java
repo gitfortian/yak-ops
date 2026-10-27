@@ -1,6 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.enumerator;
 
-import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlBinlogSplitAssigner;
+import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlBinlogSplitAssigner;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.core.api.connector.source.SplitEnumerator;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;

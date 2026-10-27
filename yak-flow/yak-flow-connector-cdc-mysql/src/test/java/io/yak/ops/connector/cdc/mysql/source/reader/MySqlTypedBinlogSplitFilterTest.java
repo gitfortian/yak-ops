@@ -8,7 +8,7 @@ import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTest
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import io.yak.ops.connector.cdc.mysql.source.assigner.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlBinlogSplitFilter.FinishedChunk;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;

@@ -3,7 +3,7 @@ package io.yak.ops.boot.config;
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.configuration.rule.ConfigValidator;
 import io.yak.ops.connector.base.factory.FactoryUtil;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
 import io.yak.ops.core.execution.PipelineExecutor;
 import io.yak.ops.flow.runtime.execution.EmbeddedPipelineExecutor;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;

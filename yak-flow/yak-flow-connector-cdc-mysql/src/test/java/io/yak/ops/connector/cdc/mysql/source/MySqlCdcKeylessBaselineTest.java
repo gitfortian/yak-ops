@@ -4,7 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlChunkSplitter;
+import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlBinlogSplitFilter;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlChunkBackfill;
@@ -12,6 +13,7 @@ import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
+import io.yak.ops.connector.cdc.mysql.table.MySqlCdcSourceFactory;
 import io.yak.ops.connector.jdbc.sink.JdbcSinkSchemaValidator;
 import io.yak.ops.connector.jdbc.sink.JdbcWriteMode;
 import io.yak.ops.core.data.GenericRowData;

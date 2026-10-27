@@ -2,7 +2,7 @@ package io.yak.ops.plugin.task.datasync.plan;
 
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.connector.base.factory.FactoryUtil;
-import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
 import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan;
 import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
 import io.yak.ops.core.data.TableId;
