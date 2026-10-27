@@ -69,7 +69,9 @@ jobs:
           CI_PREFLIGHT_MODULES: ${{ needs.scope.outputs.preflight_modules }}
         run: |
           test -n "${CI_PREFLIGHT_MODULES}"
-          bash mvnw -B -ntp -pl "${CI_PREFLIGHT_MODULES}" spotless:check checkstyle:check
+          bash mvnw -B -ntp -pl "${CI_PREFLIGHT_MODULES}" \
+            com.diffplug.spotless:spotless-maven-plugin:3.10.2:check \
+            org.apache.maven.plugins:maven-checkstyle-plugin:3.6.0:check
 
   backend-quality:
     name: Backend Quality
