@@ -32,7 +32,7 @@ METHOD = re.compile(
     r"[\w.$<>?,\[\] ]+\s+(?P<name>[A-Za-z_$][\w$]*)\s*\("
 )
 CODEC = re.compile(r"Codec|(?<![A-Za-z])codec")
-RECORD_DECLARATION = re.compile(r"\\brecord\\s+([A-Za-z_$][\\w$]*)\\s*\\(")
+RECORD_DECLARATION = re.compile(r"\brecord\s+([A-Za-z_$][\w$]*)\s*\(")
 
 
 def code_only(source: str) -> str:
