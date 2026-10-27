@@ -22,8 +22,8 @@ import org.junit.jupiter.api.Test;
 
 /** Unit test for {@link BinlogOffset}. */
 class BinlogOffsetTest {
-    public static final String PART_OF_GTID_SET_1 = "abcd:1-4";
-    public static final String PART_OF_GTID_SET_2 = "efgh:1-10";
+    public static final String PART_OF_GTID_SET_1 = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-4";
+    public static final String PART_OF_GTID_SET_2 = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb:1-10";
     public static final String FULL_GTID_SET =
             String.join(",", PART_OF_GTID_SET_1, PART_OF_GTID_SET_2);
 
@@ -54,7 +54,7 @@ class BinlogOffsetTest {
         BinlogOffset offset3 = BinlogOffset.builder().setGtidSet(PART_OF_GTID_SET_1).build();
         BinlogOffset offset4 =
                 BinlogOffset.builder()
-                        .setGtidSet("abcd:1-5") // Contains offset3's GTID set
+                        .setGtidSet("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-5") // Contains offset3's GTID set
                         .build();
 
         // offset3 should be before offset4
@@ -69,7 +69,7 @@ class BinlogOffsetTest {
                         .build();
         offset4 =
                 BinlogOffset.builder()
-                        .setGtidSet("abcd:1-5") // Contains offset3's GTID set
+                        .setGtidSet("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-5") // Contains offset3's GTID set
                         .setBinlogFilePosition("binlog.001", 23)
                         .build();
         assertCompareTo(offset3, offset4, -1);

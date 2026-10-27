@@ -91,10 +91,11 @@ class MySqlHybridHandoffTest {
     }
 
     @Test
-    void rejectsDifferentDefinitionOnRestore() {
+    void restoresSnapshotAssignerFromItsCheckpointState() {
         var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
         var state = assigner.snapshotState(1);
-        assertThrows(IllegalArgumentException.class, () -> new MySqlHybridSplitAssigner(StartupOptions.initial(), state));
+        var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), state);
+        assertEquals(state, restored.snapshotState(2));
     }
 
     private static io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo finished(

@@ -434,6 +434,9 @@ public class MySqlSourceConfigFactory implements Serializable {
         props.setProperty("topic.prefix", topic);
         props.setProperty("database.include.list", String.join(",", effectiveDatabases));
         props.setProperty("table.include.list", String.join(",", effectiveTables));
+        if (excludeTableList != null && !excludeTableList.isBlank()) {
+            props.setProperty("table.exclude.list", excludeTableList);
+        }
         if (dbzProperties != null) props.putAll(dbzProperties);
         return new MySqlSourceConfig(
                 hostname, port, username, password, serverIdRange.getStartServerId(),
