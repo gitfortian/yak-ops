@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 /**
  * Compares one observation with the stored baseline of an asset.
@@ -19,6 +20,14 @@ import java.util.Objects;
  * transaction, before the columns are replaced.
  */
 public final class DataMapChangeDetector {
+
+    /** Exact numeric types whose parenthesised form is {@code (precision,scale)}. */
+    private static final Pattern SCALED_TYPES =
+            Pattern.compile("^(DECIMAL|NUMERIC|NUMBER|DEC|FIXED)$", Pattern.CASE_INSENSITIVE);
+
+    /** Character and binary types whose parenthesised form is a length. */
+    private static final Pattern LENGTH_TYPES =
+            Pattern.compile("^(N?CHAR|N?VARCHAR|NCHAR|NVARCHAR|BINARY|VARBINARY|RAW)$", Pattern.CASE_INSENSITIVE);
 
     private DataMapChangeDetector() {}
 
@@ -90,11 +99,14 @@ public final class DataMapChangeDetector {
         return value == null ? "无" : value;
     }
 
-    /** Renders a native type with its declared size, so varchar(50) and varchar(100) differ. */
+    /** Renders a native type the way a DBA writes it, matching the field list's display rules. */
     private static String renderType(String typeName, Integer size, Integer scale) {
         String type = typeName == null ? "未知类型" : typeName;
         if (size == null || size <= 0) return type;
-        return scale == null ? type + "(" + size + ")" : type + "(" + size + "," + scale + ")";
+        if (SCALED_TYPES.matcher(type).matches()) {
+            return scale == null ? type + "(" + size + ")" : type + "(" + size + "," + scale + ")";
+        }
+        return LENGTH_TYPES.matcher(type).matches() ? type + "(" + size + ")" : type;
     }
 
     private static String nullability(Boolean nullable) {
