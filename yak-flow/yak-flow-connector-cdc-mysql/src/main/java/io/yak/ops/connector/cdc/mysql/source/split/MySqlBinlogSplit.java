@@ -81,7 +81,7 @@ public final class MySqlBinlogSplit extends MySqlSplit implements StreamSplit {
                 throw new IllegalArgumentException("Initial Binlog requires anchor and Debezium schema history");
             }
         }
-        if (phase == Phase.STREAMING) {
+        if (phase == Phase.STREAMING || (phase == Phase.PAUSED && !this.finishedSnapshotSplitInfos.isEmpty())) {
             if (highWatermark == null || this.finishedSnapshotSplitInfos.isEmpty()) {
                 throw new IllegalArgumentException("Streaming Binlog requires completed snapshot watermarks");
             }
@@ -167,6 +167,14 @@ public final class MySqlBinlogSplit extends MySqlSplit implements StreamSplit {
         if (completed.isEmpty()) {
             throw new IllegalArgumentException("No finished snapshot watermarks");
         }
+        if (!finishedSnapshotSplitInfos.isEmpty()) {
+            if (!finishedSnapshotSplitInfos.equals(completed)
+                    || !Objects.equals(highWatermark, high)) {
+                throw new IllegalStateException("Suspended Binlog metadata conflicts with snapshot handoff");
+            }
+            return new MySqlBinlogSplit(definitionFingerprint, offset, schemaHistory,
+                    Phase.STREAMING, highWatermark, finishedSnapshotSplitInfos);
+        }
         DebeziumOffset start = completed.stream()
                 .map(FinishedSnapshotSplitInfo::highWatermark)
                 .min(DebeziumOffset::compareTo)
@@ -196,19 +204,23 @@ public final class MySqlBinlogSplit extends MySqlSplit implements StreamSplit {
         if (split.phase == Phase.STANDALONE || split.phase == Phase.STREAMING) {
             return split;
         }
+        if (split.phase == Phase.PAUSED && !split.finishedSnapshotSplitInfos.isEmpty()) {
+            return new MySqlBinlogSplit(split.definitionFingerprint, split.offset, split.schemaHistory,
+                    Phase.STREAMING, split.highWatermark, split.finishedSnapshotSplitInfos);
+        }
         throw new IllegalStateException("Snapshot handoff must complete before Binlog is resumed");
     }
 
-    /** Suspends a snapshot binlog without dropping its watermark metadata. */
+    /** Suspends an already streaming binlog without discarding its completed snapshot fences. */
     public static MySqlBinlogSplit toSuspendedBinlogSplit(MySqlBinlogSplit split) {
         if (split.phase == Phase.PAUSED || split.phase == Phase.BOOTSTRAP) {
             return split;
         }
         if (split.phase == Phase.STANDALONE) {
-            throw new IllegalStateException("A Binlog-only source is not a snapshot handoff");
+            throw new IllegalStateException("Binlog-only sources do not use snapshot handoff");
         }
         return new MySqlBinlogSplit(split.definitionFingerprint, split.offset, split.schemaHistory,
-                Phase.PAUSED, null, List.of());
+                Phase.PAUSED, split.highWatermark, split.finishedSnapshotSplitInfos);
     }
 
     /** Used only by the source split serializer to reconstruct validated immutable state. */
