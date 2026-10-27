@@ -33,6 +33,7 @@ class ImpactTest(unittest.TestCase):
             ("scripts/ci/test_impact.py", False),
             ("yak-flow/yak-flow-connector-cdc-mysql/src/main/java/Source.java", True),
             ("yak-flow/yak-flow-connector-cdc-mysql/pom.xml", True),
+            ("yak-ops-bom/pom.xml", False),
         )
         with patch.object(impact, "suite_registration_changes", return_value={"cdc-binlog"}):
             for path, expected in paths:
@@ -49,7 +50,7 @@ class ImpactTest(unittest.TestCase):
                 self.assertTrue(result["full"])
                 self.assertEqual(set(impact.SUITES), result["suites"])
                 outputs = dict(line.split("=", 1) for line in impact.outputs([path]).splitlines())
-                self.assertEqual("!yak-ops-ui,!yak-ops-dist", outputs["preflight_modules"])
+                self.assertEqual("!yak-ops-bom,!yak-ops-ui,!yak-ops-dist", outputs["preflight_modules"])
         self.assertTrue(impact.analyze([], full=True)["preflight"])
 
     def test_fast_preflight_union_and_full_precedence(self):
