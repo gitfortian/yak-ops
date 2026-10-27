@@ -22,6 +22,8 @@ import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
 import java.util.List;
+import java.nio.file.Path;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 import java.util.function.Predicate;
@@ -58,5 +60,18 @@ class MySqlSourceConfigTest {
         assertThat(tableFilter.test(includedTable)).isTrue();
         assertThat(tableFilter.test(excludedTable)).isFalse();
         assertThat(tableFilter.test(unmatchedTable)).isFalse();
+
+        // Debezium 2.7 forbids table.include.list and table.exclude.list together.
+        // Verify the actual connector configuration, not only the Java predicate.
+        String include = config.getDbzProperties().getProperty("table.include.list");
+        assertThat(config.getDbzProperties().getProperty("table.exclude.list")).isNull();
+        assertThat(Pattern.compile(include).matcher("test_db.orders_1").matches()).isTrue();
+        assertThat(Pattern.compile(include).matcher("test_db.orders_skip").matches()).isFalse();
+
+        var runtime = config.debeziumProperties("unit-test", Path.of("unused-history.dat"));
+        assertThat(runtime.getProperty("table.exclude.list")).isNull();
+        String runtimeInclude = runtime.getProperty("table.include.list");
+        assertThat(Pattern.compile(runtimeInclude).matcher("test_db.orders_1").matches()).isTrue();
+        assertThat(Pattern.compile(runtimeInclude).matcher("test_db.orders_skip").matches()).isFalse();
     }
 }
