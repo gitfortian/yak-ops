@@ -178,7 +178,7 @@ public final class MySqlSnapshotSplitReader implements AutoCloseable {
      *
      * @return bounded records and at most one finished split ID
      */
-    public RecordsWithSplitIds<MySqlHybridFetchedRecord> fetch() throws SQLException {
+    public RecordsWithSplitIds<MySqlFetchedRecord> fetch() throws SQLException {
         checkCancelled();
         if (active == null) {
             throw new IllegalStateException("No active MySQL snapshot split");
@@ -189,7 +189,7 @@ public final class MySqlSnapshotSplitReader implements AutoCloseable {
         MySqlSnapshotSplit split = active;
         long fetchStartedNanos = System.nanoTime();
         String key = MySqlChunkSplitter.splitKey(schemas.get(split.tableId()));
-        List<MySqlHybridFetchedRecord> batch = new ArrayList<>();
+        List<MySqlFetchedRecord> batch = new ArrayList<>();
         for (int remaining = FETCH_BATCH; hasRow && remaining > 0; remaining--) {
             checkCancelled();
             var row = converter.toInternal(results);
@@ -197,7 +197,7 @@ public final class MySqlSnapshotSplitReader implements AutoCloseable {
             if (results.wasNull()) {
                 throw new SQLException("MySQL snapshot primary key must not be null");
             }
-            batch.add(new MySqlHybridFetchedRecord(
+            batch.add(new MySqlFetchedRecord(
                     List.of(new TableRecord(split.tableId(), RowKind.INSERT, row)), keyValue, null, false));
             hasRow = results.next();
         }
