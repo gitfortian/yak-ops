@@ -4,10 +4,13 @@ import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.LogicalTypeRoot;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import io.yak.ops.core.types.TableSchema;
+import java.util.stream.Collectors;
 
 /** JDBC keyset boundaries whose ordering is determined by the source database. */
 public final class StatementUtils {
@@ -32,7 +35,7 @@ public final class StatementUtils {
                 + " ORDER BY " + key + " LIMIT ?) chunk_values";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             int index = 1;
-            if (lower != null) statement.setObject(index++, lower);
+            if (lower != null) setSafeObject(statement, index++, lower);
             statement.setInt(index, chunkSize);
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next()) throw new SQLException("Snapshot chunk maximum query returned no result");
@@ -56,12 +59,66 @@ public final class StatementUtils {
         String key = dialect.quoteIdentifier(column);
         String sql = "SELECT MIN(" + key + ") FROM " + dialect.qualifiedTable(table) + " WHERE " + key + " > ?";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setObject(1, after);
+            setSafeObject(statement, 1, after);
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next()) throw new SQLException("Snapshot next chunk query returned no result");
                 return read(result, type);
             }
         }
+    }
+
+    /**
+     * PreparedStatement#setObject may narrow a MySQL BIGINT UNSIGNED parameter to a signed long.
+     * Ported from Flink CDC StatementUtils#setSafeObject.
+     */
+    public static void setSafeObject(PreparedStatement ps, int parameterIndex, Object value)
+            throws SQLException {
+        if (value instanceof BigInteger) {
+            BigInteger bigIntValue = (BigInteger) value;
+            if (bigIntValue.compareTo(BigInteger.valueOf(Long.MAX_VALUE)) > 0
+                    || bigIntValue.compareTo(BigInteger.valueOf(Long.MIN_VALUE)) < 0) {
+                ps.setBigDecimal(parameterIndex, new BigDecimal(bigIntValue));
+            } else {
+                ps.setObject(parameterIndex, bigIntValue.longValueExact());
+            }
+        } else {
+            ps.setObject(parameterIndex, value);
+        }
+    }
+
+    /**
+     * Builds the same bounded snapshot scan used by YakFlow's typed chunk reader.
+     * Flink CDC's RowType-based split scan SQL is adapted to YakFlow's TableSchema and
+     * half-open chunk boundaries without changing the generated SQL semantics.
+     */
+    public static String buildSplitScanQuery(
+            JdbcDialect dialect,
+            TableId table,
+            TableSchema schema,
+            String splitColumn,
+            boolean isFirstSplit,
+            boolean isLastSplit) {
+        String quotedColumn = dialect.quoteIdentifier(splitColumn);
+        String projection = schema.columns().stream()
+                .map(column -> dialect.quoteIdentifier(column.name()))
+                .collect(Collectors.joining(", "));
+        StringBuilder sql = new StringBuilder("SELECT ")
+                .append(projection)
+                .append(" FROM ")
+                .append(dialect.qualifiedTable(table));
+        if (!isFirstSplit || !isLastSplit) {
+            sql.append(" WHERE ");
+            if (!isFirstSplit) {
+                sql.append(quotedColumn).append(" >= ?");
+            }
+            if (!isFirstSplit && !isLastSplit) {
+                sql.append(" AND ");
+            }
+            if (!isLastSplit) {
+                sql.append(quotedColumn).append(" < ?");
+            }
+        }
+        return sql.append(" ORDER BY ").append(quotedColumn).toString();
     }
 
     private static Object read(ResultSet result, LogicalTypeRoot type) throws SQLException {
