@@ -1,17 +1,11 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
-import io.yak.ops.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
-import io.yak.ops.core.api.connector.source.InputStatus;
-import io.yak.ops.core.api.connector.source.ReaderOutput;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
-import io.yak.ops.core.data.TableRecord;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Receives unbounded MySQL Binlog changes on the mailbox and checkpoints delivered offsets.
@@ -19,13 +13,9 @@ import java.util.concurrent.CompletableFuture;
  * <p>All Debezium I/O is owned by the background SplitReader and never touches the Runtime
  * state backend. This reader emits an entire UPDATE pair before advancing progress.
  */
-public final class MySqlSourceReader
-        extends SingleThreadMultiplexSourceReaderBase<BinlogEvent, TableRecord, MySqlBinlogSplit, MySqlCdcSplitState> {
+public final class MySqlSourceReader extends MySqlSourceReaderBase<BinlogEvent, MySqlBinlogSplit, MySqlCdcSplitState> {
 
     private final MySqlCdcSplitReader splitReader;
-    private final SchemaChangeHandler schemaChanges;
-    private final TableMetrics metrics;
-    private final long generation;
 
     public MySqlSourceReader(MySqlCdcSourceConfig config, String fingerprint, SourceReaderContext context) {
         this(config, fingerprint, context, new TableMetrics());
@@ -41,33 +31,8 @@ public final class MySqlSourceReader
             SourceReaderContext context,
             SchemaChangeHandler schemaChanges,
             TableMetrics metrics) {
-        super(() -> splitReader, new MySqlCdcRecordEmitter(schemaChanges, metrics), context);
-        this.metrics = metrics;
-        generation = metrics.generation();
+        super(() -> splitReader, new MySqlCdcRecordEmitter(schemaChanges, metrics), context, schemaChanges, metrics);
         this.splitReader = splitReader;
-        this.schemaChanges = schemaChanges;
-    }
-
-    @Override
-    public InputStatus pollNext(ReaderOutput<TableRecord> output) throws Exception {
-        return schemaChanges.tryCompleteSchemaChange() ? super.pollNext(output) : InputStatus.NOTHING_AVAILABLE;
-    }
-
-    @Override
-    public CompletableFuture<Void> isAvailable() {
-        CompletableFuture<Void> pending = schemaChanges.getAvailableFuture();
-        return pending == null ? super.isAvailable() : pending;
-    }
-
-    @Override
-    public List<MySqlBinlogSplit> snapshotState(long checkpointId) {
-        schemaChanges.requireNoPendingSchemaChange();
-        return super.snapshotState(checkpointId);
-    }
-
-    @Override
-    public void start() {
-        context.sendSplitRequest();
     }
 
     @Override

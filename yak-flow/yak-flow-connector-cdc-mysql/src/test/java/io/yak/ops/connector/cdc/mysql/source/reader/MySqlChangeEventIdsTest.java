@@ -10,6 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSource;
+import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -153,6 +155,64 @@ class MySqlChangeEventIdsTest {
                 replay::add, new MySqlHybridSplitState(original));
         assertEquals(first.getFirst().changeEventId(), replay.getFirst().changeEventId());
         splitReader.close();
+    }
+
+    @Test
+    void binlogRowsShareIdentityAcrossModesAndAdvanceOnlyAfterWholeEvent() throws Exception {
+        BinlogOffset previous = position(42, 1);
+        BinlogOffset offset = position(44, 3);
+        BinlogOffset high = position(50, 5);
+        List<TableRecord> rows = List.of(row(RowKind.UPDATE_BEFORE, "same"), row(RowKind.UPDATE_AFTER, "same"));
+
+        var cdcState = new MySqlCdcSplitState(new MySqlBinlogSplit("task-definition", previous, new byte[] {1}));
+        List<TableRecord> cdcOutput = new ArrayList<>();
+        new MySqlCdcRecordEmitter(new SchemaChangeHandler(context()))
+                .emitRecord(new BinlogEvent(rows, offset), cdcOutput::add, cdcState);
+
+        var finished = new FinishedSnapshotSplitInfo(TABLE, "chunk-0", null, null, high);
+        var streaming = new MySqlHybridBinlogSplit(
+                new MySqlBinlogSplit("task-definition", previous, new byte[] {1}),
+                MySqlHybridBinlogSplit.Phase.STREAMING,
+                high,
+                List.of(finished));
+        var hybridState = new MySqlHybridSplitState(streaming);
+        var schema = new TableSchema(
+                List.of(
+                        new Column("id", LogicalTypes.BIGINT.copy(false)),
+                        new Column("name", LogicalTypes.varchar(100).copy(false))),
+                List.of("id"));
+        var config = MySqlCdcSource.builder()
+                .hostname("localhost")
+                .username("user")
+                .password("secret")
+                .serverId(9002)
+                .topicPrefix("hybrid-emitter-contract")
+                .table(TABLE, schema)
+                .build()
+                .config();
+        try (var splitReader = new MySqlHybridSplitReader(config)) {
+            var emitter = new MySqlHybridRecordEmitter(
+                    context(), splitReader, new TableMetrics(), new SchemaChangeHandler(context()));
+            List<TableRecord> hybridOutput = new ArrayList<>();
+            var event = new MySqlHybridFetchedRecord(rows, null, offset, false, null, null);
+            emitter.emitRecord(event, hybridOutput::add, hybridState);
+
+            assertEquals(
+                    cdcOutput.stream().map(TableRecord::changeEventId).toList(),
+                    hybridOutput.stream().map(TableRecord::changeEventId).toList());
+            assertEquals(offset, cdcState.checkpoint(new byte[] {1}).offset());
+            assertEquals(offset, ((MySqlHybridBinlogSplit) hybridState.checkpoint(new byte[] {1})).binlog().offset());
+
+            var failedState = new MySqlHybridSplitState(streaming);
+            assertThrows(IllegalStateException.class, () -> emitter.emitRecord(event, record -> {
+                if (record.rowKind() == RowKind.UPDATE_AFTER) {
+                    throw new IllegalStateException("downstream failed");
+                }
+            }, failedState));
+            assertEquals(
+                    previous,
+                    ((MySqlHybridBinlogSplit) failedState.checkpoint(new byte[] {1})).binlog().offset());
+        }
     }
 
     @Test

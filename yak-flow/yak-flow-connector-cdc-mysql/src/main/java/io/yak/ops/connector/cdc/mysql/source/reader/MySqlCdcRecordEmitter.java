@@ -4,7 +4,6 @@ import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.RecordEmitter;
 import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.core.api.connector.source.ReaderOutput;
-import io.yak.ops.core.data.ChangeEventId;
 import io.yak.ops.core.data.TableRecord;
 
 /**
@@ -18,6 +17,7 @@ public final class MySqlCdcRecordEmitter implements RecordEmitter<BinlogEvent, T
     private final SchemaChangeHandler schemaChanges;
     private final TableMetrics metrics;
     private final long generation;
+    private final MySqlRecordBatchEmitter recordBatchEmitter;
 
     public MySqlCdcRecordEmitter(SchemaChangeHandler schemaChanges) {
         this(schemaChanges, new TableMetrics());
@@ -27,6 +27,7 @@ public final class MySqlCdcRecordEmitter implements RecordEmitter<BinlogEvent, T
         this.schemaChanges = java.util.Objects.requireNonNull(schemaChanges, "schemaChanges");
         this.metrics = java.util.Objects.requireNonNull(metrics, "metrics");
         generation = metrics.generation();
+        recordBatchEmitter = new MySqlRecordBatchEmitter(metrics);
     }
 
     @Override
@@ -39,15 +40,7 @@ public final class MySqlCdcRecordEmitter implements RecordEmitter<BinlogEvent, T
         metrics.observed(generation);
         if (event.offset() != null) metrics.phase(generation, TableMetrics.Phase.STREAMING, false);
         String eventPosition = MySqlChangeEventIds.fromBinlog(event.offset());
-        int imageCount = event.records().size();
-        for (int index = 0; index < imageCount; index++) {
-            TableRecord record = event.records().get(index);
-            ChangeEventId identity = eventPosition == null
-                    ? null
-                    : new ChangeEventId(state.sourceId(), eventPosition, index, imageCount);
-            output.collect(identity == null ? record : record.withChangeEventId(identity));
-            metrics.read(generation, record.tableId(), true);
-        }
+        recordBatchEmitter.emitBinlogRows(event.records(), state.sourceId(), eventPosition, true, output);
         state.onEmitted(event.offset());
     }
 }

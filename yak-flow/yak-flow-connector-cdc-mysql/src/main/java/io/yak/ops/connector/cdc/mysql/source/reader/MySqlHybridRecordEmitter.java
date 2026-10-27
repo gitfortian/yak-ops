@@ -6,7 +6,6 @@ import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.core.api.connector.source.ReaderOutput;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
-import io.yak.ops.core.data.ChangeEventId;
 import io.yak.ops.core.data.TableRecord;
 import java.util.Objects;
 
@@ -24,6 +23,7 @@ public final class MySqlHybridRecordEmitter
     private final MySqlHybridSplitReader splits;
     private final TableMetrics metrics;
     private final long generation;
+    private final MySqlRecordBatchEmitter recordBatchEmitter;
 
     public MySqlHybridRecordEmitter(
             SourceReaderContext context,
@@ -33,6 +33,7 @@ public final class MySqlHybridRecordEmitter
         this.schemaChanges = Objects.requireNonNull(schemaChanges, "schemaChanges");
         this.metrics = metrics;
         generation = metrics.generation();
+        recordBatchEmitter = new MySqlRecordBatchEmitter(metrics);
         this.context = Objects.requireNonNull(context, "context");
         this.splits = Objects.requireNonNull(splits, "splits");
     }
@@ -57,13 +58,11 @@ public final class MySqlHybridRecordEmitter
         if (firstSnapshotRow < 0 && event.snapshotRowsEmitted() != null) {
             throw new IllegalStateException("Snapshot output ordinal is smaller than the emitted batch");
         }
-        for (int index = 0; index < count; index++) {
-            TableRecord row = event.rows().get(index);
-            ChangeEventId identity = firstSnapshotRow >= 0
-                    ? ChangeEventId.snapshot(state.sourceId(), state.snapshotSplitId(), firstSnapshotRow + index)
-                    : eventPosition == null ? null : new ChangeEventId(state.sourceId(), eventPosition, index, count);
-            output.collect(identity == null ? row : row.withChangeEventId(identity));
-            metrics.read(generation, row.tableId(), state.binlog());
+        if (event.snapshotRowsEmitted() != null) {
+            recordBatchEmitter.emitSnapshotRows(
+                    event.rows(), state.sourceId(), state.snapshotSplitId(), firstSnapshotRow, output);
+        } else {
+            recordBatchEmitter.emitBinlogRows(event.rows(), state.sourceId(), eventPosition, state.binlog(), output);
         }
         metrics.observed(generation);
         if (event.snapshotRowsEmitted() != null) {
