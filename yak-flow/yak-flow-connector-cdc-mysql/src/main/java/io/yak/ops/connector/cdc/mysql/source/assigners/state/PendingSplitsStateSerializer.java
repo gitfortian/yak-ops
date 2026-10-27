@@ -60,10 +60,10 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         Objects.requireNonNull(state, "state");
         try (var buffer = new ByteArrayOutputStream(); var out = new DataOutputStream(buffer)) {
             out.writeInt(splitSerializer.getVersion());
-            if (state instanceof MySqlPendingSplitsState binlog) {
+            if (state instanceof BinlogPendingSplitsState binlog) {
                 out.writeInt(BINLOG_PENDING_SPLITS_STATE_FLAG);
                 writeBinlog(out, binlog);
-            } else if (state instanceof MySqlHybridEnumeratorState hybrid) {
+            } else if (state instanceof HybridPendingSplitsState hybrid) {
                 out.writeInt(HYBRID_PENDING_SPLITS_STATE_FLAG);
                 writeHybrid(out, hybrid);
             } else {
@@ -103,20 +103,20 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         }
     }
 
-    private void writeBinlog(DataOutputStream out, MySqlPendingSplitsState state) throws IOException {
+    private void writeBinlog(DataOutputStream out, BinlogPendingSplitsState state) throws IOException {
         out.writeBoolean(state.splitAssigned());
         if (!state.splitAssigned()) {
             writeSplit(out, state.pendingSplit());
         }
     }
 
-    private MySqlPendingSplitsState readBinlog(DataInputStream in, int splitVersion) throws IOException {
+    private BinlogPendingSplitsState readBinlog(DataInputStream in, int splitVersion) throws IOException {
         boolean assigned = in.readBoolean();
         MySqlBinlogSplit pending = assigned ? null : (MySqlBinlogSplit) readSplit(in, splitVersion);
-        return new MySqlPendingSplitsState(assigned, pending);
+        return new BinlogPendingSplitsState(assigned, pending);
     }
 
-    private void writeHybrid(DataOutputStream out, MySqlHybridEnumeratorState state) throws IOException {
+    private void writeHybrid(DataOutputStream out, HybridPendingSplitsState state) throws IOException {
         out.writeByte(state.phase().ordinal());
         out.writeBoolean(state.binlogAssigned());
         if (state.pendingBinlog() != null) {
@@ -142,9 +142,9 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         ChunkRangeStateSerializer.write(out, state.nextChunkRange());
     }
 
-    private MySqlHybridEnumeratorState readHybrid(DataInputStream in, int splitVersion) throws IOException {
+    private HybridPendingSplitsState readHybrid(DataInputStream in, int splitVersion) throws IOException {
         int phaseIndex = in.readUnsignedByte();
-        if (phaseIndex >= MySqlHybridEnumeratorState.Phase.values().length) {
+        if (phaseIndex >= HybridPendingSplitsState.Phase.values().length) {
             throw new IOException("Unknown MySQL hybrid phase");
         }
         boolean binlogAssigned = in.readBoolean();
@@ -174,8 +174,8 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         int nextTable = in.readInt();
         int nextChunk = in.readInt();
         ChunkRange typedCursor = ChunkRangeStateSerializer.read(in);
-        return new MySqlHybridEnumeratorState(
-                MySqlHybridEnumeratorState.Phase.values()[phaseIndex],
+        return new HybridPendingSplitsState(
+                HybridPendingSplitsState.Phase.values()[phaseIndex],
                 pending, binlogAssigned, low, high, planned, total,
                 pendingSnapshots, assigned, finished, finishedInfos, nextTable, nextChunk, typedCursor);
     }
