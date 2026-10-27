@@ -10,23 +10,18 @@ import java.util.Objects;
 /** Assigns the selected stream-only startup to the only replication reader. */
 public final class MySqlBinlogSplitAssigner implements MySqlSplitAssigner<MySqlBinlogSplit, MySqlPendingSplitsState> {
 
-    private final String sourceFingerprint;
     private MySqlBinlogSplit pending;
     private boolean assigned;
 
     public MySqlBinlogSplitAssigner(
-            StartupOptions startupOptions, String sourceFingerprint, MySqlPendingSplitsState restored) {
+            StartupOptions startupOptions, MySqlPendingSplitsState restored) {
         Objects.requireNonNull(startupOptions, "startupOptions");
         if (startupOptions.startupMode() != StartupMode.LATEST_OFFSET) {
             throw new UnsupportedOperationException("MySQL Binlog Source requires latest-offset startup");
         }
-        this.sourceFingerprint = Objects.requireNonNull(sourceFingerprint, "sourceFingerprint");
         if (restored == null) {
-            pending = new MySqlBinlogSplit(sourceFingerprint, null, new byte[0]);
+            pending = new MySqlBinlogSplit(null, new byte[0]);
         } else {
-            if (!sourceFingerprint.equals(restored.sourceFingerprint())) {
-                throw new IllegalArgumentException("MySQL CDC definition changed since its checkpoint");
-            }
             pending = restored.pendingSplit();
             assigned = restored.splitAssigned();
         }
@@ -51,9 +46,6 @@ public final class MySqlBinlogSplitAssigner implements MySqlSplitAssigner<MySqlB
             throw new IllegalStateException("Unexpected returned MySQL Binlog split");
         }
         MySqlBinlogSplit returned = Objects.requireNonNull(splits.getFirst(), "split");
-        if (!sourceFingerprint.equals(returned.definitionFingerprint())) {
-            throw new IllegalArgumentException("Returned MySQL Binlog split has an incompatible source");
-        }
         pending = returned;
         assigned = false;
     }
@@ -63,7 +55,7 @@ public final class MySqlBinlogSplitAssigner implements MySqlSplitAssigner<MySqlB
         if (checkpointId < 0) {
             throw new IllegalArgumentException("Checkpoint ID must not be negative");
         }
-        return new MySqlPendingSplitsState(sourceFingerprint, assigned, pending);
+        return new MySqlPendingSplitsState(assigned, pending);
     }
 
     @Override
