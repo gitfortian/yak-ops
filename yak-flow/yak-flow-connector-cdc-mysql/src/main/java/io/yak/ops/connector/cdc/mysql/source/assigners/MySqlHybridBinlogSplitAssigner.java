@@ -5,16 +5,16 @@ import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import java.util.Objects;
 
 /** Holds the Hybrid bootstrap Binlog split before Snapshot/Handoff ownership is established. */
-final class MySqlBinlogSplitAssigner {
+final class MySqlHybridBinlogSplitAssigner {
 
     private MySqlBinlogSplit pending;
     private boolean assigned;
 
-    MySqlBinlogSplitAssigner(String fingerprint) {
+    MySqlHybridBinlogSplitAssigner(String fingerprint) {
         pending = MySqlBinlogSplit.forInitialSnapshot(Objects.requireNonNull(fingerprint, "fingerprint"));
     }
 
-    MySqlBinlogSplitAssigner(MySqlBinlogSplit pending, boolean assigned) {
+    MySqlHybridBinlogSplitAssigner(MySqlBinlogSplit pending, boolean assigned) {
         if (assigned == (pending != null)) {
             throw new IllegalArgumentException("Binlog assignment and pending state conflict");
         }

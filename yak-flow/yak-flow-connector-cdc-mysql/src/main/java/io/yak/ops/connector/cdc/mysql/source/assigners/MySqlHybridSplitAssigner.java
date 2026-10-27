@@ -24,7 +24,7 @@ public final class MySqlHybridSplitAssigner
 
     private final String fingerprint;
     private final MySqlSnapshotSplitAssigner snapshots;
-    private final MySqlBinlogSplitAssigner binlog;
+    private final MySqlHybridBinlogSplitAssigner binlog;
     private MySqlHybridEnumeratorState.Phase phase;
     private DebeziumOffset low;
     private DebeziumOffset high;
@@ -43,7 +43,7 @@ public final class MySqlHybridSplitAssigner
         this.fingerprint = Objects.requireNonNull(fingerprint, "fingerprint");
         if (restored == null) {
             snapshots = new MySqlSnapshotSplitAssigner();
-            binlog = new MySqlBinlogSplitAssigner(fingerprint);
+            binlog = new MySqlHybridBinlogSplitAssigner(fingerprint);
             phase = MySqlHybridEnumeratorState.Phase.BOOTSTRAP;
         } else {
             if (!fingerprint.equals(restored.fingerprint())) {
@@ -56,7 +56,7 @@ public final class MySqlHybridSplitAssigner
             phase = restored.phase();
             low = restored.lowWatermark();
             high = restored.highWatermark();
-            binlog = new MySqlBinlogSplitAssigner(restored.pendingBinlog(), restored.binlogAssigned());
+            binlog = new MySqlHybridBinlogSplitAssigner(restored.pendingBinlog(), restored.binlogAssigned());
             snapshots = new MySqlSnapshotSplitAssigner(
                     restored.pendingSnapshots(),
                     restored.assignedSnapshots(),
