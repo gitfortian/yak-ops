@@ -11,7 +11,7 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsReportEvent;
@@ -49,8 +49,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MySqlTypedSnapshotAssignmentTest {
     private static final TableId ORDERS = new TableId("shop", null, "orders");
     private static final String FINGERPRINT = "typed-enumerator-test";
-    private static final MySqlHybridEnumeratorStateSerializer SERIALIZER =
-            new MySqlHybridEnumeratorStateSerializer();
+    private static final PendingSplitsStateSerializer SERIALIZER =
+            new PendingSplitsStateSerializer(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE);
 
     @Test
     void assignsTypedChunksAndResumesAtCheckpointedBoundaryWithoutDuplicatingPriorWork() throws Exception {
