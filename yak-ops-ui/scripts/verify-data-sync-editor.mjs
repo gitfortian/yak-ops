@@ -131,6 +131,16 @@ const transport = compile("../apps/web/service/data-sync/definition.ts", {
     supportsMultipleTables: (solution) => solution.startsWith("DATABASE_"),
   },
 });
+const realtimeOnly = {
+  ...draft,
+  steps: ["INCREMENTAL"],
+};
+const realtimeOnlyPayload = params.buildEditorPayload(form, realtimeOnly, false, [], true);
+assert.equal("chunkKeyColumn" in realtimeOnlyPayload, false);
+const realtimeOnlyDefinition = transport.createDefinitionRequest(realtimeOnlyPayload).parameters;
+assert.equal(realtimeOnlyDefinition.source.startup.mode, "latest-offset");
+assert.deepEqual(Array.from(realtimeOnlyDefinition.steps), ["INCREMENTAL"]);
+
 const incremental = {
   mode: "TIMESTAMP",
   column: "updated_at",
