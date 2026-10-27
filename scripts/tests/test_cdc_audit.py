@@ -81,6 +81,24 @@ class CdcAuditTest(unittest.TestCase):
         self.write_report(("renamed", "second"))
         self.assertEqual("PASS", self.collect()["status"])
 
+    def test_parameterized_invocations_count_as_one_declared_method(self):
+        """Mirror Flink CDC's @ParameterizedTest source and multiple Surefire XML rows."""
+        (self.sources / "ExampleIT.java").write_text(
+            "class ExampleIT {\\n"
+            "  @ParameterizedTest\\n"
+            "  @ValueSource(ints = {1, 2})\\n"
+            "  void first(int value) {}\\n"
+            "  @Test\\n"
+            "  void second() {}\\n"
+            "}\\n",
+            encoding="utf-8",
+        )
+        self.write_report(("first(int)[1]", "first(int)[2]", "second"))
+        result = self.collect()
+        self.assertEqual("PASS", result["status"])
+        self.assertEqual((2, 2), (result["observedMethods"], result["expectedMethods"]))
+        self.assertEqual(3, result["observedInvocations"])
+
     def test_new_test_must_appear_in_execution_report(self):
         self.write_source("ExampleIT", ("first", "second", "added"))
         self.assertTrue(any("missing=['added']" in error for error in self.collect()["errors"]))
