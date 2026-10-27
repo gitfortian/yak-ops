@@ -128,7 +128,6 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
     }
 
     private static MySqlBinlogSplit readBinlog(DataInputStream in) throws IOException {
-        String fingerprint = in.readUTF();
         DebeziumOffset offset = in.readBoolean() ? DebeziumOffset.readFrom(in) : null;
         int length = in.readInt();
         if (length < 0 || length > in.available() || length > MAX_BYTES) {
