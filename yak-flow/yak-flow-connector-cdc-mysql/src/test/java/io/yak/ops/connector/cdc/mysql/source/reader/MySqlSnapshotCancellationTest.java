@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
+import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
+import io.yak.ops.core.types.LogicalTypeRoot;
 import io.yak.ops.connector.jdbc.database.internal.dialect.AnsiJdbcDialect;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
@@ -32,7 +34,8 @@ class MySqlSnapshotCancellationTest {
     private static final TableId TABLE = new TableId("shop", null, "orders");
     private static final TableSchema SCHEMA = new TableSchema(
             List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
-    private static final MySqlSnapshotSplit SPLIT = new MySqlSnapshotSplit("snapshot", "frozen", TABLE, null, null, null);
+    private static final MySqlSnapshotSplit SPLIT = MySqlSnapshotSplit.typed(
+            "snapshot", "frozen", new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, null, null));
 
     @Test
     void cancelsRunningJdbcQueryWithoutBlockingTheCaller() throws Exception {

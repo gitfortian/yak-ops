@@ -1,5 +1,8 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
+import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
+import io.yak.ops.core.types.LogicalTypeRoot;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -8,7 +11,7 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.debezium.reader.MySqlBinlogSplitFilter;
-import io.yak.ops.connector.cdc.mysql.source.utils.MySqlChunkBackfill;
+import io.yak.ops.connector.cdc.mysql.source.utils.RecordUtils;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
@@ -79,7 +82,7 @@ class MySqlCdcKeylessBaselineTest {
         var split = new MySqlSnapshotSplit("chunk", "fingerprint", TABLE, null, null, null);
         var high = offset(200);
 
-        assertThrows(IllegalArgumentException.class, () -> new MySqlChunkBackfill(split, KEYLESS, 10));
+        assertThrows(IllegalArgumentException.class, () -> new RecordUtils.ChunkBackfill(new ChunkRange(TABLE, "missing", LogicalTypeRoot.BIGINT, null, null), KEYLESS, 10));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new MySqlBinlogSplitFilter(

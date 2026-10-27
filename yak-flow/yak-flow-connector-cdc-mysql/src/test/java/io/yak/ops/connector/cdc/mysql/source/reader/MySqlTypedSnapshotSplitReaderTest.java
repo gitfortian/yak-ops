@@ -93,7 +93,7 @@ class MySqlTypedSnapshotSplitReaderTest {
                 "replayed-chunk", "fp", new ChunkRange(TABLE, "bucket", LogicalTypeRoot.BIGINT, null, null));
         try (var partial = reader(url, schema)) {
             partial.open(split);
-            RecordsWithSplitIds<TableRecord> first = partial.fetchTyped();
+            RecordsWithSplitIds<TableRecord> first = partial.fetch();
             assertEquals("replayed-chunk", first.nextSplit());
             int read = 0;
             while (first.nextRecordFromSplit() != null) read++;
@@ -196,7 +196,7 @@ class MySqlTypedSnapshotSplitReaderTest {
         List<TableRecord> records = new ArrayList<>();
         boolean finished = false;
         while (!finished) {
-            RecordsWithSplitIds<TableRecord> batch = reader.fetchTyped();
+            RecordsWithSplitIds<TableRecord> batch = reader.fetch();
             while (batch.nextSplit() != null) {
                 TableRecord record;
                 while ((record = batch.nextRecordFromSplit()) != null) records.add(record);

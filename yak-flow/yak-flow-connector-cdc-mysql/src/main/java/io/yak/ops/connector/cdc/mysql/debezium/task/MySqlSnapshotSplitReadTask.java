@@ -1,8 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.debezium.task;
 
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
-import io.yak.ops.connector.cdc.mysql.source.utils.MySqlChunkBackfill;
+import io.yak.ops.connector.cdc.mysql.source.utils.RecordUtils;
 import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotSplitReader;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
@@ -80,42 +79,26 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
         }
         ensureBinlog();
         var schema = Objects.requireNonNull(config.schemas().get(split.tableId()), "chunk schema");
-        MySqlChunkBackfill buffer = split.chunkRange() == null
-                ? new MySqlChunkBackfill(split, schema, MAX_ROWS, MAX_PAYLOAD_BYTES)
-                : new MySqlChunkBackfill(split.chunkRange(), schema, MAX_ROWS, MAX_PAYLOAD_BYTES);
+        if (split.chunkRange() == null) {
+            throw new IllegalArgumentException("MySQL snapshot execution requires a typed ChunkRange");
+        }
+        RecordUtils.ChunkBackfill buffer =
+                new RecordUtils.ChunkBackfill(split.chunkRange(), schema, MAX_ROWS, MAX_PAYLOAD_BYTES);
         try {
-            DebeziumOffset low;
-            if (split.chunkRange() == null) {
-                low = watermark();
-                snapshots.open(split);
-            } else {
-                low = openConsistentSnapshot(split);
-                afterLow.call();
-            }
+            DebeziumOffset low = openConsistentSnapshot(split);
+            afterLow.call();
             boolean complete = false;
             while (!complete) {
                 checkCancelled();
-                if (split.chunkRange() == null) {
-                    var batch = snapshots.fetch();
-                    while (batch.nextSplit() != null) {
-                        MySqlFetchedRecord record;
-                        while ((record = batch.nextRecordFromSplit()) != null) {
-                            for (var row : record.rows()) buffer.addSnapshot(row);
-                        }
+                var batch = snapshots.fetch();
+                while (batch.nextSplit() != null) {
+                    io.yak.ops.core.data.TableRecord record;
+                    while ((record = batch.nextRecordFromSplit()) != null) {
+                        buffer.addSnapshot(record);
                     }
-                    complete = batch.finishedSplits().contains(split.splitId());
-                    batch.recycle();
-                } else {
-                    var batch = snapshots.fetchTyped();
-                    while (batch.nextSplit() != null) {
-                        io.yak.ops.core.data.TableRecord record;
-                        while ((record = batch.nextRecordFromSplit()) != null) {
-                            buffer.addSnapshot(record);
-                        }
-                    }
-                    complete = batch.finishedSplits().contains(split.splitId());
-                    batch.recycle();
                 }
+                complete = batch.finishedSplits().contains(split.splitId());
+                batch.recycle();
             }
             afterSnapshot.call();
             DebeziumOffset high = watermark();
@@ -130,8 +113,7 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
                     if (event == null) continue;
                     int highOrder = event.offset().compareTo(high);
                     if (event.offset().compareTo(low) > 0 && highOrder <= 0) {
-                        if (split.chunkRange() != null
-                                && event.schemaChange() != null
+                        if (event.schemaChange() != null
                                 && split.tableId().equals(event.schemaChange().tableId())) {
                             throw new UnsupportedOperationException(
                                     "Typed snapshot cannot reconcile schema changes during Backfill");
@@ -197,7 +179,7 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
     }
 
     /** Opens and pins the typed InnoDB view without requiring a global table lock. */
-    void openTypedSnapshotReadView(MySqlSnapshotSplit split) throws SQLException {
+    public void openTypedSnapshotReadView(MySqlSnapshotSplit split) throws SQLException {
         checkCancelled();
         Connection view = null;
         try {

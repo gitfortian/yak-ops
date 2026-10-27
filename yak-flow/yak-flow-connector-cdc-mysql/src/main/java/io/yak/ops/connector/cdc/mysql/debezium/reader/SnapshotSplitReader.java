@@ -1,11 +1,9 @@
 package io.yak.ops.connector.cdc.mysql.debezium.reader;
 
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
 
 import io.yak.ops.connector.base.source.reader.RecordsBySplits;
 import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
-import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.jdbc.database.connection.JdbcConnectionProvider;
@@ -82,8 +80,8 @@ public final class SnapshotSplitReader implements AutoCloseable {
      */
     public void open(MySqlSnapshotSplit split, Connection consistentView) throws SQLException {
         checkCancelled();
-        if (consistentView != null && split.chunkRange() == null) {
-            throw new IllegalArgumentException("Consistent typed snapshot connection requires a typed split");
+        if (split.chunkRange() == null) {
+            throw new IllegalArgumentException("Snapshot Reader requires a typed ChunkRange");
         }
         if (split.chunkRange() != null && split.prepared()) {
             throw new IllegalArgumentException("Frozen typed snapshot output must be replayed, not rescanned");
@@ -96,7 +94,7 @@ public final class SnapshotSplitReader implements AutoCloseable {
         batchId = 0;
         TableSchema schema = Objects.requireNonNull(schemas.get(split.tableId()), "snapshot table schema");
         ChunkRange range = split.chunkRange();
-        String key = range == null ? MySqlChunkSplitter.splitKey(schema) : range.column();
+        String key = range.column();
         if (range != null) {
             Column selected = schema.columns().stream()
                     .filter(column -> column.name().equals(range.column()))
@@ -123,10 +121,6 @@ public final class SnapshotSplitReader implements AutoCloseable {
         if (upper != null) {
             predicates.add(quoted + " < ?");
             bounds.add(upper);
-        }
-        if (split.lastEmittedKey() != null) {
-            predicates.add(quoted + " > ?");
-            bounds.add(split.lastEmittedKey());
         }
         String sql = "SELECT " + columns + " FROM " + dialect.qualifiedTable(split.tableId())
                 + (predicates.isEmpty() ? "" : " WHERE " + String.join(" AND ", predicates))
@@ -176,68 +170,15 @@ public final class SnapshotSplitReader implements AutoCloseable {
     }
 
     /**
-     * Returns no more than FETCH_BATCH detached rows plus a terminal split marker if exhausted.
-     *
-     * @return bounded records and at most one finished split ID
-     */
-    public RecordsWithSplitIds<MySqlFetchedRecord> fetch() throws SQLException {
-        checkCancelled();
-        if (active == null) {
-            throw new IllegalStateException("No active MySQL snapshot split");
-        }
-        if (active.chunkRange() != null) {
-            throw new IllegalStateException("Typed rows must be reconciled before checkpointed downstream emission");
-        }
-        MySqlSnapshotSplit split = active;
-        long fetchStartedNanos = System.nanoTime();
-        String key = MySqlChunkSplitter.splitKey(schemas.get(split.tableId()));
-        List<MySqlFetchedRecord> batch = new ArrayList<>();
-        for (int remaining = FETCH_BATCH; hasRow && remaining > 0; remaining--) {
-            checkCancelled();
-            var row = converter.toInternal(results);
-            long keyValue = results.getLong(key);
-            if (results.wasNull()) {
-                throw new SQLException("MySQL snapshot primary key must not be null");
-            }
-            batch.add(new MySqlFetchedRecord(
-                    List.of(new TableRecord(split.tableId(), RowKind.INSERT, row)), keyValue, null, false));
-            hasRow = results.next();
-        }
-        boolean completed = !hasRow;
-        fetchedRows += batch.size();
-        if ("true".equals(MDC.get("taskLogDebug"))) {
-            LOG.debug(
-                    "CDC snapshot fetch completed, split={}, batch={}, batchRows={}, fetchMs={}",
-                    split.splitId(),
-                    ++batchId,
-                    batch.size(),
-                    (System.nanoTime() - fetchStartedNanos) / 1_000_000);
-        }
-        if (completed) {
-            if ("true".equals(MDC.get("taskLogDebug"))) {
-                LOG.debug(
-                        "CDC snapshot split finished, split={}, fetchedRows={}, durationMs={}",
-                        split.splitId(),
-                        fetchedRows,
-                        (System.nanoTime() - splitStartedNanos) / 1_000_000);
-            }
-            close();
-        }
-        return new RecordsBySplits<>(
-                batch.isEmpty() ? Map.of() : Map.of(split.splitId(), batch),
-                completed ? Set.of(split.splitId()) : Set.of());
-    }
-
-    /**
      * Fetches raw typed rows without assigning a synthetic key or advancing a resume cursor.
      *
      * <p>Only the bounded snapshot/backfill stage may consume these rows. If it fails before
      * freezing its normalized output, the entire half-open chunk must be reread; a partial
      * raw scan cannot be resumed by skipping equal Chunk Key values.
      */
-    public RecordsWithSplitIds<TableRecord> fetchTyped() throws SQLException {
+    public RecordsWithSplitIds<TableRecord> fetch() throws SQLException {
         checkCancelled();
-        if (active == null || active.chunkRange() == null) {
+        if (active == null) {
             throw new IllegalStateException("Typed fetch requires an active typed snapshot split");
         }
         MySqlSnapshotSplit split = active;

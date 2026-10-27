@@ -57,7 +57,7 @@ class MySqlBackfillIT {
                         "INSERT INTO " + other + " VALUES(7,'not-this-chunk')");
                 return null;
             })) {
-                var split = reader.read(new MySqlSnapshotSplit("chunk", "fp", id, null, 100L, null));
+                var split = reader.read(MySqlSnapshotSplit.typed("chunk", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, 100L)));
                 Map<Long,String> values = new LinkedHashMap<>();
                 for (var row : split.output().rows()) {
                     assertEquals(RowKind.INSERT, row.rowKind());
@@ -76,11 +76,11 @@ class MySqlBackfillIT {
         execute("CREATE TABLE " + table + "(id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL)");
         TableId id = new TableId("yak_cdc_it", null, table);
         try (var reader = new MySqlSnapshotSplitReadTask(config(Map.of(id, SCHEMA), 6601, table), 0)) {
-            var empty = reader.read(new MySqlSnapshotSplit("empty", "fp", id, null, 10L, null));
+            var empty = reader.read(MySqlSnapshotSplit.typed("empty", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, 10L)));
             assertTrue(empty.output().rows().isEmpty());
             assertEquals(0, empty.output().low().compareTo(empty.output().high()));
             execute("INSERT INTO " + table + " VALUES(20,'present')");
-            var second = reader.read(new MySqlSnapshotSplit("second", "fp", id, 10L, null, null));
+            var second = reader.read(MySqlSnapshotSplit.typed("second", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, 10L, null)));
             assertEquals(1, second.output().rows().size());
             assertEquals(20L, second.output().rows().getFirst().row().getLong(0));
         } finally { execute("DROP TABLE " + table); }
@@ -198,7 +198,7 @@ class MySqlBackfillIT {
             }
             try (var reader = new MySqlSnapshotSplitReadTask(config(Map.of(id, schema), 6821, table), 0)) {
                 var failure = assertThrows(IllegalStateException.class, () -> reader.read(
-                        new MySqlSnapshotSplit("wide", "fp", id, null, null, null)));
+                        MySqlSnapshotSplit.typed("wide", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null))));
                 assertTrue(failure.getMessage().contains("buffer limit"), failure.getMessage());
             }
         } finally {
@@ -225,15 +225,14 @@ class MySqlBackfillIT {
             // Debezium no_data schema bootstrap has separate locking requirements and is
             // deliberately not part of this JDBC privilege-boundary assertion.
             try (var snapshots = new SnapshotSplitReader(config)) {
-                snapshots.open(new MySqlSnapshotSplit("bigint", "fp", id, null, null, null));
+                snapshots.open(MySqlSnapshotSplit.typed("typed", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null)));
                 var batch = snapshots.fetch();
-                assertEquals("bigint", batch.nextSplit());
+                assertEquals("typed", batch.nextSplit());
                 var record = batch.nextRecordFromSplit();
                 assertNotNull(record);
-                assertEquals(1, record.rows().size());
-                assertEquals(1L, record.rows().getFirst().row().getLong(0));
+                assertEquals(1L, record.row().getLong(0));
                 assertNull(batch.nextRecordFromSplit());
-                assertTrue(batch.finishedSplits().contains("bigint"));
+                assertTrue(batch.finishedSplits().contains("typed"));
                 batch.recycle();
             }
             // Exercise the actual typed read-view code with no global read-lock privilege.
