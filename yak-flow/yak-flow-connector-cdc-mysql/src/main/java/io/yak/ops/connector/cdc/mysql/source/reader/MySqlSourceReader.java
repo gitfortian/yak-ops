@@ -1,5 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
+
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
@@ -43,7 +45,7 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
     private final Map<String, Long> finishedCheckpoint = new LinkedHashMap<>();
 
     public MySqlSourceReader(
-            MySqlCdcSourceConfig config,
+            MySqlSourceConfig config,
             String fingerprint,
             SourceReaderContext context,
             TableMetrics metrics,

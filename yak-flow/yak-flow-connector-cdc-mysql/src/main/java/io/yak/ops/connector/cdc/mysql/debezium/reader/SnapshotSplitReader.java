@@ -1,4 +1,6 @@
-package io.yak.ops.connector.cdc.mysql.source.reader;
+package io.yak.ops.connector.cdc.mysql.debezium.reader;
+
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
 
 import io.yak.ops.connector.base.source.reader.RecordsBySplits;
 import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
@@ -37,9 +39,9 @@ import org.slf4j.MDC;
  * only by the mailbox emitter. A typed scan has no per-row checkpoint cursor and must
  * be fully reconciled and frozen before any row reaches the downstream.
  */
-public final class MySqlSnapshotSplitReader implements AutoCloseable {
+public final class SnapshotSplitReader implements AutoCloseable {
 
-    private static final Logger LOG = LoggerFactory.getLogger(MySqlSnapshotSplitReader.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SnapshotSplitReader.class);
 
     private static final int FETCH_BATCH = 256;
 
@@ -58,11 +60,11 @@ public final class MySqlSnapshotSplitReader implements AutoCloseable {
     private long fetchedRows;
     private long batchId;
 
-    public MySqlSnapshotSplitReader(MySqlSourceConfig config) {
+    public SnapshotSplitReader(MySqlSourceConfig config) {
         this(config::openSnapshotConnection, JdbcDialects.forUrl("jdbc:mysql:"), config.schemas());
     }
 
-    public MySqlSnapshotSplitReader(
+    public SnapshotSplitReader(
             JdbcConnectionProvider connections, JdbcDialect dialect, Map<TableId, TableSchema> schemas) {
         this.connections = Objects.requireNonNull(connections, "connections");
         this.dialect = Objects.requireNonNull(dialect, "dialect");
@@ -78,7 +80,7 @@ public final class MySqlSnapshotSplitReader implements AutoCloseable {
      * Uses a caller-owned, already established consistent MySQL read view for typed chunks.
      * This Reader takes over ownership and closes the connection on completion or failure.
      */
-    void open(MySqlSnapshotSplit split, Connection consistentView) throws SQLException {
+    public void open(MySqlSnapshotSplit split, Connection consistentView) throws SQLException {
         checkCancelled();
         if (consistentView != null && split.chunkRange() == null) {
             throw new IllegalArgumentException("Consistent typed snapshot connection requires a typed split");

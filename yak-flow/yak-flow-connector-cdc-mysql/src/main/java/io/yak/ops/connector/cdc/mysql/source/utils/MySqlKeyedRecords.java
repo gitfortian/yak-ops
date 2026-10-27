@@ -1,4 +1,4 @@
-package io.yak.ops.connector.cdc.mysql.source.reader;
+package io.yak.ops.connector.cdc.mysql.source.utils;
 
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;

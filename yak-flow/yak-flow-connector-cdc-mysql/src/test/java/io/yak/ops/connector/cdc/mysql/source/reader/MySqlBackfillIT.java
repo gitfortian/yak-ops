@@ -1,5 +1,8 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlSnapshotSplitReadTask;
+import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotSplitReader;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
@@ -45,7 +48,7 @@ class MySqlBackfillIT {
         TableId another = new TableId("yak_cdc_it", null, other);
         try {
             var config = config(Map.of(id, SCHEMA, another, SCHEMA), 6501, table);
-            try (var reader = new MySqlSnapshotBackfillReader(config, 0, () -> {
+            try (var reader = new MySqlSnapshotSplitReadTask(config, 0, () -> {
                 execute("UPDATE " + table + " SET name='intermediate' WHERE id=1",
                         "UPDATE " + table + " SET name='final' WHERE id=1",
                         "DELETE FROM " + table + " WHERE id=2",
@@ -72,7 +75,7 @@ class MySqlBackfillIT {
         String table = "quiet_" + UUID.randomUUID().toString().replace("-", "");
         execute("CREATE TABLE " + table + "(id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL)");
         TableId id = new TableId("yak_cdc_it", null, table);
-        try (var reader = new MySqlSnapshotBackfillReader(config(Map.of(id, SCHEMA), 6601, table), 0)) {
+        try (var reader = new MySqlSnapshotSplitReadTask(config(Map.of(id, SCHEMA), 6601, table), 0)) {
             var empty = reader.read(new MySqlSnapshotSplit("empty", "fp", id, null, 10L, null));
             assertTrue(empty.output().rows().isEmpty());
             assertEquals(0, empty.output().low().compareTo(empty.output().high()));
@@ -141,7 +144,7 @@ class MySqlBackfillIT {
                 "CREATE TABLE " + table + "(id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL)",
                 "INSERT INTO " + table + " VALUES (1,'before'),(2,'removed'),(50,'moved')");
         TableId id = new TableId("yak_cdc_it", null, table);
-        try (var reader = new MySqlSnapshotBackfillReader(
+        try (var reader = new MySqlSnapshotSplitReadTask(
                 config(Map.of(id, SCHEMA), 6811, table),
                 0,
                 () -> null,
@@ -193,7 +196,7 @@ class MySqlBackfillIT {
             for (int index = 0; index < 8; index++) {
                 execute("INSERT INTO " + table + "(payload) SELECT payload FROM " + table);
             }
-            try (var reader = new MySqlSnapshotBackfillReader(config(Map.of(id, schema), 6821, table), 0)) {
+            try (var reader = new MySqlSnapshotSplitReadTask(config(Map.of(id, schema), 6821, table), 0)) {
                 var failure = assertThrows(IllegalStateException.class, () -> reader.read(
                         new MySqlSnapshotSplit("wide", "fp", id, null, null, null)));
                 assertTrue(failure.getMessage().contains("buffer limit"), failure.getMessage());
@@ -221,7 +224,7 @@ class MySqlBackfillIT {
             // Verify the restricted account can scan real rows with ordinary JDBC SELECT.
             // Debezium no_data schema bootstrap has separate locking requirements and is
             // deliberately not part of this JDBC privilege-boundary assertion.
-            try (var snapshots = new MySqlSnapshotSplitReader(config)) {
+            try (var snapshots = new SnapshotSplitReader(config)) {
                 snapshots.open(new MySqlSnapshotSplit("bigint", "fp", id, null, null, null));
                 var batch = snapshots.fetch();
                 assertEquals("bigint", batch.nextSplit());
@@ -235,7 +238,7 @@ class MySqlBackfillIT {
             }
             // Exercise the actual typed read-view code with no global read-lock privilege.
             // Ordinary SELECT plus Binlog position access is sufficient for this JDBC boundary.
-            try (var reader = new MySqlSnapshotBackfillReader(config, 1)) {
+            try (var reader = new MySqlSnapshotSplitReadTask(config, 1)) {
                 reader.openTypedSnapshotReadView(
                         MySqlSnapshotSplit.typed(
                                 "typed", "fp", new ChunkRange(id, "id", LogicalTypeRoot.BIGINT, null, null)));

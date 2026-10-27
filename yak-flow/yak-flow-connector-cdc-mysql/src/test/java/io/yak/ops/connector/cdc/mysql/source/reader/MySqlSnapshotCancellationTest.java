@@ -1,5 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotSplitReader;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
@@ -54,7 +56,7 @@ class MySqlSnapshotCancellationTest {
         var connection = (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(),
                 new Class<?>[] {Connection.class},
                 (proxy, method, args) -> method.getName().equals("prepareStatement") ? statement : null);
-        try (var reader = new MySqlSnapshotSplitReader(() -> connection, new AnsiJdbcDialect(), Map.of(TABLE, SCHEMA));
+        try (var reader = new SnapshotSplitReader(() -> connection, new AnsiJdbcDialect(), Map.of(TABLE, SCHEMA));
                 var executor = Executors.newSingleThreadExecutor()) {
             var opening = executor.submit(() -> { reader.open(SPLIT); return null; });
             try {
@@ -74,7 +76,7 @@ class MySqlSnapshotCancellationTest {
     @Test
     void cancellationBeforeOpenDoesNotAcquireAConnection() throws Exception {
         AtomicInteger connections = new AtomicInteger();
-        try (var reader = new MySqlSnapshotSplitReader(() -> {
+        try (var reader = new SnapshotSplitReader(() -> {
             connections.incrementAndGet();
             throw new SQLException("Unexpected connection");
         }, new AnsiJdbcDialect(), Map.of(TABLE, SCHEMA))) {

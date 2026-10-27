@@ -1,5 +1,8 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
+import io.yak.ops.connector.cdc.mysql.debezium.MySqlDebeziumRecordConverter;
+
 import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

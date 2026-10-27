@@ -1,5 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlSnapshotSplitReadTask;
+
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitState;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -55,7 +57,7 @@ class MySqlKeylessBackfillIT {
             var raw = MySqlSnapshotSplit.typed(
                     "keyless-chunk", "fingerprint",
                     new ChunkRange(id, "bucket", LogicalTypeRoot.BIGINT, null, 10L));
-            try (var reader = new MySqlSnapshotBackfillReader(config, 0, () -> {
+            try (var reader = new MySqlSnapshotSplitReadTask(config, 0, () -> {
                 execute(
                         "DELETE FROM " + table + " WHERE bucket=1 AND payload='same' LIMIT 1",
                         "UPDATE " + table + " SET payload='updated' WHERE bucket=1 AND payload='replace'",
@@ -107,7 +109,7 @@ class MySqlKeylessBackfillIT {
         execute("CREATE TABLE " + table + "(bucket BIGINT NOT NULL, payload VARCHAR(100))",
                 "INSERT INTO " + table + " VALUES (1,'duplicate'),(1,'duplicate')");
         TableId id = new TableId("yak_cdc_it", null, table);
-        try (var reader = new MySqlSnapshotBackfillReader(config(Map.of(id, SCHEMA), Map.of(id, "bucket"), 6741), 0)) {
+        try (var reader = new MySqlSnapshotSplitReadTask(config(Map.of(id, SCHEMA), Map.of(id, "bucket"), 6741), 0)) {
             var prepared = reader.read(MySqlSnapshotSplit.typed(
                     "quiet", "fp", new ChunkRange(id, "bucket", LogicalTypeRoot.BIGINT, null, null)));
             assertEquals(2, prepared.output().rows().size());
@@ -132,7 +134,7 @@ class MySqlKeylessBackfillIT {
                 execute("INSERT INTO " + table + " SELECT bucket, payload FROM " + table);
             }
             try (var reader =
-                    new MySqlSnapshotBackfillReader(config(Map.of(id, SCHEMA), Map.of(id, "bucket"), 6791), 0)) {
+                    new MySqlSnapshotSplitReadTask(config(Map.of(id, SCHEMA), Map.of(id, "bucket"), 6791), 0)) {
                 var raw = MySqlSnapshotSplit.typed(
                         "large-duplicates", "fp", new ChunkRange(id, "bucket", LogicalTypeRoot.BIGINT, null, null));
                 var prepared = reader.read(raw);
@@ -159,7 +161,7 @@ class MySqlKeylessBackfillIT {
         execute("CREATE TABLE " + table + "(bucket BIGINT NOT NULL, payload VARCHAR(100))",
                 "INSERT INTO " + table + " VALUES (1,'original')");
         TableId id = new TableId("yak_cdc_it", null, table);
-        try (var reader = new MySqlSnapshotBackfillReader(config(Map.of(id, SCHEMA), Map.of(id, "bucket"), 6751), 0,
+        try (var reader = new MySqlSnapshotSplitReadTask(config(Map.of(id, SCHEMA), Map.of(id, "bucket"), 6751), 0,
                 () -> {
                     execute("UPDATE " + table + " SET bucket=2 WHERE payload='original'");
                     return null;
@@ -179,7 +181,7 @@ class MySqlKeylessBackfillIT {
         execute("CREATE TABLE " + table + "(bucket BIGINT NOT NULL, payload VARCHAR(100))",
                 "INSERT INTO " + table + " VALUES (1,'same'),(1,'same'),(1,'before')");
         TableId id = new TableId("yak_cdc_it", null, table);
-        try (var reader = new MySqlSnapshotBackfillReader(
+        try (var reader = new MySqlSnapshotSplitReadTask(
                 config(Map.of(id, SCHEMA), Map.of(id, "bucket"), 6781),
                 0,
                 () -> null,

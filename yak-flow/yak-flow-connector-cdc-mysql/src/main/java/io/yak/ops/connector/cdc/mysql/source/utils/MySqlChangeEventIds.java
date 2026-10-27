@@ -1,4 +1,4 @@
-package io.yak.ops.connector.cdc.mysql.source.reader;
+package io.yak.ops.connector.cdc.mysql.source.utils;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import java.io.ByteArrayOutputStream;
@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /** Derives stable opaque change identities from Debezium's exact source event/row coordinates. */
-final class MySqlChangeEventIds {
+public final class MySqlChangeEventIds {
     private MySqlChangeEventIds() {}
 
     /**
@@ -20,7 +20,7 @@ final class MySqlChangeEventIds {
      * <p>Legacy keyed CDC remains valid without identities. Future RETRACT must require
      * a non-null identity; guessing a row number from an incomplete offset is unsafe.
      */
-    static String fromBinlog(DebeziumOffset offset) {
+    public static String fromBinlog(DebeziumOffset offset) {
         Map<String, Object> position = offset.position();
         if (!(position.get("file") instanceof String file)
                 || file.isBlank()

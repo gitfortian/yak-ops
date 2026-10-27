@@ -1,11 +1,15 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
+import io.yak.ops.connector.cdc.mysql.source.utils.MySqlChangeEventIds;
+
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.RecordEmitter;
 import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitState;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.core.api.connector.source.ReaderOutput;
+import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.data.ChangeEventId;
 import io.yak.ops.core.data.TableRecord;
 import java.util.Objects;

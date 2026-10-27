@@ -1,4 +1,6 @@
-package io.yak.ops.connector.cdc.mysql.source.reader;
+package io.yak.ops.connector.cdc.mysql.source.utils;
+
+import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;

@@ -1,5 +1,8 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
+import io.yak.ops.connector.cdc.mysql.debezium.reader.MySqlBinlogSplitFilter;
+
 import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.TABLE;
 import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.event;
 import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.offset;

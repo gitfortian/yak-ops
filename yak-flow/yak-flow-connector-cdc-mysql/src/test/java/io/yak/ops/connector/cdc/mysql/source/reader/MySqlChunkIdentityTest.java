@@ -1,5 +1,8 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
+import io.yak.ops.connector.cdc.mysql.source.utils.MySqlChunkBackfill;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;

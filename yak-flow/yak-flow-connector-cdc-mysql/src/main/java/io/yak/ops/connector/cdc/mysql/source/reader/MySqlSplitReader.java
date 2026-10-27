@@ -1,5 +1,10 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
+import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlSnapshotSplitReadTask;
+import io.yak.ops.connector.cdc.mysql.debezium.reader.MySqlBinlogSplitFilter;
+
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.RecordsBySplits;
 import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
@@ -29,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, MySqlSplit> {
     private static final int OUTPUT_BATCH_SIZE = 256;
     private final MySqlSourceConfig config;
-    private final MySqlSnapshotBackfillReader snapshots;
+    private final MySqlSnapshotSplitReadTask snapshots;
     private final TableMetrics metrics;
     private final long generation;
     private final Set<TableId> tables;
@@ -70,7 +75,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         generation = metrics.generation();
         tables = Set.copyOf(config.schemas().keySet());
-        snapshots = new MySqlSnapshotBackfillReader(config, reader);
+        snapshots = new MySqlSnapshotSplitReadTask(config, reader);
     }
 
     @Override

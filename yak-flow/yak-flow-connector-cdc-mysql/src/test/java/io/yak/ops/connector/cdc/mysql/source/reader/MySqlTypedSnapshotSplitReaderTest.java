@@ -1,5 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
+import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotSplitReader;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -174,8 +176,8 @@ class MySqlTypedSnapshotSplitReaderTest {
         assertEquals(0, split.outputPosition());
     }
 
-    private static MySqlSnapshotSplitReader reader(String url, TableSchema schema) {
-        return new MySqlSnapshotSplitReader(
+    private static SnapshotSplitReader reader(String url, TableSchema schema) {
+        return new SnapshotSplitReader(
                 () -> DriverManager.getConnection(url),
                 JdbcDialects.forUrl("jdbc:mysql:"),
                 Map.of(TABLE, schema));
@@ -190,7 +192,7 @@ class MySqlTypedSnapshotSplitReaderTest {
                 chunkSize);
     }
 
-    private static List<TableRecord> drain(MySqlSnapshotSplitReader reader) throws SQLException {
+    private static List<TableRecord> drain(SnapshotSplitReader reader) throws SQLException {
         List<TableRecord> records = new ArrayList<>();
         boolean finished = false;
         while (!finished) {

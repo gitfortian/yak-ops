@@ -1,4 +1,9 @@
-package io.yak.ops.connector.cdc.mysql.source.reader;
+package io.yak.ops.connector.cdc.mysql.debezium.task;
+
+import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
+import io.yak.ops.connector.cdc.mysql.source.utils.MySqlChunkBackfill;
+import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotSplitReader;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogEngine;
@@ -17,12 +22,12 @@ import java.util.Objects;
 import java.util.concurrent.Callable;
 
 /** Fetcher-owned JDBC scan and bounded Binlog reconciliation for one chunk at a time. */
-public final class MySqlSnapshotBackfillReader implements AutoCloseable {
+public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
     private static final int MAX_ROWS = 100_000;
     private static final long MAX_PAYLOAD_BYTES = 4L * 1024 * 1024;
     private static final long BINLOG_TIMEOUT_NANOS = Duration.ofSeconds(60).toNanos();
     private final MySqlSourceConfig config;
-    private final MySqlSnapshotSplitReader snapshots;
+    private final SnapshotSplitReader snapshots;
     private final MySqlBinlogEngine binlog;
     private final Callable<Void> afterSnapshot;
     private final Callable<Void> afterLowWatermark;
@@ -32,17 +37,17 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
     private boolean started;
     private Map<String, Object> partition;
 
-    public MySqlSnapshotBackfillReader(MySqlSourceConfig config, int reader) {
+    public MySqlSnapshotSplitReadTask(MySqlSourceConfig config, int reader) {
         this(config, reader, () -> null);
     }
 
     /** A package-local phase callback lets database tests place commits exactly inside the scan window. */
-    MySqlSnapshotBackfillReader(MySqlSourceConfig config, int reader, Callable<Void> afterSnapshot) {
+    public MySqlSnapshotSplitReadTask(MySqlSourceConfig config, int reader, Callable<Void> afterSnapshot) {
         this(config, reader, afterSnapshot, () -> null, () -> null);
     }
 
     /** Executes after Low but before the consistent read view is established. */
-    MySqlSnapshotBackfillReader(
+    public MySqlSnapshotSplitReadTask(
             MySqlSourceConfig config,
             int reader,
             Callable<Void> afterSnapshot,
@@ -52,12 +57,12 @@ public final class MySqlSnapshotBackfillReader implements AutoCloseable {
         this.afterSnapshot = Objects.requireNonNull(afterSnapshot, "afterSnapshot");
         this.afterLowWatermark = Objects.requireNonNull(afterLowWatermark, "afterLowWatermark");
         this.afterLow = Objects.requireNonNull(afterLow, "afterLow");
-        snapshots = new MySqlSnapshotSplitReader(config);
+        snapshots = new SnapshotSplitReader(config);
         binlog = new MySqlBinlogEngine(config.withoutSchemaEvolution(), config.snapshotServerId(reader));
     }
 
     /** Preserves the callback after the view is anchored for existing integration scenarios. */
-    MySqlSnapshotBackfillReader(
+    public MySqlSnapshotSplitReadTask(
             MySqlSourceConfig config, int reader, Callable<Void> afterSnapshot, Callable<Void> afterLow) {
         this(config, reader, afterSnapshot, () -> null, afterLow);
     }
