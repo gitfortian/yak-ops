@@ -12,8 +12,9 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
-import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedAckEvent;
-import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsAckEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsReportEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsRequestEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlStopSnapshotEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
@@ -27,6 +28,7 @@ import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SplitEnumerator;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
 import io.yak.ops.core.data.TableId;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -193,6 +195,8 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         if (closed) return;
         if (!initial) return;
         if (assigner.phase() == MySqlHybridEnumeratorState.Phase.STREAMING) sendResumeEvent(reader);
+        else if (assigner.phase() == MySqlHybridEnumeratorState.Phase.SNAPSHOT)
+            context.sendEventToSourceReader(reader, new FinishedSnapshotSplitsRequestEvent());
         assignAvailable();
     }
 
@@ -207,11 +211,16 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             if (!bootstrap) return;
             metrics.phase(generation, TableMetrics.Phase.SNAPSHOT, false);
             planSnapshotAsync();
-        } else if (event instanceof MySqlSnapshotFinishedEvent finished) {
-            assigner.finishSnapshot(finished.finished());
-            metrics.splitFinished(
-                    generation, finished.splitId(), finished.finished().tableId());
-            context.sendEventToSourceReader(reader, new MySqlSnapshotFinishedAckEvent(finished.splitId()));
+        } else if (event instanceof FinishedSnapshotSplitsReportEvent finished) {
+            List<String> acknowledged = new ArrayList<>();
+            for (var entry : finished.getFinishedOffsets().entrySet()) {
+                FinishedSnapshotSplitInfo info = assigner.finishSnapshot(entry.getKey(), entry.getValue());
+                metrics.splitFinished(generation, info.splitId(), info.tableId());
+                acknowledged.add(info.splitId());
+            }
+            if (!acknowledged.isEmpty()) {
+                context.sendEventToSourceReader(reader, new FinishedSnapshotSplitsAckEvent(acknowledged));
+            }
             if (assigner.snapshotComplete()) enterHandoff();
             assignAvailable();
             planSnapshotAsync();

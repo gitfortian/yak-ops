@@ -14,7 +14,7 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumerat
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
-import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsReportEvent;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
@@ -107,8 +107,11 @@ class MySqlTypedSnapshotAssignmentTest {
         assertFalse(secondContext.assignments(1).contains(first));
         recovered.handleSourceEvent(
                 1,
-                new MySqlSnapshotFinishedEvent(new FinishedSnapshotSplitInfo(
-                        ORDERS, first.splitId(), null, null, offset(150), first.chunkRange())));
+                new FinishedSnapshotSplitsReportEvent(Map.of(first.splitId(), offset(150))));
+        recovered.handleSourceEvent(
+                1, new FinishedSnapshotSplitsReportEvent(Map.of(first.splitId(), offset(150))));
+        assertThrows(IllegalArgumentException.class, () -> recovered.handleSourceEvent(
+                1, new FinishedSnapshotSplitsReportEvent(Map.of("unknown-split", offset(150)))));
         var resumed = SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize((MySqlHybridEnumeratorState) recovered.snapshotState(6)));
         assertEquals(first.chunkRange(), resumed.finishedSplitInfos().getFirst().chunkRange());

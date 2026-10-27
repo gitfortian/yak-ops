@@ -8,8 +8,10 @@ import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
-import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedAckEvent;
-import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsAckEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsReportEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsRequestEvent;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
@@ -107,15 +109,30 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
 
     @Override
     protected void onSplitFinished(Map<String, MySqlSplitState> finished) {
+        Map<String, DebeziumOffset> finishedOffsets = new LinkedHashMap<>();
         for (var entry : finished.entrySet()) {
             MySqlSplit split = entry.getValue().checkpoint(null);
             if (!(split instanceof MySqlSnapshotSplit snapshot)) {
                 throw new IllegalStateException("Continuous MySQL Binlog split cannot finish");
             }
             finishedUnacked.put(snapshot.splitId(), snapshot);
-            context.sendSourceEventToCoordinator(new MySqlSnapshotFinishedEvent(
-                    Objects.requireNonNull(snapshot.finished(), "Finished chunk has no watermark")));
+            finishedOffsets.put(
+                    snapshot.splitId(),
+                    Objects.requireNonNull(snapshot.finished(), "Finished chunk has no watermark").highWatermark());
+        }
+        if (!finishedOffsets.isEmpty()) {
+            context.sendSourceEventToCoordinator(new FinishedSnapshotSplitsReportEvent(finishedOffsets));
             context.sendSplitRequest();
+        }
+    }
+
+    private void reportFinishedSplits() {
+        Map<String, DebeziumOffset> finishedOffsets = new LinkedHashMap<>();
+        finishedUnacked.forEach((id, split) -> {
+            if (split.finished() != null) finishedOffsets.put(id, split.finished().highWatermark());
+        });
+        if (!finishedOffsets.isEmpty()) {
+            context.sendSourceEventToCoordinator(new FinishedSnapshotSplitsReportEvent(finishedOffsets));
         }
     }
 
@@ -147,8 +164,12 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
     @Override
     public void handleSourceEvents(SourceEvent event) {
         if (!initial) throw new IllegalArgumentException("Binlog-only reader does not accept hybrid events");
-        if (event instanceof MySqlSnapshotFinishedAckEvent ack) {
-            if (finishedUnacked.containsKey(ack.splitId())) acknowledged.add(ack.splitId());
+        if (event instanceof FinishedSnapshotSplitsAckEvent ack) {
+            ack.getFinishedSplits().forEach(id -> {
+                if (finishedUnacked.containsKey(id)) acknowledged.add(id);
+            });
+        } else if (event instanceof FinishedSnapshotSplitsRequestEvent) {
+            reportFinishedSplits();
         } else if (event instanceof MySqlResumeBinlogEvent resume) {
             resumeEvent = resume;
             forEachActiveSplitState(state -> {
