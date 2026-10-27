@@ -42,7 +42,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
  * <p>Run only against a disposable server with ROW Binlog, FULL row image and replication
  * permissions. No snapshot/backfill or external Sink is exercised by this test.
  */
-@Tag("cdc")
+@Tag("cdc-binlog")
 @Timeout(240)
 class MySqlBinlogIT {
     @RegisterExtension

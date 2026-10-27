@@ -26,8 +26,15 @@ SUITES = {
     "jdbc-postgres": (JDBC, "jdbc & postgres", {"PostgresSourceIT": 5, "PostgresSinkIT": 3, "PostgresKeylessRetractIT": 3}),
     "jdbc-oracle": (JDBC, "jdbc & oracle", {"OracleSourceIT": 5, "OracleSinkIT": 3, "OracleKeylessRetractIT": 4}),
     "pipeline": (JDBC, "pipeline", {name: 2 for name in ("MySqlToMySqlIT", "MySqlToPostgresIT", "PostgresToOracleIT", "OracleToMySqlIT")}),
-    "cdc": (CDC, "cdc", {"MySqlBinlogIT": 3, "MySqlHybridIT": 3, "MySqlBackfillIT": 2, "MySqlKeylessBackfillIT": 5}),
-    "cdc-pipeline": (CDC, "cdc-pipeline", {name: 1 for name in ("MySqlCdcToMySqlIT", "MySqlCdcToPostgresIT", "MySqlCdcToOracleIT")}),
+    "cdc-binlog": (CDC, "cdc-binlog", {"MySqlBinlogIT": 3}),
+    "cdc-snapshot": (CDC, "cdc-snapshot", {"MySqlBackfillIT": 6, "MySqlKeylessBackfillIT": 6}),
+    "cdc-hybrid": (CDC, "cdc-hybrid", {"MySqlHybridIT": 6}),
+    "cdc-pipeline-mysql": (CDC, "cdc-pipeline-mysql", {"MySqlCdcToMySqlIT": 2}),
+    "cdc-pipeline-postgres": (CDC, "cdc-pipeline-postgres & cdc-schema", {"MySqlCdcToPostgresIT": 1}),
+    "cdc-pipeline-oracle": (CDC, "cdc-pipeline-oracle & cdc-schema", {"MySqlCdcToOracleIT": 1}),
+    "cdc-acceptance-postgres": (CDC, "cdc-acceptance-postgres & cdc-changelog", {"MySqlCdcToPostgresIT": 1}),
+    "cdc-acceptance-oracle": (CDC, "cdc-acceptance-oracle & cdc-changelog", {"MySqlCdcToOracleIT": 1}),
+    "cdc-recovery": (CDC, "cdc-recovery", {"MySqlCdcToMySqlCrashRecoveryIT": 1}),
     "business": (BUSINESS, "business", {"TaskCursorIT": 5, "ScheduleAdmissionIT": 13}),
     "modeling": ("yak-ops-business/yak-ops-business-modeling", "modeling", {"PlanningDatabaseIT": 10, "StandardDatabaseIT": 8, "LayerDatabaseIT": 9, "DimensionDatabaseIT": 5, "ModelDatabaseIT": 12, "PublicationDatabaseIT": 9, "MetricDatabaseIT": 8}),
     "backend-e2e": (E2E, "backend-e2e", {"TaskExecutionIT": 5, "BatchSyncIT": 2, "RealtimeSyncIT": 1, "SingleTableRealtimeSchemaIT": 2, "OfflineIncrementalIT": 2, "SchemaMigrationIT": 2, "ScheduleIT": 1, "WarehousePlanningIT": 2, "DimensionModelingIT": 2, "DataStandardsIT": 1, "WarehouseLayersIT": 1, "MetricsIT": 1}),
@@ -62,6 +69,15 @@ def check_registration(root: Path = ROOT) -> None:
     actual = {p.stem for module in {spec[0] for spec in SUITES.values()} for p in (root / module / "src/test").rglob("*IT.java")}
     if actual != expected:
         raise ValueError(f"IT registration mismatch: unregistered={sorted(actual-expected)}, missing={sorted(expected-actual)}")
+    # Validate stage tags before starting Docker; matching a class name alone
+    # cannot prove Failsafe will discover it in its selected suite.
+    for suite, (module, _, classes) in SUITES.items():
+        if not suite.startswith("cdc-"):
+            continue
+        for classname in classes:
+            candidates = list((root / module / "src/test").rglob(classname + ".java"))
+            if len(candidates) != 1 or ('@Tag("' + suite + '")') not in candidates[0].read_text(encoding="utf-8"):
+                raise ValueError(f"Missing CDC suite tag {suite}: {classname}")
 
 
 def check_reports(names: list[str], root: Path = ROOT) -> dict[str, int]:

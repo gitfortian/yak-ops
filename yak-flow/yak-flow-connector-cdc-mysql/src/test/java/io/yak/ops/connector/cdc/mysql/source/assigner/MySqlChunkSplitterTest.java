@@ -1,12 +1,13 @@
 package io.yak.ops.connector.cdc.mysql.source.assigner;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlSnapshotSplitReader;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
+import io.yak.ops.core.types.LogicalTypeRoot;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialects;
@@ -17,11 +18,11 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
-/** Exercises sparse chunk keys and restart from consumed-key progress on a real JDBC query. */
+/** The active snapshot planner checkpoints a Chunk boundary, never a partial row cursor. */
 class MySqlChunkSplitterTest {
 
     @Test
-    void plansSparseHalfOpenRangesAndRestartsAtExclusiveCursor() throws Exception {
+    void plansSparseHalfOpenRangesAndRestartsIncompleteChunkFromItsLowerBoundary() throws Exception {
         String url = "jdbc:h2:mem:hybrid_" + UUID.randomUUID()
                 + ";MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1";
         try (var c = DriverManager.getConnection(url);
@@ -37,36 +38,38 @@ class MySqlChunkSplitterTest {
                 List.of("id"));
         var dialect = JdbcDialects.forUrl("jdbc:mysql:");
         var splitter = new MySqlChunkSplitter(() -> DriverManager.getConnection(url), dialect, Map.of(table, schema), 2);
-        var splits = splitter.plan(table, "fingerprint", 0);
-        assertEquals(3, splits.size());
-        assertEquals(null, splits.getFirst().lowerInclusive());
-        assertEquals(1000L, splits.getFirst().upperExclusive());
-        assertEquals(1000L, splits.get(1).lowerInclusive());
-        assertEquals(6000L, splits.get(1).upperExclusive());
-        assertEquals(null, splits.getLast().upperExclusive());
+        var first = splitter.planNext(table, "fp", 0, 0, null);
+        assertNull(first.chunkRange().start());
+        assertEquals(1000L, first.chunkRange().end());
+        var cursor = new ChunkRange(table, "id", LogicalTypeRoot.BIGINT, first.chunkRange().end(), null);
+        var second = splitter.planNext(table, "fp", 0, 1, cursor);
+        assertEquals(1000L, second.chunkRange().start());
+        assertEquals(6000L, second.chunkRange().end());
+        var last = splitter.planNext(table, "fp", 0, 2,
+                new ChunkRange(table, "id", LogicalTypeRoot.BIGINT, second.chunkRange().end(), null));
+        assertNull(last.chunkRange().end());
 
-        var reader = new MySqlSnapshotSplitReader(
-                () -> DriverManager.getConnection(url), dialect, Map.of(table, schema));
-        reader.open(splits.getFirst());
-        var first = reader.fetch();
-        assertEquals("mysql-snapshot-0-0", first.nextSplit());
-        var one = first.nextRecordFromSplit();
-        assertEquals(1L, one.snapshotKey());
-        // A Checkpoint of the first delivered key resumes at the second row, never replaying 1.
-        reader.close();
-        reader.open(splits.getFirst().withLastEmittedKey(one.snapshotKey()));
-        var remaining = reader.fetch();
-        assertEquals("mysql-snapshot-0-0", remaining.nextSplit());
-        assertEquals(100L, remaining.nextRecordFromSplit().snapshotKey());
-        assertEquals(null, remaining.nextRecordFromSplit());
-        assertTrue(remaining.finishedSplits().contains("mysql-snapshot-0-0"));
-        reader.close();
-    }
-
-    @Test
-    void rejectsUnsupportedCompositeOrNonNumericChunkKeys() {
-        var wrong = new TableSchema(
-                List.of(new Column("id", LogicalTypes.varchar(10).copy(false))), List.of("id"));
-        assertThrows(IllegalArgumentException.class, () -> MySqlChunkSplitter.splitKey(wrong));
+        // An incomplete Chunk is rescanned from its original half-open bounds.
+        // It must not skip equal-key rows based on a previous emit position.
+        var observed = new ArrayList<Long>();
+        try (var reader = new MySqlSnapshotSplitReader(
+                () -> DriverManager.getConnection(url), dialect, Map.of(table, schema))) {
+            reader.open(first);
+            var partial = reader.fetchTyped();
+            assertEquals(first.splitId(), partial.nextSplit());
+            var row = partial.nextRecordFromSplit();
+            observed.add(row.row().getLong(0));
+        }
+        try (var restarted = new MySqlSnapshotSplitReader(
+                () -> DriverManager.getConnection(url), dialect, Map.of(table, schema))) {
+            restarted.open(first);
+            var whole = restarted.fetchTyped();
+            assertEquals(first.splitId(), whole.nextSplit());
+            assertEquals(1L, whole.nextRecordFromSplit().row().getLong(0));
+            assertEquals(100L, whole.nextRecordFromSplit().row().getLong(0));
+            assertNull(whole.nextRecordFromSplit());
+            assertTrue(whole.finishedSplits().contains(first.splitId()));
+        }
+        assertEquals(List.of(1L), observed);
     }
 }

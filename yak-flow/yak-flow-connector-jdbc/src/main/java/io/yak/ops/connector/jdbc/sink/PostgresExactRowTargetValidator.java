@@ -10,12 +10,12 @@ import java.sql.SQLException;
 import java.util.Locale;
 
 /** Verifies physical PostgreSQL full-row retraction safety. */
-public final class PostgresKeylessTargetValidator {
+public final class PostgresExactRowTargetValidator {
 
-    private PostgresKeylessTargetValidator() {}
+    private PostgresExactRowTargetValidator() {}
 
     public static void validate(Connection connection, JdbcTableWritePlan plan) throws SQLException {
-        JdbcKeylessRetractionContract.validate(plan.sourceSchema(), plan.schema());
+        JdbcSinkSchemaValidator.validateExactRow(plan.sourceSchema(), plan.schema());
         String owner = plan.targetTable().schema() == null
                 ? connection.getSchema()
                 : plan.targetTable().schema();

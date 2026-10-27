@@ -83,7 +83,6 @@ class MySqlTypedSnapshotAssignmentTest {
         assertEquals(0, saved.nextTableIndex());
         assertEquals(1, saved.nextChunkIndex());
         assertEquals(first.chunkRange().end(), saved.nextChunkRange().start());
-        assertNull(saved.nextChunkLower());
         assertTrue(saved.assignedSnapshots().containsKey(first.splitId()));
         enumerator.close();
 
@@ -129,20 +128,20 @@ class MySqlTypedSnapshotAssignmentTest {
         var assigner = new MySqlHybridSplitAssigner(FINGERPRINT, null);
         assigner.nextBinlog(0);
         assigner.captureLow(offset(100));
-        MySqlSnapshotSplit first = planner.planNextTyped(ORDERS, FINGERPRINT, 0, 0, null);
+        MySqlSnapshotSplit first = planner.planNext(ORDERS, FINGERPRINT, 0, 0, null);
         assertEquals(new BigDecimal("9223372036854775808.00000000"), first.chunkRange().end());
         var cursor = new ChunkRange(
                 ORDERS, "bucket", LogicalTypeRoot.DECIMAL, first.chunkRange().end(), null);
-        assigner.appendTypedPlan(first, 0, 1, cursor, false);
+        assigner.appendPlan(first, 1);
         var saved = SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize(assigner.snapshot(9)));
         var restored = new MySqlHybridSplitAssigner(FINGERPRINT, saved);
-        MySqlSnapshotSplit last = planner.planNextTyped(
+        MySqlSnapshotSplit last = planner.planNext(
                 ORDERS, FINGERPRINT, restored.nextTableIndex(), restored.nextChunkIndex(),
                 restored.nextChunkRange());
         assertEquals(cursor.start(), last.chunkRange().start());
         assertNull(last.chunkRange().end());
-        restored.appendTypedPlan(last, 1, 0, null, true);
+        restored.appendPlan(last, 1);
         assertTrue(restored.snapshot(10).snapshotPlanned());
         assertNull(restored.snapshot(10).nextChunkRange());
     }
@@ -156,22 +155,22 @@ class MySqlTypedSnapshotAssignmentTest {
                         new Column("bucket", LogicalTypes.INTEGER.copy(false))),
                 List.of("id"));
         var planner = splitter(url, schema, "bucket");
-        assertThrows(IllegalArgumentException.class, () -> planner.planNextTyped(
+        assertThrows(IllegalArgumentException.class, () -> planner.planNext(
                 ORDERS, FINGERPRINT, 0, 1,
                 new ChunkRange(ORDERS, "id", LogicalTypeRoot.BIGINT, 2L, null)));
-        assertThrows(IllegalArgumentException.class, () -> planner.planNextTyped(
+        assertThrows(IllegalArgumentException.class, () -> planner.planNext(
                 ORDERS, FINGERPRINT, 0, 1,
                 new ChunkRange(new TableId("other", null, "orders"), "bucket", LogicalTypeRoot.INTEGER, 2L, null)));
         assertThrows(IllegalArgumentException.class,
-                () -> planner.planNextTyped(ORDERS, FINGERPRINT, 0, 1, null));
+                () -> planner.planNext(ORDERS, FINGERPRINT, 0, 1, null));
         assertThrows(IllegalArgumentException.class,
-                () -> planner.planNextTyped(
+                () -> planner.planNext(
                         ORDERS, FINGERPRINT, 0, 0,
                         new ChunkRange(ORDERS, "bucket", LogicalTypeRoot.INTEGER, 2L, null)));
     }
 
     @Test
-    void legacyBigintPrimaryKeySelectionStillUsesTheExistingPlanner() throws Exception {
+    void bigintPrimaryKeyAlsoUsesTypedChunkDiscovery() throws Exception {
         String url = database();
         try (var connection = DriverManager.getConnection(url);
                 var statement = connection.createStatement()) {
@@ -190,11 +189,10 @@ class MySqlTypedSnapshotAssignmentTest {
         enumerator.handleSourceEvent(0, new MySqlLowWatermarkEvent(offset(100)));
         context.runOne();
         var first = (MySqlSnapshotSplit) context.assignments(1).getFirst();
-        assertNull(first.chunkRange());
-        assertEquals(5L, first.upperExclusive());
+        assertEquals(LogicalTypeRoot.BIGINT, first.chunkRange().type());
+        assertEquals(5L, first.chunkRange().end());
         var checkpoint = enumerator.snapshotState(1);
-        assertEquals(5L, checkpoint.nextChunkLower());
-        assertNull(checkpoint.nextChunkRange());
+        assertEquals(5L, checkpoint.nextChunkRange().start());
         enumerator.close();
     }
 

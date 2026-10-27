@@ -199,6 +199,34 @@ class MySqlXaSinkIT {
         }
     }
 
+    @Test
+    void preparedTransactionsFromDeclinedCheckpointCommitWithNextDurableCheckpoint() throws Exception {
+        try (Connection connection = DATABASE.metadata().connect()) {
+            TableId target = table(connection);
+            create(connection, target);
+            try {
+                String owner = owner();
+                try (MySqlXaWriter writer = writer(target, owner);
+                        MySqlXaCommitter committer = committer(owner)) {
+                    writer.write(record(target, RowKind.INSERT, 11, "11.00", "checkpoint-11"), CONTEXT);
+                    var declined = writer.prepareCommit(11);
+                    writer.write(record(target, RowKind.INSERT, 12, "12.00", "checkpoint-12"), CONTEXT);
+                    var completed = writer.prepareCommit(12);
+                    assertEquals(0, count(connection, target), "PREPARE does not expose either checkpoint's rows");
+
+                    List<MySqlXaXid> persisted = new java.util.ArrayList<>(declined);
+                    persisted.addAll(completed);
+                    committer.recover(persisted);
+                    committer.commit(persisted, true);
+
+                    assertEquals(2, count(connection, target));
+                }
+            } finally {
+                drop(connection, target);
+            }
+        }
+    }
+
     private static TableRecord updateImage(TableId table, RowKind kind, long bucket, String amount, int index) {
         return new TableRecord(table, kind, GenericRowData.of(bucket, new BigDecimal(amount)))
                 .withChangeEventId(new ChangeEventId("source-" + table.table(), "update-1", index, 2));

@@ -1,5 +1,6 @@
 package io.yak.ops.plugin.task.datasync.validation;
 
+import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.connector.jdbc.database.JdbcFactoryLoader;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDdlPlan;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
@@ -7,8 +8,9 @@ import io.yak.ops.connector.jdbc.database.internal.dialect.MySqlJdbcDialect;
 import io.yak.ops.connector.jdbc.database.schema.JdbcSchemaDerivator;
 import io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan;
 import io.yak.ops.connector.jdbc.sink.JdbcMetadataApplier;
+import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
+import io.yak.ops.connector.jdbc.sink.JdbcWriteMode;
 import io.yak.ops.core.data.TableId;
-import io.yak.ops.core.event.AddColumnEvent;
 import io.yak.ops.core.event.AlterColumnTypeEvent;
 import io.yak.ops.core.event.ColumnProperties;
 import io.yak.ops.core.event.CreateTableEvent;
@@ -18,13 +20,14 @@ import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceTable;
+import io.yak.ops.plugin.task.datasync.config.JobOptions;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-/** Read-only constraints shared by schema preview, publication and execution planning. */
+/** Schema constraints shared by publication, admission and execution planning. */
 public final class SchemaValidator {
     private SchemaValidator() {}
 
@@ -46,6 +49,39 @@ public final class SchemaValidator {
             return lookup.get();
         } catch (IllegalArgumentException failure) {
             throw new SchemaValidationException(failure);
+        }
+    }
+
+    /**
+     * Enforces physical row identity after the authorized Source table is resolved.
+     * Snapshot Chunk Key is not a row identity; Sink write intent must be verified separately.
+     */
+    public static void validateCdcWrite(
+            TableSchema sourceSchema,
+            String targetType,
+            ReadonlyConfig source,
+            ReadonlyConfig sink,
+            List<String> targetPrimaryKeys,
+            boolean schemaEvolution) {
+        if (!"MYSQL_CDC".equals(source.get(JobOptions.TYPE))) {
+            return;
+        }
+        boolean noPrimaryKey = sourceSchema.primaryKeys().isEmpty();
+        JdbcWriteMode mode = sink.get(JdbcSinkOptions.WRITE_MODE);
+        if (noPrimaryKey) {
+            if (!"MYSQL".equals(targetType)) {
+                throw new IllegalArgumentException("CDC without physical primary keys requires a MySQL target");
+            }
+            if (schemaEvolution) {
+                throw new IllegalArgumentException("CDC without physical primary keys cannot evolve target schema");
+            }
+            if (mode == JdbcWriteMode.UPSERT && targetPrimaryKeys == null) {
+                throw new IllegalArgumentException(
+                        "CDC without physical primary keys requires verified target keys for UPSERT");
+            }
+            if (mode != JdbcWriteMode.UPSERT && mode != JdbcWriteMode.RETRACT) {
+                throw new IllegalArgumentException("Unsupported CDC write mode without physical primary keys");
+            }
         }
     }
 
@@ -265,34 +301,6 @@ public final class SchemaValidator {
             throw new SchemaValidationException(
                     new IllegalArgumentException("Target structure still requires schema changes"));
         }
-    }
-
-    /** Read-only DDL rendering from the exact supported events dispatched to MetadataApplier. */
-    public static List<String> statements(String targetType, SchemaChangePlan plan, DataSourceTable actual) {
-        requireCompatible(plan);
-        JdbcDialect dialect = dialect(targetType);
-        List<String> statements = new ArrayList<>();
-        for (SchemaChangeEvent event : plan.changes()) {
-            if (event instanceof CreateTableEvent create) {
-                statements.addAll(JdbcMetadataApplier.plan(create, dialect).statements());
-            } else if (event instanceof AddColumnEvent add) {
-                for (AddColumnEvent.ColumnWithPosition column : add.addedColumns()) {
-                    statements.addAll(dialect.addColumnStatements(event.tableId(), column.column()));
-                }
-            } else if (event instanceof AlterColumnTypeEvent alter) {
-                for (String name :
-                        alter.typeMapping().keySet().stream().sorted().toList()) {
-                    Column before = new Column(name, alter.oldTypeMapping().get(name));
-                    Column after = new Column(name, alter.typeMapping().get(name));
-                    String comment =
-                            actual == null ? null : actual.columnComments().get(name);
-                    statements.add(dialect.alterColumnTypeSql(event.tableId(), before, after, comment));
-                }
-            } else {
-                throw new SchemaValidationException(new IllegalArgumentException("Unsupported planned schema event"));
-            }
-        }
-        return List.copyOf(statements);
     }
 
     /** Resolves vendor dialect without opening a connection or accepting arbitrary SQL URLs. */

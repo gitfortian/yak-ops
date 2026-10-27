@@ -11,7 +11,7 @@ Playwright checks browser interaction, rendering, validation, navigation, and fa
 
 The suite keeps stable business scenarios instead of adding a new script for every feature PR:
 
-- `data_sync.py`: solution selection, draft restoration, multi-table mapping and selection/removal, schema DDL preview, realtime stage observations, partial schedule save/retry
+- `data_sync.py`: solution selection, draft restoration, multi-table mapping and selection/removal, schema preparation configuration, realtime stage observations, partial schedule save/retry
 - `scheduling.py`: schedule history, navigation, responsive mode, conflicts, Workspace isolation
 - `login.py`: real login and UI navigation through the candidate Compose images
 - `mock_api.py`: deterministic browser-only API fixtures

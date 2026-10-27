@@ -5,7 +5,8 @@ import io.yak.ops.testutils.OracleDatabase;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-@Tag("cdc-oracle")
+@Tag("cdc-pipeline-oracle")
+@Tag("cdc-acceptance-oracle")
 class MySqlCdcToOracleIT extends MySqlCdcPipelineTestBase {
     @RegisterExtension
     static final OracleDatabase TARGET = new OracleDatabase();

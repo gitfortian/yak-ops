@@ -139,9 +139,7 @@ public final class MySqlCdcSourceConfig {
                 throw new IllegalArgumentException("MySQL CDC requires database-qualified tables");
             }
             if (schema.primaryKeys().isEmpty()) {
-                // An explicit Chunk Key permits internal Backfill planning only. Both public
-                // Source execution entry points still reject keyless streaming tasks.
-                MySqlKeylessSourceContract.validate(schema, chunkKeyColumns.get(table));
+                ChunkUtils.getChunkKeyColumn(schema, chunkKeyColumns.get(table));
             }
             schema.columns().forEach(column -> {
                 if (!column.dataType().isResolved()) {

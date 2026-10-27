@@ -13,7 +13,6 @@ import io.yak.ops.core.types.LogicalTypeRoot;
 import io.yak.ops.core.types.TableSchema;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,7 +20,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Plans disjoint, half-open BIGINT-primary-key snapshot chunks using JDBC keyset boundaries.
+ * Plans disjoint, half-open snapshot chunks using typed, database-ordered keyset boundaries.
  *
  * <p>Keyset boundaries accommodate sparse keys and avoid scanning huge empty ranges. The total range is always open on both ends, so inserts
  * outside the initially observed key span remain covered by the post-snapshot Binlog replay.
@@ -70,9 +69,7 @@ public final class MySqlChunkSplitter {
     }
 
     /**
-     * Plans all snapshot ranges using database comparison semantics. This typed planner is
-     * available independently of the legacy BIGINT split transport and is not used to
-     * dispatch work until typed checkpoint, Backfill and Binlog filtering support arrives.
+     * Plans all snapshot ranges with the same database comparisons used by the active Source.
      */
     public List<ChunkRange> splitChunks(TableId table) throws SQLException {
         List<ChunkRange> ranges = new ArrayList<>();
@@ -111,102 +108,12 @@ public final class MySqlChunkSplitter {
     }
 
     /**
-     * Divides the entire table keyspace into disjoint ranges without buffering table rows.
-     *
-     * <p>Supports exactly one non-null BIGINT primary key in the first hybrid implementation.
-     * The cursor belongs to the Reader; the planner never makes a Checkpoint decision.
-     *
-     * @param table table already present in the frozen source schema
-     * @param fingerprint immutable hybrid definition fingerprint
-     * @param tableIndex index used to make stable split identifiers
-     * @return ranges in ascending key order, including an empty-table range if necessary
-     * @throws SQLException if JDBC key lookup fails
-     */
-    public List<MySqlSnapshotSplit> plan(TableId table, String fingerprint, int tableIndex) throws SQLException {
-        TableSchema schema = Objects.requireNonNull(schemas.get(table), "table schema");
-        String key = splitKey(schema, chunkKeyColumns.get(table));
-        if (tableIndex < 0) {
-            throw new IllegalArgumentException("Table index must be nonnegative");
-        }
-        String quoted = dialect.quoteIdentifier(key);
-        String qualified = dialect.qualifiedTable(table);
-        String base = "SELECT " + quoted + " FROM " + qualified;
-        List<MySqlSnapshotSplit> ranges = new ArrayList<>();
-        try (Connection connection = connections.getConnection()) {
-            Long lower = null;
-            do {
-                if (ranges.size() >= MAX_CHUNKS_PER_TABLE) {
-                    throw new IllegalStateException("MySQL snapshot exceeds the maximum chunk count");
-                }
-                String query = base + (lower == null ? "" : " WHERE " + quoted + " >= ?") + " ORDER BY " + quoted
-                        + " LIMIT 1 OFFSET ?";
-                Long upper;
-                try (PreparedStatement statement = connection.prepareStatement(query)) {
-                    int parameter = 1;
-                    if (lower != null) {
-                        statement.setLong(parameter++, lower);
-                    }
-                    statement.setInt(parameter, chunkSize);
-                    try (ResultSet records = statement.executeQuery()) {
-                        upper = records.next() ? records.getLong(1) : null;
-                        if (upper != null && records.wasNull()) {
-                            throw new SQLException("MySQL chunk key contains null");
-                        }
-                    }
-                }
-                if (upper != null && lower != null && upper <= lower) {
-                    throw new SQLException("MySQL snapshot chunk boundary is not increasing");
-                }
-                ranges.add(new MySqlSnapshotSplit(
-                        "mysql-snapshot-" + tableIndex + "-" + ranges.size(), fingerprint, table, lower, upper, null));
-                lower = upper;
-            } while (lower != null);
-        }
-        return List.copyOf(ranges);
-    }
-
-    /** Discovers exactly one next range; the caller checkpoints the returned upper boundary before continuing. */
-    public MySqlSnapshotSplit planNext(TableId table, String fingerprint, int tableIndex, int chunkIndex, Long lower)
-            throws SQLException {
-        if (cancelled || tableIndex < 0 || chunkIndex < 0 || chunkIndex >= MAX_CHUNKS_PER_TABLE) {
-            throw new SQLException("MySQL chunk discovery is cancelled or exceeds its range limit");
-        }
-        String key = splitKey(Objects.requireNonNull(schemas.get(table), "table schema"), chunkKeyColumns.get(table));
-        String quoted = dialect.quoteIdentifier(key);
-        String sql = "SELECT " + quoted + " FROM " + dialect.qualifiedTable(table)
-                + (lower == null ? "" : " WHERE " + quoted + " >= ?")
-                + " ORDER BY " + quoted + " LIMIT 1 OFFSET ?";
-        try (Connection connection = connections.getConnection();
-                PreparedStatement statement = connection.prepareStatement(sql)) {
-            planningStatement = statement;
-            statement.setQueryTimeout(60);
-            if (cancelled) throw new SQLException("MySQL chunk discovery was cancelled");
-            int parameter = 1;
-            if (lower != null) statement.setLong(parameter++, lower);
-            statement.setInt(parameter, chunkSize);
-            Long upper;
-            try (ResultSet rows = statement.executeQuery()) {
-                upper = rows.next() ? rows.getBigDecimal(1).longValueExact() : null;
-            } catch (ArithmeticException | NullPointerException invalidKey) {
-                throw new SQLException(
-                        "MySQL snapshot chunk key is outside the supported signed BIGINT range", invalidKey);
-            }
-            if (upper != null && lower != null && upper <= lower)
-                throw new SQLException("MySQL chunk boundary did not advance");
-            return new MySqlSnapshotSplit(
-                    "mysql-snapshot-" + tableIndex + "-" + chunkIndex, fingerprint, table, lower, upper, null);
-        } finally {
-            planningStatement = null;
-        }
-    }
-
-    /**
-     * Plans one typed snapshot Split from the durable Enumerator discovery cursor.
+     * Plans the next Snapshot Split from the durable Enumerator discovery cursor.
      *
      * <p>The cursor identifies the next lower boundary, not a row identity or Reader
      * progress position. Non-unique key values stay within one half-open chunk.
      */
-    public MySqlSnapshotSplit planNextTyped(
+    public MySqlSnapshotSplit planNext(
             TableId table, String fingerprint, int tableIndex, int chunkIndex, ChunkRange cursor) throws SQLException {
         if (cancelled || tableIndex < 0 || chunkIndex < 0 || chunkIndex >= MAX_CHUNKS_PER_TABLE) {
             throw new SQLException("MySQL typed chunk discovery is cancelled or exceeds its range limit");

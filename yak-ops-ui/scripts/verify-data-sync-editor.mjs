@@ -53,7 +53,7 @@ const form = {
     database: "test",
     schema: "",
     table: "orders",
-    keylessEnabled: false,
+    sourceHasPrimaryKey: true,
     chunkKeyColumn: "",
     incremental: undefined,
   },
@@ -71,7 +71,7 @@ const form = {
 const selection = compile("../apps/web/app/data-sync/editor/source-selection.ts", {});
 const keyed = {
   ...form,
-  source: { ...form.source, keylessEnabled: true, chunkKeyColumn: "bucket" },
+  source: { ...form.source, sourceHasPrimaryKey: false, chunkKeyColumn: "bucket" },
   sink: {
     ...form.sink,
     writeMode: "RETRACT",
@@ -82,7 +82,7 @@ const keyed = {
 const selectedSchema = selection.selectSourceSchema(keyed, "new_schema", true);
 assert.equal(selectedSchema.source.schema, "new_schema");
 assert.equal(selectedSchema.source.table, "");
-assert.equal(selectedSchema.source.keylessEnabled, false);
+assert.equal(selectedSchema.source.sourceHasPrimaryKey, undefined);
 assert.equal(selectedSchema.sink.writeMode, "UPSERT");
 assert.equal(selectedSchema.sink.targetPrimaryKeys.length, 0);
 assert.equal(selectedSchema.sink.dataSourceId, "pg");
@@ -93,17 +93,20 @@ const selectedTable = selection.selectSourceTable(
   true,
 );
 assert.equal(selectedTable.source.table, "invoices");
-assert.equal(selectedTable.source.keylessEnabled, false);
+assert.equal(selectedTable.source.sourceHasPrimaryKey, undefined);
 assert.equal(selectedTable.sink.writeMode, "UPSERT");
 assert.equal(selectedTable.sink.table, "ods_orders");
 
-const selectedKeyless = selection.setKeylessSource(form, true);
-assert.equal(selectedKeyless.source.keylessEnabled, true);
+const selectedKeyless = selection.setSourcePrimaryKeys(form, false);
+assert.equal(selectedKeyless.source.sourceHasPrimaryKey, false);
 assert.equal(selectedKeyless.sink.writeMode, "RETRACT");
 assert.equal(selectedKeyless.sink.schemaChangesEnabled, false);
 assert.equal(selectedKeyless.sink.allowDropColumns, false);
 assert.equal(selectedKeyless.sink.targetPrimaryKeys.length, 0);
-assert.equal(selection.setKeylessSource(selectedKeyless, false).source.chunkKeyColumn, "");
+assert.equal(
+  selection.setSourcePrimaryKeys(selectedKeyless, true).source.sourceHasPrimaryKey,
+  true,
+);
 
 const request = params.buildEditorPayload(form, draft, false, [], true);
 assert.equal(request.name, "orders");
@@ -148,15 +151,18 @@ const offlineForm = {
 const offlinePayload = params.buildEditorPayload(offlineForm, offlineDraft, false, [], false);
 assert.equal(offlinePayload.incremental.column, "updated_at");
 assert.equal(offlinePayload.incremental.lookbackSeconds, 5);
-const offlineParameters = JSON.parse(transport.createDefinitionRequest(offlinePayload).parameters);
+const offlineParameters = transport.createDefinitionRequest(offlinePayload).parameters;
 assert.equal(offlineParameters.solutionType, "SINGLE_TABLE_OFFLINE");
 assert.deepEqual(offlineParameters.steps, ["FULL", "INCREMENTAL"]);
-assert.equal(offlineParameters.tableMappings.length, 1);
-assert.deepEqual(offlineParameters.tableMappings[0].incremental, incremental);
-assert.equal(offlineParameters.tableMappings[0].source.table, "orders");
-assert.equal(offlineParameters.tableMappings[0].target.table, "ods_orders");
-assert.equal(offlineParameters.tableMappings[0].writeMode, "UPSERT");
-assert.equal("env" in offlineParameters, false);
+assert.equal(offlineParameters.source.tables.length, 1);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(offlineParameters.source.tables[0].incremental)),
+  incremental,
+);
+assert.equal(offlineParameters.source.tables[0].table, "orders");
+assert.equal(offlineParameters.sink.tables[0].table, "ods_orders");
+assert.equal(offlineParameters.sink.tables[0].write.mode, "UPSERT");
+assert.deepEqual(JSON.parse(JSON.stringify(offlineParameters.env)), {});
 assert.equal("incremental" in offlineParameters.source, false);
 
 const incrementalOnly = {
@@ -170,10 +176,9 @@ const incrementalOnlyPayload = params.buildEditorPayload(
   [],
   false,
 );
-const incrementalOnlyParameters = JSON.parse(
-  transport.createDefinitionRequest(incrementalOnlyPayload).parameters,
-);
-assert.equal(incrementalOnlyParameters.tableMappings[0].incremental.column, "updated_at");
+const incrementalOnlyParameters =
+  transport.createDefinitionRequest(incrementalOnlyPayload).parameters;
+assert.equal(incrementalOnlyParameters.source.tables[0].incremental.column, "updated_at");
 const fullOnlyPayload = params.buildEditorPayload(
   offlineForm,
   { ...offlineDraft, steps: ["FULL"] },
@@ -203,14 +208,14 @@ const many = params.buildEditorPayload(
   mappings,
   false,
 );
-const multiParameters = JSON.parse(transport.createDefinitionRequest(many).parameters);
-assert.equal(multiParameters.tableMappings.length, 2);
-assert.equal(multiParameters.tableMappings[0].incremental.column, "updated_at");
-assert.equal(multiParameters.tableMappings[1].target.table, "ods_orders");
+const multiParameters = transport.createDefinitionRequest(many).parameters;
+assert.equal(multiParameters.source.tables.length, 2);
+assert.equal(multiParameters.source.tables[0].incremental.column, "updated_at");
+assert.equal(multiParameters.sink.tables[1].table, "ods_orders");
 assert.equal("incremental" in many, false);
 const retractForm = {
   ...form,
-  source: { ...form.source, keylessEnabled: true, chunkKeyColumn: "bucket" },
+  source: { ...form.source, sourceHasPrimaryKey: false, chunkKeyColumn: "bucket" },
   sink: {
     ...form.sink,
     targetPrimaryKeys: [],
@@ -225,20 +230,18 @@ const retractPayload = params.buildEditorPayload(
   [],
   true,
 );
-const retractParameters = JSON.parse(transport.createDefinitionRequest(retractPayload).parameters);
-assert.equal(retractParameters.tableMappings[0].source.xa, true);
-assert.equal(retractParameters.tableMappings[0].source.chunkKeyColumn, "bucket");
-assert.equal(retractParameters.tableMappings[0].writeMode, "RETRACT");
-assert.equal("xa" in retractParameters.tableMappings[0].target, false);
-const upsertParameters = JSON.parse(
-  transport.createDefinitionRequest({
-    ...retractPayload,
-    writeMode: "UPSERT",
-    targetPrimaryKeys: ["bucket"],
-  }).parameters,
-);
-assert.equal(upsertParameters.tableMappings[0].source.xa, undefined);
-assert.deepEqual(upsertParameters.tableMappings[0].target.primaryKeys, ["bucket"]);
+const retractParameters = transport.createDefinitionRequest(retractPayload).parameters;
+assert.equal(retractParameters.sink.tables[0].write.transaction.mode, "CHECKPOINT_XA");
+assert.equal(retractParameters.source.tables[0].snapshot.chunkKeyColumn, "bucket");
+assert.equal(retractParameters.sink.tables[0].write.mode, "RETRACT");
+assert.equal("xa" in retractParameters.source.tables[0], false);
+const upsertParameters = transport.createDefinitionRequest({
+  ...retractPayload,
+  writeMode: "UPSERT",
+  targetPrimaryKeys: ["bucket"],
+}).parameters;
+assert.equal(upsertParameters.sink.tables[0].write.transaction, undefined);
+assert.deepEqual(Array.from(upsertParameters.sink.tables[0].write.primaryKeys), ["bucket"]);
 
 const options = {
   published: false,
@@ -290,7 +293,7 @@ assert.equal(
     combination: { writeModes: ["UPSERT", "RETRACT"] },
     form: {
       ...form,
-      source: { ...form.source, keylessEnabled: true, chunkKeyColumn: "bucket" },
+      source: { ...form.source, sourceHasPrimaryKey: false, chunkKeyColumn: "bucket" },
       sink: { ...form.sink, writeMode: "RETRACT", schemaChangesEnabled: false },
     },
     targetCatalog: { ...options.targetCatalog, tables: [{ name: "ods_orders" }] },
@@ -312,7 +315,7 @@ assert.equal(
     combination: { writeModes: ["UPSERT", "RETRACT"] },
     form: {
       ...form,
-      source: { ...form.source, keylessEnabled: true, chunkKeyColumn: "bucket" },
+      source: { ...form.source, sourceHasPrimaryKey: false, chunkKeyColumn: "bucket" },
       sink: {
         ...form.sink,
         targetPrimaryKeys: ["bucket"],

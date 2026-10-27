@@ -1,4 +1,13 @@
-import { Alert, Button, PageHeader, Modal } from "@yak-ops/yak-ui";
+import {
+  Alert,
+  Button,
+  CollapseSection,
+  Field,
+  FieldLabel,
+  Modal,
+  PageHeader,
+  Switch,
+} from "@yak-ops/yak-ui";
 import { useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
@@ -10,13 +19,14 @@ import {
   supportsMultipleTables,
 } from "@/service/data-sync/parameters";
 import { EMPTY_INCREMENTAL } from "./incremental-fields";
-import { selectSourceSchema, selectSourceTable, setKeylessSource } from "./source-selection";
+import { selectSourceSchema, selectSourceTable, setSourcePrimaryKeys } from "./source-selection";
 import { findStepCombination } from "../solution/presentation";
 import { useSolutions } from "../solution/use-solutions";
 import { EditorAnchorStepper, type EditorAnchorItem } from "./anchor-stepper";
 import type { ScheduleTimeRule } from "@/service/schedule";
 import type { DataSyncTableMapping, DataSyncTaskStatus } from "@/service/data-sync";
 import { BasicSection } from "./basic-section";
+import { DataSourceSection } from "./data-source-section";
 import { SourceSection } from "./source-section";
 import { TargetSection } from "./target-section";
 import { EditorScheduleSection } from "./schedule-section";
@@ -78,7 +88,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
         database: value?.sourceDatabase || "",
         schema: value?.sourceSchema || "",
         table: value?.sourceTable || "",
-        keylessEnabled: value?.keylessEnabled ?? false,
+        sourceHasPrimaryKey: undefined,
         chunkKeyColumn: value?.chunkKeyColumn ?? "",
         incremental: useIncremental ? value?.incremental || EMPTY_INCREMENTAL : undefined,
       },
@@ -89,13 +99,12 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
         table: value?.targetTable || "",
         schemaChangesEnabled: value?.schemaChangesEnabled ?? draft.targetType !== "ORACLE",
         allowDropColumns: value?.allowDropColumns ?? false,
-        writeMode: value?.keylessEnabled
-          ? value.writeMode === "UPSERT"
-            ? "UPSERT"
-            : "RETRACT"
-          : value?.writeMode === "UPSERT" || usesChangelog || useIncremental
-            ? "UPSERT"
-            : "APPEND",
+        writeMode:
+          value?.writeMode === "RETRACT"
+            ? "RETRACT"
+            : value?.writeMode === "UPSERT" || usesChangelog || useIncremental
+              ? "UPSERT"
+              : "APPEND",
         targetPrimaryKeys: value?.targetPrimaryKeys ?? [],
       },
     };
@@ -133,13 +142,12 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
   const anchorItems = useMemo<EditorAnchorItem[]>(
     () => [
       { id: "basic", label: "基本信息" },
+      { id: "datasource", label: "数据源" },
       { id: "source", label: "数据来源" },
-      { id: "transform", label: "数据转换" },
       { id: "target", label: "数据去向" },
       { id: "env", label: "运行配置" },
-      ...(supportsScheduling ? [{ id: "schedule", label: "调度配置" }] : []),
     ],
-    [supportsScheduling],
+    [],
   );
 
   const sourceCatalog = useCatalogOptions(
@@ -208,7 +216,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
           database: selected?.database || "",
           schema: selected?.schema || "",
           table: "",
-          keylessEnabled: false,
+          sourceHasPrimaryKey: undefined,
           chunkKeyColumn: "",
         },
         sink: {
@@ -355,13 +363,21 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
 
           <BasicSection draft={draft} form={form} patch={patch} />
 
-          <SourceSection
+          <DataSourceSection
             id={id}
             sourceType={draft.sourceType}
+            targetType={draft.targetType}
             sourceDataSources={sourceDataSources}
-            dataSourcesLoading={dataSourcesLoading}
-            loadDataSources={loadDataSources}
-            onConnectionChange={(value) => requestConnectionChange("source", value)}
+            targetDataSources={targetDataSources}
+            sourceDataSourceId={form.source.dataSourceId}
+            targetDataSourceId={form.sink.dataSourceId}
+            loading={dataSourcesLoading}
+            onRefresh={loadDataSources}
+            onSourceChange={(value) => requestConnectionChange("source", value)}
+            onTargetChange={(value) => requestConnectionChange("target", value)}
+          />
+
+          <SourceSection
             batch={batch}
             prepareSchema={prepareSchema}
             form={form}
@@ -371,7 +387,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             mappings={mappings}
             updateMappings={updateMappings}
             writeMode={combination?.writeModes[0]}
-            allowKeyless={usesChangelog && !batch && draft.targetType === "MYSQL"}
+            allowChunkKey={usesChangelog && !batch && draft.sourceType === "MYSQL"}
             usesChangelog={usesChangelog}
             useIncremental={useIncremental}
             initialLoad={initialLoad}
@@ -382,27 +398,12 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             onSourceTableChange={(table) =>
               updateSourceSelection((current) => selectSourceTable(current, table, usesChangelog))
             }
-            onKeylessChange={(enabled) =>
-              updateSourceSelection((current) => setKeylessSource(current, enabled))
+            onSourcePrimaryKeys={(hasPrimaryKey) =>
+              setForm((current) => setSourcePrimaryKeys(current, hasPrimaryKey))
             }
           />
 
-          <div
-            id="transform"
-            className="scroll-mt-4 rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-4 py-3"
-          >
-            <span className="text-sm font-medium">数据转换 Transform</span>
-            <span className="ml-3 text-xs text-[var(--yak-components-muted-text)]">
-              当前版本不支持转换
-            </span>
-          </div>
-
           <TargetSection
-            id={id}
-            targetDataSources={targetDataSources}
-            dataSourcesLoading={dataSourcesLoading}
-            loadDataSources={loadDataSources}
-            onConnectionChange={(value) => requestConnectionChange("target", value)}
             batch={batch}
             prepareSchema={prepareSchema}
             form={form}
@@ -412,8 +413,6 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             updateMappings={updateMappings}
             writeModes={combination?.writeModes || []}
             hasCombination={Boolean(combination)}
-            canSave={Boolean(canSave)}
-            payload={payload}
             usesChangelog={usesChangelog}
             useIncremental={useIncremental}
             initialLoad={initialLoad}
@@ -425,28 +424,37 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             setParametersDirty={setParametersDirty}
             setForm={setForm}
           />
-          <div
-            id="env"
-            className="scroll-mt-4 rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-4 py-3"
-          >
-            <div className="text-sm font-medium">运行配置 Env</div>
-            <div className="mt-2 flex flex-wrap gap-6 text-xs text-[var(--yak-components-muted-text)]">
-              <span>执行模式：{usesChangelog ? "STREAMING" : "BATCH"}</span>
-              <span>并行度 / Checkpoint：系统管理</span>
+          <CollapseSection id="env" title="运行配置">
+            <div className="space-y-4 rounded-lg border border-[var(--yak-components-panel-border)] bg-white p-4">
+              <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
+                <FieldLabel>执行模式</FieldLabel>
+                <span className="text-sm">{usesChangelog ? "流式" : "批式"}</span>
+              </Field>
+              <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
+                <FieldLabel>Debug</FieldLabel>
+                <Switch
+                  aria-label="Debug"
+                  size="small"
+                  checked={form.debug}
+                  onCheckedChange={(checked) => patch("debug", checked)}
+                />
+              </Field>
+              {supportsScheduling ? (
+                <div className="border-t border-[var(--yak-components-panel-border)] pt-4">
+                  <EditorScheduleSection
+                    schedule={schedule}
+                    scheduleForm={scheduleForm}
+                    scheduleError={scheduleError}
+                    scheduleNeedsReload={scheduleNeedsReload}
+                    scheduleLoading={scheduleLoading}
+                    saving={saving}
+                    onReload={reloadSchedule}
+                    onChange={changeSchedule}
+                  />
+                </div>
+              ) : null}
             </div>
-          </div>
-          {supportsScheduling ? (
-            <EditorScheduleSection
-              schedule={schedule}
-              scheduleForm={scheduleForm}
-              scheduleError={scheduleError}
-              scheduleNeedsReload={scheduleNeedsReload}
-              scheduleLoading={scheduleLoading}
-              saving={saving}
-              onReload={reloadSchedule}
-              onChange={changeSchedule}
-            />
-          ) : null}
+          </CollapseSection>
         </main>
 
         <aside className="hidden h-fit w-44 shrink-0 self-start pt-5 lg:block">

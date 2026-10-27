@@ -49,26 +49,21 @@ public final class JdbcSinkFactory implements TableSinkFactory {
             throw new IllegalArgumentException("JDBC Sink requires a write mode");
         }
         if (mode == JdbcWriteMode.RETRACT && !options.get(JdbcSinkOptions.XA_ENABLED)) {
-            throw new UnsupportedOperationException(
-                    "Keyless realtime RETRACT requires checkpoint-coordinated MySQL XA");
+            throw new UnsupportedOperationException("Exact-row RETRACT requires checkpoint-coordinated MySQL XA");
         }
         if (options.get(JdbcSinkOptions.XA_ENABLED) && mode != JdbcWriteMode.RETRACT) {
             throw new IllegalArgumentException("JDBC XA product admission currently requires RETRACT");
         }
         if (sourceProducesChangelog && mode != JdbcWriteMode.UPSERT && mode != JdbcWriteMode.RETRACT) {
-            throw new IllegalArgumentException("Changelog Source requires UPSERT or keyless RETRACT");
+            throw new IllegalArgumentException("Changelog Source requires UPSERT or exact-row RETRACT");
         }
     }
 
     @Override
     public void validateSchema(
             ReadonlyConfig options, TableSchema source, TableSchema target, boolean sourceProducesChangelog) {
-        if (options.get(JdbcSinkOptions.WRITE_MODE) == JdbcWriteMode.RETRACT) {
-            JdbcKeylessRetractionContract.validate(source, target);
-        }
         validate(options, sourceProducesChangelog);
-        JdbcSinkSchemaValidator.validate(
-                source, target, options.get(JdbcSinkOptions.WRITE_MODE) == JdbcWriteMode.UPSERT);
+        JdbcSinkSchemaValidator.validate(source, target, options.get(JdbcSinkOptions.WRITE_MODE));
     }
 
     @Override
@@ -110,7 +105,7 @@ public final class JdbcSinkFactory implements TableSinkFactory {
                     context.options(),
                     context.sourceSchema(),
                     context.targetSchema(),
-                    context.options().get(JdbcSinkOptions.WRITE_MODE) == JdbcWriteMode.RETRACT);
+                    context.options().get(JdbcSinkOptions.WRITE_MODE) != JdbcWriteMode.APPEND);
             plans.add(new JdbcTableWritePlan(
                     context.sourceTable(),
                     context.targetTable(),
@@ -124,7 +119,7 @@ public final class JdbcSinkFactory implements TableSinkFactory {
         var dialect = JdbcFactoryLoader.loadDialect(url);
         if (first.options().get(JdbcSinkOptions.XA_ENABLED)) {
             if (contexts.size() != 1) {
-                throw new UnsupportedOperationException("MySQL XA keyless execution requires one table route");
+                throw new UnsupportedOperationException("MySQL XA RETRACT execution requires one table route");
             }
             String instanceId = first.options().get(JdbcSinkOptions.XA_INSTANCE_ID);
             if (instanceId == null) {
