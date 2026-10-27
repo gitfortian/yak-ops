@@ -21,7 +21,7 @@ A YOIP is appropriate for a significant new subsystem, externally supported API,
 
 One significant design proposal may guide multiple implementation PRs. Do **not** assign a new YOIP to every CDC source/sink step, bug fix, class rename, CI repair, acceptance run or internal refactor. Put implementation details, test evidence, and rollout progress into focused PRs, tests, JavaDoc or release documentation. A material new public guarantee requires a new discussion, not silent edits to accepted design history.
 
-Use the [YOIP index](../docs/yoips/README.md) as the proposal register. Historical identifiers YOIP-7 through YOIP-19 are retired and reserved. Do not reuse them or reinterpret the legacy navigation pages as approved design records. New proposals must be registered in the index and use the exact six English template sections in order, with substantive content rather than placeholders.
+Use the [YOIP index](../docs/yoips/README.md) as the proposal register. Historical identifiers YOIP-7 through YOIP-19 are retired and reserved, even after their navigation files are deleted. The duplicate historical CDC YOIP-4 label is not an approved proposal; YOIP-4 belongs to the accepted Quartz design. Historical implementation details remain accessible through Git history and original PRs, not a second engineering-document directory. New proposals must be registered in the index and use the exact six English template sections in order, with substantive content rather than placeholders.
 
 The existing CI scope job runs `scripts/ci/check_yoips.py` for changes to YOIP records. It validates syntax, index registration and decision links; it cannot verify who voted or evaluate design quality. Normal implementation PRs do not need to change a YOIP.
 
@@ -38,6 +38,8 @@ The existing CI scope job runs `scripts/ci/check_yoips.py` for changes to YOIP r
 **Platform adaptation:** This repository currently has GitHub Issues and Discussions disabled. Therefore proposal PRs provide the discussion and decision record; this does not claim an Apache mailing-list vote or Apache committer consensus. If those GitHub features are enabled later, the discussion venue can be changed without changing the YOIP criteria or template.
 
 ## Documentation Policy
+
+`docs/yoips/` is the sole location for lasting architecture proposals. Do not recreate `docs/engineering/` or maintain per-PR technical diaries as a second documentation hierarchy. Use code, tests, JavaDoc, implementation PRs and their discussion for implementation facts; preserve accepted YOIP decisions as historical design records rather than continuously rewriting them as current implementation guides.
 
 Versioned user-facing release notes follow [docs/releases/README.md](../docs/releases/README.md). Ordinary internal refactors do not require a release-note entry; public behavior, compatibility and operational changes do.
 
