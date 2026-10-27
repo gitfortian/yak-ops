@@ -98,15 +98,15 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             throw new IllegalArgumentException("Stream-only cannot restore snapshot checkpoint state");
         }
         HybridPendingSplitsState restoredHybrid = initial ? (HybridPendingSplitsState) restored : null;
-        if (restoredHybrid != null && restoredHybrid.nextChunkRange() != null) {
-            int index = restoredHybrid.nextTableIndex();
+        if (restoredHybrid != null && restoredHybrid.getSnapshotPendingSplits().nextChunkRange() != null) {
+            int index = restoredHybrid.getSnapshotPendingSplits().nextTableIndex();
             if (index >= tables.size()) {
                 throw new IllegalArgumentException("Restored typed chunk cursor references an invalid table");
             }
             TableId table = tables.get(index);
             var selected = ChunkUtils.getChunkKeyColumn(
                     config.schemas().get(table), config.chunkKeyColumns().get(table));
-            ChunkRange cursor = restoredHybrid.nextChunkRange();
+            ChunkRange cursor = restoredHybrid.getSnapshotPendingSplits().nextChunkRange();
             if (!cursor.tableId().equals(table)
                     || !cursor.column().equals(selected.name())
                     || cursor.type() != selected.dataType().getTypeRoot()) {
@@ -137,17 +137,17 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                                     : TableMetrics.Phase.INITIALIZING,
                     complete);
             Map<TableId, Integer> counts = new LinkedHashMap<>();
-            restoredHybrid.pendingSnapshots().forEach(split -> counts.merge(split.tableId(), 1, Integer::sum));
+            restoredHybrid.getSnapshotPendingSplits().getRemainingSplits().forEach(split -> counts.merge(split.tableId(), 1, Integer::sum));
             restoredHybrid
                     .assignedSnapshots()
                     .values()
                     .forEach(split -> counts.merge(split.tableId(), 1, Integer::sum));
-            restoredHybrid.finishedSplitInfos().forEach(info -> {
+            restoredHybrid.getSnapshotPendingSplits().getFinishedSplitInfos().forEach(info -> {
                 counts.merge(info.tableId(), 1, Integer::sum);
                 metrics.splitFinished(generation, info.splitId(), info.tableId());
             });
             for (int i = 0; i < tables.size(); i++) {
-                if (restoredHybrid.snapshotPlanned() || i < restoredHybrid.nextTableIndex()) {
+                if (restoredHybrid.getSnapshotPendingSplits().snapshotPlanned() || i < restoredHybrid.getSnapshotPendingSplits().nextTableIndex()) {
                     metrics.planned(generation, tables.get(i), counts.getOrDefault(tables.get(i), 0));
                 }
             }
