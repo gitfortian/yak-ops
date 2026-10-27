@@ -60,6 +60,12 @@ import {
   validateFieldRows,
 } from "./fields";
 import {
+  defaultLayerForType,
+  layerMatchesType,
+  layersForType,
+  MODEL_LAYER_CODE,
+} from "./layer-binding";
+import {
   composeSuffix,
   decomposeSuffix,
   qualifierMaxLength,
@@ -297,18 +303,23 @@ export default function LogicalModelEditorPage() {
 
   useEffect(() => {
     if (editing || options.status !== "ready") return;
-    setForm((previous) => ({
-      ...previous,
-      type: prefill.type ?? previous.type,
-      scope: prefill.scope ?? previous.scope,
-      layerId: previous.layerId || options.layers.find((layer) => layer.enabled)?.id || "",
-      categoryId: previous.categoryId || prefill.categoryId || options.tree.categories[0]?.id || "",
-      domainId: previous.domainId || prefill.domainId,
-      datamartId: previous.datamartId || prefill.datamartId,
-      processId: previous.processId || prefill.processId,
-      dimensionId: previous.dimensionId || prefill.dimensionId,
-      ownerId: previous.ownerId || currentUser?.id || "",
-    }));
+    setForm((previous) => {
+      // The kind fixes which layer is legal, so the default layer follows the prefilled kind.
+      const type = prefill.type ?? previous.type;
+      return {
+        ...previous,
+        type,
+        scope: prefill.scope ?? previous.scope,
+        layerId: previous.layerId || defaultLayerForType(options.layers, type)?.id || "",
+        categoryId:
+          previous.categoryId || prefill.categoryId || options.tree.categories[0]?.id || "",
+        domainId: previous.domainId || prefill.domainId,
+        datamartId: previous.datamartId || prefill.datamartId,
+        processId: previous.processId || prefill.processId,
+        dimensionId: previous.dimensionId || prefill.dimensionId,
+        ownerId: previous.ownerId || currentUser?.id || "",
+      };
+    });
   }, [editing, options.status, options.layers, options.tree, currentUser?.id, prefill]);
 
   const dimensionScopeId =
@@ -339,6 +350,18 @@ export default function LogicalModelEditorPage() {
   const prefix = selectedLayer ? selectedLayer.enCode.toLowerCase() : "";
   const suffix = form.nameSuffix.trim();
   const suffixValid = isValidModelSuffix(suffix);
+  /**
+   * Layers the current kind may live in. Without a layer carrying the kind's code the select keeps
+   * every layer and the page states the gap, because an empty select would strand the user here.
+   */
+  const boundLayers = layersForType(options.layers, form.type);
+  // An unreadable type carries no kind to bind to, so the page stops guessing and says so instead.
+  const layerBindingActive = !unknownType && boundLayers.length > 0;
+  const layerMismatch =
+    layerBindingActive &&
+    selectedLayer !== undefined &&
+    !layerMatchesType(selectedLayer, form.type);
+  const layerRuleMessage = `${MODEL_TYPE_LABEL[form.type]}只能建在 ${MODEL_LAYER_CODE[form.type]} 层`;
 
   useEffect(() => {
     if (!form.layerId || !suffixValid) {
@@ -459,7 +482,19 @@ export default function LogicalModelEditorPage() {
   }, [composerActive, rootId, qualifier, processCode, rootOptions, modelRootId]);
 
   const patch = (partial: Partial<FormState>) => {
-    setForm((previous) => ({ ...previous, ...partial }));
+    setForm((previous) => {
+      const next = { ...previous, ...partial };
+      // A prefix pasted before its layer was known would otherwise be stored twice: the layer
+      // supplies it at save time, so it is dropped from the suffix the moment the layer changes.
+      if (next.layerId !== previous.layerId) {
+        const layer = options.layers.find((item) => item.id === next.layerId);
+        next.nameSuffix = stripLayerPrefix(
+          next.nameSuffix,
+          layer ? layer.enCode.toLowerCase() : "",
+        );
+      }
+      return next;
+    });
     if ("nameSuffix" in partial) setSuffixMismatch(false);
     setErrors((previous) => {
       const next = { ...previous };
@@ -475,9 +510,23 @@ export default function LogicalModelEditorPage() {
     setConflict(false);
   };
 
+  /**
+   * Drops a layer prefix that arrived without a keystroke the input could react to — a paste while
+   * the layer was still unset, or an autofilled value. Only patches when it actually changes, so a
+   * blur never clears an error message the user still needs to read.
+   */
+  const normalizeSuffix = () => {
+    const normalized = stripLayerPrefix(form.nameSuffix, prefix);
+    if (normalized !== form.nameSuffix) patch({ nameSuffix: normalized });
+  };
+
   const changeType = (type: ModelType) => {
+    // The kind decides which layer is legal: keep the current one when it already matches, else
+    // move to the kind's own layer so the prefix and the kind cannot disagree.
+    const fallback = defaultLayerForType(options.layers, type);
     patch({
       type,
+      layerId: layerMatchesType(selectedLayer, type) || !fallback ? form.layerId : fallback.id,
       processId: "",
       dimensionId: "",
       datamartId: type === "ADS" || type === "DIM" ? form.datamartId : "",
@@ -498,6 +547,7 @@ export default function LogicalModelEditorPage() {
     const next: FormErrors = {};
     if (!form.layerId) next.layerId = "请选择数仓分层";
     else if (!layerSelectable) next.layerId = "所选分层未启用或未绑定数据源";
+    else if (layerMismatch) next.layerId = layerRuleMessage;
     if (composerActive) {
       if (!rootId) next.nameSuffix = "请选择词根";
       else if (!suffix) next.nameSuffix = "请选择业务过程";
@@ -512,7 +562,8 @@ export default function LogicalModelEditorPage() {
       next.lifecycle = "生命周期须为 1 到 36000 之间的整数";
     if (!form.ownerId) next.ownerId = "请选择负责人";
     if (!form.categoryId) next.ownership = "请选择业务分类";
-    else if (form.type === "DWD") {
+    // DWD and DWS both hang below a business process; DIM and ADS split on their own scope.
+    else if (form.type === "DWD" || form.type === "DWS") {
       if (!form.domainId) next.ownership = "请选择数据域";
       else if (!form.processId) next.ownership = "请选择业务过程";
     } else if (form.scope === "PUBLIC") {
@@ -603,10 +654,16 @@ export default function LogicalModelEditorPage() {
     }
   };
 
+  /**
+   * Only the kind's own layer stays selectable: the layer supplies the table prefix, so filing a
+   * detail table under the dimension layer would name it as something it is not. The other layers
+   * stay listed but disabled, because a controlled select drops its value when the option is
+   * removed from the list, which would blank the layer the moment the kind changes.
+   */
   const layerItems = options.layers.map((layer: Layer) => ({
     value: layer.id,
     label: `${layer.enCode} · ${layer.cnName}${layer.enabled ? "" : "（未启用）"}`,
-    disabled: !layer.enabled,
+    disabled: !layer.enabled || (layerBindingActive && !layerMatchesType(layer, form.type)),
   }));
   const ownerItems = options.owners.map((owner) => ({
     value: owner.userId,
@@ -627,6 +684,13 @@ export default function LogicalModelEditorPage() {
     dimensionItems.unshift({ value: "", label: "不绑定概念维度" });
   if (form.dimensionId && !dimensions.items.some((item) => item.id === form.dimensionId))
     dimensionItems.push({ value: form.dimensionId, label: "当前绑定（不在列表中）" });
+  /**
+   * DWD and DWS hang below a business process, so a new model has no identity without one. An
+   * existing model stays savable, otherwise a record that arrived without a process could never be
+   * repaired from this page.
+   */
+  const processMissing = (form.type === "DWD" || form.type === "DWS") && !form.processId;
+  const processBlocked = processMissing && !editing;
   const disabled = saving || loading || unknownType || stale;
 
   /**
@@ -680,7 +744,7 @@ export default function LogicalModelEditorPage() {
           </div>
         }
       />
-      <div className="min-h-0 flex-1 overflow-auto px-6 pb-24 pt-5 max-md:px-4">
+      <div className="min-h-0 flex-1 overflow-auto px-6 pb-6 pt-5 max-md:px-4">
         <div className="mx-auto flex max-w-[1280px] flex-col gap-4">
           {options.status === "failed" && (
             <Alert>
@@ -699,6 +763,14 @@ export default function LogicalModelEditorPage() {
           )}
           {options.status === "ready" && !options.layers.some((layer) => layer.enabled) && (
             <Alert>当前工作空间还没有启用的数仓分层，请先到「数仓规划」创建并启用分层。</Alert>
+          )}
+          {options.status === "ready" && !unknownType && !layerBindingActive && (
+            <Alert>
+              {`当前工作空间没有编码为 ${MODEL_LAYER_CODE[form.type]} 的数仓分层，${layerRuleMessage}。请先到「数仓规划」创建该分层或修正分层编码，否则表名前缀无法体现它所在的分层。`}
+            </Alert>
+          )}
+          {layerMismatch && (
+            <Alert>{`该模型当前所在的 ${selectedLayer?.enCode} 层与类型不匹配，${layerRuleMessage}，请改选分层后再保存。`}</Alert>
           )}
           {options.status === "ready" && options.tree.categories.length === 0 && (
             <Alert>当前工作空间还没有业务分类，请先到「数仓规划」创建业务分类与数据域。</Alert>
@@ -750,7 +822,13 @@ export default function LogicalModelEditorPage() {
                 required
                 disabled={disabled}
                 error={errors.layerId}
-                hint={selectedLayer ? `表名前缀 ${prefix}_` : "分层决定表名前缀"}
+                hint={
+                  layerMismatch
+                    ? `${layerRuleMessage}，请重新选择`
+                    : selectedLayer
+                      ? `表名前缀 ${prefix}_`
+                      : "分层决定表名前缀"
+                }
                 items={layerItems}
                 onChange={(value) => patch({ layerId: value })}
               />
@@ -813,6 +891,11 @@ export default function LogicalModelEditorPage() {
                   value={form.processId}
                   required
                   disabled={disabled || ownershipLocked}
+                  hint={
+                    form.domainId && processes.length === 0
+                      ? "该数据域下还没有业务过程，请先到「数仓规划」创建"
+                      : undefined
+                  }
                   items={processes.map((process) => ({ value: process.id, label: process.name }))}
                   onChange={(value) => patch({ processId: value })}
                 />
@@ -844,7 +927,7 @@ export default function LogicalModelEditorPage() {
                   value={form.categoryId}
                   required
                   disabled={disabled}
-                  hint="应用层模型同样记录业务分类，仅用于归档"
+                  hint="仅用于资产归档"
                   items={options.tree.categories.map((category) => ({
                     value: category.id,
                     label: category.name,
@@ -924,6 +1007,7 @@ export default function LogicalModelEditorPage() {
                           aria-label="表名限定词"
                           className="w-40"
                           onChange={(event) => setQualifier(sanitizeQualifier(event.target.value))}
+                          onBlur={() => setQualifier((value) => stripLayerPrefix(value, prefix))}
                         />
                         {rootState === "error" && (
                           <Button
@@ -968,6 +1052,7 @@ export default function LogicalModelEditorPage() {
                           disabled={disabled}
                           placeholder="order_detail"
                           aria-invalid={Boolean(errors.nameSuffix) || undefined}
+                          onBlur={normalizeSuffix}
                           onChange={(event) =>
                             patch({
                               nameSuffix: stripLayerPrefix(event.target.value, prefix),
@@ -1066,7 +1151,12 @@ export default function LogicalModelEditorPage() {
           </Section>
         </div>
       </div>
-      <div className="flex items-center justify-end gap-2 border-t border-[#eaecf0] bg-white px-6 py-3">
+      {/* Pinned to the bottom of the viewport: a long field table scrolls behind it instead of
+          pushing the actions out of reach. */}
+      <div className="sticky bottom-0 z-10 flex items-center justify-end gap-2 border-t border-[#eaecf0] bg-white px-6 py-3">
+        {processBlocked && (
+          <span className="mr-auto text-xs text-[#667475]">请先选择「业务过程」后再保存</span>
+        )}
         <Button size="small" onClick={() => navigate("/data-modeling/dimension-modeling")}>
           取消
         </Button>
@@ -1074,7 +1164,7 @@ export default function LogicalModelEditorPage() {
           size="small"
           variant="primary"
           loading={saving}
-          disabled={disabled || suffixMismatch || nameState === "taken"}
+          disabled={disabled || suffixMismatch || nameState === "taken" || processBlocked}
           onClick={() => void submit()}
         >
           保存

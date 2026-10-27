@@ -69,20 +69,22 @@ export default function StandardPicker({ mode, takenCodes, onClose, onPick }: Pr
         : [...previous, row],
     );
   };
+  // Dialog content is 840px wide. Columns that hold free text share whatever the short, fixed
+  // columns leave over, so the table fills the dialog instead of overflowing it.
   const columns: TableColumns<StandardField> = [
-    { title: "中文名称", dataIndex: "cnName", width: 180, ellipsis: true },
-    { title: "英文编码", dataIndex: "enCode", width: 190, ellipsis: true },
-    { title: "数据类型", dataIndex: "dataType", width: 110 },
+    { title: "中文名称", dataIndex: "cnName", minWidth: 168, ellipsis: true },
+    { title: "英文编码", dataIndex: "enCode", minWidth: 180, ellipsis: true },
+    { title: "数据类型", dataIndex: "dataType", width: 96 },
     {
       title: "长度/精度",
       key: "precision",
-      width: 100,
+      width: 92,
       render: (_, row) => row.lengthPrecision ?? "—",
     },
     {
       title: "所属分类",
       dataIndex: "categoryPath",
-      width: 220,
+      minWidth: 168,
       ellipsis: true,
     },
     {
@@ -171,7 +173,7 @@ export default function StandardPicker({ mode, takenCodes, onClose, onPick }: Pr
             </Alert>
           </div>
         )}
-        <div className="mt-3 max-h-[46vh] overflow-auto">
+        <div className="mt-3">
           <Table<StandardField>
             rowKey="id"
             columns={columns}
@@ -179,7 +181,7 @@ export default function StandardPicker({ mode, takenCodes, onClose, onPick }: Pr
             loading={loading}
             size="small"
             bordered={false}
-            scroll={{ x: 940 }}
+            scroll={{ y: "46vh" }}
             emptyText="暂无数据标准"
             pagination={{
               current: pageNo,

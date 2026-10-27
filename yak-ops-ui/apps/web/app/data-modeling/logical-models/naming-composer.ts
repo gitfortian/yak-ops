@@ -22,12 +22,17 @@ export function composeSuffix(rootCode: string, processCode: string, qualifier: 
 /**
  * Drops a layer prefix already typed into the suffix; the layer supplies it at save time. The
  * server strips it as well, so a direct API call and the editor normalize the same way.
+ *
+ * <p>The head is matched case-insensitively: a table name copied out of a SQL editor is often
+ * upper-cased, and `DWD_order` must not survive as `dwd_DWD_order`. The tail keeps its case so the
+ * suffix rule can still report it instead of silently rewriting the user's name.
  */
 export function stripLayerPrefix(value: string, prefix: string): string {
   if (!prefix) return value;
   const head = `${prefix.toLowerCase()}_`;
   let suffix = value;
-  while (suffix.startsWith(head) && suffix.length > head.length) suffix = suffix.slice(head.length);
+  while (suffix.length > head.length && suffix.toLowerCase().startsWith(head))
+    suffix = suffix.slice(head.length);
   return suffix;
 }
 

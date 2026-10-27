@@ -16,15 +16,26 @@ import type { ConceptDimension } from "@/service/data-modeling/dimension-modelin
 
 interface Props {
   dimension: ConceptDimension;
+  /**
+   * Logical tables the loaded catalog still binds to the dimension. It blocks the dialog before the
+   * request leaves; the server keeps rejecting the delete even when this count is incomplete.
+   */
+  boundModelCount: number;
   onClose: () => void;
   onDeleted: () => void;
 }
 
-export default function DimensionDeleteDialog({ dimension, onClose, onDeleted }: Props) {
+export default function DimensionDeleteDialog({
+  dimension,
+  boundModelCount,
+  onClose,
+  onDeleted,
+}: Props) {
   const [deleting, setDeleting] = useState(false);
   const [conflict, setConflict] = useState(false);
-  const [blocked, setBlocked] = useState(false);
+  const [referenced, setReferenced] = useState(false);
   const [failure, setFailure] = useState("");
+  const blocked = boundModelCount > 0 || referenced;
   const busy = useRef(false);
   const active = useRef(true);
   useEffect(() => {
@@ -48,7 +59,7 @@ export default function DimensionDeleteDialog({ dimension, onClose, onDeleted }:
       if (!active.current) return;
       const result = classifyDimensionFailure(error);
       if (result.kind === "conflict") setConflict(true);
-      else if (result.kind === "referenced") setBlocked(true);
+      else if (result.kind === "referenced") setReferenced(true);
       else if (result.kind === "unknown") setFailure(result.message);
       else setFailure("删除失败，请刷新后重试");
     } finally {
@@ -67,9 +78,19 @@ export default function DimensionDeleteDialog({ dimension, onClose, onDeleted }:
       <DialogContent className="w-[480px] rounded-xl p-5 shadow-none">
         <DialogTitle className="text-sm font-medium">删除概念维度</DialogTitle>
         <DialogDescription className="mt-3 text-sm text-[#475467]">
-          确认删除「{dimension.name}（{dimension.code}）」？
+          {blocked
+            ? `「${dimension.name}（${dimension.code}）」暂时无法删除。`
+            : `确认删除「${dimension.name}（${dimension.code}）」？`}
         </DialogDescription>
-        {blocked && <Alert>该维度已被维度表引用，请先解除模型中的绑定后再删除。</Alert>}
+        {blocked ? (
+          <Alert>
+            {boundModelCount > 0
+              ? `该维度下还有 ${boundModelCount} 张关联逻辑表，请先删除或解绑关联的维度表。`
+              : "该维度仍被逻辑表引用，请先删除或解绑关联的维度表。"}
+          </Alert>
+        ) : (
+          <p className="mt-1 text-xs text-[#667475]">删除维度概念不会自动删除已发布的物理表。</p>
+        )}
         {conflict && <Alert>数据已变更，请关闭弹窗并刷新后重试。</Alert>}
         {failure && <Alert>{failure}</Alert>}
         <div className="mt-5 flex justify-end gap-2">
