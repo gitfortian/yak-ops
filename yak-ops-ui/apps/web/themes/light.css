@@ -9,4 +9,18 @@
   --yak-color-text-secondary: #667085;
   --yak-color-scrollbar: rgb(0 0 0 / 32%);
   --yak-color-scrollbar-hover: rgb(0 0 0 / 45%);
+
+  /* Data map asset detail: page sits one step below the card, card carries a hairline shadow. */
+  --yak-datamap-page-bg: #f5f6f8;
+  --yak-datamap-surface: #ffffff;
+  --yak-datamap-card-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+  /* Field-type chips. Semantic hues rather than the brand colour, so they read as metadata. */
+  --yak-datamap-type-character-bg: #e6f7f5;
+  --yak-datamap-type-character-text: #0f766e;
+  --yak-datamap-type-numeric-bg: #fff4e6;
+  --yak-datamap-type-numeric-text: #b45309;
+  --yak-datamap-type-temporal-bg: #f1ebff;
+  --yak-datamap-type-temporal-text: #6d3fd4;
+  --yak-datamap-type-other-bg: #f2f3f5;
+  --yak-datamap-type-other-text: #5b6472;
 }

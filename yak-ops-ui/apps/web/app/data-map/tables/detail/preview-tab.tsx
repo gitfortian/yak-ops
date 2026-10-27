@@ -12,6 +12,9 @@ type PreviewRow = Record<string, string>;
 const ROW_KEY = "__rowKey";
 const ROW_CAP = 100;
 
+/** Shown before the sample is fetched, so the warning precedes the data rather than following it. */
+const DEFAULT_NOTICE = "预览数据可能包含个人信息，请仅在授权范围内查看与使用";
+
 /** Preview is read on demand: a detail visit must not sample the user's data. */
 export default function PreviewTab({ tableId }: { tableId: string }) {
   const { scope } = useDataMapScope();
@@ -49,21 +52,21 @@ export default function PreviewTab({ tableId }: { tableId: string }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3">
+      <Alert>{data?.notice ?? DEFAULT_NOTICE}</Alert>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <Button
           size="small"
           variant="primary"
           loading={preview.isFetching}
           onClick={() => void preview.refetch()}
         >
-          {data ? "重新预览" : "加载预览"}
+          {data ? "重新加载" : "加载预览"}
         </Button>
         {data && (
           <span className="text-xs text-[var(--yak-components-muted-text)]">
-            {data.rows.length} 行
-            {data.truncated === "SIZE"
-              ? " · 样本因响应体积达到上限被截断"
-              : ` · 最多展示 ${ROW_CAP} 行`}
+            共展示 {data.rows.length} 行（限制最多 {ROW_CAP} 行）
+            {data.truncated === "SIZE" && " · 样本因响应体积达到上限被截断"}
           </span>
         )}
       </div>
@@ -75,8 +78,6 @@ export default function PreviewTab({ tableId }: { tableId: string }) {
             : dataMapFailureMessage(preview.error, "预览加载失败，请稍后重试。")}
         </Alert>
       )}
-
-      {data && <Alert>{data.notice}</Alert>}
 
       {preview.isFetching && !data && (
         <div className="flex items-center gap-2 text-xs text-[var(--yak-components-muted-text)]">
