@@ -38,8 +38,8 @@ public final class PendingCheckpoint {
 
     private static void checkpointIdNotNull(Set<CheckpointSnapshot.OperatorSubtask> tasks) {
         Objects.requireNonNull(tasks, "Checkpoint acknowledgement plan");
-        if (tasks.contains(null)) {
-            throw new IllegalArgumentException("Checkpoint plan contains a null task");
+        for (CheckpointSnapshot.OperatorSubtask task : tasks) {
+            Objects.requireNonNull(task, "Checkpoint plan task");
         }
     }
 
