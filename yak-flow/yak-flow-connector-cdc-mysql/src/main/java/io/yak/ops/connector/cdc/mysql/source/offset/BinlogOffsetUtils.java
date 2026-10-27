@@ -21,7 +21,7 @@ import com.github.shyiko.mysql.binlog.BinaryLogClient;
 import com.github.shyiko.mysql.binlog.event.EventData;
 import com.github.shyiko.mysql.binlog.event.EventHeaderV4;
 import com.github.shyiko.mysql.binlog.event.RotateEventData;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -56,7 +56,7 @@ public class BinlogOffsetUtils {
      *   <li>LATEST: fetch the current binlog by JDBC
      * </ul>
      */
-    public static BinlogOffset initializeEffectiveOffset(BinlogOffset offset, MySqlCdcSourceConfig mySqlSourceConfig) {
+    public static BinlogOffset initializeEffectiveOffset(BinlogOffset offset, MySqlSourceConfig mySqlSourceConfig) {
         try (Connection connection = mySqlSourceConfig.openSnapshotConnection()) {
             return switch (offset.getOffsetKind()) {
                 case EARLIEST -> BinlogOffset.ofBinlogFilePosition("", 0);
@@ -93,7 +93,7 @@ public class BinlogOffsetUtils {
      * Port of Flink CDC DebeziumUtils.findBinlogOffset: enumerate binlogs and search for the
      * binlog file containing the target timestamp using the first non-rotate event timestamp.
      */
-    private static BinlogOffset findBinlogOffset(long targetMs, Connection connection, MySqlCdcSourceConfig config) {
+    private static BinlogOffset findBinlogOffset(long targetMs, Connection connection, MySqlSourceConfig config) {
         List<String> binlogFiles = new ArrayList<>();
         try (Statement statement = connection.createStatement();
                 ResultSet rs = statement.executeQuery("SHOW BINARY LOGS")) {
