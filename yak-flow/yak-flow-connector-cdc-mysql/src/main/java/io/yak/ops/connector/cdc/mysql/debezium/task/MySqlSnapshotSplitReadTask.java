@@ -77,11 +77,11 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
         if (split.prepared() || split.lastEmittedKey() != null) {
             throw new IllegalArgumentException("Backfill requires an unprepared complete chunk range");
         }
-        ensureBinlog();
-        var schema = Objects.requireNonNull(config.schemas().get(split.tableId()), "chunk schema");
         if (split.chunkRange() == null) {
             throw new IllegalArgumentException("MySQL snapshot execution requires a typed ChunkRange");
         }
+        ensureBinlog();
+        var schema = Objects.requireNonNull(config.schemas().get(split.tableId()), "chunk schema");
         RecordUtils.ChunkBackfill buffer =
                 new RecordUtils.ChunkBackfill(split.chunkRange(), schema, MAX_ROWS, MAX_PAYLOAD_BYTES);
         try {

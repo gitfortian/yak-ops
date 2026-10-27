@@ -197,7 +197,7 @@ class MySqlChangeEventIdsTest {
         try (var splitReader = new MySqlSplitReader(config)) {
             var emitter = new MySqlRecordEmitter(new MySqlSourceReaderContext(context()), splitReader, new TableMetrics());
             List<TableRecord> hybridOutput = new ArrayList<>();
-            var event = new MySqlFetchedRecord(rows, null, offset, false, null, null);
+            var event = MySqlFetchedRecord.binlog(new BinlogEvent(rows, offset));
             emitter.emitRecord(event, hybridOutput::add, hybridState);
 
             assertEquals(

@@ -32,14 +32,14 @@ class MySqlRecordDiagnosticsTest {
     }
 
     @Test
-    void hybridDiagnosticsRedactRowsAndSnapshotCursor() {
+    void snapshotBatchDiagnosticsRedactRowContents() {
         MySqlFetchedRecord record =
-                new MySqlFetchedRecord(List.of(tableRecord()), 987654321L, null, false);
+                MySqlFetchedRecord.snapshotRows(List.of(tableRecord()), 1);
         String diagnostic = record.toString();
 
         assertTrue(diagnostic.contains("rowCount=1"));
         assertFalse(diagnostic.contains("secret-order-data"));
-        assertFalse(diagnostic.contains("987654321"));
+        assertFalse(diagnostic.contains("secret-order-data"));
     }
 
     private static TableRecord tableRecord() {

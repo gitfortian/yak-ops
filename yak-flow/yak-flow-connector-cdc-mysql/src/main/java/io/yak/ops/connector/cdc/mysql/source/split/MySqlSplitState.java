@@ -52,13 +52,6 @@ public final class MySqlSplitState {
         return snapshot.splitId();
     }
 
-    public void emitSnapshotKey(Long key) {
-        if (snapshot == null || key == null) {
-            throw new IllegalStateException("Snapshot progress must contain a key");
-        }
-        snapshot = snapshot.withLastEmittedKey(key);
-    }
-
     /** Anchors the Binlog BEFORE any JDBC snapshot split may be assigned. */
     public void captureLow(DebeziumOffset low, byte[] schemaHistory) {
         if (binlog == null) {

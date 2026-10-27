@@ -139,7 +139,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             binlogSplit = binlogSplit.withAnchor(first.offset(), history);
             bootstrapCandidate = null;
             return records(
-                    MySqlHybridBinlogSplit.ID, new MySqlFetchedRecord(List.of(), null, first.offset(), true), false);
+                    MySqlHybridBinlogSplit.ID, MySqlFetchedRecord.lowWatermark(first.offset()), false);
         }
         if (active == null && !pending.isEmpty()) {
             active = pending.removeFirst();

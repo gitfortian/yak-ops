@@ -69,8 +69,6 @@ public final class MySqlRecordEmitter implements RecordEmitter<MySqlFetchedRecor
         metrics.observed(generation);
         if (event.snapshotRowsEmitted() != null) {
             state.emitSnapshotRows(event.snapshotRowsEmitted());
-        } else if (event.snapshotKey() != null) {
-            state.emitSnapshotKey(event.snapshotKey());
         } else if (event.lowWatermark()) {
             state.captureLow(event.binlogOffset(), splits.snapshotHistory());
             context.sendSourceEventToCoordinator(new MySqlLowWatermarkEvent(event.binlogOffset()));
