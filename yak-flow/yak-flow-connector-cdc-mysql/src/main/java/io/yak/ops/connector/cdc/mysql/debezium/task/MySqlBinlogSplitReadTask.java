@@ -4,7 +4,7 @@ import io.debezium.embedded.Connect;
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
 import io.yak.ops.connector.cdc.mysql.debezium.CheckpointOffsetBackingStore;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
-import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogConfigurationValidator;
+import io.yak.ops.connector.cdc.mysql.source.utils.MySqlBinlogConfigurationValidator;
 import io.yak.ops.connector.cdc.mysql.debezium.task.context.StatefulTaskContext;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.RecordChangeEvent;

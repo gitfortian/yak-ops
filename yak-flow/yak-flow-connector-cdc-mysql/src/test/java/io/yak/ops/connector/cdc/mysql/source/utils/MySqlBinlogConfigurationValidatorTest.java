@@ -1,4 +1,4 @@
-package io.yak.ops.connector.cdc.mysql.debezium;
+package io.yak.ops.connector.cdc.mysql.source.utils;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
