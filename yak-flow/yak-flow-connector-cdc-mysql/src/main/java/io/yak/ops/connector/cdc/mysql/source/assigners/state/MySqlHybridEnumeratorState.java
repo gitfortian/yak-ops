@@ -17,7 +17,6 @@ import java.util.Set;
  * unpaused. Coordinator-assigned snapshot metadata never replaces Reader-owned cursors.
  */
 public record MySqlHybridEnumeratorState(
-        String fingerprint,
         Phase phase,
         MySqlBinlogSplit pendingBinlog,
         boolean binlogAssigned,
@@ -42,7 +41,6 @@ public record MySqlHybridEnumeratorState(
     }
 
     public MySqlHybridEnumeratorState {
-        Objects.requireNonNull(fingerprint, "fingerprint");
         finishedSplitInfos = List.copyOf(Objects.requireNonNull(finishedSplitInfos, "finishedSplitInfos"));
         if (nextChunkRange != null
                 && (nextChunkIndex < 1 || nextChunkRange.start() == null || nextChunkRange.end() != null)) {
