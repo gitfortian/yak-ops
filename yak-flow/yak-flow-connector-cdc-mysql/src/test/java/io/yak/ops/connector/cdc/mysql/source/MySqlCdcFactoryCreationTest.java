@@ -23,20 +23,22 @@ class MySqlCdcFactoryCreationTest {
     private static final TableSchema SCHEMA = new TableSchema(List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
 
     @Test
-    void consumesPreparedReplicationParametersAndCustomUrlPort() throws Exception {
+    void consumesPreparedReplicationParametersAndCustomUrlPort() {
         Configuration options = options();
-        MySqlHybridCdcSource source = (MySqlHybridCdcSource) new MySqlCdcSourceFactory()
-                .createSource(new TableSourceFactoryContext(options.toReadonlyConfig(), TABLE, SCHEMA));
-        var field = MySqlHybridCdcSource.class.getDeclaredField("config");
-        field.setAccessible(true);
-        MySqlCdcSourceConfig config = (MySqlCdcSourceConfig) field.get(source);
+        // The latest-offset source exposes the same configuration used by the initial snapshot path.
+        options.set(MySqlCdcSourceOptions.STARTUP_MODE, "latest-offset");
+        MySqlCdcSource source = assertInstanceOf(
+                MySqlCdcSource.class,
+                new MySqlCdcSourceFactory()
+                        .createSource(new TableSourceFactoryContext(options.toReadonlyConfig(), TABLE, SCHEMA)));
+        MySqlCdcSourceConfig config = source.config();
         assertEquals(8123, config.serverId());
         assertEquals("replication_8123", config.topicPrefix());
         assertEquals(3307, config.port());
     }
 
     @Test
-    void propagatesUrlAndAdvancedDriverSettingsToSnapshotAndDebezium() throws Exception {
+    void propagatesUrlAndAdvancedDriverSettingsToSnapshotAndDebezium() {
         Configuration options = options()
                 .set(JdbcConnectionOptions.URL,
                         "jdbc:mysql://localhost:3307/app?connectionTimeZone=Asia%2FShanghai&sslMode=REQUIRED&socketTimeout=12000")
@@ -44,11 +46,12 @@ class MySqlCdcFactoryCreationTest {
                         "connectionTimeZone", "Europe/Berlin",
                         "sslMode", "DISABLED",
                         "allowPublicKeyRetrieval", "true"));
-        var source = (MySqlHybridCdcSource) new MySqlCdcSourceFactory()
-                .createSource(new TableSourceFactoryContext(options.toReadonlyConfig(), TABLE, SCHEMA));
-        var field = MySqlHybridCdcSource.class.getDeclaredField("config");
-        field.setAccessible(true);
-        MySqlCdcSourceConfig config = (MySqlCdcSourceConfig) field.get(source);
+        options.set(MySqlCdcSourceOptions.STARTUP_MODE, "latest-offset");
+        MySqlCdcSource source = assertInstanceOf(
+                MySqlCdcSource.class,
+                new MySqlCdcSourceFactory()
+                        .createSource(new TableSourceFactoryContext(options.toReadonlyConfig(), TABLE, SCHEMA)));
+        MySqlCdcSourceConfig config = source.config();
         assertEquals("Asia/Shanghai", config.connectionProperties().get("connectionTimeZone"));
         assertEquals("REQUIRED", config.connectionProperties().get("sslMode"));
         assertEquals("12000", config.connectionProperties().get("socketTimeout"));
@@ -71,15 +74,20 @@ class MySqlCdcFactoryCreationTest {
     }
 
     @Test
-    void registersAllTablesInOnePhysicalSourceAndRejectsConflictingSettings() throws Exception {
+    void registersAllTablesInOnePhysicalSourceAndRejectsConflictingSettings() {
         var metrics = new io.yak.ops.connector.base.metrics.TableMetrics();
         var first = new TableSourceFactoryContext(options().toReadonlyConfig(), TABLE, SCHEMA, metrics);
         var second = new TableSourceFactoryContext(options().toReadonlyConfig(), new TableId("app", null, "items"), SCHEMA, metrics);
         var factory = new MySqlCdcSourceFactory();
-        var source = (MySqlHybridCdcSource) factory.createSource(List.of(first, second));
-        var field = MySqlHybridCdcSource.class.getDeclaredField("config");
-        field.setAccessible(true);
-        assertEquals(2, ((MySqlCdcSourceConfig) field.get(source)).schemas().size());
+        assertInstanceOf(MySqlHybridCdcSource.class, factory.createSource(List.of(first, second)));
+        var latest = options().set(MySqlCdcSourceOptions.STARTUP_MODE, "latest-offset").toReadonlyConfig();
+        var binlog = assertInstanceOf(
+                MySqlCdcSource.class,
+                factory.createSource(List.of(
+                        new TableSourceFactoryContext(latest, TABLE, SCHEMA, metrics),
+                        new TableSourceFactoryContext(latest, second.table(), SCHEMA, metrics))));
+        assertEquals(2, binlog.config().schemas().size());
+        assertTrue(binlog.config().schemas().containsKey(second.table()));
         var changed = new TableSourceFactoryContext(options().set(MySqlCdcSourceOptions.SERVER_ID, 1234).toReadonlyConfig(), second.table(), SCHEMA, metrics);
         assertThrows(IllegalArgumentException.class, () -> factory.createSource(List.of(first, changed)));
         assertThrows(IllegalArgumentException.class, () -> factory.createSource(List.of(first, first)));

@@ -1,7 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -9,15 +8,19 @@ import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.assigner.MySqlChunkSplitter;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
+import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
-import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.function.BiConsumer;
 import org.junit.jupiter.api.Test;
 
 /** Chunk selection is table-scoped and never requires the physical primary key to be the split key. */
@@ -79,11 +82,26 @@ class MySqlChunkKeySelectionTest {
                 ITEMS_SCHEMA,
                 measurements);
         var source = (MySqlHybridCdcSource) factory.createSource(List.of(first, second));
-        Field field = MySqlHybridCdcSource.class.getDeclaredField("config");
-        field.setAccessible(true);
-        var config = (MySqlCdcSourceConfig) field.get(source);
-        assertEquals(Map.of(ORDERS, "id", ITEMS, "sequence"), config.chunkKeyColumns());
-        assertEquals(config.chunkKeyColumns(), config.withoutSchemaEvolution().chunkKeyColumns());
+
+        // A matching Source can restore the same checkpoint without inspecting its private config.
+        var original = source.createEnumerator(new CoordinatorContext());
+        original.start();
+        var checkpoint = original.snapshotState(1L);
+        original.close();
+        var same = builder().port(3307)
+                .table(ORDERS, ORDERS_SCHEMA, "id")
+                .table(ITEMS, ITEMS_SCHEMA, "sequence")
+                .buildHybrid(1024);
+        same.restoreEnumerator(new CoordinatorContext(), checkpoint).close();
+
+        // Dropping one table's explicit key must invalidate the saved definition identity.
+        var missingOverride = builder().port(3307)
+                .table(ORDERS, ORDERS_SCHEMA, "id")
+                .table(ITEMS, ITEMS_SCHEMA)
+                .buildHybrid(1024);
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> missingOverride.restoreEnumerator(new CoordinatorContext(), checkpoint));
 
         var changedConnection = new TableSourceFactoryContext(
                 options()
@@ -114,14 +132,12 @@ class MySqlChunkKeySelectionTest {
     }
 
     @Test
-    void explicitChunkColumnChangesSourceIdentityButTheDefaultRemainsUnconfigured() throws Exception {
+    void explicitChunkColumnIsNotImplicitlyAssignedToTheDefault() {
         var implicit = builder().table(ORDERS, ORDERS_SCHEMA).build();
         var explicit = builder().table(ORDERS, ORDERS_SCHEMA, "id").build();
         assertTrue(implicit.config().chunkKeyColumns().isEmpty());
         assertEquals(Map.of(ORDERS, "id"), explicit.config().chunkKeyColumns());
-        var field = MySqlCdcSource.class.getDeclaredField("fingerprint");
-        field.setAccessible(true);
-        assertNotEquals(field.get(implicit), field.get(explicit));
+
     }
 
     private static Configuration options() {
@@ -140,5 +156,37 @@ class MySqlChunkKeySelectionTest {
                 .password("password")
                 .serverId(6130)
                 .topicPrefix("chunk-test");
+    }
+
+    private static final class CoordinatorContext implements SplitEnumeratorContext<MySqlHybridSplit> {
+        @Override
+        public int currentParallelism() {
+            return 1;
+        }
+
+        @Override
+        public Set<Integer> registeredReaders() {
+            return Set.of();
+        }
+
+        @Override
+        public void assignSplit(MySqlHybridSplit split, int subtaskId) {
+            throw new AssertionError("Checkpoint identity test must not assign a split");
+        }
+
+        @Override
+        public void signalNoMoreSplits(int subtaskId) {
+            throw new AssertionError("Hybrid Source must remain unbounded");
+        }
+
+        @Override
+        public <T> void callAsync(Callable<T> action, BiConsumer<T, Throwable> handler) {
+            throw new AssertionError("Checkpoint identity test must not open a JDBC connection");
+        }
+
+        @Override
+        public void runInCoordinatorThread(Runnable action) {
+            action.run();
+        }
     }
 }
