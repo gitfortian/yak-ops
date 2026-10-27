@@ -58,7 +58,7 @@ class MySqlCdcSourceTest {
     @Test
     void rejectsChangedSourceConfigurationAndInvalidTables() throws Exception {
         MySqlSource source = definition();
-        var state = new MySqlPendingSplitsState("other-checkpoint", true, null);
+        var state = new MySqlPendingSplitsState(true, null);
         assertThrows(IllegalArgumentException.class, () -> source.restoreEnumerator(new FakeContext(), state));
         assertThrows(IllegalArgumentException.class, () -> MySqlSource.builder()
                 .hostname("localhost")
