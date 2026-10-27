@@ -155,6 +155,9 @@ export function CreateSyncTaskDialog({ onClose }: { onClose: () => void }) {
           {!error && !loading && sourceType && targetType && choices.length === 0 ? (
             <Alert>当前链路暂无可用同步方案</Alert>
           ) : null}
+          {selected && selected.solutionType.endsWith("_REALTIME") && !steps.includes("FULL") ? (
+            <Alert>仅增量同步不会复制现有数据，目标表需要提前准备好。</Alert>
+          ) : null}
           {selected ? (
             <Field className="grid grid-cols-[104px_minmax(0,1fr)] items-center !gap-3">
               <FieldLabel required>同步步骤</FieldLabel>
