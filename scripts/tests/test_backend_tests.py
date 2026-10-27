@@ -23,7 +23,7 @@ class SuiteSelectionTest(unittest.TestCase):
             self.assertEqual(list(subject.SUITES), subject.select([path]))
         for path in ("yak-ops-common/src/main/java/X.java", "yak-ops-spi/src/main/java/X.java"):
             self.assertEqual([], subject.select([path]))
-        self.assertEqual(["business", "modeling", "backend-e2e"], subject.select(["yak-ops-dao/src/main/java/Mapper.java"]))
+        self.assertEqual(["business", "modeling", "datamap", "backend-e2e"], subject.select(["yak-ops-dao/src/main/java/Mapper.java"]))
 
     def test_unit_test_change_does_not_run_real_database(self):
         self.assertEqual([], subject.select([subject.JDBC + "/src/test/java/JdbcBatchExecutionTest.java"]))

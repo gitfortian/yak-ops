@@ -15,7 +15,7 @@ CDC_SOURCES = ("cdc-binlog", "cdc-snapshot", "cdc-hybrid")
 CDC_PIPELINES = ("cdc-pipeline-mysql", "cdc-pipeline-postgres", "cdc-pipeline-oracle")
 CDC_ACCEPTANCE = ("cdc-acceptance-postgres", "cdc-acceptance-oracle")
 CDC_SUITES = CDC_SOURCES + CDC_PIPELINES + CDC_ACCEPTANCE + ("cdc-recovery",)
-SUITES = ("jdbc-mysql", "jdbc-postgres", "jdbc-oracle", "pipeline") + CDC_SUITES + ("business", "modeling", "backend-e2e", "recovery-e2e")
+SUITES = ("jdbc-mysql", "jdbc-postgres", "jdbc-oracle", "pipeline") + CDC_SUITES + ("business", "modeling", "datamap", "backend-e2e", "recovery-e2e")
 JDBC = "yak-flow/yak-flow-connector-jdbc/"
 CDC = "yak-flow/yak-flow-connector-cdc-mysql/"
 CDC_BASE = "yak-flow/yak-flow-connector-cdc-base/"
@@ -124,6 +124,8 @@ def test_suites(path: str) -> set[str]:
             return {"recovery-e2e"} if "Recovery" in filename else {"backend-e2e"}
         if path.startswith("yak-ops-business/yak-ops-business-modeling/"):
             return {"modeling"}
+        if path.startswith("yak-ops-business/yak-ops-business-datamap/"):
+            return {"datamap"}
         if path.startswith(BUSINESS):
             return {"business"}
         return set()
@@ -166,6 +168,9 @@ def test_suites(path: str) -> set[str]:
     if path.startswith("yak-ops-business/yak-ops-business-modeling/"):
         # Modeling owns its own database suite and is still exercised end to end.
         return {"modeling", "backend-e2e"}
+    if path.startswith("yak-ops-business/yak-ops-business-datamap/"):
+        # The catalog owns its own MySQL suite for the scope lock.
+        return {"datamap"}
     if path.startswith("yak-ops-business/"):
         return {"business"}
     if path.startswith("yak-ops-task-execution/"):
@@ -175,8 +180,8 @@ def test_suites(path: str) -> set[str]:
     if path.startswith(("yak-ops-boot/", "yak-ops-plugins/")):
         return {"backend-e2e"}
     if path.startswith("yak-ops-dao/"):
-        # Modeling mappers and migrations live here, so its database suite must run.
-        return {"business", "modeling", "backend-e2e"}
+        # Modeling and data map mappers and migrations live here, so both database suites must run.
+        return {"business", "modeling", "datamap", "backend-e2e"}
     if path.startswith("yak-ops-platform/"):
         return {"business", "modeling", "backend-e2e"}
     if path.startswith(("yak-ops-common/", "yak-ops-configuration/", "yak-ops-spi/", "yak-ops-bom/")):
