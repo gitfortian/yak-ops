@@ -50,4 +50,17 @@ class MySqlSplitModelTest {
         assertEquals(info.hashCode(), again.hashCode());
         assertTrue(info.chunkRange() != null);
     }
+
+    @Test
+    void classConversionPreservesTheCurrentTypedSplitCheckpointContract() throws Exception {
+        ChunkRange range = new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, 100L, 200L);
+        MySqlSnapshotSplit split = MySqlSnapshotSplit.typed("orders:0", "source", range);
+        MySqlHybridSplitSerializer serializer = new MySqlHybridSplitSerializer();
+        byte[] serialized = serializer.serialize(split);
+        MySqlSnapshotSplit restored =
+                (MySqlSnapshotSplit) serializer.deserialize(serializer.getVersion(), serialized);
+        assertEquals(split, restored);
+        assertArrayEquals(split.getSplitStart(), restored.getSplitStart());
+        assertArrayEquals(split.getSplitEnd(), restored.getSplitEnd());
+    }
 }
