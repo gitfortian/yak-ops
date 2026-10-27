@@ -68,6 +68,22 @@ class MySqlChangeEventIdsTest {
                 new DebeziumOffset(Map.of("server", "other"), position)));
     }
 
+
+    @Test
+    void eventIdentityDoesNotDependOnCheckpointSplitFingerprint() throws Exception {
+        DebeziumOffset offset = position(88, 2);
+        BinlogEvent event = new BinlogEvent(List.of(row(RowKind.INSERT, "payload")), offset);
+        var reader = binlogEmitter();
+        var first = MySqlSplitState.fromSplit(new MySqlBinlogSplit("old-definition", null, new byte[0]));
+        var second = MySqlSplitState.fromSplit(new MySqlBinlogSplit("new-definition", null, new byte[0]));
+        List<TableRecord> earlier = new ArrayList<>();
+        List<TableRecord> later = new ArrayList<>();
+        reader.emitRecord(MySqlFetchedRecord.binlog(event), earlier::add, first);
+        reader.emitRecord(MySqlFetchedRecord.binlog(event), later::add, second);
+        assertEquals(earlier.getFirst().changeEventId(), later.getFirst().changeEventId());
+        assertEquals("emission-test", earlier.getFirst().changeEventId().sourceId());
+    }
+
     @Test
     void incompleteOffsetsCannotBePresentedAsReplaySafeIdentities() {
         assertNull(MySqlChangeEventIds.fromBinlog(
