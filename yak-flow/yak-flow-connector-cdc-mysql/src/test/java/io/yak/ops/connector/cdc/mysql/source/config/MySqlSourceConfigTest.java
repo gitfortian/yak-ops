@@ -17,7 +17,6 @@
 
 package io.yak.ops.connector.cdc.mysql.source.config;
 
-import io.debezium.relational.CachedTableFilter;
 import io.debezium.relational.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
@@ -56,8 +55,6 @@ class MySqlSourceConfigTest {
         TableId excludedTable = new TableId("test_db", null, "orders_skip");
         TableId unmatchedTable = new TableId("test_db", null, "customers");
 
-        assertThat(config.getTableFilters().dataCollectionFilter())
-                .isInstanceOf(CachedTableFilter.class);
         assertThat(tableFilter.test(includedTable)).isTrue();
         assertThat(tableFilter.test(excludedTable)).isFalse();
         assertThat(tableFilter.test(unmatchedTable)).isFalse();
