@@ -38,10 +38,8 @@ import java.util.zip.CRC32;
 public final class FileCheckpointStore implements AutoCloseable {
 
     private static final int MAGIC = 0x59414B43; // YAKC
-    private static final int FORMAT_VERSION = 3;
-    private static final int SCHEMA_MANAGER_FORMAT_VERSION = 4;
-    private static final int OPERATOR_STATE_FORMAT_VERSION = 2;
-    private static final int LEGACY_FORMAT_VERSION = 1;
+    /** One complete Source-to-Sink snapshot layout. Older formats are intentionally unsupported. */
+    private static final int FORMAT_VERSION = 5;
     private static final int MAX_FILE_BYTES = 64 * 1024 * 1024;
     private static final int MAX_STATE_BYTES = 32 * 1024 * 1024;
     private static final int MAX_GROUPS = 64;
@@ -112,7 +110,7 @@ public final class FileCheckpointStore implements AutoCloseable {
                 throw new IOException("Invalid checkpoint file magic number");
             }
             int format = in.readInt();
-            if (format < LEGACY_FORMAT_VERSION || format > SCHEMA_MANAGER_FORMAT_VERSION) {
+            if (format != FORMAT_VERSION) {
                 throw new IOException("Unsupported checkpoint file format or version");
             }
             long checkpointId = in.readLong();
@@ -122,12 +120,10 @@ public final class FileCheckpointStore implements AutoCloseable {
             Map<Integer, List<CheckpointSnapshot.SerializedState>> readers = readGroups(in);
             Map<Integer, List<CheckpointSnapshot.SerializedState>> assignments = readGroups(in);
             Map<CheckpointSnapshot.OperatorSubtask, Map<String, CheckpointSnapshot.SerializedState>> operatorStates =
-                    format >= OPERATOR_STATE_FORMAT_VERSION ? readOperatorStates(in) : Map.of();
-            Set<String> fullyFinished = format >= FORMAT_VERSION ? readFinishedOperators(in) : Set.of();
-            Set<CheckpointSnapshot.OperatorSubtask> finishedSubtasks =
-                    format >= FORMAT_VERSION ? readFinishedSubtasks(in) : Set.of();
-            CheckpointSnapshot.SerializedState schemaManagerState =
-                    format >= SCHEMA_MANAGER_FORMAT_VERSION && in.readBoolean() ? readState(in) : null;
+                    readOperatorStates(in);
+            Set<String> fullyFinished = readFinishedOperators(in);
+            Set<CheckpointSnapshot.OperatorSubtask> finishedSubtasks = readFinishedSubtasks(in);
+            CheckpointSnapshot.SerializedState schemaManagerState = in.readBoolean() ? readState(in) : null;
             if (in.available() != 0) {
                 throw new IOException("Checkpoint file contains trailing bytes");
             }
@@ -167,36 +163,19 @@ public final class FileCheckpointStore implements AutoCloseable {
         try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
                 DataOutputStream out = new DataOutputStream(bytes)) {
             out.writeInt(MAGIC);
-            // Preserve legacy layouts unless operator, finished or runtime schema state requires them.
-            int format = LEGACY_FORMAT_VERSION;
-            if (!checkpoint.operatorStates().isEmpty()) {
-                format = OPERATOR_STATE_FORMAT_VERSION;
-            }
-            if (checkpoint.hasFinishedOperators()) {
-                format = FORMAT_VERSION;
-            }
-            if (checkpoint.schemaManagerState() != null) {
-                format = SCHEMA_MANAGER_FORMAT_VERSION;
-            }
-            out.writeInt(format);
+            out.writeInt(FORMAT_VERSION);
             out.writeLong(checkpoint.checkpointId());
             out.writeUTF(checkpoint.graphSignature());
             out.writeLong(checkpoint.completedAtMillis());
             writeState(out, checkpoint.enumeratorState());
             writeGroups(out, checkpoint.readerSplits());
             writeGroups(out, checkpoint.assignments());
-            if (format >= OPERATOR_STATE_FORMAT_VERSION) {
-                writeOperatorStates(out, checkpoint.operatorStates());
-            }
-            if (format >= FORMAT_VERSION) {
-                writeFinishedOperators(out, checkpoint.fullyFinishedOperators());
-                writeFinishedSubtasks(out, checkpoint.finishedSubtasks());
-            }
-            if (format >= SCHEMA_MANAGER_FORMAT_VERSION) {
-                out.writeBoolean(checkpoint.schemaManagerState() != null);
-                if (checkpoint.schemaManagerState() != null) {
-                    writeState(out, checkpoint.schemaManagerState());
-                }
+            writeOperatorStates(out, checkpoint.operatorStates());
+            writeFinishedOperators(out, checkpoint.fullyFinishedOperators());
+            writeFinishedSubtasks(out, checkpoint.finishedSubtasks());
+            out.writeBoolean(checkpoint.schemaManagerState() != null);
+            if (checkpoint.schemaManagerState() != null) {
+                writeState(out, checkpoint.schemaManagerState());
             }
             out.flush();
             payload = bytes.toByteArray();
@@ -236,6 +215,18 @@ public final class FileCheckpointStore implements AutoCloseable {
             }
         } finally {
             Files.deleteIfExists(temp);
+        }
+    }
+
+    /**
+     * Durably publish the directory entry after an atomic checkpoint rename.
+     *
+     * <p>Never silently downgrade to a weaker publication guarantee on filesystems
+     * that cannot persist directory metadata.
+     */
+    private static void forceDirectory(Path directory) throws IOException {
+        try (FileChannel channel = FileChannel.open(directory, StandardOpenOption.READ)) {
+            channel.force(true);
         }
     }
 
