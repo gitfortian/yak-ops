@@ -4,7 +4,6 @@ import io.debezium.embedded.Connect;
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
 import io.yak.ops.connector.cdc.mysql.debezium.CheckpointOffsetBackingStore;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
-import io.yak.ops.connector.cdc.mysql.source.utils.MySqlBinlogConfigurationValidator;
 import io.yak.ops.connector.cdc.mysql.debezium.task.context.StatefulTaskContext;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.RecordChangeEvent;
@@ -61,11 +60,6 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
 
     /** Starts the engine, optionally seeding its offset and Schema History from a checkpoint. */
     public void start(MySqlBinlogSplit split) throws IOException {
-        try (var connection = getSourceConfig().openSnapshotConnection()) {
-            MySqlBinlogConfigurationValidator.validate(connection);
-        } catch (java.sql.SQLException | IllegalArgumentException error) {
-            throw new IOException("MySQL CDC Binlog settings validation failed: " + error.getMessage(), error);
-        }
         if (started || stopped) {
             throw new IllegalStateException("MySQL Binlog engine cannot start twice");
         }
