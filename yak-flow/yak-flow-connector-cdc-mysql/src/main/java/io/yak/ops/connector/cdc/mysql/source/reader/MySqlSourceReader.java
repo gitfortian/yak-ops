@@ -33,12 +33,7 @@ public final class MySqlSourceReader
             SourceReaderContext context,
             SchemaChangeHandler schemaChanges,
             TableMetrics metrics) {
-        super(
-                () -> splitReader,
-                new MySqlCdcRecordEmitter(schemaChanges, metrics),
-                context,
-                schemaChanges,
-                metrics);
+        super(() -> splitReader, new MySqlCdcRecordEmitter(schemaChanges, metrics), context, schemaChanges, metrics);
         this.splitReader = splitReader;
     }
 
