@@ -2,7 +2,7 @@ package io.yak.ops.connector.cdc.mysql.source.enumerator;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
@@ -41,8 +41,8 @@ class MySqlHybridHandoffTest {
         assertFalse(assigner.notifyCheckpointComplete(11));
         assertEquals(MySqlHybridEnumeratorState.Phase.HANDOFF, assigner.phase());
 
-        var serializer = new MySqlHybridEnumeratorStateSerializer();
-        var checkpoint = serializer.deserialize(serializer.getVersion(), serializer.serialize(waiting));
+        var serializer = new PendingSplitsStateSerializer(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE);
+        var checkpoint = (MySqlHybridEnumeratorState) serializer.deserialize(serializer.getVersion(), serializer.serialize(waiting));
         var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), "fingerprint", checkpoint);
         restored.resumeRestoredHandoff();
         assertEquals(MySqlHybridEnumeratorState.Phase.STREAMING, restored.phase());
@@ -60,10 +60,10 @@ class MySqlHybridHandoffTest {
         assigner.captureLow(low);
 
         // The planning callback has not run yet. A periodic checkpoint must not fail the job.
-        var serializer = new MySqlHybridEnumeratorStateSerializer();
+        var serializer = new PendingSplitsStateSerializer(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE);
         var saved = assigner.snapshotState(21);
         var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), 
-                "fingerprint", serializer.deserialize(serializer.getVersion(), serializer.serialize(saved)));
+                "fingerprint", (MySqlHybridEnumeratorState) serializer.deserialize(serializer.getVersion(), serializer.serialize(saved)));
         assertEquals(MySqlHybridEnumeratorState.Phase.SNAPSHOT, restored.phase());
         assertFalse(restored.snapshotPlanned());
         restored.plan(List.of(new MySqlSnapshotSplit(
@@ -84,9 +84,9 @@ class MySqlHybridHandoffTest {
         assigner.finishSnapshot(finished(split, 200));
 
         var saved = assigner.snapshotState(22);
-        var serializer = new MySqlHybridEnumeratorStateSerializer();
+        var serializer = new PendingSplitsStateSerializer(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE);
         var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), 
-                "fingerprint", serializer.deserialize(serializer.getVersion(), serializer.serialize(saved)));
+                "fingerprint", (MySqlHybridEnumeratorState) serializer.deserialize(serializer.getVersion(), serializer.serialize(saved)));
         assertEquals(MySqlHybridEnumeratorState.Phase.SNAPSHOT, restored.phase());
         assertTrue(restored.snapshotComplete());
         restored.captureHigh(
