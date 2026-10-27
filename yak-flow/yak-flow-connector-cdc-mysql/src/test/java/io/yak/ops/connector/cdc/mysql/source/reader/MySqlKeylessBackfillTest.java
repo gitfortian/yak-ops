@@ -1,7 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
-import io.yak.ops.connector.cdc.mysql.source.utils.RecordUtils;
+import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotChunkBackfill;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -38,7 +38,7 @@ class MySqlKeylessBackfillTest {
 
     @Test
     void retainsDuplicateImagesAcrossDeleteUpdateAndInsert() {
-        var buffer = new RecordUtils.ChunkBackfill(RANGE, SCHEMA, 10);
+        var buffer = new SnapshotChunkBackfill(RANGE, SCHEMA, 10);
         buffer.addSnapshot(row(RowKind.INSERT, 1, "same"));
         buffer.addSnapshot(row(RowKind.INSERT, 1, "same"));
         buffer.addSnapshot(row(RowKind.INSERT, 1, "same"));
@@ -56,7 +56,7 @@ class MySqlKeylessBackfillTest {
 
     @Test
     void failsClosedOnChunkKeyMutationWithoutPartiallyApplyingTheUpdate() {
-        var buffer = new RecordUtils.ChunkBackfill(RANGE, SCHEMA, 10);
+        var buffer = new SnapshotChunkBackfill(RANGE, SCHEMA, 10);
         buffer.addSnapshot(row(RowKind.INSERT, 1, "before"));
         assertThrows(UnsupportedOperationException.class,
                 () -> buffer.apply(event(
@@ -74,7 +74,7 @@ class MySqlKeylessBackfillTest {
                 List.of());
         var edge = new BigDecimal("9223372036854775808.00000000");
         var range = new ChunkRange(TABLE, "bucket", LogicalTypeRoot.DECIMAL, edge, null);
-        var buffer = new RecordUtils.ChunkBackfill(range, schema, 10);
+        var buffer = new SnapshotChunkBackfill(range, schema, 10);
         buffer.addSnapshot(decimal(RowKind.INSERT, edge, "twice"));
         buffer.addSnapshot(decimal(RowKind.INSERT, edge, "twice"));
         buffer.apply(event(decimal(RowKind.DELETE, edge, "twice")));
@@ -83,7 +83,7 @@ class MySqlKeylessBackfillTest {
 
     @Test
     void failsClosedOnPayloadBudgetAndDoesNotExposePartialResults() {
-        var buffer = new RecordUtils.ChunkBackfill(RANGE, SCHEMA, 2, 1200);
+        var buffer = new SnapshotChunkBackfill(RANGE, SCHEMA, 2, 1200);
         buffer.addSnapshot(row(RowKind.INSERT, 1, "one"));
         buffer.addSnapshot(row(RowKind.INSERT, 1, "two"));
         assertThrows(IllegalStateException.class, () -> buffer.addSnapshot(row(RowKind.INSERT, 1, "three")));
@@ -92,7 +92,7 @@ class MySqlKeylessBackfillTest {
 
     @Test
     void freezesMoreThanOneHundredThousandIdenticalImagesWithinTheBoundedCheckpoint() throws Exception {
-        var buffer = new RecordUtils.ChunkBackfill(RANGE, SCHEMA, 2, 4096);
+        var buffer = new SnapshotChunkBackfill(RANGE, SCHEMA, 2, 4096);
         for (int i = 0; i < 200_000; i++) {
             buffer.addSnapshot(row(RowKind.INSERT, 1, "same"));
         }
@@ -121,7 +121,7 @@ class MySqlKeylessBackfillTest {
 
     @Test
     void rejectsInvalidUpdateGroupsOrKeysOutsideTheFrozenRange() {
-        var buffer = new RecordUtils.ChunkBackfill(RANGE, SCHEMA, 10);
+        var buffer = new SnapshotChunkBackfill(RANGE, SCHEMA, 10);
         assertThrows(IllegalArgumentException.class, () -> buffer.addSnapshot(row(RowKind.INSERT, 10, "outside")));
         assertThrows(IllegalArgumentException.class,
                 () -> buffer.apply(event(row(RowKind.UPDATE_BEFORE, 1, "partial"))));

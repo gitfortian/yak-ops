@@ -1,7 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
-import io.yak.ops.connector.cdc.mysql.source.utils.RecordUtils;
+import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotChunkBackfill;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -38,7 +38,7 @@ class MySqlTypedKeyedBackfillTest {
     @Test
     void compositePrimaryKeyReconcilesUpdateUsingIdentityRatherThanChunkKey() {
         var range = new ChunkRange(TABLE, "bucket", LogicalTypeRoot.INTEGER, null, 3L);
-        var buffer = new RecordUtils.ChunkBackfill(range, SCHEMA, 10);
+        var buffer = new SnapshotChunkBackfill(range, SCHEMA, 10);
         buffer.addSnapshot(row(RowKind.INSERT, 7, 1, 1, "old"));
         buffer.addSnapshot(row(RowKind.INSERT, 7, 2, 1, "different"));
         buffer.apply(event(row(RowKind.UPDATE_BEFORE, 7, 1, 1, "old"),
@@ -49,9 +49,9 @@ class MySqlTypedKeyedBackfillTest {
 
     @Test
     void keyedRowMovesBetweenChunkBoundariesWithoutMakingDuplicateOutput() {
-        var left = new RecordUtils.ChunkBackfill(
+        var left = new SnapshotChunkBackfill(
                 new ChunkRange(TABLE, "bucket", LogicalTypeRoot.INTEGER, null, 3L), SCHEMA, 10);
-        var right = new RecordUtils.ChunkBackfill(
+        var right = new SnapshotChunkBackfill(
                 new ChunkRange(TABLE, "bucket", LogicalTypeRoot.INTEGER, 3L, null), SCHEMA, 10);
         left.addSnapshot(row(RowKind.INSERT, 7, 1, 1, "old"));
         right.addSnapshot(row(RowKind.INSERT, 7, 1, 4, "new"));
@@ -72,7 +72,7 @@ class MySqlTypedKeyedBackfillTest {
                 List.of("id"));
         BigDecimal key = new BigDecimal("9223372036854775808.00000000");
         var range = new ChunkRange(TABLE, "id", LogicalTypeRoot.DECIMAL, key, null);
-        var buffer = new RecordUtils.ChunkBackfill(range, schema, 10);
+        var buffer = new SnapshotChunkBackfill(range, schema, 10);
         buffer.addSnapshot(new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(key, "old")));
         buffer.apply(event(
                 new TableRecord(TABLE, RowKind.UPDATE_BEFORE, GenericRowData.of(key, "old")),
@@ -93,7 +93,7 @@ class MySqlTypedKeyedBackfillTest {
 
     @Test
     void failClosedWhenKeyedBeforeImageHasNullPhysicalKey() {
-        var buffer = new RecordUtils.ChunkBackfill(
+        var buffer = new SnapshotChunkBackfill(
                 new ChunkRange(TABLE, "bucket", LogicalTypeRoot.INTEGER, null, null), SCHEMA, 10);
         buffer.addSnapshot(row(RowKind.INSERT, 7, 1, 1, "old"));
         assertThrows(IllegalArgumentException.class,

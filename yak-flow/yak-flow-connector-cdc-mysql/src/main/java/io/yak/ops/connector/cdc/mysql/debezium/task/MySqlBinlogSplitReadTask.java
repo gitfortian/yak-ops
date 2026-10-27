@@ -9,6 +9,7 @@ import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.RecordChangeEvent;
 import io.debezium.engine.format.ChangeEventFormat;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.utils.RecordUtils;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.core.data.TableId;
 import java.io.IOException;
@@ -119,7 +120,7 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
                     // Debezium's no_data snapshot emits CREATE table metadata before it completes.
                     // The forced heartbeat is emitted only after postSnapshot(), with the
                     // completed snapshot offset. Earlier records must never anchor Hybrid.
-                    if (isHeartbeat(source)) {
+                    if (RecordUtils.isHeartbeatEvent(source)) {
                         if (getSourceConfig().schemaEvolutionEnabled()
                                 && !bootstrapTables.containsAll(getSourceConfig().schemas().keySet())) {
                             throw new IllegalStateException(
@@ -175,10 +176,6 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
             committer.markProcessed(event);
         }
         committer.markBatchFinished();
-    }
-
-    private static boolean isHeartbeat(SourceRecord source) {
-        return source.topic() != null && source.topic().startsWith("__debezium-heartbeat.");
     }
 
     private void enqueue(BinlogEvent record) throws InterruptedException {

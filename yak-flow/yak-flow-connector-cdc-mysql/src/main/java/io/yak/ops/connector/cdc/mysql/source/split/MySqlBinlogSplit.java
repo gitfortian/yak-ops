@@ -2,6 +2,7 @@ package io.yak.ops.connector.cdc.mysql.source.split;
 
 import io.yak.ops.connector.cdc.base.source.meta.split.StreamSplit;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.source.utils.RecordUtils;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -175,10 +176,7 @@ public final class MySqlBinlogSplit extends MySqlSplit implements StreamSplit {
             return new MySqlBinlogSplit(definitionFingerprint, offset, schemaHistory,
                     Phase.STREAMING, highWatermark, finishedSnapshotSplitInfos);
         }
-        DebeziumOffset start = completed.stream()
-                .map(FinishedSnapshotSplitInfo::highWatermark)
-                .min(DebeziumOffset::compareTo)
-                .orElseThrow();
+        DebeziumOffset start = RecordUtils.getStartingOffsetOfBinlogSplit(completed);
         return new MySqlBinlogSplit(definitionFingerprint, start, schemaHistory, Phase.STREAMING,
                 Objects.requireNonNull(high, "high"), completed);
     }

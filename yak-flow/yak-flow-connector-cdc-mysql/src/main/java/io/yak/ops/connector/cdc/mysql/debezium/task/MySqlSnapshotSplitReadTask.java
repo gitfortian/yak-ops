@@ -1,7 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.debezium.task;
 
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
-import io.yak.ops.connector.cdc.mysql.source.utils.RecordUtils;
+import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotChunkBackfill;
 import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotSplitReader;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
@@ -81,8 +81,8 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
         }
         ensureBinlog();
         var schema = Objects.requireNonNull(config.schemas().get(split.tableId()), "chunk schema");
-        RecordUtils.ChunkBackfill buffer =
-                new RecordUtils.ChunkBackfill(split.chunkRange(), schema, MAX_ROWS, MAX_PAYLOAD_BYTES);
+        SnapshotChunkBackfill buffer =
+                new SnapshotChunkBackfill(split.chunkRange(), schema, MAX_ROWS, MAX_PAYLOAD_BYTES);
         try {
             DebeziumOffset low = openConsistentSnapshot(split);
             afterLow.call();

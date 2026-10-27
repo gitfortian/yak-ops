@@ -11,7 +11,7 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.debezium.reader.BinlogSplitReader;
-import io.yak.ops.connector.cdc.mysql.source.utils.RecordUtils;
+import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotChunkBackfill;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
@@ -82,7 +82,7 @@ class MySqlCdcKeylessBaselineTest {
         var split = new MySqlSnapshotSplit("chunk", "fingerprint", TABLE, null, null, null);
         var high = offset(200);
 
-        assertThrows(IllegalArgumentException.class, () -> new RecordUtils.ChunkBackfill(new ChunkRange(TABLE, "missing", LogicalTypeRoot.BIGINT, null, null), KEYLESS, 10));
+        assertThrows(IllegalArgumentException.class, () -> new SnapshotChunkBackfill(new ChunkRange(TABLE, "missing", LogicalTypeRoot.BIGINT, null, null), KEYLESS, 10));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> BinlogSplitReader.fromFinishedSplits(

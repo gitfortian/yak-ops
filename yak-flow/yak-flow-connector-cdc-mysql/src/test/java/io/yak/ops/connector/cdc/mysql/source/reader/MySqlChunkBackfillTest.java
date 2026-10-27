@@ -1,7 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
-import io.yak.ops.connector.cdc.mysql.source.utils.RecordUtils;
+import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotChunkBackfill;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -33,7 +33,7 @@ class MySqlChunkBackfillTest {
 
     @Test
     void normalizesRepeatedUpdatesInsertsAndDeletesWithinTheChunk() {
-        RecordUtils.ChunkBackfill backfill = new RecordUtils.ChunkBackfill(split(null, 100L), SCHEMA, 5);
+        SnapshotChunkBackfill backfill = new SnapshotChunkBackfill(split(null, 100L), SCHEMA, 5);
         backfill.addSnapshot(row(RowKind.INSERT, 1L, "initial"));
         backfill.addSnapshot(row(RowKind.INSERT, 2L, "removed"));
         backfill.apply(change(row(RowKind.UPDATE_BEFORE, 1L, "initial"),
@@ -49,8 +49,8 @@ class MySqlChunkBackfillTest {
 
     @Test
     void appliesPrimaryKeyMoveOnBothSidesOfTheBoundary() {
-        RecordUtils.ChunkBackfill before = new RecordUtils.ChunkBackfill(split(null, 100L), SCHEMA, 5);
-        RecordUtils.ChunkBackfill after = new RecordUtils.ChunkBackfill(split(100L, null), SCHEMA, 5);
+        SnapshotChunkBackfill before = new SnapshotChunkBackfill(split(null, 100L), SCHEMA, 5);
+        SnapshotChunkBackfill after = new SnapshotChunkBackfill(split(100L, null), SCHEMA, 5);
         before.addSnapshot(row(RowKind.INSERT, 50L, "old"));
         BinlogEvent move = change(row(RowKind.UPDATE_BEFORE, 50L, "old"),
                 row(RowKind.UPDATE_AFTER, 150L, "new"));
@@ -63,7 +63,7 @@ class MySqlChunkBackfillTest {
 
     @Test
     void rejectsIncompleteUpdatePairsAndUnboundedSnapshotRows() {
-        RecordUtils.ChunkBackfill backfill = new RecordUtils.ChunkBackfill(split(10L, 20L), SCHEMA, 1);
+        SnapshotChunkBackfill backfill = new SnapshotChunkBackfill(split(10L, 20L), SCHEMA, 1);
         assertThrows(IllegalArgumentException.class,
                 () -> backfill.addSnapshot(row(RowKind.INSERT, 20L, "outside")));
         assertThrows(IllegalArgumentException.class,
@@ -77,7 +77,7 @@ class MySqlChunkBackfillTest {
     void byteLimitFailsClosedEvenBeforeTheRowLimit() {
         var schema = new TableSchema(List.of(new Column("id", LogicalTypes.BIGINT.copy(false)),
                 new Column("name", LogicalTypes.varchar(10000))), List.of("id"));
-        var backfill = new RecordUtils.ChunkBackfill(split(null, null), schema, 100, 512);
+        var backfill = new SnapshotChunkBackfill(split(null, null), schema, 100, 512);
         backfill.addSnapshot(row(RowKind.INSERT, 1L, "small"));
         assertThrows(IllegalStateException.class,
                 () -> backfill.addSnapshot(row(RowKind.INSERT, 2L, "x".repeat(2000))));
@@ -88,7 +88,7 @@ class MySqlChunkBackfillTest {
 
     @Test
     void deletesReleaseThePayloadBudgetForSubsequentRows() {
-        var backfill = new RecordUtils.ChunkBackfill(split(null, null), SCHEMA, 10, 512);
+        var backfill = new SnapshotChunkBackfill(split(null, null), SCHEMA, 10, 512);
         backfill.addSnapshot(row(RowKind.INSERT, 1L, "one"));
         backfill.apply(change(row(RowKind.DELETE, 1L, "one")));
         backfill.apply(change(row(RowKind.INSERT, 2L, "two")));
@@ -97,7 +97,7 @@ class MySqlChunkBackfillTest {
 
     @Test
     void rejectsNullPrimaryKeysBeforeBufferingOrRetracting() {
-        var backfill = new RecordUtils.ChunkBackfill(split(null, null), SCHEMA, 5);
+        var backfill = new SnapshotChunkBackfill(split(null, null), SCHEMA, 5);
         var malformed = new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(null, "missing"));
         assertThrows(IllegalArgumentException.class, () -> backfill.addSnapshot(malformed));
         assertEquals(Map.of(), values(backfill.finish()));
