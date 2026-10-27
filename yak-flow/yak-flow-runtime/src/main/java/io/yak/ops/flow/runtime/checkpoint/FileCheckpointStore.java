@@ -505,7 +505,18 @@ public final class FileCheckpointStore implements CompletedCheckpointStore {
      * Existing non-keyed snapshot fingerprints are byte-for-byte unchanged.
      */
     public static String graphSignature(StreamGraph graph, int maxParallelism) {
+        return graphSignature(graph, maxParallelism, "");
+    }
+
+    /**
+     * Binds a checkpoint to both physical graph topology and its immutable Task Definition.
+     *
+     * <p>Definition identity belongs to the runtime restore contract, not the connector
+     * Split or Enumerator State.
+     */
+    public static String graphSignature(StreamGraph graph, int maxParallelism, String definitionIdentity) {
         Objects.requireNonNull(graph, "graph must not be null");
+        Objects.requireNonNull(definitionIdentity, "definitionIdentity");
         StringBuilder canonical = new StringBuilder("yak-local-v1");
         for (StreamNode node : graph.getTopologicalNodes()) {
             if (node.getUid() == null) {
@@ -538,6 +549,10 @@ public final class FileCheckpointStore implements CompletedCheckpointStore {
                         .anyMatch(edge ->
                                 edge.partitioning() == io.yak.ops.flow.runtime.graph.StreamPartitioning.KEYED)) {
             canonical.append("|keygroups-murmur3-v1:").append(maxParallelism);
+        }
+        if (!definitionIdentity.isEmpty()) {
+            canonical.append("|task-definition-v1:").append(definitionIdentity.length())
+                    .append(':').append(definitionIdentity);
         }
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
