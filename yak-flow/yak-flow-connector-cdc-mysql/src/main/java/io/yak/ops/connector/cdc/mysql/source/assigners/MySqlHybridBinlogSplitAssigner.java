@@ -1,23 +1,20 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners;
 
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import java.util.Objects;
 
 /** Holds the Hybrid bootstrap Binlog split before Snapshot/Handoff ownership is established. */
-final class MySqlHybridBinlogSplitAssigner {
+final class MySqlBinlogSplitAssigner {
 
-    private MySqlHybridBinlogSplit pending;
+    private MySqlBinlogSplit pending;
     private boolean assigned;
 
-    MySqlHybridBinlogSplitAssigner(String fingerprint) {
-        pending = new MySqlHybridBinlogSplit(
-                new MySqlBinlogSplit(Objects.requireNonNull(fingerprint, "fingerprint"), null, new byte[0]),
-                MySqlHybridBinlogSplit.Phase.BOOTSTRAP,
-                null);
+    MySqlBinlogSplitAssigner(String fingerprint) {
+        pending = MySqlBinlogSplit.forInitialSnapshot(Objects.requireNonNull(fingerprint, "fingerprint"));
     }
 
-    MySqlHybridBinlogSplitAssigner(MySqlHybridBinlogSplit pending, boolean assigned) {
+    MySqlBinlogSplitAssigner(MySqlBinlogSplit pending, boolean assigned) {
         if (assigned == (pending != null)) {
             throw new IllegalArgumentException("Binlog assignment and pending state conflict");
         }
@@ -25,11 +22,11 @@ final class MySqlHybridBinlogSplitAssigner {
         this.assigned = assigned;
     }
 
-    public MySqlHybridBinlogSplit next(int subtaskId) {
+    public MySqlBinlogSplit next(int subtaskId) {
         if (subtaskId != 0) {
             return null;
         }
-        MySqlHybridBinlogSplit result = pending;
+        MySqlBinlogSplit result = pending;
         if (result != null) {
             pending = null;
             assigned = true;
@@ -37,7 +34,7 @@ final class MySqlHybridBinlogSplitAssigner {
         return result;
     }
 
-    public void addBack(MySqlHybridBinlogSplit split) {
+    public void addBack(MySqlBinlogSplit split) {
         if (pending != null || !assigned) {
             throw new IllegalStateException("Binlog is not assigned");
         }
@@ -49,7 +46,7 @@ final class MySqlHybridBinlogSplitAssigner {
         return assigned;
     }
 
-    public MySqlHybridBinlogSplit pending() {
+    public MySqlBinlogSplit pending() {
         return pending;
     }
 }

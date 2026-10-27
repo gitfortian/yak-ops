@@ -3,7 +3,7 @@ package io.yak.ops.connector.cdc.mysql.source.assigners;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
@@ -24,7 +24,7 @@ public final class MySqlHybridSplitAssigner
 
     private final String fingerprint;
     private final MySqlSnapshotSplitAssigner snapshots;
-    private final MySqlHybridBinlogSplitAssigner binlog;
+    private final MySqlBinlogSplitAssigner binlog;
     private MySqlHybridEnumeratorState.Phase phase;
     private DebeziumOffset low;
     private DebeziumOffset high;
@@ -43,7 +43,7 @@ public final class MySqlHybridSplitAssigner
         this.fingerprint = Objects.requireNonNull(fingerprint, "fingerprint");
         if (restored == null) {
             snapshots = new MySqlSnapshotSplitAssigner();
-            binlog = new MySqlHybridBinlogSplitAssigner(fingerprint);
+            binlog = new MySqlBinlogSplitAssigner(fingerprint);
             phase = MySqlHybridEnumeratorState.Phase.BOOTSTRAP;
         } else {
             if (!fingerprint.equals(restored.fingerprint())) {
@@ -56,7 +56,7 @@ public final class MySqlHybridSplitAssigner
             phase = restored.phase();
             low = restored.lowWatermark();
             high = restored.highWatermark();
-            binlog = new MySqlHybridBinlogSplitAssigner(restored.pendingBinlog(), restored.binlogAssigned());
+            binlog = new MySqlBinlogSplitAssigner(restored.pendingBinlog(), restored.binlogAssigned());
             snapshots = new MySqlSnapshotSplitAssigner(
                     restored.pendingSnapshots(),
                     restored.assignedSnapshots(),
@@ -68,11 +68,11 @@ public final class MySqlHybridSplitAssigner
 
     @Override
     public MySqlSplit getNext(int subtaskId) {
-        MySqlHybridBinlogSplit next = nextBinlog(subtaskId);
+        MySqlBinlogSplit next = nextBinlog(subtaskId);
         return next != null ? next : nextSnapshot();
     }
 
-    public MySqlHybridBinlogSplit nextBinlog(int subtaskId) {
+    public MySqlBinlogSplit nextBinlog(int subtaskId) {
         return binlog.next(subtaskId);
     }
 
@@ -263,7 +263,7 @@ public final class MySqlHybridSplitAssigner
         for (MySqlSplit split : splits) {
             if (split instanceof MySqlSnapshotSplit snapshot) {
                 addBack(snapshot);
-            } else if (split instanceof MySqlHybridBinlogSplit binlogSplit) {
+            } else if (split instanceof MySqlBinlogSplit binlogSplit) {
                 if (subtaskId != 0) {
                     throw new IllegalArgumentException("Binlog belongs to reader zero");
                 }
@@ -272,7 +272,7 @@ public final class MySqlHybridSplitAssigner
         }
     }
 
-    public void addBack(MySqlHybridBinlogSplit split) {
+    public void addBack(MySqlBinlogSplit split) {
         binlog.addBack(split);
     }
 
