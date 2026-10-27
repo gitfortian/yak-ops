@@ -225,6 +225,8 @@ class DataMapDatabaseIT {
         row.setUpdatedCount(0);
         row.setRemovedCount(0);
         row.setFailedCount(0);
+        row.setFilteredCount(0);
+        row.setTriggerType("MANUAL");
         row.setCreatedTime(LocalDateTime.now());
         row.setCreateBy("it");
         return row;
