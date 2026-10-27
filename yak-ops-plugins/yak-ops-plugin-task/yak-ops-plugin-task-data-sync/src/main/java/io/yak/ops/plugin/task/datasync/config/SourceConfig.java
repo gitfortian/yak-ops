@@ -68,7 +68,10 @@ public record SourceConfig(ReadonlyConfig options, IncrementalConfig incremental
         physical.put(JobOptions.DATASOURCE_ID.key(), datasourceId);
         physical.put(JobOptions.TYPE.key(), type.sourceIdentifier());
         if (chunkKey != null) physical.put(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN.key(), chunkKey);
-        if (startupMode != null) physical.put(MySqlCdcSourceOptions.STARTUP_MODE.key(), StartupOptions.of(startupMode).asModeString());
+        if (startupMode != null)
+            physical.put(
+                    MySqlCdcSourceOptions.STARTUP_MODE.key(),
+                    StartupOptions.of(startupMode).asModeString());
         return new SourceConfig(ReadonlyConfig.fromMap(physical), incremental);
     }
 
