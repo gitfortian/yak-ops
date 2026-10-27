@@ -1,29 +1,31 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 
 /** Verifies the unified entry keeps the existing mode-specific runtime and checkpoint contracts. */
 class MySqlSourceEntryTest {
 
     @Test
     void initialUsesOriginalHybridStateAndSerializers() {
-        var source = MySqlSource.create(builder(), StartupMode.INITIAL, 512, new TableMetrics());
+        var source = MySqlSource.create(builder(), StartupOptions.initial(), 512, new TableMetrics());
         assertEquals(StartupMode.INITIAL, source.startupMode());
+        assertEquals(StartupOptions.initial(), source.startupOptions());
         assertEquals(512, source.snapshotChunkSize());
         assertInstanceOf(MySqlHybridSplitSerializer.class, source.getSplitSerializer());
         assertInstanceOf(MySqlHybridEnumeratorStateSerializer.class, source.getEnumeratorCheckpointSerializer());
@@ -31,8 +33,9 @@ class MySqlSourceEntryTest {
 
     @Test
     void latestUsesOriginalBinlogStateAndSerializers() {
-        var source = MySqlSource.create(builder(), StartupMode.LATEST_OFFSET, 512, new TableMetrics());
+        var source = MySqlSource.create(builder(), StartupOptions.latest(), 512, new TableMetrics());
         assertEquals(StartupMode.LATEST_OFFSET, source.startupMode());
+        assertEquals(StartupOptions.latest(), source.startupOptions());
         assertThrows(IllegalStateException.class, source::snapshotChunkSize);
         assertInstanceOf(MySqlBinlogSplitSerializer.class, source.getSplitSerializer());
         assertInstanceOf(MySqlPendingSplitsStateSerializer.class, source.getEnumeratorCheckpointSerializer());

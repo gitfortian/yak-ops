@@ -6,6 +6,8 @@ import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
+import io.yak.ops.connector.cdc.mysql.table.StartupMode;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +34,12 @@ public final class MySqlHybridSplitAssigner
     private int nextChunkIndex;
     private ChunkRange nextChunkRange;
 
-    public MySqlHybridSplitAssigner(String fingerprint, MySqlHybridEnumeratorState restored) {
+    public MySqlHybridSplitAssigner(
+            StartupOptions startupOptions, String fingerprint, MySqlHybridEnumeratorState restored) {
+        Objects.requireNonNull(startupOptions, "startupOptions");
+        if (startupOptions.startupMode() != StartupMode.INITIAL) {
+            throw new UnsupportedOperationException("MySQL Hybrid Source requires initial startup");
+        }
         this.fingerprint = Objects.requireNonNull(fingerprint, "fingerprint");
         if (restored == null) {
             snapshots = new MySqlSnapshotSplitAssigner();

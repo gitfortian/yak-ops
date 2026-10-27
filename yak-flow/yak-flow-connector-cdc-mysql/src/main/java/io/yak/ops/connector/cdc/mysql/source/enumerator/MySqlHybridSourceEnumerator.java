@@ -16,6 +16,7 @@ import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridSplit;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SplitEnumerator;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
@@ -45,26 +46,30 @@ public final class MySqlHybridSourceEnumerator
     private boolean planning;
 
     public MySqlHybridSourceEnumerator(
+            StartupOptions startupOptions,
             SplitEnumeratorContext<MySqlHybridSplit> context,
             MySqlCdcSourceConfig config,
             String fingerprint,
             int chunkSize,
             MySqlHybridEnumeratorState restored) {
-        this(context, config, fingerprint, chunkSize, restored, new TableMetrics());
+        this(startupOptions, context, config, fingerprint, chunkSize, restored, new TableMetrics());
     }
 
     public MySqlHybridSourceEnumerator(
+            StartupOptions startupOptions,
             SplitEnumeratorContext<MySqlHybridSplit> context,
             MySqlCdcSourceConfig config,
             String fingerprint,
             int chunkSize,
             MySqlHybridEnumeratorState restored,
             TableMetrics metrics) {
-        this(context, config, fingerprint, chunkSize, restored, metrics, new MySqlChunkSplitter(config, chunkSize));
+        this(startupOptions, context, config, fingerprint, chunkSize, restored, metrics,
+                new MySqlChunkSplitter(config, chunkSize));
     }
 
     /** Allows the same coordinator discovery path to be exercised with an independent JDBC planner. */
     MySqlHybridSourceEnumerator(
+            StartupOptions startupOptions,
             SplitEnumeratorContext<MySqlHybridSplit> context,
             MySqlCdcSourceConfig config,
             String fingerprint,
@@ -73,6 +78,7 @@ public final class MySqlHybridSourceEnumerator
             TableMetrics metrics,
             MySqlChunkSplitter planner) {
         this.context = Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(startupOptions, "startupOptions");
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         this.fingerprint = Objects.requireNonNull(fingerprint, "fingerprint");
         tables = List.copyOf(config.schemas().keySet());
@@ -94,7 +100,7 @@ public final class MySqlHybridSourceEnumerator
         tables.forEach(metrics::register);
         generation = metrics.beginSnapshot(restored != null);
         splitter = Objects.requireNonNull(planner, "planner");
-        assigner = new MySqlHybridSplitAssigner(fingerprint, restored);
+        assigner = new MySqlHybridSplitAssigner(startupOptions, fingerprint, restored);
         restoredHandoff = restored != null && restored.phase() == MySqlHybridEnumeratorState.Phase.HANDOFF;
         if (context.currentParallelism() < 1
                 || context.currentParallelism() > 16

@@ -4,7 +4,7 @@ import io.yak.ops.configuration.Option;
 import io.yak.ops.configuration.Options;
 import io.yak.ops.configuration.rule.Conditions;
 import io.yak.ops.configuration.rule.OptionRule;
-import io.yak.ops.connector.cdc.mysql.table.StartupMode;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 
 /** Physical MySQL CDC snapshot and backpressure settings owned by the Connector. */
 public final class MySqlCdcSourceOptions {
@@ -16,7 +16,7 @@ public final class MySqlCdcSourceOptions {
 
     /** Determines the initial reading position; checkpoint restores use their saved offset. */
     public static final Option<String> STARTUP_MODE =
-            Options.key("data-sync.mysql-cdc.startup-mode").stringType().defaultValue(StartupMode.INITIAL.value());
+            Options.key("data-sync.mysql-cdc.startup-mode").stringType().defaultValue(StartupOptions.initial().asModeString());
 
     public static final Option<Integer> SNAPSHOT_CHUNK_SIZE =
             Options.key("data-sync.mysql-cdc.snapshot-chunk-size").intType().defaultValue(1024);

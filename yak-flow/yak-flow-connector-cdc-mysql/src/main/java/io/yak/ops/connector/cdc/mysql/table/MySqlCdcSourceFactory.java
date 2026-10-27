@@ -76,8 +76,24 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
 
     @Override
     public void validateSchema(ReadonlyConfig options, TableSchema schema) {
-        StartupMode.from(options.get(MySqlCdcSourceOptions.STARTUP_MODE))
-                .validateSchema(schema, options.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
+        StartupOptions startup = StartupOptions.from(options.get(MySqlCdcSourceOptions.STARTUP_MODE));
+        startup.requireSupported();
+        String chunkKey = options.get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN);
+        if (startup.startupMode() == StartupMode.INITIAL) {
+            ChunkUtils.requireSupportedSnapshot(schema, chunkKey);
+            return;
+        }
+        if (chunkKey != null) {
+            throw new IllegalArgumentException("Snapshot Chunk Key is not supported for latest-offset startup");
+        }
+        if (schema.primaryKeys().isEmpty()) {
+            throw new IllegalArgumentException("Latest-offset MySQL CDC requires a physical primary key");
+        }
+        for (var column : schema.columns()) {
+            if (!column.dataType().isResolved()) {
+                throw new IllegalArgumentException("MySQL CDC requires resolved source column types");
+            }
+        }
     }
 
     @Override
@@ -92,7 +108,8 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
         }
         var first = contexts.getFirst();
         ReadonlyConfig options = first.options();
-        StartupMode startupMode = StartupMode.from(options.get(MySqlCdcSourceOptions.STARTUP_MODE));
+        StartupOptions startupOptions = StartupOptions.from(options.get(MySqlCdcSourceOptions.STARTUP_MODE));
+        startupOptions.requireSupported();
         if (options.get(JdbcConnectionOptions.SSH_ENABLED)) {
             throw new UnsupportedOperationException("MySQL CDC requires a direct MySQL connection");
         }
@@ -129,7 +146,7 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
                     context.table(), context.schema(), context.options().get(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN));
         }
         return MySqlSource.create(
-                builder, startupMode, options.get(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE), first.metrics());
+                builder, startupOptions, options.get(MySqlCdcSourceOptions.SNAPSHOT_CHUNK_SIZE), first.metrics());
     }
 
     /**
