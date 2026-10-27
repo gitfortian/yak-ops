@@ -1,6 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -84,6 +85,61 @@ class MySqlCdcFactoryCreationTest {
         assertThrows(IllegalArgumentException.class, () -> factory.createSource(List.of(first, first)));
         assertThrows(IllegalArgumentException.class, () -> factory.validateSchema(new TableSchema(List.of(new Column("id", LogicalTypes.STRING.copy(false))), List.of("id"))));
         assertThrows(IllegalArgumentException.class, () -> factory.validateSchema(new TableSchema(List.of(new Column("id", LogicalTypes.BIGINT)), List.of("id"))));
+    }
+
+
+    @Test
+    void startupOptionsSelectHybridByDefaultAndBinlogOnlyFromLatest() {
+        var factory = new MySqlCdcSourceFactory();
+        var initial = factory.createSource(new TableSourceFactoryContext(options().toReadonlyConfig(), TABLE, SCHEMA));
+        assertInstanceOf(MySqlHybridCdcSource.class, initial);
+
+        var explicitInitial = options().set(MySqlCdcSourceOptions.STARTUP_MODE, "initial");
+        assertInstanceOf(
+                MySqlHybridCdcSource.class,
+                factory.createSource(new TableSourceFactoryContext(explicitInitial.toReadonlyConfig(), TABLE, SCHEMA)));
+
+        // A nonnumeric primary key can identify Binlog changes without serving as a snapshot Chunk Key.
+        var textKey = new TableSchema(
+                List.of(new Column("code", LogicalTypes.varchar(64).copy(false))), List.of("code"));
+        var latest = options().set(MySqlCdcSourceOptions.STARTUP_MODE, "latest-offset");
+        var binlog = factory.createSource(new TableSourceFactoryContext(latest.toReadonlyConfig(), TABLE, textKey));
+        assertInstanceOf(MySqlCdcSource.class, binlog);
+    }
+
+    @Test
+    void latestStartupRejectsUnsupportedModesAndSnapshotOnlySettings() {
+        var factory = new MySqlCdcSourceFactory();
+        var invalid = options().set(MySqlCdcSourceOptions.STARTUP_MODE, "earliest-offset");
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> factory.createSource(new TableSourceFactoryContext(invalid.toReadonlyConfig(), TABLE, SCHEMA)));
+
+        var latest = options().set(MySqlCdcSourceOptions.STARTUP_MODE, "latest-offset");
+        var withChunk = latest.set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "id");
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> factory.createSource(new TableSourceFactoryContext(withChunk.toReadonlyConfig(), TABLE, SCHEMA)));
+
+        var keyless = new TableSchema(SCHEMA.columns(), List.of());
+        var latestWithoutChunk = options().set(MySqlCdcSourceOptions.STARTUP_MODE, "latest-offset");
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> factory.createSource(
+                        new TableSourceFactoryContext(latestWithoutChunk.toReadonlyConfig(), TABLE, keyless)));
+    }
+
+    @Test
+    void multiTableStartupModeMustBeConsistent() {
+        var factory = new MySqlCdcSourceFactory();
+        var metrics = new io.yak.ops.connector.base.metrics.TableMetrics();
+        var initial = new TableSourceFactoryContext(options().toReadonlyConfig(), TABLE, SCHEMA, metrics);
+        var latest = new TableSourceFactoryContext(
+                options().set(MySqlCdcSourceOptions.STARTUP_MODE, "latest-offset").toReadonlyConfig(),
+                new TableId("app", null, "items"),
+                SCHEMA,
+                metrics);
+        assertThrows(IllegalArgumentException.class, () -> factory.createSource(List.of(initial, latest)));
     }
 
     private static Configuration options() {
