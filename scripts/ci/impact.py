@@ -235,7 +235,8 @@ def suite_registration_changes() -> set[str] | None:
 
 def analyze(paths: list[str], *, full: bool = False) -> dict:
     result = dict(backend=False, frontend=False, distribution=False, release=False,
-                  modules=set(), suites=set(), suite_reasons={}, full=False)
+                  modules=set(), suites=set(), suite_reasons={}, full=False,
+                  preflight=False, preflight_modules=set())
 
     def add_suites(suites: set[str] | tuple[str, ...], reason: str) -> None:
         result["suites"].update(suites)
@@ -243,7 +244,9 @@ def analyze(paths: list[str], *, full: bool = False) -> dict:
             result["suite_reasons"].setdefault(suite, set()).add(reason)
 
     def all_checks(reason: str) -> None:
-        result.update(backend=True, frontend=True, distribution=True, release=True, full=True)
+        result.update(backend=True, frontend=True, distribution=True, release=True, full=True,
+                      preflight=True)
+        result["preflight_modules"].clear()
         add_suites(SUITES, reason)
 
     if full:
@@ -289,6 +292,11 @@ def analyze(paths: list[str], *, full: bool = False) -> dict:
         if owners:
             result["backend"] = True
             result["modules"].update(affected_modules(owners))
+            # Spotless and Checkstyle cover production Java; check direct owners only.
+            if "/src/main/java/" in path or path.endswith("/pom.xml"):
+                result["preflight"] = True
+                if not result["full"]:
+                    result["preflight_modules"].update(owners)
             add_suites(test_suites(path), path)
             continue
         # An unknown path might change a build or generated contract: fail closed.
@@ -304,7 +312,12 @@ def summary(paths: list[str], *, full: bool = False) -> str:
     for key, label in (("backend", "Backend Quality"), ("frontend", "Frontend Quality"),
                        ("distribution", "Distribution Quality"), ("release", "Release Checks")):
         lines.append(f"| {label} | {'Yes' if result[key] else 'No'} |")
-    lines.extend(["", "### Selected database suites", "", "| Suite | Reason |", "| --- | --- |"])
+    preflight_modules = ("!yak-ops-ui,!yak-ops-dist" if result["full"]
+                         else ",".join(sorted(result["preflight_modules"])))
+    lines.extend(["", "### Fast Preflight", "",
+                  f"Run: {'Yes' if result['preflight'] else 'No'}",
+                  f"Modules: {preflight_modules if result['preflight'] else '-'}",
+                  "", "### Selected database suites", "", "| Suite | Reason |", "| --- | --- |"])
     if not result["suites"]:
         lines.append("| None | No relevant database changes |")
     for suite in SUITES:
@@ -330,6 +343,11 @@ def outputs(paths: list[str], *, full: bool = False) -> str:
         "tests": str(bool(impact["suites"])).lower(),
         "modules": selected_modules,
         "suites": ",".join(name for name in SUITES if name in impact["suites"]),
+        "preflight": str(impact["preflight"]).lower(),
+        "preflight_modules": (
+            "!yak-ops-ui,!yak-ops-dist" if impact["full"]
+            else ",".join(sorted(impact["preflight_modules"]))
+        ),
     }
     return "\n".join(f"{key}={value}" for key, value in fields.items()) + "\n"
 
