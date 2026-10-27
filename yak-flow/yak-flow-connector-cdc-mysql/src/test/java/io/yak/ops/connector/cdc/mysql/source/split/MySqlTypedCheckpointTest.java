@@ -31,7 +31,7 @@ class MySqlTypedCheckpointTest {
                 new ChunkRange(TABLE, "code", LogicalTypeRoot.VARCHAR, "a", "z"),
                 new ChunkRange(TABLE, "code", LogicalTypeRoot.CHAR, null, null));
         for (ChunkRange range : ranges) {
-            var raw = MySqlSnapshotSplit.typed("typed", "definition", range);
+            var raw = MySqlSnapshotSplit.typed("typed", range);
             var restored = roundTrip(raw);
             assertEquals(range, restored.chunkRange());
             assertFalse(restored.prepared());
@@ -43,7 +43,7 @@ class MySqlTypedCheckpointTest {
     void finishedWatermarkSurvivesWithoutSerializedRows() throws Exception {
         var range = new ChunkRange(TABLE, "amount", LogicalTypeRoot.DECIMAL,
                 new BigDecimal("1.00"), new BigDecimal("9.00"));
-        var original = MySqlSnapshotSplit.typed("chunk", "definition", range);
+        var original = MySqlSnapshotSplit.typed("chunk", range);
         var high = offset(200);
         var prepared = original.withOutput(new MySqlSnapshotOutput(offset(100), high, List.of()));
         assertThrows(IOException.class, () -> SERIALIZER.serialize(prepared));
@@ -57,8 +57,7 @@ class MySqlTypedCheckpointTest {
 
     @Test
     void oldCheckpointVersionsAndTruncatedBuffersFailClosed() throws Exception {
-        var raw = MySqlSnapshotSplit.typed("chunk", "definition",
-                new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, 1L, 5L));
+        var raw = MySqlSnapshotSplit.typed("chunk", new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, 1L, 5L));
         byte[] encoded = SERIALIZER.serialize(raw);
         for (int v = 1; v < SERIALIZER.getVersion(); v++) {
             int oldVersion = v;
