@@ -9,7 +9,7 @@ import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.RecordsBySplits;
 import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
 import io.yak.ops.connector.base.source.reader.splitreader.SplitReader;
-import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogEngine;
+import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
@@ -36,7 +36,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     private final long generation;
     private final Set<TableId> tables;
     private final Deque<MySqlSnapshotSplit> pending = new ArrayDeque<>();
-    private volatile MySqlBinlogEngine binlog;
+    private volatile MySqlBinlogSplitReadTask binlog;
     private volatile byte[] history = new byte[0];
     private volatile MySqlResumeBinlogEvent resume;
     private volatile boolean cancelled;
@@ -91,7 +91,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
                 } else if (stream.phase() == MySqlBinlogSplit.Phase.STREAMING) {
                     startStreaming(stream);
                 } else if (stream.phase() == MySqlBinlogSplit.Phase.STANDALONE) {
-                    binlog = new MySqlBinlogEngine(config);
+                    binlog = new MySqlBinlogSplitReadTask(config);
                     binlog.start(stream);
                     streaming = true;
                 }
@@ -169,7 +169,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     }
 
     private void startBinlog(MySqlBinlogSplit split) throws Exception {
-        binlog = new MySqlBinlogEngine(config);
+        binlog = new MySqlBinlogSplitReadTask(config);
         binlog.start(split);
     }
 
@@ -204,7 +204,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
      */
     public byte[] snapshotHistory() {
         if (streaming) {
-            MySqlBinlogEngine active = binlog;
+            MySqlBinlogSplitReadTask active = binlog;
             if (active == null) {
                 throw new IllegalStateException("Active MySQL Binlog reader is missing during checkpoint");
             }
@@ -230,7 +230,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     public void cancel() {
         cancelled = true;
         snapshots.cancel();
-        MySqlBinlogEngine running = binlog;
+        MySqlBinlogSplitReadTask running = binlog;
         if (running != null) running.requestStop();
     }
 

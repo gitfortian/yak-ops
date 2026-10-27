@@ -3,7 +3,7 @@ package io.yak.ops.connector.cdc.mysql.debezium.reader;
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
-import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogEngine;
+import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlBinlogSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.core.data.RowKind;
@@ -151,7 +151,7 @@ public final class BinlogSplitReader {
     }
 
     /** Poll the Debezium engine and apply the completed snapshot chunk watermarks. */
-    public BinlogEvent poll(MySqlBinlogEngine engine) throws Exception {
+    public BinlogEvent poll(MySqlBinlogSplitReadTask engine) throws Exception {
         BinlogEvent event = Objects.requireNonNull(engine, "engine").poll();
         return event == null ? null : filter(event);
     }

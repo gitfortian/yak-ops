@@ -1,4 +1,4 @@
-package io.yak.ops.connector.cdc.mysql.debezium;
+package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

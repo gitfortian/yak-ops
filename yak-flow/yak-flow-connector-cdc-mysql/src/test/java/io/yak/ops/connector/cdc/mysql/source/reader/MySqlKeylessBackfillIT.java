@@ -202,7 +202,17 @@ class MySqlKeylessBackfillIT {
         String table = name("closed_");
         TableId id = new TableId("yak_cdc_it", null, table);
         var config = config(Map.of(id, SCHEMA), Map.of(id, "bucket"), 6761);
-        var source = MySqlSource.builder()
+        var binlogOnly = MySqlSource.builder()
+                .hostname(DATABASE.metadata().host())
+                .port(DATABASE.metadata().port())
+                .username(DATABASE.metadata().username())
+                .password(DATABASE.metadata().password())
+                .serverId(6771)
+                .topicPrefix("blocked-keyless")
+                .table(id, SCHEMA, "bucket");
+        assertThrows(UnsupportedOperationException.class, binlogOnly::build);
+
+        var hybrid = MySqlSource.builder()
                 .hostname(DATABASE.metadata().host())
                 .port(DATABASE.metadata().port())
                 .username(DATABASE.metadata().username())
@@ -210,22 +220,11 @@ class MySqlKeylessBackfillIT {
                 .serverId(6771)
                 .topicPrefix("blocked-keyless")
                 .table(id, SCHEMA, "bucket")
-                .build();
-        assertEquals(config.schemas(), source.config().schemas());
-        assertThrows(UnsupportedOperationException.class, () -> source.createEnumerator(null));
-        assertThrows(UnsupportedOperationException.class, () -> source.restoreEnumerator(null, null));
+                .buildHybrid(10);
+        assertEquals(config.schemas(), hybrid.config().schemas());
         assertEquals(
                 io.yak.ops.core.api.connector.source.Boundedness.CONTINUOUS_UNBOUNDED,
-                MySqlSource.builder()
-                        .hostname(DATABASE.metadata().host())
-                        .port(DATABASE.metadata().port())
-                        .username(DATABASE.metadata().username())
-                        .password(DATABASE.metadata().password())
-                        .serverId(6771)
-                        .topicPrefix("blocked-keyless")
-                        .table(id, SCHEMA, "bucket")
-                        .buildHybrid(10)
-                        .getBoundedness());
+                hybrid.getBoundedness());
     }
 
     private static MySqlSourceConfig config(

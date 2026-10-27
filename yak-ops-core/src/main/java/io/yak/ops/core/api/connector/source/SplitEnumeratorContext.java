@@ -181,6 +181,17 @@ public interface SplitEnumeratorContext<SplitT extends SourceSplit> {
     void runInCoordinatorThread(Runnable runnable);
 
     /**
+     * Reports an estimate of bounded work units to the owning runtime.
+     *
+     * <p>Flink's standard enumerator context does not expose this hint. YakFlow's
+     * execution graph uses it for progress accounting; runtimes without such an
+     * observer may safely ignore the optional notification.
+     */
+    default void reportPlannedSplits(int count) {
+        // No progress observer is attached.
+    }
+
+    /**
      * Reports to JM whether this source is currently processing backlog.
      *
      * <p>When source is processing backlog, it means the records being emitted by this source is
@@ -191,7 +202,7 @@ public interface SplitEnumeratorContext<SplitT extends SourceSplit> {
      * <p>If no API has been explicitly invoked to specify the backlog status of a source, the
      * source is considered to have isProcessingBacklog=false by default.
      */
-        default void setIsProcessingBacklog(boolean isProcessingBacklog) {
+    default void setIsProcessingBacklog(boolean isProcessingBacklog) {
         throw new UnsupportedOperationException();
     }
 }
