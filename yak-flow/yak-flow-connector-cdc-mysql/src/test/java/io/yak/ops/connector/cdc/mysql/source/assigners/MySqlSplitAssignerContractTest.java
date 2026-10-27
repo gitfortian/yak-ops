@@ -1,10 +1,11 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsState;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -33,9 +34,9 @@ class MySqlSplitAssignerContractTest {
         MySqlPendingSplitsState assigned = assigner.snapshotState(2);
         assertInstanceOf(PendingSplitsState.class, assigned);
         assertTrue(assigned.splitAssigned());
-        var serializer = new MySqlPendingSplitsStateSerializer();
+        var serializer = new PendingSplitsStateSerializer(MySqlSplitSerializer.INSTANCE);
         var restored = new MySqlBinlogSplitAssigner(StartupOptions.latest(), 
-                "fp", serializer.deserialize(serializer.getVersion(), serializer.serialize(assigned)));
+                "fp", (MySqlPendingSplitsState) serializer.deserialize(serializer.getVersion(), serializer.serialize(assigned)));
         assertNull(restored.getNext(0));
 
         assigner.addSplitsBack(List.of(split), 0);
@@ -50,9 +51,9 @@ class MySqlSplitAssignerContractTest {
         var assigner = new MySqlBinlogSplitAssigner(StartupOptions.latest(), "fp", null);
         MySqlPendingSplitsState pending = assigner.snapshotState(1);
         assertFalse(pending.splitAssigned());
-        var serializer = new MySqlPendingSplitsStateSerializer();
+        var serializer = new PendingSplitsStateSerializer(MySqlSplitSerializer.INSTANCE);
         var restored = new MySqlBinlogSplitAssigner(StartupOptions.latest(), 
-                "fp", serializer.deserialize(serializer.getVersion(), serializer.serialize(pending)));
+                "fp", (MySqlPendingSplitsState) serializer.deserialize(serializer.getVersion(), serializer.serialize(pending)));
         var split = restored.getNext(0);
         assertNull(split.offset());
         assertEquals(0, split.schemaHistory().length);
