@@ -1,7 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
-import io.yak.ops.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.connector.cdc.mysql.source.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
@@ -27,8 +26,7 @@ import java.util.Objects;
  * a coordinator event after the snapshot handoff checkpoint completes.
  */
 public final class MySqlHybridSourceReader
-        extends SingleThreadMultiplexSourceReaderBase<
-                MySqlHybridFetchedRecord, TableRecord, MySqlHybridSplit, MySqlHybridSplitState> {
+        extends MySqlSourceReaderBase<MySqlHybridFetchedRecord, MySqlHybridSplit, MySqlHybridSplitState> {
 
     private final MySqlHybridSplitReader splits;
     private final Map<String, MySqlSnapshotSplit> finishedUnacked = new LinkedHashMap<>();
