@@ -13,7 +13,6 @@ import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogEngine;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.core.data.TableId;
@@ -44,8 +43,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     private volatile byte[] history = new byte[0];
     private volatile MySqlResumeBinlogEvent resume;
     private volatile boolean cancelled;
-    private MySqlHybridBinlogSplit binlogSplit;
-    private MySqlBinlogSplit standalone;
+    private MySqlBinlogSplit binlogSplit;
     private final String fingerprint;
     private BinlogSplitReader filter;
     private MySqlSnapshotSplit active;
@@ -86,23 +84,24 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
                 // output positions preserve both keyed updates and keyless duplicates.
                 pending.addLast(snapshot);
                 if (snapshot.prepared()) released.add(snapshot.splitId());
-            } else if (split instanceof MySqlHybridBinlogSplit stream) {
-                if (binlogSplit != null) throw new IllegalStateException("Hybrid Reader already owns Binlog");
-                binlogSplit = stream;
-                history = stream.binlog().schemaHistory();
-                if (stream.phase() == MySqlHybridBinlogSplit.Phase.BOOTSTRAP) startBinlog(stream);
-                else if (stream.phase() == MySqlHybridBinlogSplit.Phase.STREAMING) startStreaming(stream);
             } else if (split instanceof MySqlBinlogSplit stream) {
-                if (binlogSplit != null || standalone != null) {
-                    throw new IllegalStateException("MySQL Binlog Reader already has a stream");
+                if (binlogSplit != null) {
+                    throw new IllegalStateException("MySQL Reader already owns a Binlog split");
                 }
-                if (fingerprint == null || !fingerprint.equals(stream.definitionFingerprint())) {
+                if (fingerprint != null && !fingerprint.equals(stream.definitionFingerprint())) {
                     throw new IllegalArgumentException("MySQL Binlog split belongs to another source");
                 }
-                standalone = stream;
-                binlog = new MySqlBinlogEngine(config);
-                binlog.start(stream);
-                streaming = true;
+                binlogSplit = stream;
+                history = stream.schemaHistory();
+                if (stream.phase() == MySqlBinlogSplit.Phase.BOOTSTRAP) {
+                    startBinlog(stream);
+                } else if (stream.phase() == MySqlBinlogSplit.Phase.STREAMING) {
+                    startStreaming(stream);
+                } else if (stream.phase() == MySqlBinlogSplit.Phase.STANDALONE) {
+                    binlog = new MySqlBinlogEngine(config);
+                    binlog.start(stream);
+                    streaming = true;
+                }
             } else throw new IllegalArgumentException("Unknown MySQL split");
         }
     }
@@ -124,7 +123,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
 
     private RecordsWithSplitIds<MySqlFetchedRecord> fetchRecords() throws Exception {
         if (closed || cancelled) throw new IllegalStateException("MySQL hybrid reader is closed or cancelled");
-        if (binlogSplit != null && binlogSplit.phase() == MySqlHybridBinlogSplit.Phase.BOOTSTRAP) {
+        if (binlogSplit != null && binlogSplit.phase() == MySqlBinlogSplit.Phase.BOOTSTRAP) {
             if (bootstrapCandidate == null) bootstrapCandidate = binlog.poll();
             if (bootstrapCandidate == null) return empty();
             byte[] discovered = binlog.snapshotHistory();
@@ -139,7 +138,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             binlogSplit = binlogSplit.withAnchor(first.offset(), history);
             bootstrapCandidate = null;
             return records(
-                    MySqlHybridBinlogSplit.ID, MySqlFetchedRecord.lowWatermark(first.offset()), false);
+                    MySqlBinlogSplit.ID, MySqlFetchedRecord.lowWatermark(first.offset()), false);
         }
         if (active == null && !pending.isEmpty()) {
             active = pending.removeFirst();
@@ -181,24 +180,24 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
         if (streaming) {
             BinlogEvent event = filter == null ? binlog.poll() : filter.poll(binlog);
             if (event != null) {
-                return records(MySqlHybridBinlogSplit.ID, MySqlFetchedRecord.binlog(event), false);
+                return records(MySqlBinlogSplit.ID, MySqlFetchedRecord.binlog(event), false);
             }
         } else Thread.sleep(20);
         return empty();
     }
 
-    private void startBinlog(MySqlHybridBinlogSplit split) throws Exception {
+    private void startBinlog(MySqlBinlogSplit split) throws Exception {
         binlog = new MySqlBinlogEngine(config);
-        binlog.start(split.binlog());
+        binlog.start(split);
     }
 
-    private void startStreaming(MySqlHybridBinlogSplit split) throws Exception {
+    private void startStreaming(MySqlBinlogSplit split) throws Exception {
         filter = BinlogSplitReader.fromFinishedSplits(config.schemas(), split.finishedSplits());
         if (binlog != null) throw new IllegalStateException("Bootstrap Binlog was not closed before handoff");
         // Snapshot backfill connections are no longer needed once this Reader enters streaming.
         snapshots.close();
         binlogSplit = split;
-        history = split.binlog().schemaHistory();
+        history = split.schemaHistory();
         startBinlog(split);
         streaming = true;
     }
