@@ -7,14 +7,43 @@ import java.util.Objects;
  * Describes whether the single unbounded Binlog split is pending or reader-owned.
  *
  * <p>An assigned split is checkpointed by its Reader and Runtime assignment tracker,
- * not duplicated into the enumerator state.
+ * not duplicated into the enumerator state. A returned split remains pending with its offset.
  */
-public record MySqlPendingSplitsState(boolean splitAssigned, MySqlBinlogSplit pendingSplit)
-        implements PendingSplitsState {
+public final class MySqlPendingSplitsState extends PendingSplitsState {
+    private final boolean splitAssigned;
+    private final MySqlBinlogSplit pendingSplit;
 
-    public MySqlPendingSplitsState {
+    public MySqlPendingSplitsState(boolean splitAssigned, MySqlBinlogSplit pendingSplit) {
         if (splitAssigned == (pendingSplit != null)) {
             throw new IllegalArgumentException("Invalid MySQL Binlog assignment state");
         }
+        this.splitAssigned = splitAssigned;
+        this.pendingSplit = pendingSplit;
+    }
+
+    public boolean splitAssigned() {
+        return splitAssigned;
+    }
+
+    public MySqlBinlogSplit pendingSplit() {
+        return pendingSplit;
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) return true;
+        if (!(object instanceof MySqlPendingSplitsState other)) return false;
+        return splitAssigned == other.splitAssigned
+                && Objects.equals(pendingSplit, other.pendingSplit);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(splitAssigned, pendingSplit);
+    }
+
+    @Override
+    public String toString() {
+        return "MySqlPendingSplitsState{assigned=" + splitAssigned + ", pending=" + (pendingSplit != null) + "}";
     }
 }
