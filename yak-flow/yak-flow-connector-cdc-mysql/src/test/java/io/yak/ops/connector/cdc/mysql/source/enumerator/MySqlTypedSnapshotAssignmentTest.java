@@ -10,7 +10,7 @@ import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
@@ -83,8 +83,8 @@ class MySqlTypedSnapshotAssignmentTest {
         assertNull(first.chunkRange().start());
         assertEquals(new BigDecimal("3.00000000"), first.chunkRange().end());
 
-        var saved = (MySqlHybridEnumeratorState) SERIALIZER.deserialize(
-                SERIALIZER.getVersion(), SERIALIZER.serialize((MySqlHybridEnumeratorState) enumerator.snapshotState(5)));
+        var saved = (HybridPendingSplitsState) SERIALIZER.deserialize(
+                SERIALIZER.getVersion(), SERIALIZER.serialize((HybridPendingSplitsState) enumerator.snapshotState(5)));
         assertEquals(0, saved.nextTableIndex());
         assertEquals(1, saved.nextChunkIndex());
         assertEquals(first.chunkRange().end(), saved.nextChunkRange().start());
@@ -109,8 +109,8 @@ class MySqlTypedSnapshotAssignmentTest {
                 1, new FinishedSnapshotSplitsReportEvent(Map.of(first.splitId(), offset(150))));
         assertThrows(IllegalArgumentException.class, () -> recovered.handleSourceEvent(
                 1, new FinishedSnapshotSplitsReportEvent(Map.of("unknown-split", offset(150)))));
-        var resumed = (MySqlHybridEnumeratorState) SERIALIZER.deserialize(
-                SERIALIZER.getVersion(), SERIALIZER.serialize((MySqlHybridEnumeratorState) recovered.snapshotState(6)));
+        var resumed = (HybridPendingSplitsState) SERIALIZER.deserialize(
+                SERIALIZER.getVersion(), SERIALIZER.serialize((HybridPendingSplitsState) recovered.snapshotState(6)));
         assertEquals(first.chunkRange(), resumed.finishedSplitInfos().getFirst().chunkRange());
         assertEquals(offset(150), resumed.finishedSplitInfos().getFirst().highWatermark());
         recovered.close();
@@ -141,8 +141,8 @@ class MySqlTypedSnapshotAssignmentTest {
         var cursor = new ChunkRange(
                 ORDERS, "bucket", LogicalTypeRoot.DECIMAL, first.chunkRange().end(), null);
         assigner.appendPlan(first, 1);
-        var saved = (MySqlHybridEnumeratorState) SERIALIZER.deserialize(
-                SERIALIZER.getVersion(), SERIALIZER.serialize((MySqlHybridEnumeratorState) assigner.snapshotState(9)));
+        var saved = (HybridPendingSplitsState) SERIALIZER.deserialize(
+                SERIALIZER.getVersion(), SERIALIZER.serialize((HybridPendingSplitsState) assigner.snapshotState(9)));
         var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), saved);
         MySqlSnapshotSplit last = planner.planNext(ORDERS, restored.nextTableIndex(), restored.nextChunkIndex(),
                 restored.nextChunkRange());
@@ -196,7 +196,7 @@ class MySqlTypedSnapshotAssignmentTest {
         assertEquals(LogicalTypeRoot.BIGINT, first.chunkRange().type());
         assertEquals(5L, first.chunkRange().end());
         var checkpoint = enumerator.snapshotState(1);
-        assertEquals(5L, ((MySqlHybridEnumeratorState) checkpoint).nextChunkRange().start());
+        assertEquals(5L, ((HybridPendingSplitsState) checkpoint).nextChunkRange().start());
         enumerator.close();
     }
 
@@ -204,7 +204,7 @@ class MySqlTypedSnapshotAssignmentTest {
             Coordinator context,
             MySqlSourceConfig config,
             String url,
-            MySqlHybridEnumeratorState restored) {
+            HybridPendingSplitsState restored) {
         return new MySqlSourceEnumerator(
                 StartupOptions.initial(),
                 context,
