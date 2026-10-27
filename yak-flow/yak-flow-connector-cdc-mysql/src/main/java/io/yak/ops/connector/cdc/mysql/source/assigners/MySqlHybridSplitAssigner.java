@@ -17,14 +17,15 @@ import java.util.Objects;
  * Orchestrates the hybrid source's four stages without performing JDBC or Binlog I/O.
  *
  * <p>The transition from HANDOFF to STREAMING is gated by a completed checkpoint
- * containing all snapshot output, not by a final split delivery acknowledgment.
+ * containing all completed snapshot split watermarks, not by a final split delivery acknowledgment.
  */
 public final class MySqlHybridSplitAssigner
         implements MySqlSplitAssigner<MySqlSplit, MySqlHybridEnumeratorState> {
 
     private final String fingerprint;
     private final MySqlSnapshotSplitAssigner snapshots;
-    private final MySqlHybridBinlogSplitAssigner binlog;
+    private MySqlBinlogSplit pendingBinlog;
+    private boolean binlogAssigned;
     private MySqlHybridEnumeratorState.Phase phase;
     private DebeziumOffset low;
     private DebeziumOffset high;
@@ -43,7 +44,8 @@ public final class MySqlHybridSplitAssigner
         this.fingerprint = Objects.requireNonNull(fingerprint, "fingerprint");
         if (restored == null) {
             snapshots = new MySqlSnapshotSplitAssigner();
-            binlog = new MySqlHybridBinlogSplitAssigner(fingerprint);
+            pendingBinlog = MySqlBinlogSplit.forInitialSnapshot(fingerprint);
+            binlogAssigned = false;
             phase = MySqlHybridEnumeratorState.Phase.BOOTSTRAP;
         } else {
             if (!fingerprint.equals(restored.fingerprint())) {
@@ -56,7 +58,11 @@ public final class MySqlHybridSplitAssigner
             phase = restored.phase();
             low = restored.lowWatermark();
             high = restored.highWatermark();
-            binlog = new MySqlHybridBinlogSplitAssigner(restored.pendingBinlog(), restored.binlogAssigned());
+            pendingBinlog = restored.pendingBinlog();
+            binlogAssigned = restored.binlogAssigned();
+            if (binlogAssigned == (pendingBinlog != null)) {
+                throw new IllegalArgumentException("Binlog assignment and pending split state conflict");
+            }
             snapshots = new MySqlSnapshotSplitAssigner(
                     restored.pendingSnapshots(),
                     restored.assignedSnapshots(),
@@ -73,7 +79,13 @@ public final class MySqlHybridSplitAssigner
     }
 
     public MySqlBinlogSplit nextBinlog(int subtaskId) {
-        return binlog.next(subtaskId);
+        if (subtaskId != 0 || pendingBinlog == null) {
+            return null;
+        }
+        MySqlBinlogSplit next = pendingBinlog;
+        pendingBinlog = null;
+        binlogAssigned = true;
+        return next;
     }
 
     public MySqlSnapshotSplit nextSnapshot() {
@@ -243,8 +255,8 @@ public final class MySqlHybridSplitAssigner
         return new MySqlHybridEnumeratorState(
                 fingerprint,
                 phase,
-                binlog.pending(),
-                binlog.assigned(),
+                pendingBinlog,
+                binlogAssigned,
                 low,
                 high,
                 snapshots.planned(),
@@ -273,7 +285,11 @@ public final class MySqlHybridSplitAssigner
     }
 
     public void addBack(MySqlBinlogSplit split) {
-        binlog.addBack(split);
+        if (pendingBinlog != null || !binlogAssigned) {
+            throw new IllegalStateException("Binlog is not assigned");
+        }
+        pendingBinlog = Objects.requireNonNull(split, "split");
+        binlogAssigned = false;
     }
 
     public void addBack(MySqlSnapshotSplit split) {
