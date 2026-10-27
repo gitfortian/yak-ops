@@ -24,7 +24,7 @@ This YOIP defines these boundaries and their recovery semantics. It does not cla
 
 - **Core Connector API:** Keep `Source`, `SourceReader`, `SplitEnumerator`, `InputStatus`, `Sink`, and `SinkWriter` unchanged. `END_OF_INPUT` remains a Reader-local result.
 - **Internal Runtime protocol:** Specify logical `EndOfData` separately from physical `EndOfPartition`. Introducing actual events is deferred until they have an execution and checkpoint consumer.
-- **Checkpoint format:** Future finished-operator/subtask information is versioned and keyed by stable logical operator UID (and subtask index where needed). The current file format versions 1 and 2 remain readable, without inferred finish markers.
+- **Checkpoint format:** Runtime writes one complete v5 checkpoint metadata layout, keyed by stable operator UID (and subtask index), and atomically publishes a CRC-protected v6 latest pointer. Historical v1-v4 checkpoint formats are not readable by the new runtime; migration requires an explicit stop-and-reinitialize plan after resolving prepared XA transactions.
 - **Product interfaces:** No REST, plugin SPI, persisted task-definition, Flyway, frontend, or user-facing configuration changes. No new public Job status is proposed.
 
 ## Proposed Changes
@@ -75,6 +75,16 @@ Without a required final checkpoint, successful data processing and required out
 - **Trigger roots:** Build a consistent checkpoint plan from active/finished Executions. A logically finished but still running Source may emit a control barrier through its mailbox without polling more records. If its physical Task is already finished, the nearest running downstream Tasks with no running upstream become checkpoint roots. Do not call `pauseAndEmitBarrier()` on terminated Source Tasks, await ACKs from terminated Tasks, or fabricate barriers/ACKs; channels already physically finished are accounted for as terminal in the plan.
 - **Finished-operator ACK:** A Task that has logically finished but still participates in checkpointing must acknowledge through a finished-state path, not re-execute its operators. In particular, current `SinkWriterOperator.snapshotState()` rejects calls after `finish()`: Stage B must not use its normal writer snapshot/`flush(false)` path after final `flush(true)`. A finished marker is valid only after all final records and required recoverable state/commit obligations are covered; otherwise retain an actual recoverable state or decline the checkpoint. Never call `finish()` or `flush(true)` again to retry a checkpoint.
 - **Checkpoint/EOF race:** If a terminal event prevents the planned barrier cut, decline only that attempt and re-plan from the latest Execution state. Normal data stays intact. A new plan must not block on a finished Source or a Writer already closed for records.
+
+### Completed checkpoint storage and task-definition identity
+
+The local Runtime uses two distinct owners. `PendingCheckpoint` tracks planned Source/Operator ACKs and cannot be persisted until every required participant acknowledges; `CompletedCheckpointStore` exposes only durably published state. The local filesystem implementation stores immutable `checkpoints/chk-<id>/_metadata` files, then atomically replaces `checkpoint.bin` with a small CRC-protected pointer to the latest completed ID. It fsyncs checkpoint bytes and both metadata directory entries before reporting successful publication. By default it retains the latest two checkpoint metadata directories; only the newest published pointer is selected for automatic recovery, with no silent fallback.
+
+The metadata payload uses format v5 and always contains Enumerator State, Reader Splits, assignments, Operator States, finished Operator/Subtask markers, and optional Schema Manager State. The pointer is format v6. A damaged pointer, missing metadata, CRC mismatch, unsupported version, or wrong task-definition identity is a recovery failure—not permission to restart MySQL CDC from another binlog position.
+
+The Data Sync submission layer binds the checkpoint to trusted workspace, Task Definition ID, definition version, and Instance ID. This identity is included in the Runtime graph-signature digest, not embedded in MySQL CDC Split or Enumerator state. A new definition version or another task instance must not restore even if the physical job topology happens to match. Generic Runtime jobs without a trusted Task Definition identity retain topology-only validation.
+
+**Upgrade boundary:** Existing `checkpoint.bin` version 1–4 files are not migrated in place. Stop the task, settle or recover any prepared XA transactions, preserve the old state for investigation, and explicitly decide whether to start a new instance. Do not delete old checkpoints and silently resume with `LATEST_OFFSET` or `INITIAL`: either action could lose or duplicate previously committed data. The existing local file layout is not byte-compatible with Apache Flink's state backend.
 
 ### Checkpoint failure, publication, and notifications
 
