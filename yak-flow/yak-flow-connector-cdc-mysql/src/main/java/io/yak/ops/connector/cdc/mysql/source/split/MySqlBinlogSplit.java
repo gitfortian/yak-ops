@@ -45,6 +45,20 @@ public final class MySqlBinlogSplit extends MySqlSplit implements StreamSplit {
         return new MySqlBinlogSplit(fingerprint, null, new byte[0], Phase.BOOTSTRAP, null, List.of());
     }
 
+    /** Restores an anchored initial split without a second wrapper type. */
+    public static MySqlBinlogSplit forPausedSnapshot(
+            String fingerprint, DebeziumOffset low, byte[] schemaHistory) {
+        return forInitialSnapshot(fingerprint).withAnchor(low, schemaHistory);
+    }
+
+    /** Builds the completed streaming split from its per-chunk high watermarks. */
+    public static MySqlBinlogSplit forCompletedSnapshot(
+            String fingerprint, DebeziumOffset startingOffset, byte[] schemaHistory,
+            DebeziumOffset highWatermark, List<FinishedSnapshotSplitInfo> finished) {
+        return new MySqlBinlogSplit(fingerprint, startingOffset, schemaHistory,
+                Phase.STREAMING, highWatermark, finished);
+    }
+
     private MySqlBinlogSplit(
             String definitionFingerprint,
             DebeziumOffset offset,
