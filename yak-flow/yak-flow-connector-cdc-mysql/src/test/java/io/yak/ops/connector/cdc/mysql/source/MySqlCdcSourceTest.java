@@ -1,5 +1,11 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
+import io.yak.ops.core.api.connector.source.ReaderInfo;
+import io.yak.ops.core.api.connector.source.SplitsAssignment;
+import io.yak.ops.core.api.metrics.Gauge;
+import io.yak.ops.core.api.metrics.groups.SplitEnumeratorMetricGroup;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -31,10 +37,10 @@ class MySqlCdcSourceTest {
         FakeContext context = new FakeContext();
         var enumerator = source.createEnumerator(context);
         enumerator.start();
-        enumerator.handleSplitRequest(0);
+        enumerator.handleSplitRequest(0, null);
         assertEquals(1, context.assignments);
         assertNotNull(context.last);
-        enumerator.handleSplitRequest(0);
+        enumerator.handleSplitRequest(0, null);
         assertEquals(1, context.assignments);
         MySqlPendingSplitsState state = (MySqlPendingSplitsState) enumerator.snapshotState(1L);
         assertTrue(state.splitAssigned());
@@ -42,7 +48,7 @@ class MySqlCdcSourceTest {
         FakeContext restoredContext = new FakeContext();
         var restored = source.restoreEnumerator(restoredContext, state);
         restored.start();
-        restored.handleSplitRequest(0);
+        restored.handleSplitRequest(0, null);
         assertEquals(0, restoredContext.assignments);
         enumerator.close();
         restored.close();
@@ -114,8 +120,28 @@ class MySqlCdcSourceTest {
         }
 
         @Override
-        public Set<Integer> registeredReaders() {
-            return Set.of(0);
+        public Map<Integer, ReaderInfo> registeredReaders() { return Map.of(0, new ReaderInfo(0, "")); }
+
+        @Override
+        public SplitEnumeratorMetricGroup metricGroup() {
+            return new SplitEnumeratorMetricGroup() {
+                @Override
+                public <G extends Gauge<Long>> G setUnassignedSplitsGauge(G gauge) {
+                    return gauge;
+                }
+            };
+        }
+
+        @Override
+        public void assignSplits(SplitsAssignment<MySqlSplit> assignment) {
+            assignment.assignment().forEach((reader, splits) ->
+                    splits.forEach(split -> assignSplit(split, reader)));
+        }
+
+        @Override
+        public <T> void callAsync(Callable<T> action, BiConsumer<T, Throwable> handler,
+                long initialDelayMillis, long periodMillis) {
+            throw new UnsupportedOperationException("Fixture does not schedule periodic discovery");
         }
 
         @Override
