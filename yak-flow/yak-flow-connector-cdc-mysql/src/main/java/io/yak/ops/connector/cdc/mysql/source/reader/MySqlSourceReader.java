@@ -1,6 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
+import io.yak.ops.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
@@ -9,13 +10,17 @@ import io.yak.ops.connector.cdc.mysql.source.events.MySqlSnapshotFinishedEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
+import io.yak.ops.core.api.connector.source.InputStatus;
+import io.yak.ops.core.api.connector.source.ReaderOutput;
 import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
+import io.yak.ops.core.data.TableRecord;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Mailbox-owned SourceReader for parallel snapshot ranges and one deferred Binlog stream.
@@ -24,9 +29,12 @@ import java.util.Objects;
  * the Enumerator confirms receipt of their completion. The Binlog gate opens only through
  * a coordinator event after the snapshot handoff checkpoint completes.
  */
-public final class MySqlSourceReader extends MySqlSourceReaderBase<MySqlFetchedRecord, MySqlSplit, MySqlSplitState> {
+public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBase<MySqlFetchedRecord, TableRecord, MySqlSplit, MySqlSplitState> {
 
     private final MySqlSplitReader splits;
+    private final SchemaChangeHandler schemaChanges;
+    private final TableMetrics metrics;
+    private final long generation;
     private final boolean initial;
     private final Map<String, MySqlSnapshotSplit> finishedUnacked = new LinkedHashMap<>();
     private MySqlResumeBinlogEvent resumeEvent;
@@ -57,14 +65,30 @@ public final class MySqlSourceReader extends MySqlSourceReaderBase<MySqlFetchedR
             TableMetrics metrics,
             SchemaChangeHandler schemaChanges,
             boolean initial) {
-        super(
-                () -> splits,
-                new MySqlRecordEmitter(context, splits, metrics, schemaChanges),
-                context,
-                schemaChanges,
-                metrics);
+        super(() -> splits, new MySqlRecordEmitter(context, splits, metrics, schemaChanges), context);
+        this.schemaChanges = Objects.requireNonNull(schemaChanges, "schemaChanges");
+        this.metrics = Objects.requireNonNull(metrics, "metrics");
+        this.generation = metrics.generation();
         this.splits = splits;
         this.initial = initial;
+    }
+
+    @Override
+    public final InputStatus pollNext(ReaderOutput<TableRecord> output) throws Exception {
+        return schemaChanges.tryCompleteSchemaChange()
+                ? super.pollNext(output)
+                : InputStatus.NOTHING_AVAILABLE;
+    }
+
+    @Override
+    public final CompletableFuture<Void> isAvailable() {
+        CompletableFuture<Void> pending = schemaChanges.getAvailableFuture();
+        return pending == null ? super.isAvailable() : pending;
+    }
+
+    @Override
+    public final void start() {
+        context.sendSplitRequest();
     }
 
     @Override
@@ -97,6 +121,7 @@ public final class MySqlSourceReader extends MySqlSourceReaderBase<MySqlFetchedR
 
     @Override
     public List<MySqlSplit> snapshotState(long checkpointId) {
+        schemaChanges.requireNoPendingSchemaChange();
         List<MySqlSplit> active = new ArrayList<>(super.snapshotState(checkpointId));
         forEachActiveSplitState(state -> state.snapshotCheckpoint(checkpointId));
         acknowledged.forEach(id -> finishedCheckpoint.putIfAbsent(id, checkpointId));
