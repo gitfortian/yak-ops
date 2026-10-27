@@ -84,7 +84,7 @@ class MySqlTypedSnapshotAssignmentTest {
         assertNull(first.chunkRange().start());
         assertEquals(new BigDecimal("3.00000000"), first.chunkRange().end());
 
-        var saved = SERIALIZER.deserialize(
+        var saved = (MySqlHybridEnumeratorState) SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize((MySqlHybridEnumeratorState) enumerator.snapshotState(5)));
         assertEquals(0, saved.nextTableIndex());
         assertEquals(1, saved.nextChunkIndex());
@@ -110,7 +110,7 @@ class MySqlTypedSnapshotAssignmentTest {
                 1, new FinishedSnapshotSplitsReportEvent(Map.of(first.splitId(), offset(150))));
         assertThrows(IllegalArgumentException.class, () -> recovered.handleSourceEvent(
                 1, new FinishedSnapshotSplitsReportEvent(Map.of("unknown-split", offset(150)))));
-        var resumed = SERIALIZER.deserialize(
+        var resumed = (MySqlHybridEnumeratorState) SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize((MySqlHybridEnumeratorState) recovered.snapshotState(6)));
         assertEquals(first.chunkRange(), resumed.finishedSplitInfos().getFirst().chunkRange());
         assertEquals(offset(150), resumed.finishedSplitInfos().getFirst().highWatermark());
@@ -142,7 +142,7 @@ class MySqlTypedSnapshotAssignmentTest {
         var cursor = new ChunkRange(
                 ORDERS, "bucket", LogicalTypeRoot.DECIMAL, first.chunkRange().end(), null);
         assigner.appendPlan(first, 1);
-        var saved = SERIALIZER.deserialize(
+        var saved = (MySqlHybridEnumeratorState) SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize((MySqlHybridEnumeratorState) assigner.snapshotState(9)));
         var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), FINGERPRINT, saved);
         MySqlSnapshotSplit last = planner.planNext(
