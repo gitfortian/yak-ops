@@ -35,7 +35,7 @@ import java.util.zip.CRC32;
  * A checkpoint is published only after the file is synced and atomically replaced.
  * Corrupted or incompatible state is rejected rather than silently ignored.
  */
-public final class FileCheckpointStore implements AutoCloseable {
+public final class FileCheckpointStore implements CompletedCheckpointStore {
 
     private static final int MAGIC = 0x59414B43; // YAKC
     /** One complete Source-to-Sink snapshot layout. Older formats are intentionally unsupported. */
