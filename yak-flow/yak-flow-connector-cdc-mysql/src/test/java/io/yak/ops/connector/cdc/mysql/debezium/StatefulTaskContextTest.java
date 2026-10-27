@@ -40,7 +40,7 @@ class StatefulTaskContextTest {
         StatefulTaskContext context = new StatefulTaskContext(config(), 5400);
         DebeziumOffset restored = offset(4L);
         byte[] history = new byte[] {1, 2, 3};
-        context.configure(new MySqlBinlogSplit("fingerprint", restored, history));
+        context.configure(new MySqlBinlogSplit(restored, history));
 
         history[0] = 9;
         assertArrayEquals(new byte[] {1, 2, 3}, context.restoredSchemaHistory());
@@ -55,11 +55,11 @@ class StatefulTaskContextTest {
     void contextRejectsMissingSchemaHistoryAndRepeatedConfiguration() {
         StatefulTaskContext context = new StatefulTaskContext(config(), 5400);
         assertThrows(IllegalArgumentException.class,
-                () -> context.configure(new MySqlBinlogSplit("fingerprint", offset(4L), new byte[0])));
+                () -> context.configure(new MySqlBinlogSplit(offset(4L), new byte[0])));
         StatefulTaskContext fresh = new StatefulTaskContext(config(), 5400);
-        fresh.configure(new MySqlBinlogSplit("fingerprint", null, new byte[0]));
+        fresh.configure(new MySqlBinlogSplit(null, new byte[0]));
         assertThrows(IllegalStateException.class,
-                () -> fresh.configure(new MySqlBinlogSplit("fingerprint", null, new byte[0])));
+                () -> fresh.configure(new MySqlBinlogSplit(null, new byte[0])));
     }
 
     @Test
