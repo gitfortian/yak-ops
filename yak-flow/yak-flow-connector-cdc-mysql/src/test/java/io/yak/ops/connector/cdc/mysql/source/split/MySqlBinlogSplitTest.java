@@ -52,6 +52,22 @@ class MySqlBinlogSplitTest {
     }
 
     @Test
+    void suspendedStreamingSplitDoesNotLoseOffsetOrFinishedMetadata() {
+        var high = offset(300);
+        var finished = List.of(new FinishedSnapshotSplitInfo(TABLE, "chunk", null, null, high));
+        var streaming = MySqlBinlogSplit.forPausedSnapshot("source", offset(100), new byte[] {1, 2})
+                .startStreaming(high, finished).withEmittedOffset(offset(350), new byte[] {1, 2});
+        var suspended = MySqlBinlogSplit.toSuspendedBinlogSplit(streaming);
+        assertTrue(suspended.isSuspended());
+        assertEquals(offset(350), suspended.offset());
+        assertEquals(finished, suspended.finishedSplits());
+        var resumed = MySqlBinlogSplit.toNormalBinlogSplit(suspended);
+        assertEquals(offset(350), resumed.offset());
+        assertEquals(finished, resumed.finishedSplits());
+        assertEquals(MySqlBinlogSplit.Phase.STREAMING, resumed.phase());
+    }
+
+    @Test
     void serializerPersistsPhaseAndCompletedMetadata() throws Exception {
         var high = offset(200);
         var finished = List.of(new FinishedSnapshotSplitInfo(TABLE, "chunk", null, null, high));
