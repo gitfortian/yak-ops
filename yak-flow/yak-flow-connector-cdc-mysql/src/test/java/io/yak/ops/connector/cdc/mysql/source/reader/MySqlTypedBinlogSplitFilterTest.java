@@ -15,7 +15,6 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.debezium.reader.BinlogSplitReader.FinishedChunk;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
