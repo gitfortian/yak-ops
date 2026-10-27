@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
 import io.yak.ops.connector.base.metrics.TableMetrics;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
@@ -334,8 +334,8 @@ class MySqlHybridIT {
             enumerator.start();
             for(int i=0;i<readers.size();i++) { enumerator.addReader(i); readers.get(i).start(); }
         }
-        private MySqlHybridEnumeratorState state() throws Exception { return (MySqlHybridEnumeratorState) enumerator.snapshotState(checkpoint+1); }
-        private boolean streaming() throws Exception { return state().phase()==MySqlHybridEnumeratorState.Phase.STREAMING; }
+        private HybridPendingSplitsState state() throws Exception { return (HybridPendingSplitsState) enumerator.snapshotState(checkpoint+1); }
+        private boolean streaming() throws Exception { return state().phase()==HybridPendingSplitsState.Phase.STREAMING; }
         private boolean hasPreparedOutput() throws Exception {
             for(var reader:readers) for(var split:reader.snapshotState(checkpoint+1)) {
                 if(split instanceof MySqlSnapshotSplit snapshot && snapshot.output()!=null) return true;
@@ -378,7 +378,7 @@ class MySqlHybridIT {
                 while(!events.isEmpty()) events.removeFirst().run();
                 if(condition.met()) return;
                 if(checkpointAutomatically && (needsPreparationCheckpoint()
-                        || state().phase()==MySqlHybridEnumeratorState.Phase.HANDOFF)) checkpoint();
+                        || state().phase()==HybridPendingSplitsState.Phase.HANDOFF)) checkpoint();
                 Thread.sleep(10);
             }
             throw new AssertionError("Hybrid condition timed out; phase="+state().phase()+", rows="+observed.size());
