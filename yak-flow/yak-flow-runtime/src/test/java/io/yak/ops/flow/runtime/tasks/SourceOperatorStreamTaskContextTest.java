@@ -195,7 +195,7 @@ class SourceOperatorStreamTaskContextTest {
         public void start() {}
 
         @Override
-        public void handleSplitRequest(int subtaskId) {
+        public void handleSplitRequest(int subtaskId, String requesterHostname) {
             requests.incrementAndGet();
             context.assignSplit(new TestSplit("split-" + subtaskId), subtaskId);
             context.sendEventToSourceReader(subtaskId, new ProbeSourceEvent("hello"));

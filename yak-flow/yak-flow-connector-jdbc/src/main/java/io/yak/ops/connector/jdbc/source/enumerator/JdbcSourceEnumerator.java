@@ -82,11 +82,11 @@ public final class JdbcSourceEnumerator implements SplitEnumerator<JdbcSourceSpl
     }
 
     @Override
-    public void handleSplitRequest(int subtaskId) {
+    public void handleSplitRequest(int subtaskId, String requesterHostname) {
         if (closed || finishedReaders.contains(subtaskId)) {
             return;
         }
-        if (!context.registeredReaders().contains(subtaskId)) {
+        if (!context.registeredReaders().containsKey(subtaskId)) {
             throw new IllegalArgumentException("JDBC reader is not registered: " + subtaskId);
         }
         waitingReaders.add(subtaskId);
@@ -119,7 +119,7 @@ public final class JdbcSourceEnumerator implements SplitEnumerator<JdbcSourceSpl
         for (JdbcSourceSplit split : returned) {
             pending.addLast(split);
         }
-        if (context.registeredReaders().contains(subtaskId)) {
+        if (context.registeredReaders().containsKey(subtaskId)) {
             waitingReaders.add(subtaskId);
         }
         drainRequests();
@@ -179,7 +179,7 @@ public final class JdbcSourceEnumerator implements SplitEnumerator<JdbcSourceSpl
     private void drainRequests() {
         while (!pending.isEmpty() && !waitingReaders.isEmpty()) {
             int subtaskId = waitingReaders.iterator().next();
-            if (!context.registeredReaders().contains(subtaskId) || finishedReaders.contains(subtaskId)) {
+            if (!context.registeredReaders().containsKey(subtaskId) || finishedReaders.contains(subtaskId)) {
                 waitingReaders.remove(subtaskId);
                 continue;
             }
@@ -196,7 +196,7 @@ public final class JdbcSourceEnumerator implements SplitEnumerator<JdbcSourceSpl
         if (!started || planning || nextTableIndex < tables.size() || !pending.isEmpty() || closed) {
             return;
         }
-        for (int id : context.registeredReaders()) {
+        for (int id : context.registeredReaders().keySet()) {
             if (finishedReaders.add(id)) {
                 context.signalNoMoreSplits(id);
             }

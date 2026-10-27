@@ -2,6 +2,10 @@ package io.yak.ops.flow.runtime.source.coordinator;
 
 import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SourceSplit;
+import io.yak.ops.core.api.connector.source.ReaderInfo;
+import io.yak.ops.core.api.connector.source.SplitsAssignment;
+import io.yak.ops.core.api.metrics.Gauge;
+import io.yak.ops.core.api.metrics.groups.SplitEnumeratorMetricGroup;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import io.yak.ops.flow.runtime.execution.RuntimeTaskInfo;
@@ -13,6 +17,7 @@ import io.yak.ops.flow.runtime.source.event.SourceEventWrapper;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -21,6 +26,8 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -39,11 +46,20 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
     private final OperatorCoordinatorContext operatorContext;
     private final SimpleVersionedSerializer<SplitT> splitSerializer;
     private final ExecutorService coordinatorExecutor;
-    private final ExecutorService discoveryExecutor;
+    private final ScheduledExecutorService discoveryExecutor;
     private final Supplier<Thread> coordinatorThread;
     private final Consumer<Throwable> onFailure;
     private final IntConsumer plannedSplits;
     private final SplitAssignmentTracker<SplitT> assignments = new SplitAssignmentTracker<>();
+    private Gauge<Long> unassignedSplitsGauge;
+    private final SplitEnumeratorMetricGroup metricGroup = new SplitEnumeratorMetricGroup() {
+        @Override
+        public <G extends Gauge<Long>> G setUnassignedSplitsGauge(G gauge) {
+            assertCoordinatorThread();
+            unassignedSplitsGauge = Objects.requireNonNull(gauge, "gauge");
+            return gauge;
+        }
+    };
     private final Map<Integer, SubtaskGateway> readers = new HashMap<>();
     private final Map<Integer, RuntimeTaskInfo> readerIdentities = new HashMap<>();
     private final Map<String, Integer> inFlight = new HashMap<>();
@@ -59,7 +75,7 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
             OperatorCoordinatorContext operatorContext,
             SimpleVersionedSerializer<SplitT> splitSerializer,
             ExecutorService coordinatorExecutor,
-            ExecutorService discoveryExecutor,
+            ScheduledExecutorService discoveryExecutor,
             Supplier<Thread> coordinatorThread,
             Consumer<Throwable> onFailure,
             IntConsumer plannedSplits) {
@@ -175,43 +191,97 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
     }
 
     @Override
-    public Set<Integer> registeredReaders() {
+    public SplitEnumeratorMetricGroup metricGroup() {
         assertCoordinatorThread();
-        return Set.copyOf(readers.keySet());
+        return metricGroup;
     }
 
     @Override
-    public void assignSplit(SplitT split, int subtaskId) {
+    public Map<Integer, ReaderInfo> registeredReaders() {
         assertCoordinatorThread();
-        if (!canAssignSplit(subtaskId)) {
-            throw new IllegalStateException("Cannot assign splits after NoMoreSplits: " + subtaskId);
+        Map<Integer, ReaderInfo> registered = new HashMap<>();
+        readerIdentities.forEach((subtask, identity) -> registered.put(subtask, new ReaderInfo(subtask, null)));
+        return Map.copyOf(registered);
+    }
+
+    @Override
+    public Map<Integer, Map<Integer, ReaderInfo>> registeredReadersOfAttempts() {
+        assertCoordinatorThread();
+        Map<Integer, Map<Integer, ReaderInfo>> attempts = new HashMap<>();
+        readerIdentities.forEach((subtask, task) ->
+                attempts.put(subtask, Map.of(task.attemptNumber(), new ReaderInfo(subtask, null))));
+        return Map.copyOf(attempts);
+    }
+
+    @Override
+    public void assignSplits(SplitsAssignment<SplitT> newSplitAssignments) {
+        assertCoordinatorThread();
+        Map<Integer, List<SplitT>> requested =
+                Objects.requireNonNull(newSplitAssignments, "newSplitAssignments").assignment();
+        if (requested.isEmpty()) {
+            return;
         }
-        String splitId = Objects.requireNonNull(split, "split").splitId();
-        if (inFlight.putIfAbsent(splitId, subtaskId) != null) {
-            throw new IllegalArgumentException("Duplicate in-flight split delivery: " + splitId);
-        }
-        try {
-            AddSplitEvent<SplitT> event = new AddSplitEvent<>(List.of(split), splitSerializer);
-            assignments.recordAssignment(subtaskId, split);
-            CompletionStage<Void> delivered =
-                    Objects.requireNonNull(readers.get(subtaskId).sendEvent(event), "SubtaskGateway returned null");
-            delivered.whenComplete((unused, error) -> post(() -> {
-                if (error != null) {
-                    onFailure.accept(new IllegalStateException("Split delivery failed: " + splitId, error));
-                } else {
-                    inFlight.remove(splitId);
-                    maybeSendNoMore(subtaskId);
+
+        // Validate and serialize the entire batch before making any assignment visible.
+        // A delivery failure afterwards fails the job and restores the last durable checkpoint.
+        Set<String> splitIds = new LinkedHashSet<>();
+        Set<String> outstandingIds = new HashSet<>(inFlight.keySet());
+        assignments.outstandingAssignments().values().forEach(splits ->
+                splits.forEach(split -> outstandingIds.add(split.splitId())));
+        Map<Integer, AddSplitEvent<SplitT>> events = new HashMap<>();
+        for (Map.Entry<Integer, List<SplitT>> entry : requested.entrySet()) {
+            int reader = Objects.requireNonNull(entry.getKey(), "reader");
+            if (!canAssignSplit(reader)) {
+                throw new IllegalStateException("Cannot assign splits after NoMoreSplits: " + reader);
+            }
+            List<SplitT> splits = List.copyOf(Objects.requireNonNull(entry.getValue(), "splits"));
+            if (splits.isEmpty()) {
+                throw new IllegalArgumentException("Empty split assignment for reader " + reader);
+            }
+            for (SplitT split : splits) {
+                String splitId = Objects.requireNonNull(split, "split").splitId();
+                if (splitId == null || splitId.isBlank()
+                        || !splitIds.add(splitId) || outstandingIds.contains(splitId)) {
+                    throw new IllegalArgumentException("Duplicate or invalid split assignment: " + splitId);
                 }
-            }));
-        } catch (Throwable error) {
-            onFailure.accept(error);
-            if (error instanceof RuntimeException runtime) {
-                throw runtime;
             }
-            if (error instanceof Error serious) {
-                throw serious;
+            try {
+                events.put(reader, new AddSplitEvent<>(splits, splitSerializer));
+            } catch (java.io.IOException failure) {
+                onFailure.accept(failure);
+                throw new IllegalStateException("Split serialization failed", failure);
             }
-            throw new IllegalStateException("Split serialization or delivery failed", error);
+        }
+
+        for (Map.Entry<Integer, List<SplitT>> entry : requested.entrySet()) {
+            int reader = entry.getKey();
+            List<SplitT> splits = entry.getValue();
+            List<String> ids = splits.stream().map(SourceSplit::splitId).toList();
+            for (SplitT split : splits) {
+                inFlight.put(split.splitId(), reader);
+                assignments.recordAssignment(reader, split);
+            }
+            try {
+                CompletionStage<Void> delivered = Objects.requireNonNull(
+                        readers.get(reader).sendEvent(events.get(reader)), "SubtaskGateway returned null");
+                delivered.whenComplete((unused, error) -> post(() -> {
+                    if (error != null) {
+                        onFailure.accept(new IllegalStateException("Split delivery failed: " + ids, error));
+                    } else {
+                        ids.forEach(inFlight::remove);
+                        maybeSendNoMore(reader);
+                    }
+                }));
+            } catch (Throwable failure) {
+                onFailure.accept(failure);
+                if (failure instanceof RuntimeException runtime) {
+                    throw runtime;
+                }
+                if (failure instanceof Error serious) {
+                    throw serious;
+                }
+                throw new IllegalStateException("Split delivery failed", failure);
+            }
         }
     }
 
@@ -277,6 +347,16 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
     }
 
     @Override
+    public void sendEventToSourceReader(int subtaskId, int attemptNumber, SourceEvent event) {
+        assertCoordinatorThread();
+        RuntimeTaskInfo active = readerIdentities.get(subtaskId);
+        if (active == null || active.attemptNumber() != attemptNumber) {
+            throw new IllegalStateException("No registered reader attempt " + subtaskId + "/" + attemptNumber);
+        }
+        sendEventToSourceReader(subtaskId, event);
+    }
+
+    @Override
     public <T> void callAsync(Callable<T> action, BiConsumer<T, Throwable> handler) {
         assertCoordinatorThread();
         Objects.requireNonNull(action, "action must not be null");
@@ -300,6 +380,39 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
                 }
             });
         });
+    }
+
+    @Override
+    public <T> void callAsync(
+            Callable<T> action,
+            BiConsumer<T, Throwable> handler,
+            long initialDelayMillis,
+            long periodMillis) {
+        assertCoordinatorThread();
+        Objects.requireNonNull(action, "action");
+        Objects.requireNonNull(handler, "handler");
+        if (initialDelayMillis < 0 || periodMillis <= 0) {
+            throw new IllegalArgumentException("Invalid periodic discovery interval");
+        }
+        discoveryExecutor.scheduleWithFixedDelay(() -> {
+            T value = null;
+            Throwable error = null;
+            try {
+                value = action.call();
+            } catch (Throwable failure) {
+                error = failure;
+            }
+            T result = value;
+            Throwable failure = error;
+            post(() -> {
+                Runnable callback = () -> handler.accept(result, failure);
+                if (checkpointPaused) {
+                    postponedDiscoveryCallbacks.add(callback);
+                } else {
+                    callback.run();
+                }
+            });
+        }, initialDelayMillis, periodMillis, TimeUnit.MILLISECONDS);
     }
 
     @Override

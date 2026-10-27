@@ -1,5 +1,10 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
+import io.yak.ops.core.api.connector.source.ReaderInfo;
+import io.yak.ops.core.api.connector.source.SplitsAssignment;
+import io.yak.ops.core.api.metrics.Gauge;
+import io.yak.ops.core.api.metrics.groups.SplitEnumeratorMetricGroup;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -173,8 +178,28 @@ class MySqlChunkKeySelectionTest {
         }
 
         @Override
-        public Set<Integer> registeredReaders() {
-            return Set.of();
+        public Map<Integer, ReaderInfo> registeredReaders() { return Map.of(); }
+
+        @Override
+        public SplitEnumeratorMetricGroup metricGroup() {
+            return new SplitEnumeratorMetricGroup() {
+                @Override
+                public <G extends Gauge<Long>> G setUnassignedSplitsGauge(G gauge) {
+                    return gauge;
+                }
+            };
+        }
+
+        @Override
+        public void assignSplits(SplitsAssignment<MySqlSplit> assignment) {
+            assignment.assignment().forEach((reader, splits) ->
+                    splits.forEach(split -> assignSplit(split, reader)));
+        }
+
+        @Override
+        public <T> void callAsync(Callable<T> action, BiConsumer<T, Throwable> handler,
+                long initialDelayMillis, long periodMillis) {
+            throw new UnsupportedOperationException("Fixture does not schedule periodic discovery");
         }
 
         @Override

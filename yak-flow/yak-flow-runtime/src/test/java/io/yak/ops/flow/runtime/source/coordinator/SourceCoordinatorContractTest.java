@@ -14,6 +14,7 @@ import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SourceSplit;
 import io.yak.ops.core.api.connector.source.SplitEnumerator;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
+import io.yak.ops.core.api.connector.source.SplitsAssignment;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import io.yak.ops.flow.runtime.support.TestSplitSerializers;
 import io.yak.ops.flow.runtime.checkpoint.SourceCoordinatorCheckpoint;
@@ -141,6 +142,30 @@ class SourceCoordinatorContractTest {
             assertEquals(7, checkpoint.checkpointId());
             assertEquals(List.of(new TestSplit("split-0")),
                     checkpoint.assignedSinceLastCompletedCheckpoint().get(0));
+        }
+    }
+
+    @Test
+    void shouldBatchSplitsIntoOneEventAndIncludeBothInCoordinatorCheckpoint() throws Exception {
+        JobID jobID = JobID.generate();
+        RuntimeTaskInfo reader = new RuntimeTaskInfo(jobID, 11, 0, 1, 0, 128);
+        RecordingSource source = new RecordingSource(true, false, false, true);
+        List<OperatorEvent> events = new CopyOnWriteArrayList<>();
+
+        try (SourceCoordinator<TestSplit, Integer> coordinator =
+                new SourceCoordinator<>(source, new OperatorCoordinatorContext(jobID, 11, 1))) {
+            coordinator.start().get(5, TimeUnit.SECONDS);
+            coordinator.registerReader(reader, event -> {
+                events.add(event);
+                return CompletableFuture.completedFuture(null);
+            }).get(5, TimeUnit.SECONDS);
+            coordinator.handleEventFromOperator(reader, new RequestSplitEvent(0, 0)).get(5, TimeUnit.SECONDS);
+
+            AddSplitEvent<?> assigned = assertInstanceOf(AddSplitEvent.class, events.getFirst());
+            assertEquals(2, assigned.splitCount());
+            SourceCoordinatorCheckpoint<TestSplit, Integer> state = awaitCoordinatorSnapshot(coordinator, 10);
+            assertEquals(List.of(new TestSplit("batch-0-a"), new TestSplit("batch-0-b")),
+                    state.assignedSinceLastCompletedCheckpoint().get(0));
         }
     }
 
@@ -291,6 +316,7 @@ class SourceCoordinatorContractTest {
 
         private final boolean assignSplits;
         private final boolean failStart;
+        private final boolean batchAssignments;
         private final AtomicBoolean failNextSnapshot;
         private final AtomicInteger snapshots = new AtomicInteger();
         private final AtomicInteger registrations = new AtomicInteger();
@@ -303,8 +329,14 @@ class SourceCoordinatorContractTest {
         }
 
         private RecordingSource(boolean assignSplits, boolean failStart, boolean failNextSnapshot) {
+            this(assignSplits, failStart, failNextSnapshot, false);
+        }
+
+        private RecordingSource(boolean assignSplits, boolean failStart, boolean failNextSnapshot,
+                boolean batchAssignments) {
             this.assignSplits = assignSplits;
             this.failStart = failStart;
+            this.batchAssignments = batchAssignments;
             this.failNextSnapshot = new AtomicBoolean(failNextSnapshot);
         }
 
@@ -324,10 +356,16 @@ class SourceCoordinatorContractTest {
                 }
 
                 @Override
-                public void handleSplitRequest(int subtaskId) {
+                public void handleSplitRequest(int subtaskId, String requesterHostname) {
                     requests.incrementAndGet();
                     if (assignSplits) {
-                        context.assignSplit(new TestSplit("split-" + subtaskId), subtaskId);
+                        if (batchAssignments) {
+                            context.assignSplits(new SplitsAssignment<>(java.util.Map.of(subtaskId,
+                                    List.of(new TestSplit("batch-" + subtaskId + "-a"),
+                                            new TestSplit("batch-" + subtaskId + "-b"))));
+                        } else {
+                            context.assignSplit(new TestSplit("split-" + subtaskId), subtaskId);
+                        }
                         context.signalNoMoreSplits(subtaskId);
                     }
                 }

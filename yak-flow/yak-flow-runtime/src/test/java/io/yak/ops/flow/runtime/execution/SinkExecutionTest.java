@@ -357,7 +357,7 @@ class SinkExecutionTest {
                 public void start() {}
 
                 @Override
-                public void handleSplitRequest(int subtask) {
+                public void handleSplitRequest(int subtask, String requesterHostname) {
                     context.assignSplit(new Split("row-" + subtask), subtask);
                     context.signalNoMoreSplits(subtask);
                 }

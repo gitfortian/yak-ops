@@ -1,5 +1,11 @@
 package io.yak.ops.connector.jdbc.source;
 
+import io.yak.ops.core.api.connector.source.ReaderInfo;
+import io.yak.ops.core.api.connector.source.SplitsAssignment;
+import io.yak.ops.core.api.metrics.Gauge;
+import io.yak.ops.core.api.metrics.groups.SplitEnumeratorMetricGroup;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -36,13 +42,13 @@ class JdbcSourceEnumeratorReliabilityTest {
             enumerator.start();
             assertEquals(1, enumerator.snapshotState(1).pendingSplits().size());
             context.failAssignment = true;
-            assertThrows(IllegalStateException.class, () -> enumerator.handleSplitRequest(0));
+            assertThrows(IllegalStateException.class, () -> enumerator.handleSplitRequest(0, null));
             JdbcEnumeratorState checkpoint = enumerator.snapshotState(2);
             assertEquals(1, checkpoint.pendingSplits().size());
             assertEquals(1, checkpoint.nextTableIndex());
 
             context.failAssignment = false;
-            enumerator.handleSplitRequest(0);
+            enumerator.handleSplitRequest(0, null);
             assertEquals(1, context.assigned.size());
             assertEquals(0, enumerator.snapshotState(3).pendingSplits().size());
             assertTrue(context.finished);
@@ -95,8 +101,28 @@ class JdbcSourceEnumeratorReliabilityTest {
         }
 
         @Override
-        public Set<Integer> registeredReaders() {
-            return Set.of(0);
+        public Map<Integer, ReaderInfo> registeredReaders() { return Map.of(0, new ReaderInfo(0, "")); }
+
+        @Override
+        public SplitEnumeratorMetricGroup metricGroup() {
+            return new SplitEnumeratorMetricGroup() {
+                @Override
+                public <G extends Gauge<Long>> G setUnassignedSplitsGauge(G gauge) {
+                    return gauge;
+                }
+            };
+        }
+
+        @Override
+        public void assignSplits(SplitsAssignment<JdbcSourceSplit> assignment) {
+            assignment.assignment().forEach((reader, splits) ->
+                    splits.forEach(split -> assignSplit(split, reader)));
+        }
+
+        @Override
+        public <T> void callAsync(Callable<T> action, BiConsumer<T, Throwable> handler,
+                long initialDelayMillis, long periodMillis) {
+            throw new UnsupportedOperationException("Fixture does not schedule periodic discovery");
         }
 
         @Override

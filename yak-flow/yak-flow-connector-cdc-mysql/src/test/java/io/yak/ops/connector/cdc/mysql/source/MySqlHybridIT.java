@@ -1,5 +1,10 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
+import io.yak.ops.core.api.connector.source.ReaderInfo;
+import io.yak.ops.core.api.connector.source.SplitsAssignment;
+import io.yak.ops.core.api.metrics.Gauge;
+import io.yak.ops.core.api.metrics.groups.SplitEnumeratorMetricGroup;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 import io.yak.ops.configuration.Configuration;
@@ -391,13 +396,36 @@ class MySqlHybridIT {
             @Override public Configuration getConfiguration(){return new Configuration().set(CheckpointingOptions.CHECKPOINTING_INTERVAL,Duration.ofSeconds(2));}
             @Override public int getIndexOfSubtask(){return id;}
             @Override public int currentParallelism(){return 2;}
-            @Override public void sendSplitRequest(){events.addLast(()->enumerator.handleSplitRequest(id));}
+            @Override public void sendSplitRequest(){events.addLast(()->enumerator.handleSplitRequest(id, null));}
             @Override public void sendSourceEventToCoordinator(SourceEvent event){events.addLast(()->enumerator.handleSourceEvent(id,event));}
         }
         private final class EnumeratorContext implements SplitEnumeratorContext<MySqlSplit> {
             @Override public int currentParallelism(){return 2;}
-            @Override public Set<Integer> registeredReaders(){return Set.of(0,1);}
-            @Override public void assignSplit(MySqlSplit split,int reader){events.addLast(()->readers.get(reader).addSplits(List.of(split)));}
+            @Override public Map<Integer, ReaderInfo> registeredReaders() { return Map.of(0, new ReaderInfo(0, ""), 1, new ReaderInfo(1, "")); }
+            @Override
+        public SplitEnumeratorMetricGroup metricGroup() {
+            return new SplitEnumeratorMetricGroup() {
+                @Override
+                public <G extends Gauge<Long>> G setUnassignedSplitsGauge(G gauge) {
+                    return gauge;
+                }
+            };
+        }
+
+        @Override
+        public void assignSplits(SplitsAssignment<MySqlSplit> assignment) {
+            assignment.assignment().forEach((reader, splits) ->
+                    splits.forEach(split -> assignSplit(split, reader)));
+        }
+
+        @Override
+        public <T> void callAsync(Callable<T> action, BiConsumer<T, Throwable> handler,
+                long initialDelayMillis, long periodMillis) {
+            throw new UnsupportedOperationException("Fixture does not schedule periodic discovery");
+        }
+
+        @Override
+        public void assignSplit(MySqlSplit split,int reader){events.addLast(()->readers.get(reader).addSplits(List.of(split)));}
             @Override public void signalNoMoreSplits(int reader){throw new AssertionError("Unbounded Hybrid reader cannot finish");}
             @Override public void sendEventToSourceReader(int reader,SourceEvent event){events.addLast(()->readers.get(reader).handleSourceEvents(event));}
             @Override public <V> void callAsync(Callable<V> action,BiConsumer<V,Throwable> handler){

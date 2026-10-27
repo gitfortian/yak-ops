@@ -19,6 +19,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
@@ -45,7 +46,7 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
     private final EnumStateT restoredEnumeratorState;
     private final boolean restoring;
     private final ExecutorService eventLoop;
-    private final ExecutorService discovery;
+    private final ScheduledExecutorService discovery;
     private final SourceCoordinatorContext<SplitT> context;
     private final AtomicBoolean startRequested = new AtomicBoolean();
     private final AtomicBoolean closing = new AtomicBoolean();
@@ -136,7 +137,7 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
                 Thread.ofVirtual().name("yak-source-discovery-", 0).factory();
         this.eventLoop = Executors.newSingleThreadExecutor(
                 action -> coordinatorThreads.newThread(withLogId(logId, logDebug, action)));
-        this.discovery = Executors.newSingleThreadExecutor(
+        this.discovery = Executors.newSingleThreadScheduledExecutor(
                 action -> discoveryThreads.newThread(withLogId(logId, logDebug, action)));
         this.context = new SourceCoordinatorContext<>(
                 coordinatorContext,
@@ -259,7 +260,7 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
                 return null;
             }
             try {
-                enumerator.handleSplitRequest(taskInfo.subtaskIndex());
+                enumerator.handleSplitRequest(taskInfo.subtaskIndex(), null);
                 return null;
             } catch (Throwable failure) {
                 fail(failure);
@@ -297,8 +298,8 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
                 checkpointPaused = false;
                 context.resumeAfterCheckpoint();
                 for (Integer subtask : deferredSplitRequests) {
-                    if (context.registeredReaders().contains(subtask)) {
-                        enumerator.handleSplitRequest(subtask);
+                    if (context.registeredReaders().containsKey(subtask)) {
+                        enumerator.handleSplitRequest(subtask, null);
                     }
                 }
                 deferredSplitRequests.clear();
@@ -358,6 +359,7 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
     public CompletableFuture<Void> notifyCheckpointAborted(long checkpointId) {
         validateCheckpointId(checkpointId);
         return submit(() -> {
+            enumerator.notifyCheckpointAborted(checkpointId);
             context.assignmentTracker().notifyCheckpointAborted(checkpointId);
             return null;
         });

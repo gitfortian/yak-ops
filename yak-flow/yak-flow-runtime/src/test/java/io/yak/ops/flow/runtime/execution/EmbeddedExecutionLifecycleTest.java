@@ -472,7 +472,7 @@ class EmbeddedExecutionLifecycleTest {
                 public void addReader(int subtaskId) {}
 
                 @Override
-                public void handleSplitRequest(int subtaskId) {
+                public void handleSplitRequest(int subtaskId, String requesterHostname) {
                     if (failRequest) {
                         throw new IllegalStateException("enumerator request failed");
                     }
