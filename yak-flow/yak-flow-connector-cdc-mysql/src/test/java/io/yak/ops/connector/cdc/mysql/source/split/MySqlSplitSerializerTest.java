@@ -14,16 +14,18 @@ import org.junit.jupiter.api.Test;
 class MySqlSplitSerializerTest {
 
     @Test
-    void roundTripsCursorAndBoundaries() throws Exception {
+    void roundTripsUnfinishedSnapshotBoundariesWithoutCursorImages() throws Exception {
         var serializer = new MySqlSplitSerializer();
         var original = new MySqlSnapshotSplit(
-                "snapshot-0", "fingerprint", new TableId("shop", null, "orders"), 100L, 200L, 143L);
+                "snapshot-0", "fingerprint", new TableId("shop", null, "orders"), 100L, 200L, null);
         MySqlSnapshotSplit restored =
                 (MySqlSnapshotSplit) serializer.deserialize(serializer.getVersion(), serializer.serialize(original));
         assertEquals(original, restored);
         assertThrows(IOException.class, () -> serializer.deserialize(99, serializer.serialize(original)));
         assertThrows(IOException.class, () -> serializer.deserialize(2, serializer.serialize(original)));
-        assertEquals(143L, restored.lastEmittedKey());
+        assertEquals(100L, restored.getSplitStart()[0]);
+        assertEquals(200L, restored.getSplitEnd()[0]);
+        assertEquals(null, restored.output());
     }
 
     @Test
@@ -31,17 +33,14 @@ class MySqlSplitSerializerTest {
         var serializer = new MySqlSplitSerializer();
         var low = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000010", "pos", 100L));
         var high = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000010", "pos", 300L));
-        var bootstrap = new MySqlHybridBinlogSplit(
-                new MySqlBinlogSplit("fingerprint", null, new byte[0]),
-                MySqlHybridBinlogSplit.Phase.BOOTSTRAP,
-                null);
+        var bootstrap = MySqlBinlogSplit.forInitialSnapshot("fingerprint");
         var paused = bootstrap.withAnchor(low, new byte[] {1, 2, 3});
         var running = paused.startStreaming(high, completed(high)).withEmittedOffset(high, new byte[] {1, 2, 3});
-        var restored = (MySqlHybridBinlogSplit) serializer.deserialize(serializer.getVersion(), serializer.serialize(running));
-        assertEquals(MySqlHybridBinlogSplit.Phase.STREAMING, restored.phase());
+        var restored = (MySqlBinlogSplit) serializer.deserialize(serializer.getVersion(), serializer.serialize(running));
+        assertEquals(MySqlBinlogSplit.Phase.STREAMING, restored.phase());
         assertEquals(high, restored.highWatermark());
-        assertEquals(high, restored.binlog().offset());
-        assertArrayEquals(new byte[] {1, 2, 3}, restored.binlog().schemaHistory());
+        assertEquals(high, restored.offset());
+        assertArrayEquals(new byte[] {1, 2, 3}, restored.schemaHistory());
         assertArrayEquals(serializer.serialize(running), serializer.serialize(restored));
         assertThrows(IllegalStateException.class, () -> paused.withEmittedOffset(high, new byte[] {1}));
     }

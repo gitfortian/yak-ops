@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-/** Real MySQL no-PK snapshot, Debezium events, watermarks and frozen Checkpoint transport. */
+/** Real MySQL no-PK snapshot, Debezium events, watermarks and in-memory completed-chunk emission and metadata-only recovery. */
 @Tag("cdc-snapshot")
 @Timeout(180)
 class MySqlKeylessBackfillIT {
@@ -79,24 +79,16 @@ class MySqlKeylessBackfillIT {
                 assertTrue(results.stream().allMatch(r -> r.row().getLong(0) == 1L));
 
                 var serializer = new MySqlSplitSerializer();
-                var restored = (MySqlSnapshotSplit)
-                        serializer.deserialize(serializer.getVersion(), serializer.serialize(prepared));
-                assertEquals(prepared, restored);
+                assertThrows(java.io.IOException.class, () -> serializer.serialize(prepared));
                 var state = MySqlSplitState.fromSplit(raw);
-                state.prepareSnapshot(restored);
-                assertThrows(IllegalStateException.class, () -> state.emitSnapshotRows(1));
-                state.snapshotCheckpoint(41);
-                assertEquals("keyless-chunk", state.completeCheckpoint(41));
-                state.emitSnapshotRows(1);
-                var checkpoint = (MySqlSnapshotSplit)
-                        serializer.deserialize(serializer.getVersion(), serializer.serialize((io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit) state.checkpoint(null)));
-                assertEquals(1, checkpoint.outputPosition());
-                assertEquals(3, checkpoint.output().rows().size());
-                var recovered = MySqlSplitState.fromSplit(checkpoint);
-                recovered.emitSnapshotRows(3);
-                var finished = (MySqlSnapshotSplit) recovered.checkpoint(null);
+                state.prepareSnapshot(prepared);
+                var finished = (MySqlSnapshotSplit) state.checkpoint(null);
                 assertEquals(raw.chunkRange(), finished.finished().chunkRange());
                 assertEquals(prepared.output().high(), finished.finished().highWatermark());
+                var restored = (MySqlSnapshotSplit) serializer.deserialize(
+                        serializer.getVersion(), serializer.serialize(finished));
+                assertEquals(null, restored.output());
+                assertEquals(finished, restored);
             }
         } finally {
             execute("DROP TABLE " + table, "DROP TABLE " + other);
@@ -122,7 +114,7 @@ class MySqlKeylessBackfillIT {
     }
 
     @Test
-    void checkpointsAnOversizedRepeatedRowGroupFromRealMysqlWithoutDroppingOccurrences() throws Exception {
+    void restoresOnlyWatermarkMetadataForAnOversizedRepeatedRowGroup() throws Exception {
         String table = name("large_keyless_");
         execute(
                 "CREATE TABLE " + table + "(bucket BIGINT NOT NULL, payload VARCHAR(100))",
@@ -140,15 +132,14 @@ class MySqlKeylessBackfillIT {
                 var prepared = reader.read(raw);
                 assertEquals(16_384, prepared.output().rows().size());
                 var serializer = new MySqlSplitSerializer();
-                byte[] checkpoint = serializer.serialize(prepared);
-                assertTrue(checkpoint.length < 8192, "Repeated physical images must use a counted checkpoint");
-                var restored = (MySqlSnapshotSplit)
-                        serializer.deserialize(serializer.getVersion(), checkpoint);
-                assertEquals(16_384, restored.output().rows().size());
-                var resumed = (MySqlSnapshotSplit) serializer.deserialize(
-                        serializer.getVersion(), serializer.serialize(restored.withOutputPosition(8192)));
-                assertEquals(8192, resumed.outputPosition());
-                assertEquals(1L, resumed.output().rows().get(8192).row().getLong(0));
+                assertThrows(java.io.IOException.class, () -> serializer.serialize(prepared));
+                var state = MySqlSplitState.fromSplit(raw);
+                state.prepareSnapshot(prepared);
+                byte[] checkpoint = serializer.serialize((MySqlSnapshotSplit) state.checkpoint(null));
+                assertTrue(checkpoint.length < 8192, "A snapshot checkpoint must contain only range metadata");
+                var restored = (MySqlSnapshotSplit) serializer.deserialize(serializer.getVersion(), checkpoint);
+                assertEquals(null, restored.output());
+                assertEquals(prepared.output().high(), restored.finished().highWatermark());
             }
         } finally {
             execute("DROP TABLE " + table);

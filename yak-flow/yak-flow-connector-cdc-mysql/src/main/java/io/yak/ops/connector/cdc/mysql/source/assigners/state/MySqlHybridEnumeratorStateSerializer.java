@@ -3,7 +3,7 @@ package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.split.ChunkRangeStateSerializer;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -29,7 +29,7 @@ import java.util.Set;
 public final class MySqlHybridEnumeratorStateSerializer
         implements SimpleVersionedSerializer<MySqlHybridEnumeratorState> {
 
-    private static final int VERSION = 5;
+    private static final int VERSION = 6;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final int MAX_SPLITS = 10_000;
     private final MySqlSplitSerializer splitSerializer = new MySqlSplitSerializer();
@@ -88,7 +88,7 @@ public final class MySqlHybridEnumeratorStateSerializer
                 throw new IOException("Unknown MySQL hybrid phase");
             }
             boolean binlogAssigned = in.readBoolean();
-            MySqlHybridBinlogSplit pending = binlogAssigned ? null : (MySqlHybridBinlogSplit) readSplit(in);
+            MySqlBinlogSplit pending = binlogAssigned ? null : (MySqlBinlogSplit) readSplit(in);
             DebeziumOffset low = readOffset(in);
             DebeziumOffset high = readOffset(in);
             boolean planned = in.readBoolean();

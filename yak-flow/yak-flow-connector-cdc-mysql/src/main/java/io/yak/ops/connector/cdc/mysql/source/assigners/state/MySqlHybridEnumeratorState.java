@@ -3,7 +3,7 @@ package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +19,7 @@ import java.util.Set;
 public record MySqlHybridEnumeratorState(
         String fingerprint,
         Phase phase,
-        MySqlHybridBinlogSplit pendingBinlog,
+        MySqlBinlogSplit pendingBinlog,
         boolean binlogAssigned,
         DebeziumOffset lowWatermark,
         DebeziumOffset highWatermark,

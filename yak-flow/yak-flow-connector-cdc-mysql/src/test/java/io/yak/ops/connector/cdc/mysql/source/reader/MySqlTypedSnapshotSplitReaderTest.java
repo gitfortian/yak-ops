@@ -113,7 +113,7 @@ class MySqlTypedSnapshotSplitReaderTest {
             assertEquals(520, rows.stream().filter(row -> row.row().getLong(0) == 7L).count());
             assertEquals(1, rows.stream().filter(row -> row.row().getLong(0) == 9L).count());
         }
-        assertEquals(0, split.outputPosition());
+        assertEquals(null, split.lastEmittedKey());
     }
 
     @Test

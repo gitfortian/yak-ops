@@ -18,7 +18,6 @@ import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsReques
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlStopSnapshotEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
@@ -306,7 +305,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
 
     private void assignAvailable() {
         if (closed || !started) return;
-        MySqlHybridBinlogSplit binlog = assigner.nextBinlog(0);
+        MySqlBinlogSplit binlog = assigner.nextBinlog(0);
         if (binlog != null) {
             if (context.registeredReaders().containsKey(0)) context.assignSplit(binlog, 0);
             else assigner.addBack(binlog);

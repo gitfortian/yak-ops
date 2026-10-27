@@ -81,11 +81,14 @@ class MySqlTypedKeyedBackfillTest {
         var frozen = MySqlSnapshotSplit.typed("typed-decimal", "fingerprint", range)
                 .withOutput(new MySqlSnapshotOutput(offset(100), offset(200), buffer.finish()));
         var serializer = new MySqlSplitSerializer();
-        var restored = (MySqlSnapshotSplit)
-                serializer.deserialize(serializer.getVersion(), serializer.serialize(frozen));
-        assertEquals(1, restored.output().rows().size());
-        assertEquals("new", restored.output().rows().getFirst().row().getString(1));
-        assertEquals(range, restored.withOutputPosition(1).finished().chunkRange());
+        assertThrows(java.io.IOException.class, () -> serializer.serialize(frozen));
+        assertEquals(1, frozen.output().rows().size());
+        assertEquals("new", frozen.output().rows().getFirst().row().getString(1));
+        var completed = frozen.withOutputPosition(1);
+        var restored = (MySqlSnapshotSplit) serializer.deserialize(
+                serializer.getVersion(), serializer.serialize(completed));
+        assertEquals(range, restored.finished().chunkRange());
+        assertEquals(null, restored.output());
     }
 
     @Test

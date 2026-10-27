@@ -6,7 +6,7 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.core.data.TableId;
 import java.util.Objects;
 
-/** Frozen key range, durable normalized output, and mailbox-owned output position for one chunk. */
+/** Source chunk boundaries and completion high watermark; normalized rows are transient only. */
 public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSplit {
     private final String splitId;
     private final String fingerprint;
@@ -19,7 +19,7 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
     private final FinishedSnapshotSplitInfo finished;
     private final ChunkRange chunkRange;
 
-    /** Preserves every existing source and checkpoint caller using the BIGINT constructor. */
+    /** Constructs an unprepared legacy numeric range using the stable split identifier. */
     public MySqlSnapshotSplit(
             String splitId,
             String fingerprint,
@@ -43,7 +43,7 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
                 null);
     }
 
-    /** One durable typed range; raw scans restart entirely until normalized output is frozen. */
+    /** One typed chunk range. Incomplete chunks restart their scan and backfill. */
     public static MySqlSnapshotSplit typed(String splitId, String fingerprint, ChunkRange range) {
         Objects.requireNonNull(range, "range");
         return new MySqlSnapshotSplit(splitId, fingerprint, range.tableId(), null, null, null, null, 0, null, range);

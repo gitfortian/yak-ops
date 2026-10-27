@@ -9,11 +9,10 @@ import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.RecordsBySplits;
 import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
 import io.yak.ops.connector.base.source.reader.splitreader.SplitReader;
-import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlBinlogSplitReadTask;
+import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.core.data.TableId;
@@ -23,33 +22,28 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Fetches normalized chunks and a filtered Binlog stream without advancing mailbox checkpoint state.
  *
- * <p>A prepared result waits for a completed checkpoint before any output batch is released.
- * Restored results are replayed verbatim, not recomputed from a later database snapshot.
+ * <p>Normalized snapshot chunks are emitted in one reader mailbox step. Incomplete chunks
+ * are retried from their stable range after a failure, without checkpointing source row images.
  */
 public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, MySqlSplit> {
-    private static final int OUTPUT_BATCH_SIZE = 256;
     private final MySqlSourceConfig config;
     private final MySqlSnapshotSplitReadTask snapshots;
     private final TableMetrics metrics;
     private final long generation;
     private final Set<TableId> tables;
     private final Deque<MySqlSnapshotSplit> pending = new ArrayDeque<>();
-    private final Set<String> released = ConcurrentHashMap.newKeySet();
     private volatile MySqlBinlogSplitReadTask binlog;
     private volatile byte[] history = new byte[0];
     private volatile MySqlResumeBinlogEvent resume;
     private volatile boolean cancelled;
-    private MySqlHybridBinlogSplit binlogSplit;
-    private MySqlBinlogSplit standalone;
+    private MySqlBinlogSplit binlogSplit;
     private final String fingerprint;
     private BinlogSplitReader filter;
     private MySqlSnapshotSplit active;
-    private int outputPosition;
     // Written by the fetcher and inspected by the source mailbox during checkpoints.
     private volatile boolean streaming;
     private volatile boolean snapshotsFinished;
@@ -82,27 +76,25 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     public void addSplits(List<MySqlSplit> splits) throws Exception {
         for (MySqlSplit split : splits) {
             if (split instanceof MySqlSnapshotSplit snapshot) {
-                // Typed backfill freezes every range before emitting rows; checkpointed
-                // output positions preserve both keyed updates and keyless duplicates.
                 pending.addLast(snapshot);
-                if (snapshot.prepared()) released.add(snapshot.splitId());
-            } else if (split instanceof MySqlHybridBinlogSplit stream) {
-                if (binlogSplit != null) throw new IllegalStateException("Hybrid Reader already owns Binlog");
-                binlogSplit = stream;
-                history = stream.binlog().schemaHistory();
-                if (stream.phase() == MySqlHybridBinlogSplit.Phase.BOOTSTRAP) startBinlog(stream);
-                else if (stream.phase() == MySqlHybridBinlogSplit.Phase.STREAMING) startStreaming(stream);
             } else if (split instanceof MySqlBinlogSplit stream) {
-                if (binlogSplit != null || standalone != null) {
-                    throw new IllegalStateException("MySQL Binlog Reader already has a stream");
+                if (binlogSplit != null) {
+                    throw new IllegalStateException("MySQL Reader already owns a Binlog split");
                 }
-                if (fingerprint == null || !fingerprint.equals(stream.definitionFingerprint())) {
+                if (fingerprint != null && !fingerprint.equals(stream.definitionFingerprint())) {
                     throw new IllegalArgumentException("MySQL Binlog split belongs to another source");
                 }
-                standalone = stream;
-                binlog = new MySqlBinlogSplitReadTask(config);
-                binlog.start(stream);
-                streaming = true;
+                binlogSplit = stream;
+                history = stream.schemaHistory();
+                if (stream.phase() == MySqlBinlogSplit.Phase.BOOTSTRAP) {
+                    startBinlog(stream);
+                } else if (stream.phase() == MySqlBinlogSplit.Phase.STREAMING) {
+                    startStreaming(stream);
+                } else if (stream.phase() == MySqlBinlogSplit.Phase.STANDALONE) {
+                    binlog = new MySqlBinlogSplitReadTask(config);
+                    binlog.start(stream);
+                    streaming = true;
+                }
             } else throw new IllegalArgumentException("Unknown MySQL split");
         }
     }
@@ -124,7 +116,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
 
     private RecordsWithSplitIds<MySqlFetchedRecord> fetchRecords() throws Exception {
         if (closed || cancelled) throw new IllegalStateException("MySQL hybrid reader is closed or cancelled");
-        if (binlogSplit != null && binlogSplit.phase() == MySqlHybridBinlogSplit.Phase.BOOTSTRAP) {
+        if (binlogSplit != null && binlogSplit.phase() == MySqlBinlogSplit.Phase.BOOTSTRAP) {
             if (bootstrapCandidate == null) bootstrapCandidate = binlog.poll();
             if (bootstrapCandidate == null) return empty();
             byte[] discovered = binlog.snapshotHistory();
@@ -139,37 +131,26 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             binlogSplit = binlogSplit.withAnchor(first.offset(), history);
             bootstrapCandidate = null;
             return records(
-                    MySqlHybridBinlogSplit.ID, MySqlFetchedRecord.lowWatermark(first.offset()), false);
+                    MySqlBinlogSplit.ID, MySqlFetchedRecord.lowWatermark(first.offset()), false);
         }
         if (active == null && !pending.isEmpty()) {
             active = pending.removeFirst();
-            outputPosition = active.outputPosition();
             if (!active.prepared()) {
                 active = snapshots.read(active);
-                return records(active.splitId(), MySqlFetchedRecord.prepared(active), false);
             }
         }
         if (active != null) {
-            String id = active.splitId();
-            if (active.finished() != null) {
-                active = null;
-                released.remove(id);
-                return new RecordsBySplits<>(Map.of(), Set.of(id));
+            MySqlSnapshotSplit chunk = active;
+            active = null;
+            if (chunk.finished() != null) {
+                return new RecordsBySplits<>(Map.of(), Set.of(chunk.splitId()));
             }
-            if (!released.contains(id)) {
-                Thread.sleep(20);
-                return empty();
+            if (chunk.output() == null) {
+                throw new IllegalStateException("Snapshot chunk has no normalized output");
             }
-            List<io.yak.ops.core.data.TableRecord> rows = active.output().rows();
-            int next = Math.min(rows.size(), outputPosition + OUTPUT_BATCH_SIZE);
-            MySqlFetchedRecord batch = MySqlFetchedRecord.snapshotRows(rows.subList(outputPosition, next), next);
-            outputPosition = next;
-            boolean complete = next == rows.size();
-            if (complete) {
-                active = null;
-                released.remove(id);
-            }
-            return records(id, batch, complete);
+            // A chunk is emitted atomically in one mailbox operation. If interrupted,
+            // restoration starts from its typed range and repeats Low/High/Backfill.
+            return records(chunk.splitId(), MySqlFetchedRecord.prepared(chunk), true);
         }
         if (snapshotsFinished && !snapshotsClosed) {
             snapshots.close();
@@ -181,34 +162,30 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
         if (streaming) {
             BinlogEvent event = filter == null ? binlog.poll() : filter.poll(binlog);
             if (event != null) {
-                return records(MySqlHybridBinlogSplit.ID, MySqlFetchedRecord.binlog(event), false);
+                return records(MySqlBinlogSplit.ID, MySqlFetchedRecord.binlog(event), false);
             }
         } else Thread.sleep(20);
         return empty();
     }
 
-    private void startBinlog(MySqlHybridBinlogSplit split) throws Exception {
+    private void startBinlog(MySqlBinlogSplit split) throws Exception {
         binlog = new MySqlBinlogSplitReadTask(config);
-        binlog.start(split.binlog());
+        binlog.start(split);
     }
 
-    private void startStreaming(MySqlHybridBinlogSplit split) throws Exception {
+    private void startStreaming(MySqlBinlogSplit split) throws Exception {
         filter = BinlogSplitReader.fromFinishedSplits(config.schemas(), split.finishedSplits());
         if (binlog != null) throw new IllegalStateException("Bootstrap Binlog was not closed before handoff");
         // Snapshot backfill connections are no longer needed once this Reader enters streaming.
         snapshots.close();
         binlogSplit = split;
-        history = split.binlog().schemaHistory();
+        history = split.schemaHistory();
         startBinlog(split);
         streaming = true;
     }
 
     public void finishSnapshots() {
         snapshotsFinished = true;
-    }
-
-    public void releaseSnapshot(String splitId) {
-        if (!cancelled) released.add(splitId);
     }
 
     public void resumeBinlog(MySqlResumeBinlogEvent event) {
@@ -275,7 +252,6 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             else failure.addSuppressed(error);
         }
         pending.clear();
-        released.clear();
         active = null;
         if (failure != null) throw failure;
     }

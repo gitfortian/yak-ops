@@ -17,7 +17,7 @@ import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -25,7 +25,6 @@ import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.data.ChangeEventId;
 import io.yak.ops.core.data.GenericRowData;
@@ -119,46 +118,66 @@ class MySqlChangeEventIdsTest {
 
 
     @Test
-    void frozenSnapshotIdentityUsesDurableSplitAndRowOrdinalsAfterRestore() throws Exception {
+    void atomicSnapshotEmissionKeepsStableOrdinalsAndMetadataOnlyCheckpoint() throws Exception {
         var schema = new TableSchema(
                 List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
         var config = MySqlSource.builder()
-                .hostname("localhost")
-                .username("user")
-                .password("secret")
-                .serverId(9001)
-                .topicPrefix("identity-test")
-                .table(TABLE, schema)
-                .build()
-                .config();
-        var splitReader = new MySqlSplitReader(config);
-        var emitter = new MySqlRecordEmitter(new MySqlSourceReaderContext(context()), splitReader, new TableMetrics());
-        var rows = List.of(
-                new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L)),
-                new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L)));
-        var original = new MySqlSnapshotSplit("chunk-0", "stable-definition", TABLE, null, null, null)
-                .withOutput(new MySqlSnapshotOutput(position(10, 0), position(20, 0), rows));
-        var state = MySqlSplitState.fromSplit(original);
-        List<TableRecord> first = new ArrayList<>();
-        emitter.emitRecord(MySqlFetchedRecord.snapshotRows(original.output().rows().subList(0, 1), 1),
-                first::add, state);
-        assertEquals(ChangeEventId.snapshot("stable-definition", "chunk-0", 0), first.getFirst().changeEventId());
+                .hostname("localhost").username("user").password("secret")
+                .serverId(9001).topicPrefix("identity-test").table(TABLE, schema)
+                .build().config();
+        try (var splitReader = new MySqlSplitReader(config)) {
+            var emitter = new MySqlRecordEmitter(
+                    new MySqlSourceReaderContext(context()), splitReader, new TableMetrics());
+            var rows = List.of(
+                    new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L)),
+                    new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L)));
+            var raw = new MySqlSnapshotSplit("chunk-0", "stable-definition", TABLE, null, null, null);
+            var prepared = raw.withOutput(new MySqlSnapshotOutput(position(10, 0), position(20, 0), rows));
+            var state = MySqlSplitState.fromSplit(raw);
+            var output = new ArrayList<TableRecord>();
+            emitter.emitRecord(MySqlFetchedRecord.prepared(prepared), output::add, state);
+            assertEquals(2, output.size());
+            assertEquals(ChangeEventId.snapshot("stable-definition", "chunk-0", 0),
+                    output.getFirst().changeEventId());
+            assertEquals(ChangeEventId.snapshot("stable-definition", "chunk-0", 1),
+                    output.getLast().changeEventId());
+            var serializer = new MySqlSplitSerializer();
+            var restored = (MySqlSnapshotSplit) serializer.deserialize(
+                    serializer.getVersion(), serializer.serialize((MySqlSnapshotSplit) state.checkpoint(null)));
+            assertEquals(null, restored.output());
+            assertEquals(position(20, 0), restored.finished().highWatermark());
+            assertEquals(null, ((MySqlSnapshotSplit) MySqlSplitState.fromSplit(raw).checkpoint(null)).finished());
+        }
+    }
 
-        var serializer = new MySqlSplitSerializer();
-        var checkpoint = (MySqlSnapshotSplit)
-                serializer.deserialize(serializer.getVersion(), serializer.serialize((io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit) state.checkpoint(null)));
-        assertEquals(1, checkpoint.outputPosition());
-        var resumed = MySqlSplitState.fromSplit(checkpoint);
-        List<TableRecord> next = new ArrayList<>();
-        emitter.emitRecord(MySqlFetchedRecord.snapshotRows(checkpoint.output().rows().subList(1, 2), 2),
-                next::add, resumed);
-        assertEquals(ChangeEventId.snapshot("stable-definition", "chunk-0", 1), next.getFirst().changeEventId());
-        assertFalse(first.getFirst().changeEventId().sameEvent(next.getFirst().changeEventId()));
-        List<TableRecord> replay = new ArrayList<>();
-        emitter.emitRecord(MySqlFetchedRecord.snapshotRows(original.output().rows().subList(0, 1), 1),
-                replay::add, MySqlSplitState.fromSplit(original));
-        assertEquals(first.getFirst().changeEventId(), replay.getFirst().changeEventId());
-        splitReader.close();
+    @Test
+    void interruptedSnapshotChunkDoesNotPublishFinishedWatermark() throws Exception {
+        var schema = new TableSchema(
+                List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
+        var config = MySqlSource.builder()
+                .hostname("localhost").username("user").password("secret")
+                .serverId(9001).topicPrefix("atomic-snapshot-test").table(TABLE, schema)
+                .build().config();
+        try (var splitReader = new MySqlSplitReader(config)) {
+            var emitter = new MySqlRecordEmitter(
+                    new MySqlSourceReaderContext(context()), splitReader, new TableMetrics());
+            var rows = List.of(
+                    new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L)),
+                    new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(2L)));
+            var raw = new MySqlSnapshotSplit("chunk-atomic", "definition", TABLE, null, null, null);
+            var prepared = raw.withOutput(new MySqlSnapshotOutput(position(10, 0), position(20, 0), rows));
+            var state = MySqlSplitState.fromSplit(raw);
+            var delivered = new java.util.concurrent.atomic.AtomicInteger();
+            assertThrows(IllegalStateException.class, () -> emitter.emitRecord(
+                    MySqlFetchedRecord.prepared(prepared),
+                    row -> {
+                        if (delivered.incrementAndGet() == 2) {
+                            throw new IllegalStateException("downstream failure");
+                        }
+                    }, state));
+            assertEquals(raw, state.checkpoint(null));
+            assertNull(((MySqlSnapshotSplit) state.toMySqlSplit()).finished());
+        }
     }
 
     @Test
@@ -174,11 +193,7 @@ class MySqlChangeEventIdsTest {
                 .emitRecord(MySqlFetchedRecord.binlog(new BinlogEvent(rows, offset)), cdcOutput::add, cdcState);
 
         var finished = new FinishedSnapshotSplitInfo(TABLE, "chunk-0", null, null, high);
-        var streaming = new MySqlHybridBinlogSplit(
-                new MySqlBinlogSplit("task-definition", previous, new byte[] {1}),
-                MySqlHybridBinlogSplit.Phase.STREAMING,
-                high,
-                List.of(finished));
+        var streaming = MySqlBinlogSplit.forCompletedSnapshot("task-definition", previous, new byte[] {1}, high, List.of(finished));
         var hybridState = MySqlSplitState.fromSplit(streaming);
         var schema = new TableSchema(
                 List.of(
@@ -204,7 +219,7 @@ class MySqlChangeEventIdsTest {
                     cdcOutput.stream().map(TableRecord::changeEventId).toList(),
                     hybridOutput.stream().map(TableRecord::changeEventId).toList());
             assertEquals(offset, ((MySqlBinlogSplit) cdcState.checkpoint(new byte[] {1})).offset());
-            assertEquals(offset, ((MySqlHybridBinlogSplit) hybridState.checkpoint(new byte[] {1})).binlog().offset());
+            assertEquals(offset, ((MySqlBinlogSplit) hybridState.checkpoint(new byte[] {1})).offset());
 
             var failedState = MySqlSplitState.fromSplit(streaming);
             assertThrows(IllegalStateException.class, () -> emitter.emitRecord(event, record -> {
@@ -214,7 +229,7 @@ class MySqlChangeEventIdsTest {
             }, failedState));
             assertEquals(
                     previous,
-                    ((MySqlHybridBinlogSplit) failedState.checkpoint(new byte[] {1})).binlog().offset());
+                    ((MySqlBinlogSplit) failedState.checkpoint(new byte[] {1})).offset());
         }
     }
 

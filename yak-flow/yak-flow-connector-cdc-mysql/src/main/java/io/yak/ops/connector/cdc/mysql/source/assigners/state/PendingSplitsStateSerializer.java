@@ -9,7 +9,7 @@ import java.io.IOException;
 
 /** Shared enumerator state serialization; rejects checkpoint formats from previous split models. */
 public final class PendingSplitsStateSerializer implements SimpleVersionedSerializer<PendingSplitsState> {
-    private static final int VERSION = 6;
+    private static final int VERSION = 7;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private final MySqlHybridEnumeratorStateSerializer hybrid = new MySqlHybridEnumeratorStateSerializer();
     private final MySqlPendingSplitsStateSerializer stream = new MySqlPendingSplitsStateSerializer();

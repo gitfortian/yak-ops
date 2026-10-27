@@ -13,7 +13,7 @@ import java.util.Objects;
 /** Checkpoints the Binlog split-assignment status without duplicating reader-owned offsets. */
 public final class MySqlPendingSplitsStateSerializer implements SimpleVersionedSerializer<MySqlPendingSplitsState> {
 
-    private static final int VERSION = 2;
+    private static final int VERSION = 3;
     private final MySqlSplitSerializer splitSerializer = new MySqlSplitSerializer();
 
     @Override

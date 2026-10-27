@@ -19,19 +19,18 @@ import java.util.Set;
  * A serializer for the {@link MySqlSplit}.
  *
  * <p>Snapshot and binlog splits share one entry point, as in Flink CDC. The schema-history
- * and checkpointed normalized snapshot output remain part of YakFlow's existing recovery
- * protocol until the corresponding snapshot reader and Debezium engine are migrated.
+ * remains part of the binlog recovery state; snapshot checkpoints contain only
+ * split metadata, never a frozen copy of the source row images.
  */
 public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MySqlSplit> {
 
     public static final MySqlSplitSerializer INSTANCE = new MySqlSplitSerializer();
 
     // An incompatible layout: old nested hybrid/binlog frames must not be silently restored.
-    private static final int VERSION = 7;
+    private static final int VERSION = 9;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final int SNAPSHOT_SPLIT_FLAG = 1;
     private static final int BINLOG_SPLIT_FLAG = 2;
-    private static final int HYBRID_BINLOG_SPLIT_FLAG = 3;
 
     @Override
     public int getVersion() {
@@ -46,15 +45,6 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
             if (split.isSnapshotSplit()) {
                 out.writeInt(SNAPSHOT_SPLIT_FLAG);
                 writeSnapshot(out, split.asSnapshotSplit());
-            } else if (split instanceof MySqlHybridBinlogSplit hybrid) {
-                out.writeInt(HYBRID_BINLOG_SPLIT_FLAG);
-                out.writeByte(hybrid.phase().ordinal());
-                out.writeBoolean(hybrid.highWatermark() != null);
-                if (hybrid.highWatermark() != null) {
-                    hybrid.highWatermark().writeTo(out);
-                }
-                writeBinlog(out, hybrid.binlog());
-                writeFinishedSplits(out, hybrid.finishedSplits());
             } else if (split.isBinlogSplit()) {
                 out.writeInt(BINLOG_SPLIT_FLAG);
                 writeBinlog(out, split.asBinlogSplit());
@@ -78,7 +68,6 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
             MySqlSplit split = switch (in.readInt()) {
                 case SNAPSHOT_SPLIT_FLAG -> readSnapshot(in);
                 case BINLOG_SPLIT_FLAG -> readBinlog(in);
-                case HYBRID_BINLOG_SPLIT_FLAG -> readHybridBinlog(in);
                 default -> throw new IOException("Unknown MySQL split kind");
             };
             if (in.available() != 0) {
@@ -90,19 +79,19 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
         }
     }
 
+    /** Snapshot checkpoints store only boundaries and completed high watermarks. */
     private static void writeSnapshot(DataOutputStream out, MySqlSnapshotSplit split) throws IOException {
+        if (split.output() != null || split.outputPosition() != 0 || split.lastEmittedKey() != null) {
+            throw new IOException("Normalized snapshot row output cannot be stored in a split checkpoint");
+        }
         out.writeUTF(split.splitId());
         out.writeUTF(split.fingerprint());
         out.writeUTF(split.tableId().catalog() == null ? "" : split.tableId().catalog());
         out.writeUTF(split.tableId().table());
         writeLong(out, split.lowerInclusive());
         writeLong(out, split.upperExclusive());
-        writeLong(out, split.lastEmittedKey());
-        out.writeByte(split.finished() != null ? 2 : split.output() != null ? 1 : 0);
-        if (split.output() != null) {
-            MySqlSnapshotOutputSerializer.writeCompact(out, split.output());
-            out.writeInt(split.outputPosition());
-        } else if (split.finished() != null) {
+        out.writeBoolean(split.finished() != null);
+        if (split.finished() != null) {
             split.finished().highWatermark().writeTo(out);
         }
         ChunkRangeStateSerializer.write(out, split.chunkRange());
@@ -114,25 +103,11 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
         TableId table = new TableId(in.readUTF(), null, in.readUTF());
         Long lower = readLong(in);
         Long upper = readLong(in);
-        Long key = readLong(in);
-        int stage = in.readUnsignedByte();
-        MySqlSnapshotOutput output = null;
-        FinishedSnapshotSplitInfo finished = null;
-        DebeziumOffset high = null;
-        int position = 0;
-        if (stage == 1) {
-            output = MySqlSnapshotOutputSerializer.readCompact(in, table, true);
-            position = in.readInt();
-        } else if (stage == 2) {
-            high = DebeziumOffset.readFrom(in);
-        } else if (stage != 0) {
-            throw new IOException("Unknown MySQL snapshot checkpoint stage");
-        }
+        DebeziumOffset high = in.readBoolean() ? DebeziumOffset.readFrom(in) : null;
         ChunkRange range = ChunkRangeStateSerializer.read(in);
-        if (high != null) {
-            finished = new FinishedSnapshotSplitInfo(table, id, lower, upper, high, range);
-        }
-        return new MySqlSnapshotSplit(id, fingerprint, table, lower, upper, key, output, position, finished, range);
+        FinishedSnapshotSplitInfo finished = high == null
+                ? null : new FinishedSnapshotSplitInfo(table, id, lower, upper, high, range);
+        return new MySqlSnapshotSplit(id, fingerprint, table, lower, upper, null, null, 0, finished, range);
     }
 
     private static void writeBinlog(DataOutputStream out, MySqlBinlogSplit split) throws IOException {
@@ -147,6 +122,12 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
         }
         out.writeInt(history.length);
         out.write(history);
+        out.writeByte(split.phase().ordinal());
+        out.writeBoolean(split.highWatermark() != null);
+        if (split.highWatermark() != null) {
+            split.highWatermark().writeTo(out);
+        }
+        writeFinishedSplits(out, split.finishedSplits());
     }
 
     private static MySqlBinlogSplit readBinlog(DataInputStream in) throws IOException {
@@ -160,18 +141,14 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
         if (offset != null && history.length == 0) {
             throw new IOException("Restored MySQL binlog offset is missing schema history");
         }
-        return new MySqlBinlogSplit(fingerprint, offset, history);
-    }
-
-    private static MySqlHybridBinlogSplit readHybridBinlog(DataInputStream in) throws IOException {
         int phase = in.readUnsignedByte();
-        if (phase >= MySqlHybridBinlogSplit.Phase.values().length) {
-            throw new IOException("Unknown MySQL hybrid binlog phase");
+        if (phase >= MySqlBinlogSplit.Phase.values().length) {
+            throw new IOException("Unknown MySQL Binlog phase");
         }
         DebeziumOffset high = in.readBoolean() ? DebeziumOffset.readFrom(in) : null;
-        MySqlBinlogSplit binlog = readBinlog(in);
-        return new MySqlHybridBinlogSplit(
-                binlog, MySqlHybridBinlogSplit.Phase.values()[phase], high, readFinishedSplits(in));
+        List<FinishedSnapshotSplitInfo> infos = readFinishedSplits(in);
+        return MySqlBinlogSplit.restore(fingerprint, offset, history,
+                MySqlBinlogSplit.Phase.values()[phase], high, infos);
     }
 
     /** Serializes completed snapshot chunk watermarks for reader and enumerator checkpoints. */

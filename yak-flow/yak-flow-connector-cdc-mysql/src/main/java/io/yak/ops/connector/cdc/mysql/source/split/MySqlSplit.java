@@ -19,7 +19,7 @@ public abstract class MySqlSplit implements SourceSplit {
 
     /** Checks whether this split is a binlog split. */
     public final boolean isBinlogSplit() {
-        return getClass() == MySqlBinlogSplit.class || getClass() == MySqlHybridBinlogSplit.class;
+        return getClass() == MySqlBinlogSplit.class;
     }
 
     /** Casts this split into a {@link MySqlSnapshotSplit}. */

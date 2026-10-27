@@ -12,7 +12,7 @@ import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsAckEve
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsReportEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsRequestEvent;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlHybridBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.core.api.connector.source.InputStatus;
@@ -96,7 +96,7 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
     @Override
     protected MySqlSplitState initializedState(MySqlSplit split) {
         MySqlSplitState state = MySqlSplitState.fromSplit(split);
-        if (resumeEvent != null && split instanceof MySqlHybridBinlogSplit) {
+        if (resumeEvent != null && split instanceof MySqlBinlogSplit binlog && binlog.phase() != MySqlBinlogSplit.Phase.STANDALONE) {
             state.resume(resumeEvent.highWatermark(), resumeEvent.finishedSplits());
         }
         return state;
@@ -150,8 +150,7 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
     public void notifyCheckpointComplete(long checkpointId) {
         if (!initial) metrics.checkpointCompleted(generation, checkpointId, false);
         forEachActiveSplitState(state -> {
-            String id = state.completeCheckpoint(checkpointId);
-            if (id != null) splits.releaseSnapshot(id);
+            state.completeCheckpoint(checkpointId);
         });
         finishedCheckpoint.entrySet().removeIf(entry -> {
             if (entry.getValue() > checkpointId) return false;

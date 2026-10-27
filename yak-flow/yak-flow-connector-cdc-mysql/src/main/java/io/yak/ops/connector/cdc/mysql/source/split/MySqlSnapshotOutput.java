@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-/** Immutable normalized chunk retained in a completed checkpoint before its first external write. */
+/** Immutable transient normalized chunk produced by Low/High watermark backfill. */
 public final class MySqlSnapshotOutput {
     private final DebeziumOffset low;
     private final DebeziumOffset high;
@@ -61,7 +61,7 @@ public final class MySqlSnapshotOutput {
                 || !low.equals(output.low)
                 || !high.equals(output.high)
                 || rows.size() != output.rows.size()) return false;
-        // TableRecord deliberately has execution identity, while this checkpoint is a value.
+        // TableRecord deliberately has execution identity, while this in-memory snapshot image is a value.
         for (int i = 0; i < rows.size(); i++) {
             TableRecord left = rows.get(i), right = output.rows.get(i);
             if (!left.tableId().equals(right.tableId())
@@ -83,7 +83,7 @@ public final class MySqlSnapshotOutput {
         return "MySqlSnapshotOutput{rows=" + rows.size() + ", values=redacted}";
     }
 
-    /** Prevents downstream consumers from mutating the checkpoint's retained row objects. */
+    /** Prevents downstream consumers from mutating normalized source rows while they are emitted. */
     private static final class SnapshotRow implements RowData {
         private final GenericRowData values;
 

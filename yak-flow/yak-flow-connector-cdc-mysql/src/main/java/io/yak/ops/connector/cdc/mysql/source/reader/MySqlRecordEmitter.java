@@ -45,31 +45,35 @@ public final class MySqlRecordEmitter implements RecordEmitter<MySqlFetchedRecor
             return;
         }
         if (event.preparedSnapshot() != null) {
-            state.prepareSnapshot(event.preparedSnapshot());
+            // Incremental Snapshot commits the completed split after all normalized rows
+            // have been emitted together in this mailbox operation.
+            var prepared = event.preparedSnapshot();
+            var rows = prepared.output().rows();
+            for (int ordinal = 0; ordinal < rows.size(); ordinal++) {
+                TableRecord row = rows.get(ordinal);
+                ChangeEventId identity = ChangeEventId.snapshot(
+                        state.sourceId(), state.snapshotSplitId(), ordinal);
+                output.collect(row.withChangeEventId(identity));
+                metrics.read(generation, row.tableId(), false);
+            }
+            state.prepareSnapshot(prepared);
+            metrics.observed(generation);
             return;
         }
         int count = event.rows().size();
         String eventPosition = event.binlogOffset() != null && !event.lowWatermark()
                 ? MySqlChangeEventIds.fromBinlog(event.binlogOffset())
                 : null;
-        int firstSnapshotRow = event.snapshotRowsEmitted() == null ? -1 : event.snapshotRowsEmitted() - count;
-        if (firstSnapshotRow < 0 && event.snapshotRowsEmitted() != null) {
-            throw new IllegalStateException("Snapshot output ordinal is smaller than the emitted batch");
-        }
         for (int index = 0; index < count; index++) {
             TableRecord row = event.rows().get(index);
-            ChangeEventId identity = event.snapshotRowsEmitted() != null
-                    ? ChangeEventId.snapshot(state.sourceId(), state.snapshotSplitId(), firstSnapshotRow + index)
-                    : eventPosition == null
-                            ? null
-                            : new ChangeEventId(state.sourceId(), eventPosition, index, count);
+            ChangeEventId identity = eventPosition == null
+                    ? null
+                    : new ChangeEventId(state.sourceId(), eventPosition, index, count);
             output.collect(identity == null ? row : row.withChangeEventId(identity));
-            metrics.read(generation, row.tableId(), event.snapshotRowsEmitted() == null && state.binlog());
+            metrics.read(generation, row.tableId(), state.binlog());
         }
         metrics.observed(generation);
-        if (event.snapshotRowsEmitted() != null) {
-            state.emitSnapshotRows(event.snapshotRowsEmitted());
-        } else if (event.lowWatermark()) {
+        if (event.lowWatermark()) {
             state.captureLow(event.binlogOffset(), splits.snapshotHistory());
             context.sendSourceEventToCoordinator(new MySqlLowWatermarkEvent(event.binlogOffset()));
             context.sendSplitRequest();

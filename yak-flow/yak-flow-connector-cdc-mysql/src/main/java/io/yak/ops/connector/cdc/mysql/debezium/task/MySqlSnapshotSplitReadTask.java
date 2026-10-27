@@ -5,10 +5,9 @@ import io.yak.ops.connector.cdc.mysql.source.utils.RecordUtils;
 import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotSplitReader;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
-import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlBinlogSplitReadTask;
+import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import java.sql.Connection;
@@ -128,8 +127,6 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
                 }
             }
             MySqlSnapshotSplit prepared = split.withOutput(new MySqlSnapshotOutput(low, high, buffer.finish()));
-            // Fail before any downstream output if the exact persisted representation cannot fit.
-            new MySqlSplitSerializer().serialize(prepared);
             return prepared;
         } finally {
             snapshots.close();
