@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.debezium.connector.mysql.jdbc.MySqlConnectionConfiguration;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
@@ -86,8 +86,8 @@ class MySqlCdcConnectionPropertiesTest {
         assertEquals(expected, jdbc.getString("connectionTimeZone"));
     }
 
-    private static MySqlCdcSourceConfig config(Map<String, String> properties) {
-        return new MySqlCdcSourceConfig(
+    private static MySqlSourceConfig config(Map<String, String> properties) {
+        return new MySqlSourceConfig(
                 "localhost", 3306, "root", "secret", 1234, "source",
                 Map.of(TABLE, SCHEMA), 256, properties);
     }

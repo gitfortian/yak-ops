@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlBinlogSplitFilter;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlChunkBackfill;
@@ -48,7 +48,7 @@ class MySqlCdcKeylessBaselineTest {
 
         IllegalArgumentException failure = assertThrows(
                 IllegalArgumentException.class,
-                () -> new MySqlCdcSourceConfig(
+                () -> new MySqlSourceConfig(
                         "localhost", 3306, "user", "secret", 6101, "baseline", Map.of(TABLE, KEYLESS), 256));
         assertTrue(failure.getMessage().toLowerCase(java.util.Locale.ROOT).contains("chunk key"));
     }

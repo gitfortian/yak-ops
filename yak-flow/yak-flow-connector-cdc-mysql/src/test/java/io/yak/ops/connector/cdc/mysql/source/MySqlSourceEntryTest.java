@@ -1,5 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
+
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfigFactory;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlPendingSplitsStateSerializer;
@@ -41,7 +43,7 @@ class MySqlSourceEntryTest {
         assertInstanceOf(io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer.class, source.getEnumeratorCheckpointSerializer());
     }
 
-    private static MySqlCdcSourceBuilder builder() {
+    private static MySqlSourceConfigFactory builder() {
         TableSchema schema = new TableSchema(
                 List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
         return MySqlSource.builder()

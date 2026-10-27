@@ -1,5 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
+
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfigFactory;
 import io.yak.ops.core.api.connector.source.ReaderInfo;
 import io.yak.ops.core.api.connector.source.SplitsAssignment;
 import io.yak.ops.core.api.metrics.Gauge;
@@ -15,7 +17,7 @@ import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.MySqlHybridEnumeratorState;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.connector.cdc.mysql.table.MySqlCdcSourceFactory;
@@ -71,7 +73,7 @@ class MySqlChunkKeySelectionTest {
                 IllegalArgumentException.class,
                 () -> MySqlChunkSplitter.splitKey(ORDERS_SCHEMA, "created_at"));
         new MySqlCdcSourceFactory().validateSchema(
-                options().set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "created_at").toReadonlyConfig(),
+                options().set(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN, "created_at").toReadonlyConfig(),
                 ORDERS_SCHEMA);
         var keyless = new TableSchema(ORDERS_SCHEMA.columns(), List.of());
         assertThrows(IllegalArgumentException.class, () -> MySqlChunkSplitter.splitKey(keyless, "created_at"));
@@ -82,12 +84,12 @@ class MySqlChunkKeySelectionTest {
         var factory = new MySqlCdcSourceFactory();
         var measurements = new TableMetrics();
         var first = new TableSourceFactoryContext(
-                options().set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "id").toReadonlyConfig(),
+                options().set(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN, "id").toReadonlyConfig(),
                 ORDERS,
                 ORDERS_SCHEMA,
                 measurements);
         var second = new TableSourceFactoryContext(
-                options().set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "sequence").toReadonlyConfig(),
+                options().set(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN, "sequence").toReadonlyConfig(),
                 ITEMS,
                 ITEMS_SCHEMA,
                 measurements);
@@ -119,7 +121,7 @@ class MySqlChunkKeySelectionTest {
         var changedConnection = new TableSourceFactoryContext(
                 options()
                         .set(JdbcConnectionOptions.URL, "jdbc:mysql://localhost:3308/shop")
-                        .set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "sequence")
+                        .set(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN, "sequence")
                         .toReadonlyConfig(),
                 ITEMS,
                 ITEMS_SCHEMA,
@@ -133,13 +135,13 @@ class MySqlChunkKeySelectionTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> factory.createSource(new TableSourceFactoryContext(
-                        options().set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "unknown").toReadonlyConfig(),
+                        options().set(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN, "unknown").toReadonlyConfig(),
                         ORDERS,
                         ORDERS_SCHEMA)));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> factory.createSource(new TableSourceFactoryContext(
-                        options().set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "name").toReadonlyConfig(),
+                        options().set(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN, "name").toReadonlyConfig(),
                         ORDERS,
                         ORDERS_SCHEMA)));
     }
@@ -158,11 +160,11 @@ class MySqlChunkKeySelectionTest {
                 .set(JdbcConnectionOptions.URL, "jdbc:mysql://localhost:3307/shop")
                 .set(JdbcConnectionOptions.USERNAME, "user")
                 .set(JdbcConnectionOptions.PASSWORD, "password")
-                .set(MySqlCdcSourceOptions.SERVER_ID, 6130)
-                .set(MySqlCdcSourceOptions.TOPIC_PREFIX, "chunk-test");
+                .set(MySqlSourceOptions.SERVER_ID, "6130")
+                .set(MySqlSourceOptions.TOPIC_PREFIX, "chunk-test");
     }
 
-    private static MySqlCdcSourceBuilder builder() {
+    private static MySqlSourceConfigFactory builder() {
         return MySqlSource.builder()
                 .hostname("localhost")
                 .username("user")

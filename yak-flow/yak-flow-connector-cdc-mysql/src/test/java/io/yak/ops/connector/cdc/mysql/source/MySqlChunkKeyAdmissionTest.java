@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlCdcSourceOptions;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.connector.cdc.mysql.table.MySqlCdcSourceFactory;
 import io.yak.ops.core.types.Column;
@@ -35,7 +35,7 @@ class MySqlChunkKeyAdmissionTest {
     @Test
     void derivesSourceModeFromPhysicalSchemaWithoutOptInFlag() {
         var factory = new MySqlCdcSourceFactory();
-        var settings = new Configuration().set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "bucket");
+        var settings = new Configuration().set(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN, "bucket");
         factory.validateSchema(settings.toReadonlyConfig(), WITHOUT_PK);
         assertThrows(IllegalArgumentException.class,
                 () -> factory.validateSchema(new Configuration().toReadonlyConfig(), WITHOUT_PK));
@@ -43,7 +43,7 @@ class MySqlChunkKeyAdmissionTest {
         factory.validateSchema(new Configuration().toReadonlyConfig(), keyed);
         assertEquals("bucket", MySqlChunkSplitter.splitKey(keyed));
         assertThrows(IllegalArgumentException.class,
-                () -> factory.validateSchema(settings.set(MySqlCdcSourceOptions.CHUNK_KEY_COLUMN, "name")
+                () -> factory.validateSchema(settings.set(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN, "name")
                         .toReadonlyConfig(), keyed));
     }
 
