@@ -9,7 +9,7 @@ import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.RecordsBySplits;
 import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
 import io.yak.ops.connector.base.source.reader.splitreader.SplitReader;
-import io.yak.ops.connector.cdc.mysql.debezium.MySqlBinlogSplitReadTask;
+import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlBinlogSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
