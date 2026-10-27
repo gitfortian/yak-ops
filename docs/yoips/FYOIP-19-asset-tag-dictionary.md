@@ -2,7 +2,7 @@
 
 Status: Discussion
 
-Discussion: Pending — proposal pull request not yet opened
+Discussion: https://github.com/gitfortian/yak-ops/pull/44
 
 Decision: Pending maintainer vote — scope decisions D1 and D2 recorded 2026-10-27, see "Recorded scope decisions"
 
