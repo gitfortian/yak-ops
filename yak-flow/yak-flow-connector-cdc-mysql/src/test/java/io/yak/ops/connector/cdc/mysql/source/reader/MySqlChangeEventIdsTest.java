@@ -176,13 +176,18 @@ class MySqlChangeEventIdsTest {
                 high,
                 List.of(finished));
         var hybridState = new MySqlHybridSplitState(streaming);
+        var schema = new TableSchema(
+                List.of(
+                        new Column("id", LogicalTypes.BIGINT.copy(false)),
+                        new Column("name", LogicalTypes.varchar(100).copy(false))),
+                List.of("id"));
         var config = MySqlCdcSource.builder()
                 .hostname("localhost")
                 .username("user")
                 .password("secret")
                 .serverId(9002)
                 .topicPrefix("hybrid-emitter-contract")
-                .table(TABLE, YAK_SCHEMA)
+                .table(TABLE, schema)
                 .build()
                 .config();
         try (var splitReader = new MySqlHybridSplitReader(config)) {
