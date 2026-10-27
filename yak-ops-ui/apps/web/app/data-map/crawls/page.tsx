@@ -23,7 +23,13 @@ import { dataMapFailureMessage } from "@/service/data-map/request";
 import type { Crawl } from "@/service/data-map/types";
 
 import { dataMapKeys } from "../shared/keys";
-import { CRAWL_STATUS_LABEL, CRAWL_STATUS_TONE, locationLabel } from "../shared/labels";
+import {
+  CRAWL_STATUS_LABEL,
+  CRAWL_STATUS_TONE,
+  CRAWL_TRIGGER_LABEL,
+  formatDuration,
+  locationLabel,
+} from "../shared/labels";
 import { useDatasourceOptions } from "../shared/lookups";
 import { useDataMapScope } from "../shared/scope";
 import CrawlDetailDialog from "./crawl-detail-dialog";
@@ -108,6 +114,20 @@ export default function CrawlsPage() {
       ),
     },
     {
+      key: "trigger",
+      title: "触发方式",
+      width: 90,
+      render: (_value, record) => CRAWL_TRIGGER_LABEL[record.triggerType] ?? record.triggerType,
+    },
+    {
+      key: "duration",
+      title: "耗时",
+      width: 90,
+      render: (_value, record) => (
+        <span className="tabular-nums">{formatDuration(record.durationSeconds)}</span>
+      ),
+    },
+    {
       key: "tables",
       title: "表 / 字段",
       width: 110,
@@ -118,7 +138,8 @@ export default function CrawlsPage() {
       title: "变更",
       minWidth: 170,
       render: (_value, record) =>
-        `新增 ${record.addedCount} · 更新 ${record.updatedCount} · 缺失 ${record.removedCount}`,
+        `新增 ${record.addedCount} · 更新 ${record.updatedCount} · 缺失 ${record.removedCount}` +
+        (record.filteredCount > 0 ? ` · 过滤 ${record.filteredCount}` : ""),
     },
     {
       key: "failed",
@@ -154,7 +175,7 @@ export default function CrawlsPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
-        title="采集任务"
+        title="元数据采集"
         bordered
         className="bg-white px-6 max-md:px-4"
         extra={
@@ -215,7 +236,7 @@ export default function CrawlsPage() {
               loading={page.isFetching}
               emptyText="还没有采集任务"
               rowHoverable
-              scroll={{ x: 1220 }}
+              scroll={{ x: 1400 }}
               pagination={{
                 current: pageNo,
                 pageSize: DEFAULT_PAGE_SIZE,

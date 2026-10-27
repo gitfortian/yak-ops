@@ -1,12 +1,27 @@
-import { Alert, Badge, Button, Dialog, DialogContent, DialogTitle, Table } from "@yak-ops/yak-ui";
-import { useQuery } from "@tanstack/react-query";
+import {
+  Alert,
+  Badge,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Table,
+  toast,
+} from "@yak-ops/yak-ui";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { RotateCcw } from "lucide-react";
 
-import { getCrawl } from "@/service/data-map/crawl";
+import { getCrawl, submitCrawl } from "@/service/data-map/crawl";
 import { dataMapFailureMessage } from "@/service/data-map/request";
 import type { CrawlFailure } from "@/service/data-map/types";
 
 import { dataMapKeys } from "../shared/keys";
-import { CRAWL_STATUS_LABEL, CRAWL_STATUS_TONE } from "../shared/labels";
+import {
+  CRAWL_STATUS_LABEL,
+  CRAWL_STATUS_TONE,
+  CRAWL_TRIGGER_LABEL,
+  formatDuration,
+} from "../shared/labels";
 import { useDataMapScope } from "../shared/scope";
 
 interface Props {
@@ -35,6 +50,7 @@ const Metric = ({ label, value }: { label: string; value: number | undefined }) 
 
 export default function CrawlDetailDialog({ crawlId, onClose }: Props) {
   const { scope } = useDataMapScope();
+  const queryClient = useQueryClient();
   const detail = useQuery({
     queryKey: dataMapKeys.crawl(scope, crawlId),
     queryFn: ({ signal }) => getCrawl(crawlId, signal),
@@ -43,6 +59,29 @@ export default function CrawlDetailDialog({ crawlId, onClose }: Props) {
 
   const crawl = detail.data?.crawl;
   const failures = detail.data?.failures ?? [];
+
+  /**
+   * A retry submits a fresh run scoped to this run's failures; the dialog closes so the operator
+   * watches the new row instead of a stale one, and the mutation's pending flag guards double clicks.
+   */
+  const retry = useMutation({
+    mutationFn: () => {
+      const source = detail.data?.crawl;
+      if (!source) throw new Error("source run is unavailable");
+      return submitCrawl({
+        datasourceId: source.datasourceId,
+        database: source.database,
+        schema: source.schema || undefined,
+        retryOf: source.id,
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: [...dataMapKeys.all, "crawls"] });
+      toast.success("已发起失败表重试");
+      onClose();
+    },
+  });
+
   const failureColumns = [
     { key: "tableName", title: "表名", dataIndex: "tableName" as const, width: 200 },
     { key: "error", title: "错误", dataIndex: "error" as const, ellipsis: true },
@@ -70,23 +109,43 @@ export default function CrawlDetailDialog({ crawlId, onClose }: Props) {
 
         {crawl && (
           <>
-            <dl className="mt-4 grid grid-cols-3 gap-px overflow-hidden rounded border border-[var(--yak-components-panel-border)] bg-[var(--yak-components-panel-border)]">
+            <div className="mt-4 grid grid-cols-3 gap-px overflow-hidden rounded border border-[var(--yak-components-panel-border)] bg-[var(--yak-components-panel-border)]">
               <Metric label="表" value={crawl.tableCount} />
               <Metric label="字段" value={crawl.columnCount} />
               <Metric label="失败表" value={crawl.failedCount} />
               <Metric label="新增" value={crawl.addedCount} />
               <Metric label="更新" value={crawl.updatedCount} />
               <Metric label="标记缺失" value={crawl.removedCount} />
-            </dl>
+            </div>
 
-            <dl className="mt-4 space-y-1 text-xs text-[var(--yak-components-muted-text)]">
+            {crawl.filteredCount > 0 && (
+              <div className="mt-2.5 text-xs text-[var(--yak-components-muted-text)]">
+                本次过滤了 {crawl.filteredCount} 张表
+                {crawl.excludePattern ? `（正则 ${crawl.excludePattern}）` : ""}
+                ，这些表保持正常状态、字段未重新采集。
+              </div>
+            )}
+
+            <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-[var(--yak-components-muted-text)]">
+              <div className="flex gap-2">
+                <dt>触发方式</dt>
+                <dd className="text-[var(--yak-components-panel-text)]">
+                  {CRAWL_TRIGGER_LABEL[crawl.triggerType] ?? crawl.triggerType}
+                </dd>
+              </div>
+              <div className="flex gap-2">
+                <dt>耗时</dt>
+                <dd className="tabular-nums text-[var(--yak-components-panel-text)]">
+                  {formatDuration(crawl.durationSeconds)}
+                </dd>
+              </div>
+              <div className="flex gap-2">
+                <dt>提交人</dt>
+                <dd className="text-[var(--yak-components-panel-text)]">{crawl.createBy}</dd>
+              </div>
               <div className="flex gap-2">
                 <dt>提交</dt>
                 <dd>{crawl.createdTime}</dd>
-              </div>
-              <div className="flex gap-2">
-                <dt>开始</dt>
-                <dd>{crawl.startedTime || "-"}</dd>
               </div>
               <div className="flex gap-2">
                 <dt>结束</dt>
@@ -98,15 +157,37 @@ export default function CrawlDetailDialog({ crawlId, onClose }: Props) {
           </>
         )}
 
-        {failures.length > 0 && (
-          <div className="mt-4 max-h-64 overflow-auto">
-            <Table<CrawlFailure>
-              columns={failureColumns}
-              dataSource={failures}
-              rowKey="tableName"
-              size="small"
-              bordered
-            />
+        {crawl && crawl.failedCount > 0 && (
+          <div className="mt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-[13px] font-medium text-[var(--yak-components-panel-text)]">
+                本次采集有 {crawl.failedCount} 张表失败
+              </span>
+              <Button
+                size="small"
+                variant="primary"
+                loading={retry.isPending}
+                disabled={retry.isPending || isActive(crawl.status)}
+                onClick={() => retry.mutate()}
+              >
+                <RotateCcw size={13} aria-hidden="true" />
+                重试失败表
+              </Button>
+            </div>
+            <div className="mt-2 max-h-64 overflow-auto">
+              <Table<CrawlFailure>
+                columns={failureColumns}
+                dataSource={failures}
+                rowKey="tableName"
+                size="small"
+                bordered
+              />
+            </div>
+            {retry.isError && (
+              <Alert className="mt-2">
+                {dataMapFailureMessage(retry.error, "重试提交失败，请稍后再试")}
+              </Alert>
+            )}
           </div>
         )}
 

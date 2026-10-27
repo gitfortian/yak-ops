@@ -5,7 +5,8 @@ export interface Paging<T> {
 }
 
 export type TableStatus = "ACTIVE" | "MISSING";
-export type CrawlStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
+export type CrawlStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "INTERRUPTED";
+export type CrawlTrigger = "MANUAL" | "SCHEDULED";
 export type PreviewTruncation = "ROWS" | "SIZE";
 
 export interface Tag {
@@ -117,6 +118,11 @@ export interface Crawl {
   updatedCount: number;
   removedCount: number;
   failedCount: number;
+  filteredCount: number;
+  triggerType: CrawlTrigger;
+  excludePattern: string | null;
+  durationSeconds: number | null;
+  retryOf: string | null;
   error: string | null;
   createdTime: string;
   startedTime: string | null;
@@ -140,4 +146,8 @@ export interface CrawlSubmission {
   /** Required: a run always targets exactly one database. */
   database: string;
   schema?: string;
+  /** Java regex of table names to keep alive without re-crawling. */
+  excludePattern?: string;
+  /** Crawl whose failed tables this run re-attempts. */
+  retryOf?: string;
 }
