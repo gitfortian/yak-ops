@@ -9,16 +9,12 @@ import java.util.Objects;
  * <p>An assigned split is checkpointed by its Reader and Runtime assignment tracker,
  * not duplicated into the enumerator state.
  */
-public record MySqlPendingSplitsState(String sourceFingerprint, boolean splitAssigned, MySqlBinlogSplit pendingSplit)
+public record MySqlPendingSplitsState(boolean splitAssigned, MySqlBinlogSplit pendingSplit)
         implements PendingSplitsState {
 
     public MySqlPendingSplitsState {
-        Objects.requireNonNull(sourceFingerprint, "sourceFingerprint");
-        if (sourceFingerprint.isBlank() || splitAssigned == (pendingSplit != null)) {
+        if (splitAssigned == (pendingSplit != null)) {
             throw new IllegalArgumentException("Invalid MySQL Binlog assignment state");
-        }
-        if (pendingSplit != null && !sourceFingerprint.equals(pendingSplit.definitionFingerprint())) {
-            throw new IllegalArgumentException("MySQL Binlog split belongs to a different source");
         }
     }
 }
