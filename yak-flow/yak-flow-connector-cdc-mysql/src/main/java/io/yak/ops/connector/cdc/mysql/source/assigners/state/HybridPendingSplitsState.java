@@ -9,7 +9,12 @@ import java.util.Objects;
 /** A checkpoint of hybrid source split assignment and Snapshot lifecycle. */
 public final class HybridPendingSplitsState extends PendingSplitsState {
 
-    public enum Phase { BOOTSTRAP, SNAPSHOT, HANDOFF, STREAMING }
+    public enum Phase {
+        BOOTSTRAP,
+        SNAPSHOT,
+        HANDOFF,
+        STREAMING
+    }
 
     private final SnapshotPendingSplitsState snapshotPendingSplits;
     private final boolean binlogAssigned;
@@ -74,12 +79,29 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
         }
     }
 
-    public SnapshotPendingSplitsState getSnapshotPendingSplits() { return snapshotPendingSplits; }
-    public boolean isBinlogSplitAssigned() { return binlogAssigned; }
-    public MySqlBinlogSplit pendingBinlog() { return pendingBinlog; }
-    public Phase phase() { return phase; }
-    public DebeziumOffset lowWatermark() { return lowWatermark; }
-    public DebeziumOffset highWatermark() { return highWatermark; }
+    public SnapshotPendingSplitsState getSnapshotPendingSplits() {
+        return snapshotPendingSplits;
+    }
+
+    public boolean isBinlogSplitAssigned() {
+        return binlogAssigned;
+    }
+
+    public MySqlBinlogSplit pendingBinlog() {
+        return pendingBinlog;
+    }
+
+    public Phase phase() {
+        return phase;
+    }
+
+    public DebeziumOffset lowWatermark() {
+        return lowWatermark;
+    }
+
+    public DebeziumOffset highWatermark() {
+        return highWatermark;
+    }
 
     @Override
     public boolean equals(Object other) {

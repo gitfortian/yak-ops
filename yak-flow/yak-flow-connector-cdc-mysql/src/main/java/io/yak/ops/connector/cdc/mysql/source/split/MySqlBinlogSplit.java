@@ -163,11 +163,7 @@ public final class MySqlBinlogSplit extends MySqlSplit implements StreamSplit {
             // the exact offset captured at suspension; restarting from the oldest new fence
             // would replay already emitted changes and could violate the reader's checkpoint.
             return new MySqlBinlogSplit(
-                    offset,
-                    schemaHistory,
-                    Phase.STREAMING,
-                    Objects.requireNonNull(high, "high"),
-                    completed);
+                    offset, schemaHistory, Phase.STREAMING, Objects.requireNonNull(high, "high"), completed);
         }
         DebeziumOffset start = RecordUtils.getStartingOffsetOfBinlogSplit(completed);
         return new MySqlBinlogSplit(

@@ -24,8 +24,8 @@ import io.debezium.relational.RelationalTableFilters;
 import io.yak.ops.connector.cdc.mysql.debezium.CheckpointOffsetBackingStore;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumUtils;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
-import io.yak.ops.connector.jdbc.database.internal.convert.MySqlTypeConverter;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
+import io.yak.ops.connector.jdbc.database.internal.convert.MySqlTypeConverter;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.configuration.SchemaEvolutionOptions;
 import io.yak.ops.core.data.TableId;
@@ -35,8 +35,8 @@ import io.yak.ops.core.types.TableSchema;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
-import java.sql.ResultSet;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -383,8 +383,8 @@ public final class MySqlSourceConfig {
         }
     }
 
-    public synchronized TableSchema discoverTable(
-            Connection connection, TableId table, String requestedChunkKey) throws SQLException {
+    public synchronized TableSchema discoverTable(Connection connection, TableId table, String requestedChunkKey)
+            throws SQLException {
         Objects.requireNonNull(connection, "connection");
         Objects.requireNonNull(table, "table");
         TableSchema existing = discoveredSchemas.get(table);
@@ -392,8 +392,10 @@ public final class MySqlSourceConfig {
         if (existing != null) {
             if (requestedChunkKey != null) {
                 try {
-                    String selected = ChunkUtils.getChunkKeyColumn(existing, requestedChunkKey).name();
-                    if (!selected.equals(requestedChunkKey)) throw new SQLException("Configured Snapshot key differs from the requested key for " + table);
+                    String selected = ChunkUtils.getChunkKeyColumn(existing, requestedChunkKey)
+                            .name();
+                    if (!selected.equals(requestedChunkKey))
+                        throw new SQLException("Configured Snapshot key differs from the requested key for " + table);
                     if (!chunkKeyColumns.containsKey(table)) discoveredChunkKeyColumns.putIfAbsent(table, selected);
                 } catch (IllegalArgumentException invalidKey) {
                     throw new SQLException("Invalid Snapshot chunk key for " + table, invalidKey);
@@ -414,8 +416,8 @@ public final class MySqlSourceConfig {
                 int precision = result.getInt("COLUMN_SIZE");
                 int scale = result.getInt("DECIMAL_DIGITS");
                 boolean nullable = result.getInt("NULLABLE") != DatabaseMetaData.columnNoNulls;
-                var logicalType = new MySqlTypeConverter().convertColumn(
-                        jdbcType, nativeType, precision, scale, nullable, name);
+                var logicalType =
+                        new MySqlTypeConverter().convertColumn(jdbcType, nativeType, precision, scale, nullable, name);
                 columns.put(result.getInt("ORDINAL_POSITION"), new Column(name, logicalType));
             }
         }
@@ -425,12 +427,15 @@ public final class MySqlSourceConfig {
         try (ResultSet result = metadata.getPrimaryKeys(catalog, table.schema(), table.table())) {
             while (result.next()) primaryKeys.put(result.getShort("KEY_SEQ"), result.getString("COLUMN_NAME"));
         }
-        TableSchema discovered = new TableSchema(new ArrayList<>(columns.values()), new ArrayList<>(primaryKeys.values()));
+        TableSchema discovered =
+                new TableSchema(new ArrayList<>(columns.values()), new ArrayList<>(primaryKeys.values()));
         String selectedKey;
         try {
-            selectedKey = ChunkUtils.getChunkKeyColumn(discovered, requestedChunkKey).name();
+            selectedKey =
+                    ChunkUtils.getChunkKeyColumn(discovered, requestedChunkKey).name();
         } catch (RuntimeException invalidKey) {
-            throw new SQLException("Newly added table " + table + " needs a primary key or configured Snapshot chunk key", invalidKey);
+            throw new SQLException(
+                    "Newly added table " + table + " needs a primary key or configured Snapshot chunk key", invalidKey);
         }
         discoveredSchemas.put(table, discovered);
         discoveredChunkKeyColumns.put(table, selectedKey);
@@ -573,7 +578,8 @@ public final class MySqlSourceConfig {
         connectionProperties.forEach((key, value) -> properties.setProperty("driver." + key, value));
         properties.setProperty("topic.prefix", topicPrefix);
         if (scanNewlyAddedTableEnabled) {
-            if (!databaseList.isEmpty()) properties.setProperty("database.include.list", String.join(",", databaseList));
+            if (!databaseList.isEmpty())
+                properties.setProperty("database.include.list", String.join(",", databaseList));
             else properties.remove("database.include.list");
             if (!tableList.isEmpty()) {
                 properties.setProperty(
@@ -601,8 +607,8 @@ public final class MySqlSourceConfig {
                             MySqlSourceConfigFactory.includeTablesExcept(
                                     tableList.isEmpty()
                                             ? schemas.keySet().stream()
-                                                    .map(table -> Pattern.quote(table.catalog())
-                                                            + "\\." + Pattern.quote(table.table()))
+                                                    .map(table -> Pattern.quote(table.catalog()) + "\\."
+                                                            + Pattern.quote(table.table()))
                                                     .toList()
                                             : tableList,
                                     excludeTableList)));

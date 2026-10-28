@@ -1,30 +1,30 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
-import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.assigners.AssignerStatus;
-import io.yak.ops.core.data.TableId;
+import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.split.ChunkRangeStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
+import io.yak.ops.core.data.TableId;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.zip.CRC32C;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.zip.CRC32C;
 
 /**
  * Serializes enumerator state in one versioned envelope shared by the MySQL split assigners.
@@ -100,7 +100,9 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
     @Override
     public PendingSplitsState deserialize(int version, byte[] bytes) throws IOException {
         if ((version != VERSION && version != VERSION_WITHOUT_CHECKSUM && version != PREVIOUS_VERSION)
-                || bytes == null || bytes.length < Integer.BYTES * 2 || bytes.length > MAX_BYTES) {
+                || bytes == null
+                || bytes.length < Integer.BYTES * 2
+                || bytes.length > MAX_BYTES) {
             throw new IOException("Unsupported MySQL pending splits checkpoint format: " + version);
         }
         if (version == VERSION) {
@@ -108,7 +110,8 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
                 throw new IOException("Truncated checksummed MySQL pending splits checkpoint");
             }
             int payloadLength = bytes.length - Integer.BYTES;
-            int expectedChecksum = ByteBuffer.wrap(bytes, payloadLength, Integer.BYTES).getInt();
+            int expectedChecksum =
+                    ByteBuffer.wrap(bytes, payloadLength, Integer.BYTES).getInt();
             CRC32C checksum = new CRC32C();
             checksum.update(bytes, 0, payloadLength);
             if ((int) checksum.getValue() != expectedChecksum) {
@@ -220,17 +223,41 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
             List<TableId> alreadyProcessedTables = readTableIds(in);
             List<TableId> remainingTables = readTableIds(in);
             AssignerStatus status;
-            try { status = AssignerStatus.fromStatusCode(in.readInt()); }
-            catch (IllegalStateException invalidStatus) { throw new IOException("Unknown MySQL Snapshot Assigner status", invalidStatus); }
+            try {
+                status = AssignerStatus.fromStatusCode(in.readInt());
+            } catch (IllegalStateException invalidStatus) {
+                throw new IOException("Unknown MySQL Snapshot Assigner status", invalidStatus);
+            }
             boolean tableIdCaseSensitive = in.readBoolean();
             boolean remainingTablesCheckpointed = in.readBoolean();
             boolean snapshotMetaReleased = in.readBoolean();
-            snapshot = new SnapshotPendingSplitsState(planned, total, pendingSnapshots, assigned, finished,
-                    finishedInfos, nextTable, nextChunk, typedCursor, alreadyProcessedTables, remainingTables,
-                    status, tableIdCaseSensitive, remainingTablesCheckpointed, snapshotMetaReleased);
+            snapshot = new SnapshotPendingSplitsState(
+                    planned,
+                    total,
+                    pendingSnapshots,
+                    assigned,
+                    finished,
+                    finishedInfos,
+                    nextTable,
+                    nextChunk,
+                    typedCursor,
+                    alreadyProcessedTables,
+                    remainingTables,
+                    status,
+                    tableIdCaseSensitive,
+                    remainingTablesCheckpointed,
+                    snapshotMetaReleased);
         } else {
             snapshot = new SnapshotPendingSplitsState(
-                    planned, total, pendingSnapshots, assigned, finished, finishedInfos, nextTable, nextChunk, typedCursor);
+                    planned,
+                    total,
+                    pendingSnapshots,
+                    assigned,
+                    finished,
+                    finishedInfos,
+                    nextTable,
+                    nextChunk,
+                    typedCursor);
         }
         return new HybridPendingSplitsState(
                 snapshot, binlogAssigned, pending, HybridPendingSplitsState.Phase.values()[phaseIndex], low, high);
@@ -279,7 +306,6 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         }
         return count;
     }
-
 
     private static void writeTableIds(DataOutputStream out, List<TableId> tables) throws IOException {
         if (tables.size() > MAX_SPLITS) throw new IOException("Too many MySQL Snapshot tables in checkpoint");

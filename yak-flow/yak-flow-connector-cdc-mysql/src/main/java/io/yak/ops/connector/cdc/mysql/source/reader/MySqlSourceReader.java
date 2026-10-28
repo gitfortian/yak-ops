@@ -10,11 +10,11 @@ import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaRequestEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitUpdateAckEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitUpdateRequestEvent;
-import io.yak.ops.connector.cdc.mysql.source.events.LatestFinishedSplitsNumberEvent;
-import io.yak.ops.connector.cdc.mysql.source.events.LatestFinishedSplitsNumberRequestEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsAckEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsReportEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsRequestEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.LatestFinishedSplitsNumberEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.LatestFinishedSplitsNumberRequestEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
@@ -147,8 +147,8 @@ public final class MySqlSourceReader
                 }
                 suspendedBinlogSplit = binlog;
                 readerContext.suspendBinlogSplitReader();
-                context.sendSourceEventToCoordinator(
-                        new LatestFinishedSplitsNumberRequestEvent(binlog.finishedSplits().size()));
+                context.sendSourceEventToCoordinator(new LatestFinishedSplitsNumberRequestEvent(
+                        binlog.finishedSplits().size()));
                 context.sendSplitRequest();
             } else {
                 active.add(split);
@@ -187,14 +187,14 @@ public final class MySqlSourceReader
         for (var entry : finished.entrySet()) {
             if (entry.getValue().binlog()) {
                 if (pendingBinlogUpdateGeneration < 0 || !readerContext.isBinlogSplitReaderSuspended()) {
-                    throw new IllegalStateException("A continuous Binlog split can finish only for a requested metadata update");
+                    throw new IllegalStateException(
+                            "A continuous Binlog split can finish only for a requested metadata update");
                 }
                 MySqlBinlogSplit checkpointed =
                         (MySqlBinlogSplit) entry.getValue().checkpoint(splits.snapshotHistory());
                 suspendedBinlogSplit = MySqlBinlogSplit.toSuspendedBinlogSplit(checkpointed);
                 splits.suspendBinlog(suspendedBinlogSplit);
-                context.sendSourceEventToCoordinator(
-                        new BinlogSplitMetaRequestEvent(0, pendingBinlogUpdateGeneration));
+                context.sendSourceEventToCoordinator(new BinlogSplitMetaRequestEvent(0, pendingBinlogUpdateGeneration));
                 requestNextSplit = true;
                 continue;
             }
@@ -205,7 +205,8 @@ public final class MySqlSourceReader
             finishedUnacked.put(snapshot.splitId(), snapshot);
             finishedOffsets.put(
                     snapshot.splitId(),
-                    Objects.requireNonNull(snapshot.finished(), "Finished chunk has no watermark").highWatermark());
+                    Objects.requireNonNull(snapshot.finished(), "Finished chunk has no watermark")
+                            .highWatermark());
             requestNextSplit = true;
         }
         if (!finishedOffsets.isEmpty()) {
@@ -261,8 +262,7 @@ public final class MySqlSourceReader
             pendingBinlogUpdateGeneration = update.getGeneration();
             readerContext.suspendBinlogSplitReader();
             if (suspendedBinlogSplit != null) {
-                context.sendSourceEventToCoordinator(
-                        new BinlogSplitMetaRequestEvent(0, pendingBinlogUpdateGeneration));
+                context.sendSourceEventToCoordinator(new BinlogSplitMetaRequestEvent(0, pendingBinlogUpdateGeneration));
                 context.sendSplitRequest();
             }
         } else if (event instanceof LatestFinishedSplitsNumberEvent latest) {
@@ -277,8 +277,7 @@ public final class MySqlSourceReader
             readerContext.suspendBinlogSplitReader();
             // An unfinished assignment treats the request as a pause acknowledgement and
             // defers metadata delivery until the Snapshot completion checkpoint is durable.
-            context.sendSourceEventToCoordinator(
-                    new BinlogSplitMetaRequestEvent(0, pendingBinlogUpdateGeneration));
+            context.sendSourceEventToCoordinator(new BinlogSplitMetaRequestEvent(0, pendingBinlogUpdateGeneration));
         } else if (event instanceof FinishedSnapshotSplitsAckEvent ack) {
             ack.getFinishedSplits().forEach(id -> {
                 if (finishedUnacked.containsKey(id)) acknowledged.add(id);

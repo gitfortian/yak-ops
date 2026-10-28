@@ -232,8 +232,7 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
         return new DebeziumOffset(copiedPartition, copiedPosition);
     }
 
-    private static void requireNonRegressing(
-            DebeziumOffset previous, DebeziumOffset next, String progress) {
+    private static void requireNonRegressing(DebeziumOffset previous, DebeziumOffset next, String progress) {
         if (previous != null && next != null && next.compareTo(previous) < 0) {
             throw new IllegalStateException("MySQL CDC " + progress + " offset moved backwards");
         }

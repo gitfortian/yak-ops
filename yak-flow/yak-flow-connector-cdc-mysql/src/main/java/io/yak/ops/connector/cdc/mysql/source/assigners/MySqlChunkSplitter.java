@@ -18,8 +18,8 @@ import java.math.RoundingMode;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
-import java.sql.SQLException;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -208,11 +208,9 @@ public final class MySqlChunkSplitter {
      * contract the first split must not be empty, and a terminal MAX is represented
      * by a null upper bound. Comparisons for VARCHAR remain database ordered.
      */
-    private Object nextChunkEnd(
-            Connection connection, TableId table, String column, LogicalTypeRoot type, Object lower)
+    private Object nextChunkEnd(Connection connection, TableId table, String column, LogicalTypeRoot type, Object lower)
             throws SQLException {
-        Object chunkEnd = StatementUtils.queryNextChunkMax(
-                connection, dialect, table, column, type, chunkSize, lower);
+        Object chunkEnd = StatementUtils.queryNextChunkMax(connection, dialect, table, column, type, chunkSize, lower);
         if (chunkEnd == null) return null;
         boolean advancedFromRepeatedKey = false;
         if (lower == null) {
