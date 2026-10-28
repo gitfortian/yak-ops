@@ -3,7 +3,7 @@ package io.yak.ops.connector.cdc.mysql.debezium.reader;
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotRows;
-import io.yak.ops.connector.cdc.mysql.source.utils.ObjectUtils;
+import io.yak.ops.connector.cdc.mysql.source.utils.SplitKeyUtils;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowData;
 import io.yak.ops.core.data.RowKind;
@@ -74,6 +74,14 @@ public final class SnapshotChunkBackfill {
         ensureOpen();
         List<TableRecord> changes = Objects.requireNonNull(event, "event").records();
         if (changes.isEmpty()) return;
+        // Flink's backfill buffer is scoped to a single snapshot split. Do not
+        // silently drop one half of a mixed-table change group before applying it.
+        for (TableRecord change : changes) {
+            if (!range.tableId().equals(change.tableId())) {
+                throw new IllegalArgumentException(
+                        "Backfill event contains changes outside the current Snapshot table");
+            }
+        }
         if (changes.size() == 2) {
             TableRecord before = changes.get(0);
             TableRecord after = changes.get(1);
@@ -87,7 +95,8 @@ public final class SnapshotChunkBackfill {
             if (records.keyless()) {
                 Object oldKey = before.row().getField(chunkColumn);
                 Object newKey = after.row().getField(chunkColumn);
-                if (oldKey == null || newKey == null || compare(oldKey, newKey) != 0) {
+                if (oldKey == null || newKey == null
+                        || !sameChunkKey(oldKey, newKey)) {
                     throw new UnsupportedOperationException(
                             "Source without physical primary keys cannot change Chunk Key during Backfill");
                 }
@@ -123,17 +132,21 @@ public final class SnapshotChunkBackfill {
         Object value = row.row().getField(chunkColumn);
         if (value == null) throw new IllegalArgumentException("Snapshot chunk column must not be null");
         if (range.start() == null && range.end() == null) return true;
-        return (range.start() == null || compare(value, range.start()) >= 0)
-                && (range.end() == null || compare(value, range.end()) < 0);
+        // Share the same half-open boundary algorithm with the Flink-style Binlog
+        // split reader. In particular, avoid narrowing unsigned BIGINT to long.
+        return SplitKeyUtils.splitKeyRangeContains(
+                new Object[] {value},
+                range.start() == null ? null : new Object[] {range.start()},
+                range.end() == null ? null : new Object[] {range.end()});
     }
 
-    private int compare(Object value, Object boundary) {
-        return switch (range.type()) {
-            case TINYINT, SMALLINT, INTEGER, BIGINT ->
-                ObjectUtils.compare(((Number) value).longValue(), ((Number) boundary).longValue());
-            case DECIMAL -> ObjectUtils.compare((BigDecimal) value, (BigDecimal) boundary);
-            default -> throw new IllegalArgumentException("Bounded chunk values require database-aware comparisons");
-        };
+    private boolean sameChunkKey(Object left, Object right) {
+        // Numeric JDBC and Debezium values can have different Java types and scales.
+        // These two half-open comparisons are true together only for equivalent keys.
+        return SplitKeyUtils.splitKeyRangeContains(
+                        new Object[] {left}, new Object[] {right}, null)
+                && SplitKeyUtils.splitKeyRangeContains(
+                        new Object[] {right}, new Object[] {left}, null);
     }
 
     private void ensureOpen() {
