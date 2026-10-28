@@ -117,6 +117,13 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
             return false;
         }
         if (!remainingTablesCheckpointed) restoreLegacyTableState();
+        // A checkpoint can capture all finished splits immediately before notifyCheckpointComplete
+        // advances the in-memory status. Since a restored checkpoint is durable, reconcile that
+        // state before looking for newly configured tables.
+        if (AssignerStatus.isAssigningSnapshotSplits(assignerStatus) && allFinished()) {
+            assignerStatus = assignerStatus.onFinish();
+            checkpointIdToFinish = null;
+        }
         Set<TableId> known = knownTables();
         LinkedHashSet<TableId> current = new LinkedHashSet<>(capturedTables);
         LinkedHashSet<TableId> removed = new LinkedHashSet<>(known);
