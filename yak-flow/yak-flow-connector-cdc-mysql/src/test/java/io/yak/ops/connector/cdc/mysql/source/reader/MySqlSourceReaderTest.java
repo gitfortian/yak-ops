@@ -165,6 +165,31 @@ class MySqlSourceReaderTest {
         }
     }
 
+    @Test
+    void restoresPausedBinlogWhenCoordinatorHasRemovedAnOldCapturedTable() throws Exception {
+        var table = new TableId("shop", null, "orders");
+        var oldTable = new TableId("shop", null, "old_orders");
+        var completed = List.of(
+                new FinishedSnapshotSplitInfo(table, "current-0", null, null, offset(100)),
+                new FinishedSnapshotSplitInfo(oldTable, "removed-0", null, null, offset(100)));
+        var paused = MySqlBinlogSplit.toSuspendedBinlogSplit(
+                MySqlBinlogSplit.forInitialSnapshot()
+                        .withAnchor(offset(50), new byte[] {1})
+                        .startStreaming(offset(100), completed));
+        var events = new ArrayList<SourceEvent>();
+        try (MySqlSourceReader reader = new MySqlSourceReader(
+                config(), context(new AtomicInteger(), events), new TableMetrics(), true)) {
+            reader.addSplits(List.of(paused));
+            assertThat(((LatestFinishedSplitsNumberRequestEvent) events.getFirst())
+                            .getRestoredFinishedSplitsNumber())
+                    .isEqualTo(2);
+            reader.handleSourceEvents(new LatestFinishedSplitsNumberEvent(1, 7, true));
+            assertThat(events.getLast()).isInstanceOf(BinlogSplitMetaRequestEvent.class);
+            assertThat(((BinlogSplitMetaRequestEvent) events.getLast()).getGeneration()).isEqualTo(7);
+            assertThat(reader.snapshotState(2)).containsExactly(paused);
+        }
+    }
+
     private static DebeziumOffset offset(long position) {
         return new DebeziumOffset(Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", position));
     }
