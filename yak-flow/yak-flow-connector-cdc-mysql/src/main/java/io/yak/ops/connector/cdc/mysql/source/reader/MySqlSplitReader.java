@@ -30,6 +30,7 @@ import java.util.Set;
  */
 public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, MySqlSplit> {
     private final MySqlSourceConfig config;
+    private final MySqlSourceReaderContext readerContext;
     private final MySqlSnapshotSplitReadTask snapshots;
     private final TableMetrics metrics;
     private final long generation;
@@ -58,7 +59,16 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     }
 
     public MySqlSplitReader(MySqlSourceConfig config, TableMetrics metrics, int reader) {
+        this(config, metrics, reader, null);
+    }
+
+    MySqlSplitReader(
+            MySqlSourceConfig config,
+            TableMetrics metrics,
+            int reader,
+            MySqlSourceReaderContext readerContext) {
         this.config = Objects.requireNonNull(config, "config");
+        this.readerContext = readerContext;
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         generation = metrics.generation();
         tables = Set.copyOf(config.schemas().keySet());
@@ -75,6 +85,14 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
                     throw new IllegalStateException("MySQL Reader already owns a Binlog split");
                 }
                 binlogSplit = stream;
+                if (readerContext != null) {
+                    readerContext.setHasAssignedBinlogSplit(true);
+                    if (stream.isSuspended() && stream.phase() == MySqlBinlogSplit.Phase.PAUSED) {
+                        readerContext.suspendBinlogSplitReader();
+                    } else {
+                        readerContext.wakeupSuspendedBinlogSplitReader();
+                    }
+                }
                 history = stream.schemaHistory();
                 if (stream.phase() == MySqlBinlogSplit.Phase.BOOTSTRAP) {
                     startBinlog(stream);
@@ -171,6 +189,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
         history = split.schemaHistory();
         startBinlog(split);
         streaming = true;
+        if (readerContext != null) readerContext.wakeupSuspendedBinlogSplitReader();
     }
 
     public void finishSnapshots() {
@@ -179,6 +198,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
 
     public void resumeBinlog(MySqlResumeBinlogEvent event) {
         resume = Objects.requireNonNull(event, "event");
+        if (readerContext != null) readerContext.wakeupSuspendedBinlogSplitReader();
     }
 
     /**
