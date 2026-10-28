@@ -63,10 +63,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     }
 
     MySqlSplitReader(
-            MySqlSourceConfig config,
-            TableMetrics metrics,
-            int reader,
-            MySqlSourceReaderContext readerContext) {
+            MySqlSourceConfig config, TableMetrics metrics, int reader, MySqlSourceReaderContext readerContext) {
         this.config = Objects.requireNonNull(config, "config");
         this.readerContext = readerContext;
         this.metrics = Objects.requireNonNull(metrics, "metrics");
