@@ -126,7 +126,8 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
             int kind = in.readInt();
             PendingSplitsState state =
                     switch (kind) {
-                        case SNAPSHOT_PENDING_SPLITS_STATE_FLAG -> deserializeSnapshotPendingSplitsState(in, splitVersion);
+                        case SNAPSHOT_PENDING_SPLITS_STATE_FLAG ->
+                            deserializeSnapshotPendingSplitsState(in, splitVersion);
                         case BINLOG_PENDING_SPLITS_STATE_FLAG -> deserializeBinlogPendingSplitsState(in, splitVersion);
                         case HYBRID_PENDING_SPLITS_STATE_FLAG -> deserializeHybridPendingSplitsState(in, splitVersion);
                         default -> throw new IOException("Unknown MySQL pending splits state kind: " + kind);
@@ -186,8 +187,8 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         }
     }
 
-    private void writeAssignedSnapshotSplits(
-            DataOutputStream out, Map<String, MySqlSnapshotSplit> assignedSplits) throws IOException {
+    private void writeAssignedSnapshotSplits(DataOutputStream out, Map<String, MySqlSnapshotSplit> assignedSplits)
+            throws IOException {
         if (assignedSplits.size() > MAX_SPLITS) {
             throw new IOException("Too many assigned MySQL snapshot splits");
         }
@@ -255,7 +256,8 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         if (phaseIndex >= HybridPendingSplitsState.Phase.values().length) {
             throw new IOException("Unknown MySQL hybrid phase");
         }
-        MySqlBinlogSplit pending = binlogAssigned ? null : readMySqlSplit(in, splitVersion).asBinlogSplit();
+        MySqlBinlogSplit pending =
+                binlogAssigned ? null : readMySqlSplit(in, splitVersion).asBinlogSplit();
         DebeziumOffset low = readOffset(in);
         DebeziumOffset high = readOffset(in);
         return new HybridPendingSplitsState(
@@ -265,7 +267,8 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
     private BinlogPendingSplitsState deserializeBinlogPendingSplitsState(DataInputStream in, int splitVersion)
             throws IOException {
         boolean assigned = in.readBoolean();
-        MySqlBinlogSplit pending = assigned ? null : readMySqlSplit(in, splitVersion).asBinlogSplit();
+        MySqlBinlogSplit pending =
+                assigned ? null : readMySqlSplit(in, splitVersion).asBinlogSplit();
         return new BinlogPendingSplitsState(assigned, pending);
     }
 

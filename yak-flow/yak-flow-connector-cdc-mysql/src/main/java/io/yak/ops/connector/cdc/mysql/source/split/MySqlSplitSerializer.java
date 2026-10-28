@@ -74,7 +74,9 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
 
     /** Flink CDC's named split-deserialization entry point. */
     public MySqlSplit deserializeSplit(int version, byte[] serialized) throws IOException {
-        if (version != VERSION || serialized == null || serialized.length < Integer.BYTES
+        if (version != VERSION
+                || serialized == null
+                || serialized.length < Integer.BYTES
                 || serialized.length > MAX_BYTES) {
             throw new IOException("Unsupported MySQL split checkpoint version or size: " + version);
         }
