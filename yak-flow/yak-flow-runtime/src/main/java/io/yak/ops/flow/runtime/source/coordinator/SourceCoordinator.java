@@ -330,11 +330,12 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
         return submit(() -> {
             ensureStarted();
             context.ensureDeliveriesCompleted();
+            // Flink SourceCoordinator records assignments at the checkpoint boundary
+            // before snapshotting the SplitEnumerator.
+            context.onCheckpoint(checkpointId);
             EnumStateT state = Objects.requireNonNull(
                     enumerator.snapshotState(checkpointId), "Enumerator snapshot must not be null");
-            Map<Integer, java.util.List<SplitT>> assignments =
-                    context.assignmentTracker().snapshot(checkpointId);
-            return new SourceCoordinatorCheckpoint<>(checkpointId, state, assignments);
+            return new SourceCoordinatorCheckpoint<>(checkpointId, state, context.checkpointedAssignments());
         });
     }
 
@@ -343,8 +344,8 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
         validateCheckpointId(checkpointId);
         return submit(() -> {
                     ensureStarted();
+                    context.onCheckpointComplete(checkpointId);
                     enumerator.notifyCheckpointComplete(checkpointId);
-                    context.assignmentTracker().notifyCheckpointComplete(checkpointId);
                     return context.awaitSourceEventDeliveries();
                 })
                 .thenCompose(deliveries -> deliveries);
@@ -359,8 +360,9 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
     public CompletableFuture<Void> notifyCheckpointAborted(long checkpointId) {
         validateCheckpointId(checkpointId);
         return submit(() -> {
+            // As in Flink, the tracker retains checkpoint buckets until a later
+            // successful checkpoint or subtask reset; abort only notifies the enumerator.
             enumerator.notifyCheckpointAborted(checkpointId);
-            context.assignmentTracker().notifyCheckpointAborted(checkpointId);
             return null;
         });
     }

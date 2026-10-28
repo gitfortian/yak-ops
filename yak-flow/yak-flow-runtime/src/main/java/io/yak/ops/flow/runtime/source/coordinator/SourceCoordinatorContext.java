@@ -161,6 +161,42 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
                 .toArray(CompletableFuture<?>[]::new));
     }
 
+    /** Records split assignments in the checkpoint bucket, as Flink SourceCoordinatorContext does. */
+    void onCheckpoint(long checkpointId) throws Exception {
+        assertCoordinatorThread();
+        assignments.onCheckpoint(checkpointId);
+    }
+
+    /** Drops the assignment history covered by a completed checkpoint. */
+    void onCheckpointComplete(long checkpointId) {
+        assertCoordinatorThread();
+        assignments.onCheckpointComplete(checkpointId);
+    }
+
+    /**
+     * Whole-job recovery keeps in-flight assignment history together with Reader state.
+     * Flink uses these buckets for subtask reset; YakFlow currently restores the complete job.
+     * This adapter does not change the Flink SplitAssignmentTracker algorithm.
+     */
+    Map<Integer, List<SplitT>> checkpointedAssignments() {
+        assertCoordinatorThread();
+        Map<Integer, java.util.LinkedHashMap<String, SplitT>> all = new java.util.LinkedHashMap<>();
+        assignments.assignmentsByCheckpointId().values().forEach(checkpoint ->
+                checkpoint.forEach((subtask, splits) -> {
+                    java.util.LinkedHashMap<String, SplitT> bucket =
+                            all.computeIfAbsent(subtask, ignored -> new java.util.LinkedHashMap<>());
+                    splits.forEach(split -> bucket.putIfAbsent(split.splitId(), split));
+                }));
+        assignments.uncheckpointedAssignments().forEach((subtask, splits) -> {
+            java.util.LinkedHashMap<String, SplitT> bucket =
+                    all.computeIfAbsent(subtask, ignored -> new java.util.LinkedHashMap<>());
+            splits.forEach(split -> bucket.putIfAbsent(split.splitId(), split));
+        });
+        Map<Integer, List<SplitT>> result = new java.util.LinkedHashMap<>();
+        all.forEach((subtask, splits) -> result.put(subtask, List.copyOf(splits.values())));
+        return Map.copyOf(result);
+    }
+
     SplitAssignmentTracker<SplitT> assignmentTracker() {
         assertCoordinatorThread();
         return assignments;
@@ -226,10 +262,11 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
         // A delivery failure afterwards fails the job and restores the last durable checkpoint.
         Set<String> splitIds = new LinkedHashSet<>();
         Set<String> outstandingIds = new HashSet<>(inFlight.keySet());
-        assignments
-                .outstandingAssignments()
-                .values()
+        assignments.uncheckpointedAssignments().values()
                 .forEach(splits -> splits.forEach(split -> outstandingIds.add(split.splitId())));
+        assignments.assignmentsByCheckpointId().values()
+                .forEach(checkpoint -> checkpoint.values()
+                        .forEach(splits -> splits.forEach(split -> outstandingIds.add(split.splitId()))));
         Map<Integer, AddSplitEvent<SplitT>> events = new HashMap<>();
         for (Map.Entry<Integer, List<SplitT>> entry : requested.entrySet()) {
             int reader = Objects.requireNonNull(entry.getKey(), "reader");
@@ -263,8 +300,8 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
             List<String> ids = splits.stream().map(SourceSplit::splitId).toList();
             for (SplitT split : splits) {
                 inFlight.put(split.splitId(), reader);
-                assignments.recordAssignment(reader, split);
             }
+            assignments.recordSplitAssignment(new SplitsAssignment<>(Map.of(reader, List.copyOf(splits))));
             try {
                 CompletionStage<Void> delivered = Objects.requireNonNull(
                         readers.get(reader).sendEvent(events.get(reader)), "SubtaskGateway returned null");
