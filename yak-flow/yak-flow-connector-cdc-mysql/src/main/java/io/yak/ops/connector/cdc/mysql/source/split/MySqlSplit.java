@@ -8,6 +8,9 @@ public abstract class MySqlSplit implements SourceSplit {
 
     protected final String splitId;
 
+    /** Flink CDC's transient cached checkpoint serialization; splits are immutable values. */
+    transient byte[] serializedFormCache;
+
     public MySqlSplit(String splitId) {
         this.splitId = Objects.requireNonNull(splitId, "splitId");
     }
