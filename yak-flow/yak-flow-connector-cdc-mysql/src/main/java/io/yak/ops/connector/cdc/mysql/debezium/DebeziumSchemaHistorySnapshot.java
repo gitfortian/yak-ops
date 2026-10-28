@@ -49,8 +49,7 @@ public final class DebeziumSchemaHistorySnapshot {
         for (String record : new String(complete, StandardCharsets.UTF_8).split("\\n")) {
             if (record.isBlank()) continue;
             JsonNode parsed = JSON.readTree(record);
-            if (!(parsed instanceof ObjectNode json)
-                    || !(json.get("position") instanceof ObjectNode position)) {
+            if (!(parsed instanceof ObjectNode json) || !(json.get("position") instanceof ObjectNode position)) {
                 throw new IOException("Invalid MySQL Schema History record");
             }
             position.removeAll();
