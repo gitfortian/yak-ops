@@ -27,8 +27,7 @@ import java.util.Objects;
 /** The state of the {@link MySqlChunkSplitter}. */
 public class ChunkSplitterState {
 
-    public static final ChunkSplitterState NO_SPLITTING_TABLE_STATE =
-            new ChunkSplitterState(null, null, null);
+    public static final ChunkSplitterState NO_SPLITTING_TABLE_STATE = new ChunkSplitterState(null, null, null);
 
     /** Record current splitting table id in the chunk splitter. */
     private final TableId currentSplittingTableId;
@@ -39,10 +38,7 @@ public class ChunkSplitterState {
     /** Record next chunk id. */
     private final Integer nextChunkId;
 
-    public ChunkSplitterState(
-            TableId currentSplittingTableId,
-            ChunkBound nextChunkStart,
-            Integer nextChunkId) {
+    public ChunkSplitterState(TableId currentSplittingTableId, ChunkBound nextChunkStart, Integer nextChunkId) {
         this.currentSplittingTableId = currentSplittingTableId;
         this.nextChunkStart = nextChunkStart;
         this.nextChunkId = nextChunkId;
