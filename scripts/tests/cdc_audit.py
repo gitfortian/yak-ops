@@ -36,7 +36,10 @@ def test_sources(test_root: Path, classname: str) -> list[Path]:
     source = found[0]
     result = [source]
     declaration = source.read_text(encoding="utf-8")
-    base = re.search(r"\bextends\s+(\w+)", declaration)
+    base = re.search(
+        r"\\bclass\\s+" + re.escape(classname) + r"\\s*(?:<[^{}]+>\\s*)?extends\\s+(\\w+)",
+        declaration,
+    )
     if base:
         parent = list(test_root.rglob(base.group(1) + ".java"))
         if len(parent) != 1:

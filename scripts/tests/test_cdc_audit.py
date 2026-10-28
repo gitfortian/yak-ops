@@ -105,6 +105,17 @@ class CdcAuditTest(unittest.TestCase):
         self.write_report(("first", "second", "added"))
         self.assertEqual("PASS", self.collect()["status"])
 
+    def test_generic_method_bound_is_not_a_test_superclass(self):
+        source = self.sources / "ExampleIT.java"
+        source.write_text(
+            source.read_text(encoding="utf-8").replace(
+                "}\\n",
+                "  public <G extends Gauge<Long>> G metric(G gauge) { return gauge; }\\n}\\n",
+            ),
+            encoding="utf-8",
+        )
+        self.assertEqual("PASS", self.collect()["status"])
+
     def test_inherited_test_methods_are_checked(self):
         self.write_source("ExampleIT", (), "SharedITBase")
         self.write_source("SharedITBase", ("first", "second"))
