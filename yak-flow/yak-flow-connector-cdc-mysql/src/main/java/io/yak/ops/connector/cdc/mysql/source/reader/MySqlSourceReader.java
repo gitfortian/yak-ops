@@ -56,10 +56,7 @@ public final class MySqlSourceReader
             MySqlSourceConfig config, MySqlSourceReaderContext readerContext, TableMetrics metrics, boolean initial) {
         this(
                 new MySqlSplitReader(
-                        config,
-                        metrics,
-                        readerContext.getSourceReaderContext().getIndexOfSubtask(),
-                        readerContext),
+                        config, metrics, readerContext.getSourceReaderContext().getIndexOfSubtask(), readerContext),
                 readerContext,
                 metrics,
                 initial,
