@@ -6,7 +6,7 @@ import io.yak.ops.core.api.common.JobStatus;
 import io.yak.ops.core.configuration.CheckpointingOptions;
 import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.core.configuration.PipelineOptions;
-import io.yak.ops.flow.runtime.checkpoint.AlignedCheckpointCoordinator;
+import io.yak.ops.flow.runtime.checkpoint.CheckpointCoordinator;
 import io.yak.ops.flow.runtime.checkpoint.CheckpointSnapshot;
 import io.yak.ops.flow.runtime.checkpoint.FileCheckpointStore;
 import io.yak.ops.flow.runtime.jobgraph.JobGraph;
@@ -45,7 +45,7 @@ public final class ExecutionGraph {
     private final AtomicLong completedSplits = new AtomicLong();
     private final CompletableFuture<JobExecutionResult> result = new CompletableFuture<>();
     private final CompletableFuture<Void> cancellation = new CompletableFuture<>();
-    private volatile CompletableFuture<AlignedCheckpointCoordinator> checkpointController = new CompletableFuture<>();
+    private volatile CompletableFuture<CheckpointCoordinator> checkpointController = new CompletableFuture<>();
     private final boolean checkpointConfigured;
 
     private volatile JobStatus status = JobStatus.CREATED;
@@ -119,7 +119,7 @@ public final class ExecutionGraph {
         return vertex.getTaskVertex(subtask).getCurrentExecutionAttempt();
     }
 
-    void registerCheckpoint(AlignedCheckpointCoordinator controller) {
+    void registerCheckpoint(CheckpointCoordinator controller) {
         if (!checkpointController.complete(Objects.requireNonNull(controller, "controller"))) {
             throw new IllegalStateException("A job may register a single CheckpointCoordinator");
         }
@@ -333,7 +333,7 @@ public final class ExecutionGraph {
                     new IllegalStateException("Cannot trigger a checkpoint for a terminal or cancelling job"));
         }
         return checkpointController
-                .thenCompose(AlignedCheckpointCoordinator::trigger)
+                .thenCompose(CheckpointCoordinator::triggerCheckpoint)
                 .copy();
     }
 

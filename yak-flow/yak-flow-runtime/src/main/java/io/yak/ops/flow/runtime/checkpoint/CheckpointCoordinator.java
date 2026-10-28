@@ -46,9 +46,9 @@ import org.slf4j.MDC;
  *
  * <p>Only linear, single-input local graphs are supported. No distributed exactly-once.
  */
-public final class AlignedCheckpointCoordinator implements AutoCloseable {
+public final class CheckpointCoordinator implements AutoCloseable {
 
-    private static final Logger LOG = LoggerFactory.getLogger(AlignedCheckpointCoordinator.class);
+    private static final Logger LOG = LoggerFactory.getLogger(CheckpointCoordinator.class);
 
     private final JobGraph jobGraph;
     private final Source<?, SourceSplit, Object> source;
@@ -72,7 +72,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
     private volatile Thread checkpointThread;
     private final AtomicBoolean closed = new AtomicBoolean();
 
-    public AlignedCheckpointCoordinator(
+    public CheckpointCoordinator(
             JobGraph plan,
             Source<?, SourceSplit, Object> source,
             SourceCoordinator<SourceSplit, Object> coordinator,
@@ -86,7 +86,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
     }
 
     /** Adds optional runtime schema state to the same durable checkpoint cut as Source offsets. */
-    public AlignedCheckpointCoordinator(
+    public CheckpointCoordinator(
             JobGraph plan,
             Source<?, SourceSplit, Object> source,
             SourceCoordinator<SourceSplit, Object> coordinator,
@@ -179,7 +179,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
                         if (closed.get() || cancelled.getAsBoolean() || anySourceFinished()) {
                             return;
                         }
-                        runCheckpoint(new CompletableFuture<>());
+                        triggerCheckpointFromCheckpointThread(new CompletableFuture<>());
                     },
                     intervalMillis,
                     Math.max(intervalMillis, minPauseMillis),
@@ -192,14 +192,14 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
      *
      * @return the durable publication outcome, independent of subsequent completion notifications
      */
-    public CompletableFuture<CheckpointSnapshot> trigger() {
+    public CompletableFuture<CheckpointSnapshot> triggerCheckpoint() {
         CompletableFuture<CheckpointSnapshot> result = new CompletableFuture<>();
         if (closed.get()) {
             result.completeExceptionally(new IllegalStateException("Checkpoint coordinator is closed"));
             return result;
         }
         try {
-            timer.execute(() -> runCheckpoint(result));
+            timer.execute(() -> triggerCheckpointFromCheckpointThread(result));
         } catch (java.util.concurrent.RejectedExecutionException error) {
             result.completeExceptionally(error);
         }
@@ -221,7 +221,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
         return completed;
     }
 
-    private void runCheckpoint(CompletableFuture<CheckpointSnapshot> published) {
+    private void triggerCheckpointFromCheckpointThread(CompletableFuture<CheckpointSnapshot> published) {
         try {
             performCheckpoint(published, false);
         } catch (Throwable failure) {
@@ -323,7 +323,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             throw new CheckpointDeclinedException(checkpointId, "Source has already reached EndOfData");
         }
         CheckpointPlan checkpointPlan = calculatePlan(checkpointId);
-        PendingCheckpoint pending = new PendingCheckpoint(checkpointId, checkpointPlan.tasksToAcknowledge());
+        PendingCheckpoint pending = createPendingCheckpoint(checkpointId, checkpointPlan);
         checkpointDeadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
         if (terminal) {
             checkpointDeadlineNanos = Math.min(checkpointDeadlineNanos, finalCheckpointDeadlineNanos);
@@ -334,7 +334,6 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
         List<SourceOperatorStreamTask<Object, SourceSplit>> paused = new ArrayList<>();
         Map<CheckpointSnapshot.OperatorSubtask, CompletableFuture<OneInputStreamTask.CheckpointState>>
                 acknowledgements = new LinkedHashMap<>();
-        boolean stored = false;
         Throwable originalFailure = null;
         // A decline in an upstream Operator must wake a checkpoint currently awaiting the Sink.
         CompletableFuture<Void> firstFailedAcknowledgement = new CompletableFuture<>();
@@ -347,59 +346,8 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             await(coordinator.pauseForCheckpoint());
             coordinatorFrozen = true;
             waitForAssignments();
-            // Register the running participants before injecting any trigger barrier.
-            for (OneInputStreamTask task : inputTasks) {
-                CheckpointSnapshot.OperatorSubtask id = task.checkpointIdentity();
-                if (!checkpointPlan.tasksToAcknowledge().contains(id)) {
-                    continue;
-                }
-                CompletableFuture<OneInputStreamTask.CheckpointState> acknowledgement =
-                        task.expectCheckpoint(checkpointId);
-                acknowledgement.whenComplete((unused, error) -> {
-                    if (error != null) {
-                        firstFailedAcknowledgement.completeExceptionally(error);
-                    }
-                });
-                if (acknowledgements.putIfAbsent(id, acknowledgement) != null) {
-                    throw new IllegalStateException("Duplicate operator state identity: " + id);
-                }
-            }
-            Map<Integer, List<SourceSplit>> readerStates = new LinkedHashMap<>();
-            String sourceUid =
-                    jobGraph.getVertices().getFirst().getHeadOperator().getUid();
-            for (SourceOperatorStreamTask<Object, SourceSplit> sourceTask : sourceTasks) {
-                CheckpointSnapshot.OperatorSubtask id = new CheckpointSnapshot.OperatorSubtask(
-                        sourceUid, sourceTask.taskInfo().subtaskIndex());
-                if (!checkpointPlan.triggerTasks().contains(id)) {
-                    continue;
-                }
-                ensureActive();
-                List<SourceSplit> splits;
-                try {
-                    splits = await(sourceTask.pauseAndEmitBarrier(checkpointId));
-                } catch (Exception error) {
-                    if (sourceTask.hasFinishedOutput()
-                            || sourceTask.completionFuture().isDone()) {
-                        throw new CheckpointDeclinedException(checkpointId, "Source finished during checkpoint");
-                    }
-                    throw error;
-                }
-                paused.add(sourceTask);
-                readerStates.put(sourceTask.taskInfo().subtaskIndex(), splits);
-                pending.acknowledgeTask(id);
-            }
-            SourceCoordinatorCheckpoint<SourceSplit, Object> sourceState =
-                    await(coordinator.snapshotCoordinator(checkpointId));
-            // The Reader and Enumerator are paused *now*. Serialize their potentially mutable
-            // Split/Enumerator objects before either one is allowed to resume. Downstream barrier
-            // alignment may take time and must never change the recorded source offset.
-            CheckpointSnapshot frozenSource = serialize(checkpointId, sourceState, readerStates, Map.of());
-            for (OneInputStreamTask task : inputTasks) {
-                if (checkpointPlan.triggerTasks().contains(task.checkpointIdentity())) {
-                    await(task.triggerCheckpoint(checkpointId));
-                }
-            }
-
+            CheckpointSnapshot frozenSource = triggerTasks(
+                    checkpointId, checkpointPlan, pending, paused, acknowledgements, firstFailedAcknowledgement);
             // Barriers follow captured source offsets, but the gates can align concurrently
             // with new records on faster producer channels.
             for (SourceOperatorStreamTask<Object, SourceSplit> task : paused) {
@@ -417,7 +365,7 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
                 ensureActive();
                 await(CompletableFuture.anyOf(entry.getValue(), firstFailedAcknowledgement));
                 OneInputStreamTask.CheckpointState state = await(entry.getValue());
-                pending.acknowledgeTask(entry.getKey());
+                receiveAcknowledgeMessage(pending, entry.getKey());
                 if (state.finished()) {
                     finishedReports.add(entry.getKey());
                 } else if (!state.operatorStates().isEmpty()) {
@@ -466,42 +414,14 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
             if (snapshot.hasFinishedOperators() && !terminal) {
                 throw new CheckpointDeclinedException(checkpointId, "Finished state requires a terminal checkpoint");
             }
-            if (!pending.isFullyAcknowledged()) {
-                throw new IllegalStateException("Checkpoint has missing task acknowledgements");
-            }
-            storage.save(snapshot);
-            pending.markPersisted(snapshot);
-            stored = true;
-            LOG.info("YakFlow checkpoint saved, jobId={}, checkpointId={}", jobGraph.jobID(), checkpointId);
-            published.complete(snapshot);
-            if (System.nanoTime() >= checkpointDeadlineNanos) {
-                throw new IllegalStateException("Checkpoint persisted after deadline; refusing completion callback");
-            }
-            // Commit prepared external transactions only after storage.save(snapshot) returned.
-            // Source completion is withheld until every participating Sink commit succeeds.
-            for (OneInputStreamTask task : inputTasks) {
-                if (task.isSinkTask() && !task.completionFuture().isDone()) {
-                    await(task.notifyCheckpointComplete(checkpointId));
-                }
-            }
-            await(coordinator.notifyCheckpointComplete(checkpointId));
-            for (SourceOperatorStreamTask<Object, SourceSplit> sourceTask : sourceTasks) {
-                if (!sourceTask.completionFuture().isDone()) {
-                    await(sourceTask.notifyCheckpointComplete(checkpointId));
-                }
-            }
-            pending.complete();
+            maybeCompleteCheckpoint(pending, snapshot, published);
         } catch (Exception | Error failure) {
-            if (pending.status() == PendingCheckpoint.Status.PERSISTED) {
-                // This checkpoint is already durable. Recovery, not abort, must resolve XA.
-                pending.failCompletion();
-            } else if (pending.status() == PendingCheckpoint.Status.PENDING) {
-                pending.abort();
-            }
+            abortPendingCheckpoint(pending);
             originalFailure = failure;
             throw failure;
         } finally {
-            if (!stored) {
+            if (pending.status() == PendingCheckpoint.Status.PENDING
+                    || pending.status() == PendingCheckpoint.Status.ABORTED) {
                 Throwable reason = originalFailure == null
                         ? new CheckpointDeclinedException(checkpointId, "checkpoint did not complete")
                         : originalFailure;
@@ -554,6 +474,131 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
                 }
             }
         }
+    }
+
+    /** Creates the checkpoint from the tasks which must acknowledge its barrier. */
+    private PendingCheckpoint createPendingCheckpoint(long checkpointId, CheckpointPlan plan) {
+        return new PendingCheckpoint(checkpointId, plan.getTasksToWaitFor());
+    }
+
+    /** Receives the task acknowledgement; duplicate and unknown ACKs cannot complete a checkpoint. */
+    private void receiveAcknowledgeMessage(
+            PendingCheckpoint checkpoint, CheckpointSnapshot.OperatorSubtask task) {
+        PendingCheckpoint.TaskAcknowledgeResult result = checkpoint.acknowledgeTask(task);
+        if (result != PendingCheckpoint.TaskAcknowledgeResult.SUCCESS) {
+            throw new IllegalStateException(
+                    "Checkpoint " + checkpoint.getCheckpointID() + " rejected acknowledgement " + task + ": " + result);
+        }
+    }
+
+    /** A completed durable publication must not be aborted if its callbacks fail. */
+    private void abortPendingCheckpoint(PendingCheckpoint checkpoint) {
+        if (checkpoint.status() == PendingCheckpoint.Status.PERSISTED) {
+            checkpoint.failCompletion();
+        } else if (checkpoint.status() == PendingCheckpoint.Status.PENDING) {
+            checkpoint.abort();
+        }
+    }
+
+    /** Triggers task barriers after Source Coordinator and Reader state has been frozen. */
+    private CheckpointSnapshot triggerTasks(
+            long checkpointId,
+            CheckpointPlan checkpointPlan,
+            PendingCheckpoint pending,
+            List<SourceOperatorStreamTask<Object, SourceSplit>> paused,
+            Map<CheckpointSnapshot.OperatorSubtask, CompletableFuture<OneInputStreamTask.CheckpointState>> acknowledgements,
+            CompletableFuture<Void> firstFailedAcknowledgement) throws Exception {
+        // Register the running participants before injecting any trigger barrier.
+        for (OneInputStreamTask task : inputTasks) {
+            CheckpointSnapshot.OperatorSubtask id = task.checkpointIdentity();
+            if (!checkpointPlan.getTasksToWaitFor().contains(id)) {
+                continue;
+            }
+            CompletableFuture<OneInputStreamTask.CheckpointState> acknowledgement =
+                    task.expectCheckpoint(checkpointId);
+            acknowledgement.whenComplete((unused, error) -> {
+                if (error != null) {
+                    firstFailedAcknowledgement.completeExceptionally(error);
+                }
+            });
+            if (acknowledgements.putIfAbsent(id, acknowledgement) != null) {
+                throw new IllegalStateException("Duplicate operator state identity: " + id);
+            }
+        }
+        Map<Integer, List<SourceSplit>> readerStates = new LinkedHashMap<>();
+        String sourceUid =
+                jobGraph.getVertices().getFirst().getHeadOperator().getUid();
+        for (SourceOperatorStreamTask<Object, SourceSplit> sourceTask : sourceTasks) {
+            CheckpointSnapshot.OperatorSubtask id = new CheckpointSnapshot.OperatorSubtask(
+                    sourceUid, sourceTask.taskInfo().subtaskIndex());
+            if (!checkpointPlan.getTasksToTrigger().contains(id)) {
+                continue;
+            }
+            ensureActive();
+            List<SourceSplit> splits;
+            try {
+                splits = await(sourceTask.pauseAndEmitBarrier(checkpointId));
+            } catch (Exception error) {
+                if (sourceTask.hasFinishedOutput()
+                        || sourceTask.completionFuture().isDone()) {
+                    throw new CheckpointDeclinedException(checkpointId, "Source finished during checkpoint");
+                }
+                throw error;
+            }
+            paused.add(sourceTask);
+            readerStates.put(sourceTask.taskInfo().subtaskIndex(), splits);
+            receiveAcknowledgeMessage(pending, id);
+        }
+        SourceCoordinatorCheckpoint<SourceSplit, Object> sourceState =
+                await(coordinator.snapshotCoordinator(checkpointId));
+        // The Reader and Enumerator are paused *now*. Serialize their potentially mutable
+        // Split/Enumerator objects before either one is allowed to resume. Downstream barrier
+        // alignment may take time and must never change the recorded source offset.
+        CheckpointSnapshot frozenSource = serialize(checkpointId, sourceState, readerStates, Map.of());
+        for (OneInputStreamTask task : inputTasks) {
+            if (checkpointPlan.getTasksToTrigger().contains(task.checkpointIdentity())) {
+                await(task.triggerCheckpoint(checkpointId));
+            }
+        }
+        return frozenSource;
+    }
+
+    /** Completes the pending checkpoint only after every task acknowledged its state. */
+    private void maybeCompleteCheckpoint(
+            PendingCheckpoint pending,
+            CheckpointSnapshot snapshot,
+            CompletableFuture<CheckpointSnapshot> published) throws Exception {
+        if (!pending.isFullyAcknowledged()) {
+            throw new IllegalStateException("Checkpoint has missing task acknowledgements");
+        }
+        completePendingCheckpoint(pending, snapshot, published);
+    }
+
+    /** Finalizes durable state before notifying Sink committers and Source participants. */
+    private void completePendingCheckpoint(
+            PendingCheckpoint pending,
+            CheckpointSnapshot snapshot,
+            CompletableFuture<CheckpointSnapshot> published) throws Exception {
+        pending.finalizeCheckpoint(snapshot, storage);
+        LOG.info("YakFlow checkpoint saved, jobId={}, checkpointId={}", jobGraph.jobID(), checkpointId);
+        published.complete(snapshot);
+        if (System.nanoTime() >= checkpointDeadlineNanos) {
+            throw new IllegalStateException("Checkpoint persisted after deadline; refusing completion callback");
+        }
+        // Commit prepared external transactions only after storage.save(snapshot) returned.
+        // Source completion is withheld until every participating Sink commit succeeds.
+        for (OneInputStreamTask task : inputTasks) {
+            if (task.isSinkTask() && !task.completionFuture().isDone()) {
+                await(task.notifyCheckpointComplete(checkpointId));
+            }
+        }
+        await(coordinator.notifyCheckpointComplete(checkpointId));
+        for (SourceOperatorStreamTask<Object, SourceSplit> sourceTask : sourceTasks) {
+            if (!sourceTask.completionFuture().isDone()) {
+                await(sourceTask.notifyCheckpointComplete(checkpointId));
+            }
+        }
+        pending.complete();
     }
 
     private static Throwable accumulate(Throwable previous, Throwable error) {

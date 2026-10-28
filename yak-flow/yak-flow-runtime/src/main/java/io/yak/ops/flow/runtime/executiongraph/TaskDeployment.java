@@ -10,7 +10,7 @@ import io.yak.ops.core.configuration.CheckpointingOptions;
 import io.yak.ops.core.configuration.ExecutionOptions;
 import io.yak.ops.core.configuration.PipelineOptions;
 import io.yak.ops.core.schema.SchemaVersionedTableState;
-import io.yak.ops.flow.runtime.checkpoint.AlignedCheckpointCoordinator;
+import io.yak.ops.flow.runtime.checkpoint.CheckpointCoordinator;
 import io.yak.ops.flow.runtime.checkpoint.CheckpointSnapshot;
 import io.yak.ops.flow.runtime.checkpoint.FileCheckpointStore;
 import io.yak.ops.flow.runtime.configuration.RuntimeOptions;
@@ -66,7 +66,7 @@ final class TaskDeployment {
     private SourceCoordinator<SourceSplit, Object> coordinator;
     private CheckpointSnapshot restoredCheckpoint;
     private FileCheckpointStore checkpointStore;
-    private AlignedCheckpointCoordinator checkpointCoordinator;
+    private CheckpointCoordinator checkpointCoordinator;
     private SchemaCoordinator schemaCoordinator;
 
     TaskDeployment(ExecutionGraph executionGraph, boolean recoverFromLatestCheckpoint) {
@@ -297,8 +297,8 @@ final class TaskDeployment {
                 new OperatorCoordinatorContext(jobGraph.jobID(), sourceVertex.getId(), sourceVertex.getParallelism());
         Map<Integer, List<SourceSplit>> restoredReaderSplits = Map.of();
         if (restoredCheckpoint != null) {
-            restoredReaderSplits = AlignedCheckpointCoordinator.restoreSplits(restoredCheckpoint, source);
-            Object enumeratorState = AlignedCheckpointCoordinator.restoreEnumerator(restoredCheckpoint, source);
+            restoredReaderSplits = CheckpointCoordinator.restoreSplits(restoredCheckpoint, source);
+            Object enumeratorState = CheckpointCoordinator.restoreEnumerator(restoredCheckpoint, source);
             coordinator = SourceCoordinator.restore(
                     source,
                     coordinatorContext,
@@ -340,7 +340,7 @@ final class TaskDeployment {
         }
 
         if (checkpointStore != null) {
-            checkpointCoordinator = new AlignedCheckpointCoordinator(
+            checkpointCoordinator = new CheckpointCoordinator(
                     jobGraph,
                     source,
                     coordinator,

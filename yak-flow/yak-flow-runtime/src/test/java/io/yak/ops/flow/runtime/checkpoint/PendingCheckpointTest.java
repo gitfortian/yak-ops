@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -18,16 +19,16 @@ class PendingCheckpointTest {
             new CheckpointSnapshot.OperatorSubtask("sink", 0);
 
     @Test
-    void waitsForEveryParticipantBeforeDurablePublication() {
+    void waitsForEveryParticipantBeforeDurablePublication() throws Exception {
         PendingCheckpoint pending = new PendingCheckpoint(17, Set.of(SOURCE, SINK));
         assertFalse(pending.isFullyAcknowledged());
-        pending.acknowledgeTask(SOURCE);
-        assertEquals(1, pending.numberOfNonAcknowledgedTasks());
-        assertThrows(IllegalStateException.class, () -> pending.markPersisted(snapshot(17)));
-        assertThrows(IllegalArgumentException.class, () -> pending.acknowledgeTask(SOURCE));
+        assertEquals(PendingCheckpoint.TaskAcknowledgeResult.SUCCESS, pending.acknowledgeTask(SOURCE));
+        assertEquals(1, pending.getNumberOfNonAcknowledgedTasks());
+        assertThrows(IllegalStateException.class, () -> pending.finalizeCheckpoint(snapshot(17), store()));
+        assertEquals(PendingCheckpoint.TaskAcknowledgeResult.DUPLICATE, pending.acknowledgeTask(SOURCE));
         pending.acknowledgeTask(SINK);
         assertTrue(pending.isFullyAcknowledged());
-        pending.markPersisted(snapshot(17));
+        pending.finalizeCheckpoint(snapshot(17), store());
         assertEquals(PendingCheckpoint.Status.PERSISTED, pending.status());
         assertThrows(IllegalStateException.class, pending::abort);
         pending.complete();
@@ -36,25 +37,40 @@ class PendingCheckpointTest {
     }
 
     @Test
-    void rejectsUnknownTasksAndCheckpointIdentityMismatch() {
+    void rejectsUnknownTasksAndCheckpointIdentityMismatch() throws Exception {
         var pending = new PendingCheckpoint(18, Set.of(SOURCE));
-        assertThrows(IllegalArgumentException.class, () -> pending.acknowledgeTask(SINK));
+        assertEquals(PendingCheckpoint.TaskAcknowledgeResult.UNKNOWN, pending.acknowledgeTask(SINK));
         pending.acknowledgeTask(SOURCE);
-        assertThrows(IllegalStateException.class, () -> pending.markPersisted(snapshot(19)));
+        assertThrows(IllegalStateException.class, () -> pending.finalizeCheckpoint(snapshot(19), store()));
         pending.abort();
         assertEquals(PendingCheckpoint.Status.ABORTED, pending.status());
-        assertThrows(IllegalStateException.class, () -> pending.acknowledgeTask(SOURCE));
+        assertEquals(PendingCheckpoint.TaskAcknowledgeResult.DISCARDED, pending.acknowledgeTask(SOURCE));
     }
 
     @Test
-    void persistedCheckpointCannotAbortAfterExternalCommitFailure() {
+    void persistedCheckpointCannotAbortAfterExternalCommitFailure() throws Exception {
         var pending = new PendingCheckpoint(20, Set.of(SINK));
         pending.acknowledgeTask(SINK);
-        pending.markPersisted(snapshot(20));
+        pending.finalizeCheckpoint(snapshot(20), store());
         pending.failCompletion();
         assertEquals(PendingCheckpoint.Status.COMPLETION_FAILED, pending.status());
         assertThrows(IllegalStateException.class, pending::abort);
         assertThrows(IllegalStateException.class, pending::complete);
+    }
+
+    private static CompletedCheckpointStore store() {
+        return new CompletedCheckpointStore() {
+            @Override
+            public Optional<CheckpointSnapshot> loadLatest(String graphSignature) {
+                return Optional.empty();
+            }
+
+            @Override
+            public void save(CheckpointSnapshot snapshot) {}
+
+            @Override
+            public void close() {}
+        };
     }
 
     private static CheckpointSnapshot snapshot(long id) {
