@@ -98,6 +98,20 @@ class MySqlSplitSerializerTest {
     }
 
     @Test
+    void testSplitVersionAndDefensiveSerializedFormCache() throws Exception {
+        var serializer = MySqlSplitSerializer.INSTANCE;
+        assertEquals(1, serializer.getVersion());
+        var split = new MySqlSnapshotSplit(
+                "cached-0", new TableId("shop", null, "orders"), null, 12L, null);
+        byte[] baseline = serializer.serialize(split);
+        byte[] corruptedCopy = serializer.serialize(split);
+        corruptedCopy[0] ^= 0x7F;
+        assertArrayEquals(baseline, serializer.serialize(split));
+        assertEquals(split, serializer.deserializeSplit(serializer.getVersion(), baseline));
+        assertThrows(IOException.class, () -> serializer.deserializeSplit(10, baseline));
+    }
+
+    @Test
     void classConversionPreservesTheCurrentTypedSplitCheckpointContract() throws Exception {
         TableId TABLE = new TableId("shop", null, "orders");
         ChunkRange range = new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, 100L, 200L);
