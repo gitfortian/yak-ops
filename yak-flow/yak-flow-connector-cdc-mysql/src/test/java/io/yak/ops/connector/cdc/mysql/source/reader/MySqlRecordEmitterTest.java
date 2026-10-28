@@ -155,16 +155,87 @@ class MySqlRecordEmitterTest {
             var output = new ArrayList<TableRecord>();
             emitter.emitRecord(MySqlFetchedRecord.prepared(prepared), output::add, state);
             assertEquals(2, output.size());
-            assertEquals(ChangeEventId.snapshot("identity-test", "chunk-0", 0),
-                    output.getFirst().changeEventId());
-            assertEquals(ChangeEventId.snapshot("identity-test", "chunk-0", 1),
-                    output.getLast().changeEventId());
+            assertNotEquals(output.getFirst().changeEventId(), output.getLast().changeEventId());
+            assertEquals("identity-test", output.getFirst().changeEventId().sourceId());
+            assertTrue(output.getFirst().changeEventId().eventId().startsWith("snapshot:chunk-0:key:"));
+            // The deliberately duplicated physical key is not valid MySQL table data,
+            // but distinct emitted images must not reuse one event identity.
+            assertTrue(output.getFirst().changeEventId().eventId().endsWith(":0"));
+            assertTrue(output.getLast().changeEventId().eventId().endsWith(":1"));
             var serializer = new MySqlSplitSerializer();
             var restored = (MySqlSnapshotSplit) serializer.deserialize(
                     serializer.getVersion(), serializer.serialize((MySqlSnapshotSplit) state.checkpoint(null)));
             assertEquals(null, restored.output());
             assertEquals(position(20, 0), restored.finished().highWatermark());
             assertEquals(null, ((MySqlSnapshotSplit) MySqlSplitState.fromSplit(raw).checkpoint(null)).finished());
+        }
+    }
+
+
+    @Test
+    void snapshotIdentitiesFollowPhysicalKeysWhenReplayedChunkChangesOrder() throws Exception {
+        var schema = new TableSchema(
+                List.of(
+                        new Column("id", LogicalTypes.BIGINT.copy(false)),
+                        new Column("name", LogicalTypes.varchar(100))),
+                List.of("id"));
+        var config = MySqlSource.builder()
+                .hostname("localhost").username("user").password("secret")
+                .serverId(9030).topicPrefix("keyed-identity-test").table(TABLE, schema)
+                .build().config();
+        try (var splitReader = new MySqlSplitReader(config)) {
+            var emitter = new MySqlRecordEmitter(
+                    new MySqlSourceReaderContext(context()), splitReader, new TableMetrics(), config.topicPrefix());
+            var raw = new MySqlSnapshotSplit("stable-chunk", TABLE, null, null, null);
+            var first = raw.withOutput(new MySqlSnapshotOutput(
+                    position(10, 0), position(20, 0),
+                    List.of(
+                            new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L, "before")),
+                            new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(2L, "second")))));
+            var retried = raw.withOutput(new MySqlSnapshotOutput(
+                    position(10, 0), position(30, 0),
+                    List.of(
+                            new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(0L, "new")),
+                            new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(2L, "updated")),
+                            new TableRecord(TABLE, RowKind.INSERT, GenericRowData.of(1L, "after")))));
+            var originalRows = new ArrayList<TableRecord>();
+            var retriedRows = new ArrayList<TableRecord>();
+            emitter.emitRecord(MySqlFetchedRecord.prepared(first), originalRows::add, MySqlSplitState.fromSplit(raw));
+            emitter.emitRecord(MySqlFetchedRecord.prepared(retried), retriedRows::add, MySqlSplitState.fromSplit(raw));
+
+            assertEquals(originalRows.get(0).changeEventId(), retriedRows.get(2).changeEventId());
+            assertEquals(originalRows.get(1).changeEventId(), retriedRows.get(1).changeEventId());
+            assertNotEquals(originalRows.get(0).changeEventId(), retriedRows.get(0).changeEventId());
+            assertNotEquals(retriedRows.get(0).changeEventId(), retriedRows.get(1).changeEventId());
+        }
+    }
+
+    @Test
+    void keylessSnapshotIdentitiesPreserveDuplicateOccurrenceAndIgnoreOtherRowInsertions() throws Exception {
+        var schema = new TableSchema(
+                List.of(new Column("name", LogicalTypes.varchar(100))), List.of());
+        var config = MySqlSource.builder()
+                .hostname("localhost").username("user").password("secret")
+                .serverId(9031).topicPrefix("keyless-identity-test").table(TABLE, schema)
+                .build().config();
+        try (var splitReader = new MySqlSplitReader(config)) {
+            var emitter = new MySqlRecordEmitter(
+                    new MySqlSourceReaderContext(context()), splitReader, new TableMetrics(), config.topicPrefix());
+            var raw = new MySqlSnapshotSplit("keyless-chunk", TABLE, null, null, null);
+            var original = raw.withOutput(new MySqlSnapshotOutput(
+                    position(10, 0), position(20, 0), List.of(
+                            row(RowKind.INSERT, "duplicate"), row(RowKind.INSERT, "duplicate"))));
+            var retried = raw.withOutput(new MySqlSnapshotOutput(
+                    position(10, 0), position(25, 0), List.of(
+                            row(RowKind.INSERT, "other"), row(RowKind.INSERT, "duplicate"),
+                            row(RowKind.INSERT, "duplicate"))));
+            var before = new ArrayList<TableRecord>();
+            var after = new ArrayList<TableRecord>();
+            emitter.emitRecord(MySqlFetchedRecord.prepared(original), before::add, MySqlSplitState.fromSplit(raw));
+            emitter.emitRecord(MySqlFetchedRecord.prepared(retried), after::add, MySqlSplitState.fromSplit(raw));
+            assertNotEquals(before.get(0).changeEventId(), before.get(1).changeEventId());
+            assertEquals(before.get(0).changeEventId(), after.get(1).changeEventId());
+            assertEquals(before.get(1).changeEventId(), after.get(2).changeEventId());
         }
     }
 
