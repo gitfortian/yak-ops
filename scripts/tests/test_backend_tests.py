@@ -22,6 +22,17 @@ class SuiteSelectionTest(unittest.TestCase):
 
     def test_unit_test_change_does_not_run_real_database(self):
         self.assertEqual([], subject.select([subject.JDBC + "/src/test/java/JdbcBatchExecutionTest.java"]))
+        self.assertEqual([], subject.select([subject.CDC + "/src/test/java/SnapshotChunkBackfillBudgetTest.java"]))
+
+    def test_connector_local_cdc_it_runs_real_mysql_suite(self):
+        selected = subject.select([subject.CDC + "/src/test/java/MySqlSnapshotBackfillIT.java"])
+        self.assertEqual(["cdc"], selected)
+
+    def test_cdc_production_change_retains_sink_and_recovery_acceptance(self):
+        selected = subject.select([subject.CDC + "/src/main/java/reader/Reader.java"])
+        self.assertIn("cdc", selected)
+        self.assertIn("backend-e2e", selected)
+        self.assertIn("recovery-e2e", selected)
 
     def test_common_jdbc_includes_oracle(self):
         selected = subject.select([subject.JDBC + "/src/main/java/reader/JdbcReader.java"])
@@ -70,6 +81,7 @@ class NightlyAcceptanceTest(unittest.TestCase):
     def test_release_full_retains_end_to_end_acceptance(self):
         self.assertIn("backend-e2e", subject.SUITES)
         self.assertIn("recovery-e2e", subject.SUITES)
+        self.assertIn("cdc", subject.SUITES)
         self.assertFalse(any(name.startswith("cdc-") for name in subject.SUITES))
 
 

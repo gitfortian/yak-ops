@@ -11,7 +11,7 @@ import sys
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
-SUITES = ("jdbc-mysql", "jdbc-postgres", "jdbc-oracle", "pipeline", "business", "backend-e2e", "recovery-e2e")
+SUITES = ("jdbc-mysql", "jdbc-postgres", "jdbc-oracle", "pipeline", "business", "cdc", "backend-e2e", "recovery-e2e")
 JDBC = "yak-flow/yak-flow-connector-jdbc/"
 CDC = "yak-flow/yak-flow-connector-cdc-mysql/"
 CDC_BASE = "yak-flow/yak-flow-connector-cdc-base/"
@@ -87,7 +87,7 @@ def affected_modules(owners: list[str]) -> set[str]:
 
 
 def test_suites(path: str) -> set[str]:
-    """Select registered integration suites, with CDC covered by end-to-end tests."""
+    """Select registered integration suites, including connector-local CDC contracts."""
     if "/src/test/" in path:
         if not path.endswith("IT.java"):
             return set()
@@ -98,7 +98,7 @@ def test_suites(path: str) -> set[str]:
             vendor = next((v for v in ("mysql", "postgres", "oracle") if v in filename.lower()), None)
             return {"jdbc-" + vendor} if vendor else {"pipeline"}
         if path.startswith(CDC):
-            return {"backend-e2e", "recovery-e2e"}
+            return {"cdc"}
         if path.startswith(E2E):
             return {"recovery-e2e"} if "Recovery" in filename else {"backend-e2e"}
         if path.startswith(BUSINESS):
@@ -112,7 +112,7 @@ def test_suites(path: str) -> set[str]:
             return suites | ({"recovery-e2e"} if vendor == "mysql" else set())
         return {"jdbc-mysql", "jdbc-postgres", "jdbc-oracle", "pipeline", "backend-e2e", "recovery-e2e"}
     if path.startswith(CDC_BASE) or path.startswith(CDC):
-        return {"backend-e2e", "recovery-e2e"}
+        return {"cdc", "backend-e2e", "recovery-e2e"}
     if path.startswith(RUNTIME):
         return {"pipeline", "recovery-e2e", "backend-e2e"}
     if path.startswith("yak-flow/yak-flow-connector-base/"):
