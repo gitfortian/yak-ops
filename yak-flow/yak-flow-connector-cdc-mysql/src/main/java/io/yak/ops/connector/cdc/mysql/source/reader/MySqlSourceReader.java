@@ -12,6 +12,7 @@ import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsAckEve
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsReportEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsRequestEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
+import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
