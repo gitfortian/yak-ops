@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 /** Tests actual Enumerator async callbacks, durable cursors and reader assignments. */
-class MySqlTypedSnapshotAssignmentTest {
+class MySqlSourceEnumeratorTest {
     private static final TableId ORDERS = new TableId("shop", null, "orders");
     private static final PendingSplitsStateSerializer SERIALIZER =
             new PendingSplitsStateSerializer(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE);
@@ -85,10 +85,10 @@ class MySqlTypedSnapshotAssignmentTest {
 
         var saved = (HybridPendingSplitsState) SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize((HybridPendingSplitsState) enumerator.snapshotState(5)));
-        assertEquals(0, saved.nextTableIndex());
-        assertEquals(1, saved.nextChunkIndex());
-        assertEquals(first.chunkRange().end(), saved.nextChunkRange().start());
-        assertTrue(saved.assignedSnapshots().containsKey(first.splitId()));
+        assertEquals(0, saved.getSnapshotPendingSplits().nextTableIndex());
+        assertEquals(1, saved.getSnapshotPendingSplits().nextChunkIndex());
+        assertEquals(first.chunkRange().end(), saved.getSnapshotPendingSplits().nextChunkRange().start());
+        assertTrue(saved.getSnapshotPendingSplits().getAssignedSplits().containsKey(first.splitId()));
         enumerator.close();
 
         var secondContext = new Coordinator();
@@ -111,8 +111,8 @@ class MySqlTypedSnapshotAssignmentTest {
                 1, new FinishedSnapshotSplitsReportEvent(Map.of("unknown-split", offset(150)))));
         var resumed = (HybridPendingSplitsState) SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize((HybridPendingSplitsState) recovered.snapshotState(6)));
-        assertEquals(first.chunkRange(), resumed.finishedSplitInfos().getFirst().chunkRange());
-        assertEquals(offset(150), resumed.finishedSplitInfos().getFirst().highWatermark());
+        assertEquals(first.chunkRange(), resumed.getSnapshotPendingSplits().getFinishedSplitInfos().getFirst().chunkRange());
+        assertEquals(offset(150), resumed.getSnapshotPendingSplits().getFinishedSplitInfos().getFirst().highWatermark());
         recovered.close();
     }
 
@@ -149,8 +149,8 @@ class MySqlTypedSnapshotAssignmentTest {
         assertEquals(cursor.start(), last.chunkRange().start());
         assertNull(last.chunkRange().end());
         restored.appendPlan(last, 1);
-        assertTrue(restored.snapshotState(10).snapshotPlanned());
-        assertNull(restored.snapshotState(10).nextChunkRange());
+        assertTrue(restored.snapshotState(10).getSnapshotPendingSplits().snapshotPlanned());
+        assertNull(restored.snapshotState(10).getSnapshotPendingSplits().nextChunkRange());
     }
 
     @Test
@@ -196,7 +196,7 @@ class MySqlTypedSnapshotAssignmentTest {
         assertEquals(LogicalTypeRoot.BIGINT, first.chunkRange().type());
         assertEquals(5L, first.chunkRange().end());
         var checkpoint = enumerator.snapshotState(1);
-        assertEquals(5L, ((HybridPendingSplitsState) checkpoint).nextChunkRange().start());
+        assertEquals(5L, ((HybridPendingSplitsState) checkpoint).getSnapshotPendingSplits().nextChunkRange().start());
         enumerator.close();
     }
 

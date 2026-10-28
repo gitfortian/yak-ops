@@ -27,10 +27,13 @@ import java.util.Map;
 public final class MySqlCdcSourceFactory implements TableSourceFactory {
 
     private static final OptionRule PHYSICAL_RULE = OptionRule.builder()
-            .optional(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE,
+            .optional(
+                    MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE,
                     Conditions.greaterOrEqual(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, 1)
-                            .and(Conditions.lessOrEqual(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, 100_000)))
-            .optional(MySqlSourceOptions.QUEUE_CAPACITY,
+                            .and(Conditions.lessOrEqual(
+                                    MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, 100_000)))
+            .optional(
+                    MySqlSourceOptions.QUEUE_CAPACITY,
                     Conditions.greaterOrEqual(MySqlSourceOptions.QUEUE_CAPACITY, 1)
                             .and(Conditions.lessOrEqual(MySqlSourceOptions.QUEUE_CAPACITY, 10_000)))
             .build();
@@ -152,10 +155,15 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
                 .queueCapacity(options.get(MySqlSourceOptions.QUEUE_CAPACITY));
         for (var context : contexts) {
             builder.table(
-                    context.table(), context.schema(), context.options().get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN));
+                    context.table(),
+                    context.schema(),
+                    context.options().get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN));
         }
         return MySqlSource.create(
-                builder, startupOptions, options.get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE), first.metrics());
+                builder,
+                startupOptions,
+                options.get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE),
+                first.metrics());
     }
 
     /**

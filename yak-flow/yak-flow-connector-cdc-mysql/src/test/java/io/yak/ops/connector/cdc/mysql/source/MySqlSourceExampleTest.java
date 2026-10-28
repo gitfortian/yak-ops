@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 
 /** Verifies the unified entry keeps the existing mode-specific runtime and checkpoint contracts. */
-class MySqlSourceEntryTest {
+class MySqlSourceExampleTest {
 
     @Test
     void initialUsesOriginalHybridStateAndSerializers() {

@@ -17,18 +17,16 @@
 
 package io.yak.ops.connector.cdc.mysql.debezium.dispatcher;
 
-import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
-
 import io.debezium.connector.base.ChangeEventQueue;
 import io.debezium.pipeline.DataChangeEvent;
 import io.debezium.schema.SchemaNameAdjuster;
+import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
+import java.util.Map;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
-
-import java.util.Map;
 
 /**
  * A dispatcher to dispatch watermark signal events.
@@ -47,8 +45,7 @@ public class SignalEventDispatcher {
     public static final String BINLOG_FILENAME_OFFSET_KEY = "file";
     public static final String BINLOG_POSITION_OFFSET_KEY = "pos";
     public static final String WATERMARK_KIND = "watermark_kind";
-    public static final String SIGNAL_EVENT_KEY_SCHEMA_NAME =
-            "io.debezium.connector.flink.cdc.embedded.watermark.key";
+    public static final String SIGNAL_EVENT_KEY_SCHEMA_NAME = "io.debezium.connector.flink.cdc.embedded.watermark.key";
     public static final String SIGNAL_EVENT_VALUE_SCHEMA_NAME =
             "io.debezium.connector.flink.cdc.embedded.watermark.value";
 
@@ -63,33 +60,29 @@ public class SignalEventDispatcher {
         this.sourcePartition = sourcePartition;
         this.topic = topic;
         this.queue = queue;
-        this.signalEventKeySchema =
-                SchemaBuilder.struct()
-                        .name(SCHEMA_NAME_ADJUSTER.adjust(SIGNAL_EVENT_KEY_SCHEMA_NAME))
-                        .field(SPLIT_ID_KEY, Schema.STRING_SCHEMA)
-                        .field(WATERMARK_SIGNAL, Schema.BOOLEAN_SCHEMA)
-                        .build();
-        this.signalEventValueSchema =
-                SchemaBuilder.struct()
-                        .name(SCHEMA_NAME_ADJUSTER.adjust(SIGNAL_EVENT_VALUE_SCHEMA_NAME))
-                        .field(SPLIT_ID_KEY, Schema.STRING_SCHEMA)
-                        .field(WATERMARK_KIND, Schema.STRING_SCHEMA)
-                        .build();
+        this.signalEventKeySchema = SchemaBuilder.struct()
+                .name(SCHEMA_NAME_ADJUSTER.adjust(SIGNAL_EVENT_KEY_SCHEMA_NAME))
+                .field(SPLIT_ID_KEY, Schema.STRING_SCHEMA)
+                .field(WATERMARK_SIGNAL, Schema.BOOLEAN_SCHEMA)
+                .build();
+        this.signalEventValueSchema = SchemaBuilder.struct()
+                .name(SCHEMA_NAME_ADJUSTER.adjust(SIGNAL_EVENT_VALUE_SCHEMA_NAME))
+                .field(SPLIT_ID_KEY, Schema.STRING_SCHEMA)
+                .field(WATERMARK_KIND, Schema.STRING_SCHEMA)
+                .build();
     }
 
-    public void dispatchWatermarkEvent(
-            MySqlSplit mySqlSplit, BinlogOffset watermark, WatermarkKind watermarkKind)
+    public void dispatchWatermarkEvent(MySqlSplit mySqlSplit, BinlogOffset watermark, WatermarkKind watermarkKind)
             throws InterruptedException {
 
-        SourceRecord sourceRecord =
-                new SourceRecord(
-                        sourcePartition,
-                        watermark.getOffset(),
-                        topic,
-                        signalEventKeySchema,
-                        signalRecordKey(mySqlSplit.splitId()),
-                        signalEventValueSchema,
-                        signalRecordValue(mySqlSplit.splitId(), watermarkKind));
+        SourceRecord sourceRecord = new SourceRecord(
+                sourcePartition,
+                watermark.getOffset(),
+                topic,
+                signalEventKeySchema,
+                signalRecordKey(mySqlSplit.splitId()),
+                signalEventValueSchema,
+                signalRecordValue(mySqlSplit.splitId(), watermarkKind));
         queue.enqueue(new DataChangeEvent(sourceRecord));
     }
 

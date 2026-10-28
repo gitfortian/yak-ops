@@ -1,18 +1,17 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
-import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
-import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlSnapshotSplitReadTask;
-import io.yak.ops.connector.cdc.mysql.debezium.reader.BinlogSplitReader;
-
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.RecordsBySplits;
 import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
 import io.yak.ops.connector.base.source.reader.splitreader.SplitReader;
+import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
+import io.yak.ops.connector.cdc.mysql.debezium.reader.BinlogSplitReader;
 import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlBinlogSplitReadTask;
+import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlSnapshotSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.core.data.TableId;
@@ -121,8 +120,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             binlog = null;
             binlogSplit = binlogSplit.withAnchor(first.offset(), history);
             bootstrapCandidate = null;
-            return records(
-                    MySqlBinlogSplit.ID, MySqlFetchedRecord.lowWatermark(first.offset()), false);
+            return records(MySqlBinlogSplit.ID, MySqlFetchedRecord.lowWatermark(first.offset()), false);
         }
         if (active == null && !pending.isEmpty()) {
             active = pending.removeFirst();
@@ -202,7 +200,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             try {
                 byte[] current = active.snapshotHistory();
                 if (current.length == 0) {
-                    throw new IllegalStateException("Active MySQL Binlog has no schema history");
+                    throw new IllegalStateException("MySQL Binlog has no complete offset/schema-history checkpoint");
                 }
                 history = current;
             } catch (java.io.IOException failure) {

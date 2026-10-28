@@ -17,22 +17,19 @@
 
 package io.yak.ops.connector.cdc.mysql.source.utils;
 
-import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
-
 import io.debezium.schema.SchemaNameAdjuster;
-import org.apache.kafka.connect.data.Struct;
-
+import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.List;
+import org.apache.kafka.connect.data.Struct;
 
 /** Utility class to deal split keys and split key ranges. */
 public class SplitKeyUtils {
 
     /** Returns the specific key contains in the split key range or not. */
-    public static boolean splitKeyRangeContains(
-            Object[] key, Object[] splitKeyStart, Object[] splitKeyEnd) {
+    public static boolean splitKeyRangeContains(Object[] key, Object[] splitKeyStart, Object[] splitKeyEnd) {
         return compareKeyWithRange(key, splitKeyStart, splitKeyEnd) == RangePosition.WITHIN;
     }
 
@@ -64,8 +61,7 @@ public class SplitKeyUtils {
         return new BigDecimal(numericObj.toString());
     }
 
-    public static Object[] getSplitKey(
-            String splitColumnName, SchemaNameAdjuster nameAdjuster, Struct target) {
+    public static Object[] getSplitKey(String splitColumnName, SchemaNameAdjuster nameAdjuster, Struct target) {
         // The source has a single configured chunk key field.
         String splitFieldName = nameAdjuster.adjust(splitColumnName);
         return new Object[] {target.get(splitFieldName)};
@@ -90,25 +86,24 @@ public class SplitKeyUtils {
             return;
         }
 
-        splits.sort(
-                (leftSplit, rightSplit) -> {
-                    Object[] leftSplitStart = leftSplit.getSplitStart();
-                    Object[] rightSplitStart = rightSplit.getSplitStart();
+        splits.sort((leftSplit, rightSplit) -> {
+            Object[] leftSplitStart = leftSplit.getSplitStart();
+            Object[] rightSplitStart = rightSplit.getSplitStart();
 
-                    // Splits with null splitStart should come first (they are the first split)
-                    if (leftSplitStart == null && rightSplitStart == null) {
-                        return 0;
-                    }
-                    if (leftSplitStart == null) {
-                        return -1;
-                    }
-                    if (rightSplitStart == null) {
-                        return 1;
-                    }
+            // Splits with null splitStart should come first (they are the first split)
+            if (leftSplitStart == null && rightSplitStart == null) {
+                return 0;
+            }
+            if (leftSplitStart == null) {
+                return -1;
+            }
+            if (rightSplitStart == null) {
+                return 1;
+            }
 
-                    // Compare split starts
-                    return compareSplit(leftSplitStart, rightSplitStart);
-                });
+            // Compare split starts
+            return compareSplit(leftSplitStart, rightSplitStart);
+        });
     }
 
     /**
@@ -135,8 +130,7 @@ public class SplitKeyUtils {
         int size = sortedSplits.size();
 
         FinishedSnapshotSplitInfo firstSplit = sortedSplits.get(0);
-        RangePosition firstPosition =
-                compareKeyWithRange(key, firstSplit.getSplitStart(), firstSplit.getSplitEnd());
+        RangePosition firstPosition = compareKeyWithRange(key, firstSplit.getSplitStart(), firstSplit.getSplitEnd());
         if (firstPosition == RangePosition.WITHIN) {
             return firstSplit;
         }
@@ -148,8 +142,7 @@ public class SplitKeyUtils {
         }
 
         FinishedSnapshotSplitInfo lastSplit = sortedSplits.get(size - 1);
-        RangePosition lastPosition =
-                compareKeyWithRange(key, lastSplit.getSplitStart(), lastSplit.getSplitEnd());
+        RangePosition lastPosition = compareKeyWithRange(key, lastSplit.getSplitStart(), lastSplit.getSplitEnd());
         if (lastPosition == RangePosition.WITHIN) {
             return lastSplit;
         }
@@ -167,8 +160,7 @@ public class SplitKeyUtils {
             int mid = left + (right - left) / 2;
             FinishedSnapshotSplitInfo split = sortedSplits.get(mid);
 
-            RangePosition position =
-                    compareKeyWithRange(key, split.getSplitStart(), split.getSplitEnd());
+            RangePosition position = compareKeyWithRange(key, split.getSplitStart(), split.getSplitEnd());
 
             if (position == RangePosition.WITHIN) {
                 return split;
@@ -193,8 +185,7 @@ public class SplitKeyUtils {
      * Compares {@code key} against the half-open interval {@code [splitStart, splitEnd)} and
      * returns where the key lies relative to that interval.
      */
-    private static RangePosition compareKeyWithRange(
-            Object[] key, Object[] splitStart, Object[] splitEnd) {
+    private static RangePosition compareKeyWithRange(Object[] key, Object[] splitStart, Object[] splitEnd) {
         if (splitStart == null) {
             if (splitEnd == null) {
                 return RangePosition.WITHIN; // Full range split
@@ -227,10 +218,9 @@ public class SplitKeyUtils {
     private static int compareSplit(Object[] leftSplit, Object[] rightSplit) {
         // Ensure both splits have the same length
         if (leftSplit.length != rightSplit.length) {
-            throw new IllegalArgumentException(
-                    String.format(
-                            "Split key arrays must have the same length. Left: %d, Right: %d",
-                            leftSplit.length, rightSplit.length));
+            throw new IllegalArgumentException(String.format(
+                    "Split key arrays must have the same length. Left: %d, Right: %d",
+                    leftSplit.length, rightSplit.length));
         }
 
         int compareResult = 0;

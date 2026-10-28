@@ -86,4 +86,15 @@ class MySqlBinlogSplitTest {
     private static DebeziumOffset offset(long pos) {
         return new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", pos));
     }
+    /** Upstream MySqlBinlogSplitTest: duplicate completed chunk metadata must fail closed. */
+    @Test
+    void duplicateSplitInfo() {
+        var high = offset(200);
+        var completed = new FinishedSnapshotSplitInfo(TABLE, "orders-0", null, null, high);
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> MySqlBinlogSplit.forCompletedSnapshot(
+                        offset(100), new byte[] {1}, high, List.of(completed, completed)));
+    }
+
 }

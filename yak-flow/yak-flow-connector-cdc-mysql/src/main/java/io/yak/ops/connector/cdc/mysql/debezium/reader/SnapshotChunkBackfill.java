@@ -105,7 +105,7 @@ public final class SnapshotChunkBackfill {
                     if (contains(change)) records.delete(change);
                 }
                 case UPDATE_BEFORE, UPDATE_AFTER ->
-                        throw new IllegalArgumentException("Backfill UPDATE requires both before and after");
+                    throw new IllegalArgumentException("Backfill UPDATE requires both before and after");
             }
         } else {
             throw new IllegalArgumentException("Unsupported Binlog change group size");
@@ -130,10 +130,9 @@ public final class SnapshotChunkBackfill {
     private int compare(Object value, Object boundary) {
         return switch (range.type()) {
             case TINYINT, SMALLINT, INTEGER, BIGINT ->
-                    ObjectUtils.compare(((Number) value).longValue(), ((Number) boundary).longValue());
+                ObjectUtils.compare(((Number) value).longValue(), ((Number) boundary).longValue());
             case DECIMAL -> ObjectUtils.compare((BigDecimal) value, (BigDecimal) boundary);
-            default -> throw new IllegalArgumentException(
-                    "Bounded chunk values require database-aware comparisons");
+            default -> throw new IllegalArgumentException("Bounded chunk values require database-aware comparisons");
         };
     }
 
@@ -144,7 +143,7 @@ public final class SnapshotChunkBackfill {
 
     /**
      * Primary-keyed records overwrite a single image; keyless records preserve full-row
-     * multiplicity, as in Flink CDC's Map<Struct, List<SourceRecord>> snapshot buffer.
+     * multiplicity, as in Flink CDC's snapshot buffer keyed by Struct records.
      * No synthetic primary key or independent keyless Source execution path is introduced.
      */
     private static final class SnapshotRecords {
@@ -304,8 +303,7 @@ public final class SnapshotChunkBackfill {
             values.clear();
             retainedBytes = 0;
             totalRows = 0;
-            throw new IllegalStateException(
-                    "Snapshot Backfill buffer limit exceeded; reduce Chunk Size");
+            throw new IllegalStateException("Snapshot Backfill buffer limit exceeded; reduce Chunk Size");
         }
 
         private void requireOpen() {

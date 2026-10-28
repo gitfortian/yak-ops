@@ -120,7 +120,8 @@ public final class AlignedCheckpointCoordinator implements AutoCloseable {
         this.inputTasks = List.copyOf(inputTasks);
         this.storage = Objects.requireNonNull(storage, "storage must not be null");
         this.graphSignature = FileCheckpointStore.graphSignature(
-                plan.graph(), plan.configuration().get(PipelineOptions.MAX_PARALLELISM),
+                plan.graph(),
+                plan.configuration().get(PipelineOptions.MAX_PARALLELISM),
                 plan.configuration().get(CheckpointingOptions.DEFINITION_IDENTITY));
         this.cancelled = Objects.requireNonNull(cancelled, "cancelled must not be null");
         this.onFailure = Objects.requireNonNull(onFailure, "onFailure must not be null");

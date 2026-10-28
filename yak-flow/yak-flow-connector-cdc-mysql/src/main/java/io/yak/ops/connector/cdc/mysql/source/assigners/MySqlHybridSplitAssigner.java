@@ -5,8 +5,8 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplits
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.SnapshotPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import java.util.LinkedHashMap;
@@ -20,8 +20,7 @@ import java.util.Objects;
  * <p>The transition from HANDOFF to STREAMING is gated by a completed checkpoint
  * containing all completed snapshot split watermarks, not by a final split delivery acknowledgment.
  */
-public final class MySqlHybridSplitAssigner
-        implements MySqlSplitAssigner<MySqlSplit, HybridPendingSplitsState> {
+public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner<MySqlSplit, HybridPendingSplitsState> {
 
     private final MySqlSnapshotSplitAssigner snapshots;
     private MySqlBinlogSplit pendingBinlog;
@@ -35,8 +34,7 @@ public final class MySqlHybridSplitAssigner
     private int nextChunkIndex;
     private ChunkRange nextChunkRange;
 
-    public MySqlHybridSplitAssigner(
-            StartupOptions startupOptions, HybridPendingSplitsState restored) {
+    public MySqlHybridSplitAssigner(StartupOptions startupOptions, HybridPendingSplitsState restored) {
         Objects.requireNonNull(startupOptions, "startupOptions");
         if (startupOptions.startupMode() != StartupMode.INITIAL) {
             throw new UnsupportedOperationException("MySQL Hybrid Source requires initial startup");
@@ -47,7 +45,9 @@ public final class MySqlHybridSplitAssigner
             binlogAssigned = false;
             phase = HybridPendingSplitsState.Phase.BOOTSTRAP;
         } else {
-            restored.getSnapshotPendingSplits().getFinishedSplitInfos().forEach(info -> completed.put(info.splitId(), info));
+            restored.getSnapshotPendingSplits()
+                    .getFinishedSplitInfos()
+                    .forEach(info -> completed.put(info.splitId(), info));
             nextTableIndex = restored.getSnapshotPendingSplits().nextTableIndex();
             nextChunkIndex = restored.getSnapshotPendingSplits().nextChunkIndex();
             nextChunkRange = restored.getSnapshotPendingSplits().nextChunkRange();

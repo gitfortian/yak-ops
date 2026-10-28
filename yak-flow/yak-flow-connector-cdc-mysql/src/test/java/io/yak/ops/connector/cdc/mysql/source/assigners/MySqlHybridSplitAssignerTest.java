@@ -1,4 +1,4 @@
-package io.yak.ops.connector.cdc.mysql.source.enumerator;
+package io.yak.ops.connector.cdc.mysql.source.assigners;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 /** Proves Binlog handoff needs a completed snapshot checkpoint, not only an assignment ACK. */
-class MySqlHybridHandoffTest {
+class MySqlHybridSplitAssignerTest {
 
     @Test
     void gatesHandoffAndRestoresCompletedPendingTransition() throws Exception {
@@ -27,7 +27,7 @@ class MySqlHybridHandoffTest {
         assertEquals(HybridPendingSplitsState.Phase.BOOTSTRAP, assigner.phase());
         assertEquals("mysql-binlog", assigner.nextBinlog(0).splitId());
         assigner.captureLow(low);
-        assertFalse(assigner.snapshotState(10).snapshotPlanned());
+        assertFalse(assigner.snapshotState(10).getSnapshotPendingSplits().snapshotPlanned());
         var split = new MySqlSnapshotSplit("snap-1", new TableId("shop", null, "orders"),
                 null, null, null);
         assigner.plan(List.of(split));
@@ -91,10 +91,11 @@ class MySqlHybridHandoffTest {
     }
 
     @Test
-    void rejectsDifferentDefinitionOnRestore() {
+    void restoresSnapshotAssignerFromItsCheckpointState() {
         var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
         var state = assigner.snapshotState(1);
-        assertThrows(IllegalArgumentException.class, () -> new MySqlHybridSplitAssigner(StartupOptions.initial(), state));
+        var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), state);
+        assertEquals(state, restored.snapshotState(2));
     }
 
     private static io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo finished(

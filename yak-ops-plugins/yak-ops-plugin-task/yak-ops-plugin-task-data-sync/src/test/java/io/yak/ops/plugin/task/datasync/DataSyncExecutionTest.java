@@ -286,7 +286,7 @@ class DataSyncExecutionTest {
         var sourceConfig = mysql.config();
         assertEquals(64, sourceConfig.queueCapacity());
         JobPlan prepared = planner.plan(parameters, CONTEXT);
-        assertEquals(prepared.sourceOptions().get(MySqlSourceOptions.SERVER_ID), sourceConfig.serverId());
+        assertEquals(prepared.sourceOptions().get(MySqlSourceOptions.SERVER_ID), Integer.toString(sourceConfig.serverId()));
         assertEquals(prepared.sourceOptions().get(MySqlSourceOptions.TOPIC_PREFIX), sourceConfig.topicPrefix());
         assertEquals(false, compiled.configuration().get(CheckpointingOptions.RESTORE_LATEST));
         assertEquals(2, resources.connections.get());

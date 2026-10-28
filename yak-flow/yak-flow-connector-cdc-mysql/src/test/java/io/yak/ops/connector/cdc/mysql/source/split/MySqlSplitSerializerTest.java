@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
+import io.yak.ops.core.types.LogicalTypeRoot;
 import io.yak.ops.core.data.TableId;
 import java.io.IOException;
 import java.util.Map;
@@ -54,5 +56,34 @@ class MySqlSplitSerializerTest {
     private static java.util.List<FinishedSnapshotSplitInfo> completed(DebeziumOffset high) {
         return java.util.List.of(new FinishedSnapshotSplitInfo(
                 new io.yak.ops.core.data.TableId("shop", null, "orders"), "chunk", null, null, high));
+    }
+    /** The repeated-serialization contract from Flink CDC's MySqlSplitSerializerTest. */
+    @Test
+    void testRepeatedSerializationCache() throws Exception {
+        var serializer = MySqlSplitSerializer.INSTANCE;
+        MySqlSnapshotSplit snapshot = new MySqlSnapshotSplit(
+                "repeated", new TableId("shop", null, "orders"), null, 100L, null);
+        byte[] original = serializer.serialize(snapshot);
+        for (int index = 0; index < 4; index++) {
+            assertArrayEquals(original, serializer.serialize(snapshot));
+            assertArrayEquals(
+                    original,
+                    serializer.serialize(
+                            serializer.deserialize(serializer.getVersion(), original)));
+        }
+    }
+
+    @Test
+    void classConversionPreservesTheCurrentTypedSplitCheckpointContract() throws Exception {
+        TableId TABLE = new TableId("shop", null, "orders");
+        ChunkRange range = new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, 100L, 200L);
+        MySqlSnapshotSplit split = MySqlSnapshotSplit.typed("orders:0", range);
+        MySqlSplitSerializer serializer = new MySqlSplitSerializer();
+        byte[] serialized = serializer.serialize(split);
+        MySqlSnapshotSplit restored =
+                (MySqlSnapshotSplit) serializer.deserialize(serializer.getVersion(), serialized);
+        assertEquals(split, restored);
+        assertArrayEquals(split.getSplitStart(), restored.getSplitStart());
+        assertArrayEquals(split.getSplitEnd(), restored.getSplitEnd());
     }
 }

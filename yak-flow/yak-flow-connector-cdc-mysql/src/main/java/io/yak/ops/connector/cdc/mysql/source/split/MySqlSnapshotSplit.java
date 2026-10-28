@@ -28,16 +28,7 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
             MySqlSnapshotOutput output,
             int outputPosition,
             FinishedSnapshotSplitInfo finished) {
-        this(
-                splitId,
-                tableId,
-                lowerInclusive,
-                upperExclusive,
-                lastEmittedKey,
-                output,
-                outputPosition,
-                finished,
-                null);
+        this(splitId, tableId, lowerInclusive, upperExclusive, lastEmittedKey, output, outputPosition, finished, null);
     }
 
     /** One typed chunk range. Incomplete chunks restart their scan and backfill. */
@@ -48,11 +39,7 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
 
     /** Creates an unprepared range; numeric cursors are used only by the JDBC scan primitive. */
     public MySqlSnapshotSplit(
-            String splitId,
-            TableId tableId,
-            Long lowerInclusive,
-            Long upperExclusive,
-            Long lastEmittedKey) {
+            String splitId, TableId tableId, Long lowerInclusive, Long upperExclusive, Long lastEmittedKey) {
         this(splitId, tableId, lowerInclusive, upperExclusive, lastEmittedKey, null, 0, null);
     }
 
@@ -159,15 +146,7 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
                     chunkRange);
         }
         return new MySqlSnapshotSplit(
-                splitId,
-                tableId,
-                lowerInclusive,
-                upperExclusive,
-                null,
-                output,
-                position,
-                null,
-                chunkRange);
+                splitId, tableId, lowerInclusive, upperExclusive, null, output, position, null, chunkRange);
     }
 
     @Override
@@ -182,6 +161,7 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
     public Long lowerInclusive() {
         return lowerInclusive;
     }
+
     public Long upperExclusive() {
         return upperExclusive;
     }
@@ -189,6 +169,7 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
     public Long lastEmittedKey() {
         return lastEmittedKey;
     }
+
     public MySqlSnapshotOutput output() {
         return output;
     }
@@ -196,6 +177,7 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
     public int outputPosition() {
         return outputPosition;
     }
+
     public FinishedSnapshotSplitInfo finished() {
         return finished;
     }
@@ -213,10 +195,12 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
         Object start = chunkRange != null ? chunkRange.start() : lowerInclusive;
         return start == null ? null : new Object[] {start};
     }
+
     public Object[] getSplitEnd() {
         Object end = chunkRange != null ? chunkRange.end() : upperExclusive;
         return end == null ? null : new Object[] {end};
     }
+
     public DebeziumOffset getHighWatermark() {
         return finished == null ? null : finished.highWatermark();
     }
@@ -246,8 +230,16 @@ public final class MySqlSnapshotSplit extends MySqlSplit implements SnapshotSpli
 
     @Override
     public int hashCode() {
-        return Objects.hash(splitId, tableId, lowerInclusive, upperExclusive,
-                lastEmittedKey, output, outputPosition, finished, chunkRange);
+        return Objects.hash(
+                splitId,
+                tableId,
+                lowerInclusive,
+                upperExclusive,
+                lastEmittedKey,
+                output,
+                outputPosition,
+                finished,
+                chunkRange);
     }
 
     @Override

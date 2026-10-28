@@ -65,11 +65,12 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
             throw new IOException("Unsupported MySQL split checkpoint version or size: " + version);
         }
         try (var in = new DataInputStream(new ByteArrayInputStream(serialized))) {
-            MySqlSplit split = switch (in.readInt()) {
-                case SNAPSHOT_SPLIT_FLAG -> readSnapshot(in);
-                case BINLOG_SPLIT_FLAG -> readBinlog(in);
-                default -> throw new IOException("Unknown MySQL split kind");
-            };
+            MySqlSplit split =
+                    switch (in.readInt()) {
+                        case SNAPSHOT_SPLIT_FLAG -> readSnapshot(in);
+                        case BINLOG_SPLIT_FLAG -> readBinlog(in);
+                        default -> throw new IOException("Unknown MySQL split kind");
+                    };
             if (in.available() != 0) {
                 throw new IOException("Trailing bytes in MySQL split checkpoint");
             }
@@ -103,8 +104,8 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
         Long upper = readLong(in);
         DebeziumOffset high = in.readBoolean() ? DebeziumOffset.readFrom(in) : null;
         ChunkRange range = ChunkRangeStateSerializer.read(in);
-        FinishedSnapshotSplitInfo finished = high == null
-                ? null : new FinishedSnapshotSplitInfo(table, id, lower, upper, high, range);
+        FinishedSnapshotSplitInfo finished =
+                high == null ? null : new FinishedSnapshotSplitInfo(table, id, lower, upper, high, range);
         return new MySqlSnapshotSplit(id, table, lower, upper, null, null, 0, finished, range);
     }
 
@@ -143,8 +144,7 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
         }
         DebeziumOffset high = in.readBoolean() ? DebeziumOffset.readFrom(in) : null;
         List<FinishedSnapshotSplitInfo> infos = readFinishedSplits(in);
-        return MySqlBinlogSplit.restore(offset, history,
-                MySqlBinlogSplit.Phase.values()[phase], high, infos);
+        return MySqlBinlogSplit.restore(offset, history, MySqlBinlogSplit.Phase.values()[phase], high, infos);
     }
 
     /** Serializes completed snapshot chunk watermarks for reader and enumerator checkpoints. */

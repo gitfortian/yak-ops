@@ -96,8 +96,8 @@ public final class ExecutionConfigurationFactory {
     }
 
     private static String checkpointDefinitionIdentity(TaskExecutionIdentity identity) {
-        return identity.workspaceId() + ":" + identity.definitionId() + ":"
-                + identity.definitionVersion() + ":" + identity.instanceId();
+        return identity.workspaceId() + ":" + identity.definitionId() + ":" + identity.definitionVersion() + ":"
+                + identity.instanceId();
     }
 
     private Path stateDirectory(String instanceId) {

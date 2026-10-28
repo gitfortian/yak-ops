@@ -38,37 +38,30 @@ public class ObjectUtils {
         } else if (number instanceof BigDecimal) {
             return ((BigDecimal) number).add(BigDecimal.valueOf(augend));
         } else {
-            throw new UnsupportedOperationException(
-                    String.format(
-                            "Unsupported type %s for numeric plus.",
-                            number.getClass().getSimpleName()));
+            throw new UnsupportedOperationException(String.format(
+                    "Unsupported type %s for numeric plus.", number.getClass().getSimpleName()));
         }
     }
 
     /** Returns the difference {@code BigDecimal} whose value is {@code (minuend - subtrahend)}. */
     public static BigDecimal minus(Object minuend, Object subtrahend) {
         if (!minuend.getClass().equals(subtrahend.getClass())) {
-            throw new IllegalStateException(
-                    String.format(
-                            "Unsupported operand type, the minuend type %s is different with subtrahend type %s.",
-                            minuend.getClass().getSimpleName(),
-                            subtrahend.getClass().getSimpleName()));
+            throw new IllegalStateException(String.format(
+                    "Unsupported operand type, the minuend type %s is different with subtrahend type %s.",
+                    minuend.getClass().getSimpleName(), subtrahend.getClass().getSimpleName()));
         }
         if (minuend instanceof Integer) {
             return BigDecimal.valueOf((int) minuend).subtract(BigDecimal.valueOf((int) subtrahend));
         } else if (minuend instanceof Long) {
-            return BigDecimal.valueOf((long) minuend)
-                    .subtract(BigDecimal.valueOf((long) subtrahend));
+            return BigDecimal.valueOf((long) minuend).subtract(BigDecimal.valueOf((long) subtrahend));
         } else if (minuend instanceof BigInteger) {
             return new BigDecimal(
                     ((BigInteger) minuend).subtract((BigInteger) subtrahend).toString());
         } else if (minuend instanceof BigDecimal) {
             return ((BigDecimal) minuend).subtract((BigDecimal) subtrahend);
         } else {
-            throw new UnsupportedOperationException(
-                    String.format(
-                            "Unsupported type %s for numeric minus.",
-                            minuend.getClass().getSimpleName()));
+            throw new UnsupportedOperationException(String.format(
+                    "Unsupported type %s for numeric minus.", minuend.getClass().getSimpleName()));
         }
     }
 

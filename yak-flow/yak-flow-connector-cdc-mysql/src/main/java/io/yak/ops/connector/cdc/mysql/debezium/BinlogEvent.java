@@ -1,6 +1,5 @@
 package io.yak.ops.connector.cdc.mysql.debezium;
 
-import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.event.SourceSchemaChange;
 import java.util.List;

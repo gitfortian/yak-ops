@@ -6,15 +6,15 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlBinlogSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.BinlogPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
-import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
-import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsAckEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsReportEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsRequestEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlStopSnapshotEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
@@ -117,9 +117,8 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         generation = metrics.beginSnapshot(restored != null);
         splitter = planner;
         assigner = initial ? new MySqlHybridSplitAssigner(startupOptions, restoredHybrid) : null;
-        streamAssigner = initial
-                ? null
-                : new MySqlBinlogSplitAssigner(startupOptions, (BinlogPendingSplitsState) restored);
+        streamAssigner =
+                initial ? null : new MySqlBinlogSplitAssigner(startupOptions, (BinlogPendingSplitsState) restored);
         restoredHandoff = restoredHybrid != null && restoredHybrid.phase() == HybridPendingSplitsState.Phase.HANDOFF;
         if (context.currentParallelism() < 1
                 || context.currentParallelism() > (initial ? 16 : 1)
@@ -137,9 +136,13 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                                     : TableMetrics.Phase.INITIALIZING,
                     complete);
             Map<TableId, Integer> counts = new LinkedHashMap<>();
-            restoredHybrid.getSnapshotPendingSplits().getRemainingSplits().forEach(split -> counts.merge(split.tableId(), 1, Integer::sum));
             restoredHybrid
-                    .assignedSnapshots()
+                    .getSnapshotPendingSplits()
+                    .getRemainingSplits()
+                    .forEach(split -> counts.merge(split.tableId(), 1, Integer::sum));
+            restoredHybrid
+                    .getSnapshotPendingSplits()
+                    .getAssignedSplits()
                     .values()
                     .forEach(split -> counts.merge(split.tableId(), 1, Integer::sum));
             restoredHybrid.getSnapshotPendingSplits().getFinishedSplitInfos().forEach(info -> {
@@ -147,7 +150,8 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                 metrics.splitFinished(generation, info.splitId(), info.tableId());
             });
             for (int i = 0; i < tables.size(); i++) {
-                if (restoredHybrid.getSnapshotPendingSplits().snapshotPlanned() || i < restoredHybrid.getSnapshotPendingSplits().nextTableIndex()) {
+                if (restoredHybrid.getSnapshotPendingSplits().snapshotPlanned()
+                        || i < restoredHybrid.getSnapshotPendingSplits().nextTableIndex()) {
                     metrics.planned(generation, tables.get(i), counts.getOrDefault(tables.get(i), 0));
                 }
             }
@@ -224,8 +228,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         if (closed || reader < 0 || reader >= context.currentParallelism())
             throw new IllegalStateException("Invalid split return");
         if (initial) {
-            assigner.addSplitsBack(
-                    splits, reader);
+            assigner.addSplitsBack(splits, reader);
             assignAvailable();
         } else {
             streamAssigner.addSplitsBack(
@@ -271,21 +274,20 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             throw new IllegalStateException("Typed chunk discovery cursor does not match its index");
         }
         planning = true;
-        context.callAsync(
-                () -> splitter.planNext(table, tableIndex, chunkIndex, cursor), (split, failure) -> {
-                    planning = false;
-                    if (closed) return;
-                    if (failure != null) {
-                        metrics.readFailed(generation, table, false);
-                        throw new IllegalStateException("MySQL snapshot chunk discovery failed", failure);
-                    }
-                    boolean tableComplete = split.chunkRange().last();
-                    assigner.appendPlan(split, tables.size());
-                    // A table's final split count is only known after the terminal range.
-                    if (tableComplete) metrics.planned(generation, table, chunkIndex + 1);
-                    assignAvailable();
-                    planSnapshotAsync();
-                });
+        context.callAsync(() -> splitter.planNext(table, tableIndex, chunkIndex, cursor), (split, failure) -> {
+            planning = false;
+            if (closed) return;
+            if (failure != null) {
+                metrics.readFailed(generation, table, false);
+                throw new IllegalStateException("MySQL snapshot chunk discovery failed", failure);
+            }
+            boolean tableComplete = split.chunkRange().last();
+            assigner.appendPlan(split, tables.size());
+            // A table's final split count is only known after the terminal range.
+            if (tableComplete) metrics.planned(generation, table, chunkIndex + 1);
+            assignAvailable();
+            planSnapshotAsync();
+        });
     }
 
     private void enterHandoff() {

@@ -1,7 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.debezium.reader;
 
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
-
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlBinlogSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
@@ -75,8 +74,7 @@ public final class BinlogSplitReader {
         return forChunks(schemas, converted);
     }
 
-    private BinlogSplitReader(
-            Map<TableId, TableSchema> schemas, List<FinishedChunk> finished) {
+    private BinlogSplitReader(Map<TableId, TableSchema> schemas, List<FinishedChunk> finished) {
         Objects.requireNonNull(schemas, "schemas");
         Objects.requireNonNull(finished, "finished");
         if (schemas.isEmpty() || finished.isEmpty()) {
@@ -120,8 +118,7 @@ public final class BinlogSplitReader {
                 throw new IllegalArgumentException(
                         "Bounded string chunks require MySQL collation-aware Binlog comparisons");
             }
-            chunks.add(new FinishedSnapshotSplitInfo(
-                    table, chunk.splitId(), null, null, chunk.highWatermark(), range));
+            chunks.add(new FinishedSnapshotSplitInfo(table, chunk.splitId(), null, null, chunk.highWatermark(), range));
         }
         completed.replaceAll((table, chunks) -> {
             if (chunks.isEmpty()) {
@@ -223,7 +220,8 @@ public final class BinlogSplitReader {
             throw new UnsupportedOperationException("Keyless CDC schema change requires coordinated acceptance");
         }
         ChunkColumn previous = columns.get(change.tableId());
-        if (previous == null || !change.before().primaryKeys().equals(change.after().primaryKeys())) {
+        if (previous == null
+                || !change.before().primaryKeys().equals(change.after().primaryKeys())) {
             throw new UnsupportedOperationException("MySQL CDC cannot change Binlog filter primary keys");
         }
         int position = -1;
@@ -270,8 +268,7 @@ public final class BinlogSplitReader {
             return true;
         }
         // The Flink CDC utility owns the sorted, half-open chunk lookup.
-        FinishedSnapshotSplitInfo match =
-                SplitKeyUtils.findSplitByKeyBinary(chunks, new Object[] {value});
+        FinishedSnapshotSplitInfo match = SplitKeyUtils.findSplitByKeyBinary(chunks, new Object[] {value});
         if (match == null) {
             throw new IllegalStateException("Missing finished snapshot metadata for Binlog chunk key");
         }

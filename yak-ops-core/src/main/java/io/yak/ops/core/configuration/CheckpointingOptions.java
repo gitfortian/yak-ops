@@ -41,8 +41,9 @@ public final class CheckpointingOptions {
      * be restored by a different task definition that happens to share topology and UIDs.
      * The identity is hashed; it is not stored in the checkpoint payload as cleartext.
      */
-    public static final Option<String> DEFINITION_IDENTITY =
-            Options.key("execution.checkpointing.definition-identity").stringType().defaultValue("");
+    public static final Option<String> DEFINITION_IDENTITY = Options.key("execution.checkpointing.definition-identity")
+            .stringType()
+            .defaultValue("");
 
     /** Maximum concurrent checkpoints; the current runtime requires exactly one. */
     public static final Option<Integer> MAX_CONCURRENT_CHECKPOINTS = Options.key(

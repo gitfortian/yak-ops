@@ -21,7 +21,7 @@ from backend_tests import SUITES
 EXPECTED = {suite: classes for suite, (_, _, classes) in SUITES.items() if suite.startswith("cdc-")}
 
 TEST_PATTERN = re.compile(
-    r"@Test(?P<annotations>(?:\s+@\w+(?:\([^)]*\))?)*)\s+"
+    r"@(?:Test|ParameterizedTest|RepeatedTest)(?P<annotations>(?:\s+@\w+(?:\([^)]*\))?)*)\s+"
     r"(?:(?:public|protected|private|static|final)\s+)*void\s+(?P<name>\w+)\s*\(",
     re.MULTILINE,
 )
@@ -36,7 +36,10 @@ def test_sources(test_root: Path, classname: str) -> list[Path]:
     source = found[0]
     result = [source]
     declaration = source.read_text(encoding="utf-8")
-    base = re.search(r"\bextends\s+(\w+)", declaration)
+    base = re.search(
+        r"\bclass\s+" + re.escape(classname) + r"\s*(?:<[^{}]+>\s*)?extends\s+(\w+)",
+        declaration,
+    )
     if base:
         parent = list(test_root.rglob(base.group(1) + ".java"))
         if len(parent) != 1:
@@ -174,7 +177,12 @@ def collect(root: Path, suite: str, inventory: dict | None = None) -> dict:
             errors.append(f"{path.name}: invalid JUnit report ({exc})")
 
     for classname, required in sorted(expected.items()):
-        actual = set(observed.get(classname, {}))
+        # Surefire/Failsafe display one row per parameterized invocation. Compare
+        # declared test methods with the normalized base names, not display names.
+        actual = {
+            re.split(r"[\\[(]", name, maxsplit=1)[0]
+            for name in observed.get(classname, {})
+        }
         if actual != set(required):
             errors.append(
                 f"{classname}: missing={sorted(set(required) - actual)}, unexpected={sorted(actual - set(required))}"
@@ -200,7 +208,11 @@ def collect(root: Path, suite: str, inventory: dict | None = None) -> dict:
     return {
         "suite": suite,
         "expectedMethods": sum(len(methods) for methods in expected.values()),
-        "observedMethods": len(cases),
+        "observedMethods": sum(
+            len({re.split(r"[\\[(]", name, maxsplit=1)[0] for name in methods})
+            for methods in observed.values()
+        ),
+        "observedInvocations": len(cases),
         "cases": cases,
         "databaseStartup": startups,
         "pollLocations": poll_locations(test_root, set(expected)),

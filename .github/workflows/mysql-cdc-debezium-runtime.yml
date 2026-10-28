@@ -5,6 +5,9 @@ on:
     paths:
       - 'yak-flow/yak-flow-connector-cdc-mysql/**'
       - '.github/workflows/mysql-cdc-debezium-runtime.yml'
+      - 'scripts/tests/cdc_audit.py'
+      - 'scripts/tests/test_cdc_audit.py'
+      - 'scripts/tests/backend_tests.py'
   workflow_dispatch:
 
 permissions:
@@ -22,6 +25,8 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - name: Verify CDC execution audit contract
+        run: python3 -m unittest discover -s scripts/tests -p test_cdc_audit.py
       # Compile/test phases avoid the unrelated baseline Spotless violations
       # currently blocking the repository-wide verify lifecycle.
       - name: Compile MySQL CDC and reactor dependencies
@@ -37,3 +42,6 @@ jobs:
           bash mvnw -B -ntp -pl yak-flow/yak-flow-connector-cdc-mysql
           -Pintegration-tests -Dbackend.test.groups=cdc-snapshot
           -Dspotless.check.skip=true -Dcheckstyle.skip=true verify
+      - name: Audit actual snapshot test execution
+        if: always()
+        run: python3 scripts/tests/cdc_audit.py --suite cdc-snapshot

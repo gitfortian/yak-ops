@@ -38,10 +38,10 @@ class MySqlTypedEnumeratorCheckpointTest {
         assigner.finishSnapshot(finished(first, 150));
         HybridPendingSplitsState persisted = (HybridPendingSplitsState) SERIALIZER.deserialize(
                 SERIALIZER.getVersion(), SERIALIZER.serialize(assigner.snapshotState(5)));
-        assertEquals(boundary, persisted.nextChunkRange().start());
-        assertEquals(1, persisted.finishedSplitInfos().size());
+        assertEquals(boundary, persisted.getSnapshotPendingSplits().nextChunkRange().start());
+        assertEquals(1, persisted.getSnapshotPendingSplits().getFinishedSplitInfos().size());
         var recovered = new MySqlHybridSplitAssigner(StartupOptions.initial(), persisted);
-        assertEquals(persisted.nextChunkRange(), recovered.nextChunkRange());
+        assertEquals(persisted.getSnapshotPendingSplits().nextChunkRange(), recovered.nextChunkRange());
         assertEquals(finished(first, 150), recovered.finishedSplits().getFirst());
 
         var last = MySqlSnapshotSplit.typed("chunk-1", new ChunkRange(TABLE, "amount", LogicalTypeRoot.DECIMAL, boundary, null));

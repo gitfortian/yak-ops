@@ -57,8 +57,7 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
                     .map(FinishedSnapshotSplitInfo::highWatermark)
                     .max(DebeziumOffset::compareTo)
                     .orElseThrow();
-            if (highWatermark.compareTo(maximum) != 0
-                    || lowWatermark.compareTo(highWatermark) > 0) {
+            if (highWatermark.compareTo(maximum) != 0 || lowWatermark.compareTo(highWatermark) > 0) {
                 throw new IllegalArgumentException("Hybrid checkpoint watermarks are inconsistent");
             }
         }
@@ -102,8 +101,7 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
 
     @Override
     public int hashCode() {
-        return Objects.hash(snapshotPendingSplits, binlogAssigned, pendingBinlog,
-                phase, lowWatermark, highWatermark);
+        return Objects.hash(snapshotPendingSplits, binlogAssigned, pendingBinlog, phase, lowWatermark, highWatermark);
     }
 
     @Override

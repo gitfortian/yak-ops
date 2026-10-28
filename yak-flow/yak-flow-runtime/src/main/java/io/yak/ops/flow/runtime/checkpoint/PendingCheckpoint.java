@@ -26,8 +26,7 @@ public final class PendingCheckpoint {
     private final Set<CheckpointSnapshot.OperatorSubtask> notYetAcknowledgedTasks;
     private Status status = Status.PENDING;
 
-    public PendingCheckpoint(
-            long checkpointId, Set<CheckpointSnapshot.OperatorSubtask> tasksToAcknowledge) {
+    public PendingCheckpoint(long checkpointId, Set<CheckpointSnapshot.OperatorSubtask> tasksToAcknowledge) {
         if (checkpointId <= 0) {
             throw new IllegalArgumentException("Checkpoint ID must be positive");
         }
@@ -103,8 +102,8 @@ public final class PendingCheckpoint {
 
     private void require(Status expected) {
         if (status != expected) {
-            throw new IllegalStateException(
-                    "Checkpoint " + checkpointId + " cannot transition from " + status + " (expected " + expected + ")");
+            throw new IllegalStateException("Checkpoint " + checkpointId + " cannot transition from " + status
+                    + " (expected " + expected + ")");
         }
     }
 }

@@ -1,5 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.split;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -8,6 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
+import io.yak.ops.core.types.LogicalTypeRoot;
 import io.yak.ops.core.data.GenericRowData;
 import io.yak.ops.core.data.RowKind;
 import io.yak.ops.core.data.TableId;
@@ -76,5 +79,17 @@ class MySqlSplitStateTest {
     private static DebeziumOffset offset(long position) {
         return new DebeziumOffset(
                 Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", position));
+    }
+    @Test
+    void exposesTypedSnapshotBoundaries() {
+        ChunkRange range = new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, 100L, 200L);
+        MySqlSnapshotSplit split = MySqlSnapshotSplit.typed("orders:0", range);
+        assertEquals(TABLE, split.getTableId());
+        assertArrayEquals(new Object[] {100L}, split.getSplitStart());
+        assertArrayEquals(new Object[] {200L}, split.getSplitEnd());
+        assertFalse(split.isSnapshotReadFinished());
+        assertNull(split.getHighWatermark());
+        assertEquals(split, MySqlSnapshotSplit.typed("orders:0", range));
+        assertEquals(split.hashCode(), MySqlSnapshotSplit.typed("orders:0", range).hashCode());
     }
 }

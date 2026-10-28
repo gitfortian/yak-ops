@@ -18,7 +18,6 @@
 
 package io.yak.ops.core.api.common.state;
 
-
 /**
  * This interface is typically only needed for transactional interaction with the "outside world",
  * like committing external side effects on checkpoints. An example is committing external

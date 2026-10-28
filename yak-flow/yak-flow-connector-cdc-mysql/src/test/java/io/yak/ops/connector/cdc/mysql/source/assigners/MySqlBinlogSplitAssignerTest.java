@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 /** Verifies assignment and recovery using the same contract for both startup modes. */
-class MySqlSplitAssignerContractTest {
+class MySqlBinlogSplitAssignerTest {
 
     @Test
     void binlogOnlyReturnsOneSplitAndPersistsAssignedOwnership() throws Exception {
@@ -81,4 +81,16 @@ class MySqlSplitAssignerContractTest {
         assertEquals(0, split.schemaHistory().length);
         assertThrows(IllegalArgumentException.class, () -> assigner.snapshotState(-1));
     }
+    /** Adapted from Flink CDC's testStartFromLatestOffset: bind NOW only at reader startup. */
+    @Test
+    void testStartFromLatestOffset() {
+        var assigner = new MySqlBinlogSplitAssigner(StartupOptions.latest(), null);
+        var split = assigner.getNext(0);
+        assertInstanceOf(MySqlBinlogSplit.class, split);
+        assertNull(split.getStartingOffset());
+        assertEquals(MySqlBinlogSplit.Phase.STANDALONE, split.phase());
+        assertNull(assigner.getNext(0));
+        assertTrue(assigner.snapshotState(1).splitAssigned());
+    }
+
 }

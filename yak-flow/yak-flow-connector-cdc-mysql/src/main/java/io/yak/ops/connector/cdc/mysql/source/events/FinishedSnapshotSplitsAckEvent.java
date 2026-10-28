@@ -17,10 +17,9 @@
 
 package io.yak.ops.connector.cdc.mysql.source.events;
 
-import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.connector.cdc.mysql.source.enumerator.MySqlSourceEnumerator;
 import io.yak.ops.connector.cdc.mysql.source.reader.MySqlSourceReader;
-
+import io.yak.ops.core.api.connector.source.SourceEvent;
 import java.util.List;
 
 /**

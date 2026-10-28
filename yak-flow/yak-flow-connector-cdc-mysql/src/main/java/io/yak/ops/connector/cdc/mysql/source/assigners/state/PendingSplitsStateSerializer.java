@@ -58,7 +58,8 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
     @Override
     public byte[] serialize(PendingSplitsState state) throws IOException {
         Objects.requireNonNull(state, "state");
-        try (var buffer = new ByteArrayOutputStream(); var out = new DataOutputStream(buffer)) {
+        try (var buffer = new ByteArrayOutputStream();
+                var out = new DataOutputStream(buffer)) {
             out.writeInt(splitSerializer.getVersion());
             if (state instanceof BinlogPendingSplitsState binlog) {
                 out.writeInt(BINLOG_PENDING_SPLITS_STATE_FLAG);
@@ -67,7 +68,8 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
                 out.writeInt(HYBRID_PENDING_SPLITS_STATE_FLAG);
                 writeHybrid(out, hybrid);
             } else {
-                throw new IOException("Unsupported pending splits state: " + state.getClass().getName());
+                throw new IOException(
+                        "Unsupported pending splits state: " + state.getClass().getName());
             }
             out.flush();
             if (buffer.size() > MAX_BYTES) {
@@ -79,8 +81,7 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
 
     @Override
     public PendingSplitsState deserialize(int version, byte[] bytes) throws IOException {
-        if (version != VERSION || bytes == null || bytes.length < Integer.BYTES * 2
-                || bytes.length > MAX_BYTES) {
+        if (version != VERSION || bytes == null || bytes.length < Integer.BYTES * 2 || bytes.length > MAX_BYTES) {
             throw new IOException("Unsupported MySQL pending splits checkpoint format: " + version);
         }
         try (var in = new DataInputStream(new ByteArrayInputStream(bytes))) {
@@ -89,11 +90,12 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
                 throw new IOException("Unsupported nested MySQL split serializer version: " + splitVersion);
             }
             int kind = in.readInt();
-            PendingSplitsState state = switch (kind) {
-                case BINLOG_PENDING_SPLITS_STATE_FLAG -> readBinlog(in, splitVersion);
-                case HYBRID_PENDING_SPLITS_STATE_FLAG -> readHybrid(in, splitVersion);
-                default -> throw new IOException("Unknown MySQL pending splits state kind: " + kind);
-            };
+            PendingSplitsState state =
+                    switch (kind) {
+                        case BINLOG_PENDING_SPLITS_STATE_FLAG -> readBinlog(in, splitVersion);
+                        case HYBRID_PENDING_SPLITS_STATE_FLAG -> readHybrid(in, splitVersion);
+                        default -> throw new IOException("Unknown MySQL pending splits state kind: " + kind);
+                    };
             if (in.available() != 0) {
                 throw new IOException("Trailing bytes in MySQL pending splits state");
             }
@@ -118,28 +120,29 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
 
     private void writeHybrid(DataOutputStream out, HybridPendingSplitsState state) throws IOException {
         out.writeByte(state.phase().ordinal());
-        out.writeBoolean(state.binlogAssigned());
+        out.writeBoolean(state.isBinlogSplitAssigned());
         if (state.pendingBinlog() != null) {
             writeSplit(out, state.pendingBinlog());
         }
         writeOffset(out, state.lowWatermark());
         writeOffset(out, state.highWatermark());
-        out.writeBoolean(state.snapshotPlanned());
-        out.writeInt(state.totalSnapshotSplits());
-        writeSplits(out, state.pendingSnapshots());
-        out.writeInt(state.assignedSnapshots().size());
-        for (var entry : state.assignedSnapshots().entrySet()) {
+        SnapshotPendingSplitsState snapshot = state.getSnapshotPendingSplits();
+        out.writeBoolean(snapshot.snapshotPlanned());
+        out.writeInt(snapshot.totalSnapshotSplits());
+        writeSplits(out, snapshot.getRemainingSplits());
+        out.writeInt(snapshot.getAssignedSplits().size());
+        for (var entry : snapshot.getAssignedSplits().entrySet()) {
             out.writeUTF(entry.getKey());
             writeSplit(out, entry.getValue());
         }
-        out.writeInt(state.finishedSnapshots().size());
-        for (String id : state.finishedSnapshots()) {
+        out.writeInt(snapshot.getFinishedSplits().size());
+        for (String id : snapshot.getFinishedSplits()) {
             out.writeUTF(id);
         }
-        MySqlSplitSerializer.writeFinishedSplits(out, state.finishedSplitInfos());
-        out.writeInt(state.nextTableIndex());
-        out.writeInt(state.nextChunkIndex());
-        ChunkRangeStateSerializer.write(out, state.nextChunkRange());
+        MySqlSplitSerializer.writeFinishedSplits(out, snapshot.getFinishedSplitInfos());
+        out.writeInt(snapshot.nextTableIndex());
+        out.writeInt(snapshot.nextChunkIndex());
+        ChunkRangeStateSerializer.write(out, snapshot.nextChunkRange());
     }
 
     private HybridPendingSplitsState readHybrid(DataInputStream in, int splitVersion) throws IOException {
@@ -174,10 +177,10 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         int nextTable = in.readInt();
         int nextChunk = in.readInt();
         ChunkRange typedCursor = ChunkRangeStateSerializer.read(in);
+        SnapshotPendingSplitsState snapshot = new SnapshotPendingSplitsState(
+                planned, total, pendingSnapshots, assigned, finished, finishedInfos, nextTable, nextChunk, typedCursor);
         return new HybridPendingSplitsState(
-                HybridPendingSplitsState.Phase.values()[phaseIndex],
-                pending, binlogAssigned, low, high, planned, total,
-                pendingSnapshots, assigned, finished, finishedInfos, nextTable, nextChunk, typedCursor);
+                snapshot, binlogAssigned, pending, HybridPendingSplitsState.Phase.values()[phaseIndex], low, high);
     }
 
     private void writeSplits(DataOutputStream out, List<MySqlSnapshotSplit> splits) throws IOException {

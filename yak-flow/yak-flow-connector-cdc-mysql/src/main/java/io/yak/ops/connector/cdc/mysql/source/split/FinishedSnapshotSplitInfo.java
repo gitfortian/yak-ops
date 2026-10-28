@@ -13,11 +13,6 @@ import java.util.Objects;
  * emission. It must survive Checkpoint and be included in the final Binlog split so events
  * already reflected in an initial chunk are not replayed into the JDBC Sink.
  *
- * @param tableId original MySQL source table
- * @param splitId stable source split identifier
- * @param lowerInclusive nullable lower key boundary
- * @param upperExclusive nullable upper key boundary
- * @param highWatermark event boundary included in the normalized snapshot
  */
 public final class FinishedSnapshotSplitInfo implements FinishedSnapshotSplit<DebeziumOffset> {
     private final TableId tableId;
@@ -73,9 +68,11 @@ public final class FinishedSnapshotSplitInfo implements FinishedSnapshotSplit<De
     public Long lowerInclusive() {
         return lowerInclusive;
     }
+
     public Long upperExclusive() {
         return upperExclusive;
     }
+
     @Override
     public DebeziumOffset highWatermark() {
         return highWatermark;
@@ -93,14 +90,17 @@ public final class FinishedSnapshotSplitInfo implements FinishedSnapshotSplit<De
     public String getSplitId() {
         return splitId;
     }
+
     public Object[] getSplitStart() {
         Object start = chunkRange != null ? chunkRange.start() : lowerInclusive;
         return start == null ? null : new Object[] {start};
     }
+
     public Object[] getSplitEnd() {
         Object end = chunkRange != null ? chunkRange.end() : upperExclusive;
         return end == null ? null : new Object[] {end};
     }
+
     public DebeziumOffset getHighWatermark() {
         return highWatermark;
     }

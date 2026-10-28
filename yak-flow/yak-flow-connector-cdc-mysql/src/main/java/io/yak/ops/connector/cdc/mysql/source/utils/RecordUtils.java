@@ -17,30 +17,28 @@
 
 package io.yak.ops.connector.cdc.mysql.source.utils;
 
+import static io.debezium.connector.AbstractSourceInfo.DATABASE_NAME_KEY;
+import static io.debezium.connector.AbstractSourceInfo.TABLE_NAME_KEY;
+
 import io.debezium.data.Envelope;
 import io.debezium.relational.TableId;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.source.SourceRecord;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static io.debezium.connector.AbstractSourceInfo.DATABASE_NAME_KEY;
-import static io.debezium.connector.AbstractSourceInfo.TABLE_NAME_KEY;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.source.SourceRecord;
 
 /** Utilities for interpreting Debezium records, aligned with Flink CDC RecordUtils. */
 public final class RecordUtils {
 
-    public static final String SCHEMA_CHANGE_EVENT_KEY_NAME =
-            "io.debezium.connector.mysql.SchemaChangeKey";
-    public static final String SCHEMA_HEARTBEAT_EVENT_KEY_NAME =
-            "io.debezium.connector.common.Heartbeat";
+    public static final String SCHEMA_CHANGE_EVENT_KEY_NAME = "io.debezium.connector.mysql.SchemaChangeKey";
+    public static final String SCHEMA_HEARTBEAT_EVENT_KEY_NAME = "io.debezium.connector.common.Heartbeat";
     public static final String SCHEMA_TRANSACTION_METADATA_EVENT_KEY_NAME =
             "io.debezium.connector.common.TransactionMetadataKey";
 
@@ -72,12 +70,12 @@ public final class RecordUtils {
         if (schema.field(Envelope.FieldName.SOURCE) == null) {
             return null;
         }
-    
+
         Struct source = value.getStruct(Envelope.FieldName.SOURCE);
         if (source.schema().field(Envelope.FieldName.TIMESTAMP) == null) {
             return null;
         }
-    
+
         return source.getInt64(Envelope.FieldName.TIMESTAMP);
     }
 
@@ -100,15 +98,13 @@ public final class RecordUtils {
 
     public static boolean isHeartbeatEvent(SourceRecord record) {
         Schema valueSchema = record.valueSchema();
-        return (valueSchema != null
-                        && SCHEMA_HEARTBEAT_EVENT_KEY_NAME.equalsIgnoreCase(valueSchema.name()))
+        return (valueSchema != null && SCHEMA_HEARTBEAT_EVENT_KEY_NAME.equalsIgnoreCase(valueSchema.name()))
                 || (record.topic() != null && record.topic().startsWith("__debezium-heartbeat."));
     }
 
     public static boolean isTransactionMetadataEvent(SourceRecord record) {
         Schema keySchema = record.keySchema();
-        return keySchema != null
-                && SCHEMA_TRANSACTION_METADATA_EVENT_KEY_NAME.equalsIgnoreCase(keySchema.name());
+        return keySchema != null && SCHEMA_TRANSACTION_METADATA_EVENT_KEY_NAME.equalsIgnoreCase(keySchema.name());
     }
 
     public static boolean isDataChangeRecord(SourceRecord record) {
@@ -141,7 +137,8 @@ public final class RecordUtils {
         Map<String, String> offsetStrMap = new HashMap<>();
         for (Map.Entry<String, ?> entry : offset.entrySet()) {
             offsetStrMap.put(
-                    entry.getKey(), entry.getValue() == null ? null : entry.getValue().toString());
+                    entry.getKey(),
+                    entry.getValue() == null ? null : entry.getValue().toString());
         }
         return BinlogOffset.builder().setOffsetMap(offsetStrMap).build();
     }

@@ -114,7 +114,7 @@ class MySqlHybridIT {
                 assertEquals(Map.of(1L,"first",50L,"moving"), fixture.values(0));
                 assertEquals(Map.of(10L,"item"), fixture.values(1));
                 assertTrue(pipeline.observed.stream().allMatch(row -> row.rowKind() == RowKind.INSERT));
-                assertEquals(3, pipeline.state().finishedSplitInfos().size());
+                assertEquals(3, pipeline.state().getSnapshotPendingSplits().getFinishedSplitInfos().size());
                 fixture.execute("UPDATE " + fixture.source(0) + " SET name='updated' WHERE id=1",
                         "UPDATE " + fixture.source(0) + " SET id=150 WHERE id=50",
                         "DELETE FROM " + fixture.source(1) + " WHERE id=10",
@@ -206,7 +206,7 @@ class MySqlHybridIT {
                 fixture.execute("UPDATE " + fixture.source(0) + " SET name='before-save' WHERE id=1");
                 first.until(() -> "before-save".equals(fixture.values(0).get(1L)), true);
                 saved = first.checkpoint();
-                assertEquals(2, first.state().finishedSplitInfos().size());
+                assertEquals(2, first.state().getSnapshotPendingSplits().getFinishedSplitInfos().size());
             }
             fixture.execute("DELETE FROM " + fixture.source(0) + " WHERE id=1",
                     "UPDATE " + fixture.source(1) + " SET name='after-save' WHERE id=2");

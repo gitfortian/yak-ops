@@ -1,13 +1,13 @@
 package io.yak.ops.flow.runtime.source.coordinator;
 
+import io.yak.ops.core.api.connector.source.ReaderInfo;
 import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SourceSplit;
-import io.yak.ops.core.api.connector.source.ReaderInfo;
+import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
 import io.yak.ops.core.api.connector.source.SplitsAssignment;
+import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import io.yak.ops.core.api.metrics.Gauge;
 import io.yak.ops.core.api.metrics.groups.SplitEnumeratorMetricGroup;
-import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
-import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import io.yak.ops.flow.runtime.execution.RuntimeTaskInfo;
 import io.yak.ops.flow.runtime.operators.coordination.OperatorCoordinatorContext;
 import io.yak.ops.flow.runtime.operators.coordination.SubtaskGateway;
@@ -26,9 +26,9 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
@@ -208,16 +208,16 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
     public Map<Integer, Map<Integer, ReaderInfo>> registeredReadersOfAttempts() {
         assertCoordinatorThread();
         Map<Integer, Map<Integer, ReaderInfo>> attempts = new HashMap<>();
-        readerIdentities.forEach((subtask, task) ->
-                attempts.put(subtask, Map.of(task.attemptNumber(), new ReaderInfo(subtask, null))));
+        readerIdentities.forEach(
+                (subtask, task) -> attempts.put(subtask, Map.of(task.attemptNumber(), new ReaderInfo(subtask, null))));
         return Map.copyOf(attempts);
     }
 
     @Override
     public void assignSplits(SplitsAssignment<SplitT> newSplitAssignments) {
         assertCoordinatorThread();
-        Map<Integer, List<SplitT>> requested =
-                Objects.requireNonNull(newSplitAssignments, "newSplitAssignments").assignment();
+        Map<Integer, List<SplitT>> requested = Objects.requireNonNull(newSplitAssignments, "newSplitAssignments")
+                .assignment();
         if (requested.isEmpty()) {
             return;
         }
@@ -226,8 +226,10 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
         // A delivery failure afterwards fails the job and restores the last durable checkpoint.
         Set<String> splitIds = new LinkedHashSet<>();
         Set<String> outstandingIds = new HashSet<>(inFlight.keySet());
-        assignments.outstandingAssignments().values().forEach(splits ->
-                splits.forEach(split -> outstandingIds.add(split.splitId())));
+        assignments
+                .outstandingAssignments()
+                .values()
+                .forEach(splits -> splits.forEach(split -> outstandingIds.add(split.splitId())));
         Map<Integer, AddSplitEvent<SplitT>> events = new HashMap<>();
         for (Map.Entry<Integer, List<SplitT>> entry : requested.entrySet()) {
             int reader = Objects.requireNonNull(entry.getKey(), "reader");
@@ -240,8 +242,10 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
             }
             for (SplitT split : splits) {
                 String splitId = Objects.requireNonNull(split, "split").splitId();
-                if (splitId == null || splitId.isBlank()
-                        || !splitIds.add(splitId) || outstandingIds.contains(splitId)) {
+                if (splitId == null
+                        || splitId.isBlank()
+                        || !splitIds.add(splitId)
+                        || outstandingIds.contains(splitId)) {
                     throw new IllegalArgumentException("Duplicate or invalid split assignment: " + splitId);
                 }
             }
@@ -384,35 +388,36 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
 
     @Override
     public <T> void callAsync(
-            Callable<T> action,
-            BiConsumer<T, Throwable> handler,
-            long initialDelayMillis,
-            long periodMillis) {
+            Callable<T> action, BiConsumer<T, Throwable> handler, long initialDelayMillis, long periodMillis) {
         assertCoordinatorThread();
         Objects.requireNonNull(action, "action");
         Objects.requireNonNull(handler, "handler");
         if (initialDelayMillis < 0 || periodMillis <= 0) {
             throw new IllegalArgumentException("Invalid periodic discovery interval");
         }
-        discoveryExecutor.scheduleWithFixedDelay(() -> {
-            T value = null;
-            Throwable error = null;
-            try {
-                value = action.call();
-            } catch (Throwable failure) {
-                error = failure;
-            }
-            T result = value;
-            Throwable failure = error;
-            post(() -> {
-                Runnable callback = () -> handler.accept(result, failure);
-                if (checkpointPaused) {
-                    postponedDiscoveryCallbacks.add(callback);
-                } else {
-                    callback.run();
-                }
-            });
-        }, initialDelayMillis, periodMillis, TimeUnit.MILLISECONDS);
+        discoveryExecutor.scheduleWithFixedDelay(
+                () -> {
+                    T value = null;
+                    Throwable error = null;
+                    try {
+                        value = action.call();
+                    } catch (Throwable failure) {
+                        error = failure;
+                    }
+                    T result = value;
+                    Throwable failure = error;
+                    post(() -> {
+                        Runnable callback = () -> handler.accept(result, failure);
+                        if (checkpointPaused) {
+                            postponedDiscoveryCallbacks.add(callback);
+                        } else {
+                            callback.run();
+                        }
+                    });
+                },
+                initialDelayMillis,
+                periodMillis,
+                TimeUnit.MILLISECONDS);
     }
 
     @Override

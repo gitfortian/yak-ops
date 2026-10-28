@@ -1,6 +1,5 @@
 package io.yak.ops.connector.cdc.mysql.debezium.reader;
 
-
 import io.yak.ops.connector.base.source.reader.RecordsBySplits;
 import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
@@ -108,8 +107,8 @@ public final class SnapshotSplitReader implements AutoCloseable {
         }
         Object lower = range.start();
         Object upper = range.end();
-        String sql = StatementUtils.buildSplitScanQuery(
-                dialect, split.tableId(), schema, key, lower == null, upper == null);
+        String sql =
+                StatementUtils.buildSplitScanQuery(dialect, split.tableId(), schema, key, lower == null, upper == null);
         try {
             connection = consistentView == null ? connections.getConnection() : consistentView;
             if (consistentView == null) connection.setReadOnly(true);
