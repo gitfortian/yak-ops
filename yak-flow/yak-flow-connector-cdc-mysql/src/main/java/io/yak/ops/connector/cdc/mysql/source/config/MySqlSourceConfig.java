@@ -599,9 +599,12 @@ public final class MySqlSourceConfig {
                     String.join(
                             ",",
                             MySqlSourceConfigFactory.includeTablesExcept(
-                                    schemas.keySet().stream()
-                                            .map(table -> Pattern.quote(table.catalog()) + "\\\\." + Pattern.quote(table.table()))
-                                            .toList(),
+                                    tableList.isEmpty()
+                                            ? schemas.keySet().stream()
+                                                    .map(table -> Pattern.quote(table.catalog())
+                                                            + "\\." + Pattern.quote(table.table()))
+                                                    .toList()
+                                            : tableList,
                                     excludeTableList)));
         }
         properties.setProperty("snapshot.mode", "no_data");
