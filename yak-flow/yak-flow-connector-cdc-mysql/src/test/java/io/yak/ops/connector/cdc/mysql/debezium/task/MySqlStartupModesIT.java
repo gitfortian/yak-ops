@@ -56,7 +56,15 @@ class MySqlStartupModesIT {
         var options = StartupOptions.specificOffset(start[0], Long.parseLong(start[1]));
         try (var reader = splitReader(options)) {
             reader.addSplits(List.of(new MySqlBinlogSplit(null, new byte[0])));
-            assertThat(collectIds(reader, Set.of(1L), Duration.ofSeconds(90))).contains(1L);
+            try {
+                assertThat(collectIds(reader, Set.of(1L), Duration.ofSeconds(90))).contains(1L);
+            } catch (Exception failure) {
+                byte[] history = reader.snapshotHistory();
+                throw new IllegalStateException(
+                        "Historical startup missing table schema; requested=" + options.binlogOffset
+                                + ", history=" + new String(history, java.nio.charset.StandardCharsets.UTF_8),
+                        failure);
+            }
         }
     }
 
