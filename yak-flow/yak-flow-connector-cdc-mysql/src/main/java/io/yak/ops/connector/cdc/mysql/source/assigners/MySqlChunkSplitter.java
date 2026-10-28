@@ -120,10 +120,13 @@ public final class MySqlChunkSplitter {
                             new io.debezium.relational.TableId(catalog, schema, name);
                     if (!filter.test(debeziumId)) continue;
                     TableId table = new TableId(catalog, schema, name);
-                    TableSchema tableSchema =
-                            sourceConfig.discoverTable(connection, table, sourceConfig.chunkKeyColumns().get(table));
+                    String configuredKey = sourceConfig.chunkKeyColumns().get(table);
+                    TableSchema tableSchema = sourceConfig.discoverTable(connection, table, configuredKey);
+                    String selectedKey = configuredKey == null
+                            ? ChunkUtils.getChunkKeyColumn(tableSchema, null).name()
+                            : configuredKey;
                     schemas.put(table, tableSchema);
-                    chunkKeyColumns.put(table, sourceConfig.chunkKeyColumns().get(table));
+                    chunkKeyColumns.put(table, selectedKey);
                     discovered.add(table);
                 }
             }
