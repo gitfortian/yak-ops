@@ -482,8 +482,7 @@ public final class CheckpointCoordinator implements AutoCloseable {
     }
 
     /** Receives the task acknowledgement; duplicate and unknown ACKs cannot complete a checkpoint. */
-    private void receiveAcknowledgeMessage(
-            PendingCheckpoint checkpoint, CheckpointSnapshot.OperatorSubtask task) {
+    private void receiveAcknowledgeMessage(PendingCheckpoint checkpoint, CheckpointSnapshot.OperatorSubtask task) {
         PendingCheckpoint.TaskAcknowledgeResult result = checkpoint.acknowledgeTask(task);
         if (result != PendingCheckpoint.TaskAcknowledgeResult.SUCCESS) {
             throw new IllegalStateException(
@@ -506,16 +505,17 @@ public final class CheckpointCoordinator implements AutoCloseable {
             CheckpointPlan checkpointPlan,
             PendingCheckpoint pending,
             List<SourceOperatorStreamTask<Object, SourceSplit>> paused,
-            Map<CheckpointSnapshot.OperatorSubtask, CompletableFuture<OneInputStreamTask.CheckpointState>> acknowledgements,
-            CompletableFuture<Void> firstFailedAcknowledgement) throws Exception {
+            Map<CheckpointSnapshot.OperatorSubtask, CompletableFuture<OneInputStreamTask.CheckpointState>>
+                    acknowledgements,
+            CompletableFuture<Void> firstFailedAcknowledgement)
+            throws Exception {
         // Register the running participants before injecting any trigger barrier.
         for (OneInputStreamTask task : inputTasks) {
             CheckpointSnapshot.OperatorSubtask id = task.checkpointIdentity();
             if (!checkpointPlan.getTasksToWaitFor().contains(id)) {
                 continue;
             }
-            CompletableFuture<OneInputStreamTask.CheckpointState> acknowledgement =
-                    task.expectCheckpoint(checkpointId);
+            CompletableFuture<OneInputStreamTask.CheckpointState> acknowledgement = task.expectCheckpoint(checkpointId);
             acknowledgement.whenComplete((unused, error) -> {
                 if (error != null) {
                     firstFailedAcknowledgement.completeExceptionally(error);
@@ -526,8 +526,7 @@ public final class CheckpointCoordinator implements AutoCloseable {
             }
         }
         Map<Integer, List<SourceSplit>> readerStates = new LinkedHashMap<>();
-        String sourceUid =
-                jobGraph.getVertices().getFirst().getHeadOperator().getUid();
+        String sourceUid = jobGraph.getVertices().getFirst().getHeadOperator().getUid();
         for (SourceOperatorStreamTask<Object, SourceSplit> sourceTask : sourceTasks) {
             CheckpointSnapshot.OperatorSubtask id = new CheckpointSnapshot.OperatorSubtask(
                     sourceUid, sourceTask.taskInfo().subtaskIndex());
@@ -565,9 +564,8 @@ public final class CheckpointCoordinator implements AutoCloseable {
 
     /** Completes the pending checkpoint only after every task acknowledged its state. */
     private void maybeCompleteCheckpoint(
-            PendingCheckpoint pending,
-            CheckpointSnapshot snapshot,
-            CompletableFuture<CheckpointSnapshot> published) throws Exception {
+            PendingCheckpoint pending, CheckpointSnapshot snapshot, CompletableFuture<CheckpointSnapshot> published)
+            throws Exception {
         if (!pending.isFullyAcknowledged()) {
             throw new IllegalStateException("Checkpoint has missing task acknowledgements");
         }
@@ -576,9 +574,8 @@ public final class CheckpointCoordinator implements AutoCloseable {
 
     /** Finalizes durable state before notifying Sink committers and Source participants. */
     private void completePendingCheckpoint(
-            PendingCheckpoint pending,
-            CheckpointSnapshot snapshot,
-            CompletableFuture<CheckpointSnapshot> published) throws Exception {
+            PendingCheckpoint pending, CheckpointSnapshot snapshot, CompletableFuture<CheckpointSnapshot> published)
+            throws Exception {
         long checkpointId = pending.getCheckpointID();
         pending.finalizeCheckpoint(snapshot, storage);
         LOG.info("YakFlow checkpoint saved, jobId={}, checkpointId={}", jobGraph.jobID(), checkpointId);
