@@ -1,5 +1,5 @@
 name: Temporary Specific Startup Recovery IT
-# Third pass: retain assigned stream-only Binlog split
+# Fourth pass: anchor schema before the requested binlog row cursor
 on:
   push:
     branches: [feat/mysql-cdc-chunk-startup-completion]
