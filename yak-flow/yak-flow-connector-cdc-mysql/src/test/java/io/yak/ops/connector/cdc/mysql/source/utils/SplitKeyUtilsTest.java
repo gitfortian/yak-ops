@@ -23,7 +23,12 @@ import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.core.data.TableId;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -208,6 +213,39 @@ class SplitKeyUtilsTest {
                 new DebeziumOffset(
                         Map.of("server", "test_db"),
                         Map.of("file", "mysql-bin.000001", "pos", 4L)));
+    }
+
+    @Test
+    void sortsAndFindsHalfOpenFinishedChunkRanges() {
+        var first = alignmentFinished("first", null, 10L, 100L);
+        var middle = alignmentFinished("middle", 10L, 20L, 110L);
+        var last = alignmentFinished("last", 20L, null, 120L);
+        List<FinishedSnapshotSplitInfo> chunks = new ArrayList<>(List.of(last, first, middle));
+
+        SplitKeyUtils.sortFinishedSplitInfos(chunks);
+        assertEquals(List.of(first, middle, last), chunks);
+        assertSame(first, SplitKeyUtils.findSplitByKeyBinary(chunks, new Object[] {9L}));
+        assertSame(middle, SplitKeyUtils.findSplitByKeyBinary(chunks, new Object[] {10L}));
+        assertSame(last, SplitKeyUtils.findSplitByKeyBinary(chunks, new Object[] {20L}));
+        // JDBC and Debezium can materialize the same numeric key as different Java classes.
+        assertSame(middle, SplitKeyUtils.findSplitByKeyBinary(chunks, new Object[] {new BigDecimal("10.00")}));
+    }
+
+    @Test
+    void splitRangeContainsFollowsHalfOpenBoundaries() {
+        assertTrue(SplitKeyUtils.splitKeyRangeContains(new Object[] {1}, null, new Object[] {10}));
+        assertFalse(SplitKeyUtils.splitKeyRangeContains(new Object[] {10}, null, new Object[] {10}));
+        assertTrue(SplitKeyUtils.splitKeyRangeContains(new Object[] {10}, new Object[] {10}, null));
+    }
+
+    private static final TableId ALIGNMENT_TABLE = new TableId("test", null, "orders");
+
+    private static FinishedSnapshotSplitInfo alignmentFinished(
+            String id, Long start, Long end, long position) {
+        return new FinishedSnapshotSplitInfo(
+                ALIGNMENT_TABLE, id, start, end,
+                new DebeziumOffset(
+                        Map.of("server", "mysql"), Map.of("file", "mysql-bin.000001", "pos", position)));
     }
 
 }

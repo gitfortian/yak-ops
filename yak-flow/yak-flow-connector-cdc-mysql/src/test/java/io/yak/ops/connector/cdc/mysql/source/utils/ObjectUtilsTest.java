@@ -21,6 +21,9 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Tests for {@link org.apache.flink.cdc.connectors.mysql.source.utils.ObjectUtils}. */
 class ObjectUtilsTest {
@@ -58,5 +61,12 @@ class ObjectUtilsTest {
                 .isLessThan(0);
         Assertions.assertThat(ObjectUtils.compare(new byte[] {(byte) 0x80}, new byte[] {0x7f}))
                 .isGreaterThan(0);
+    }
+    @Test
+    void numericObjectUtilitiesMatchFlinkSemantics() {
+        assertEquals(new BigInteger("9223372036854775808"),
+                ObjectUtils.plus(new BigInteger("9223372036854775807"), 1));
+        assertEquals(new BigDecimal("1.25"), ObjectUtils.minus(new BigDecimal("2.50"), new BigDecimal("1.25")));
+        assertTrue(ObjectUtils.compare(new byte[] {(byte) 255}, new byte[] {1}) > 0);
     }
 }

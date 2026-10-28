@@ -22,6 +22,12 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.List;
+import java.util.Map;
+import io.yak.ops.core.data.TableId;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import static io.yak.ops.connector.cdc.mysql.source.utils.SplitKeyUtils.splitKeyRangeContains;
 
@@ -105,4 +111,22 @@ class RecordUtilsTest {
             Object[] key, Object[] splitKeyStart, Object[] splitKeyEnd) {
         Assertions.assertThat(splitKeyRangeContains(key, splitKeyStart, splitKeyEnd)).isTrue();
     }
+    @Test
+    void earliestFinishedWatermarkUsesFlinkStyleRecordUtility() {
+        var first = alignmentFinished("first", null, 10L, 150L);
+        var second = alignmentFinished("second", 10L, null, 100L);
+        assertEquals(second.highWatermark(),
+                RecordUtils.getStartingOffsetOfBinlogSplit(List.of(first, second)));
+    }
+
+    private static final TableId ALIGNMENT_TABLE = new TableId("test", null, "orders");
+
+    private static FinishedSnapshotSplitInfo alignmentFinished(
+            String id, Long start, Long end, long position) {
+        return new FinishedSnapshotSplitInfo(
+                ALIGNMENT_TABLE, id, start, end,
+                new DebeziumOffset(
+                        Map.of("server", "mysql"), Map.of("file", "mysql-bin.000001", "pos", position)));
+    }
+
 }
