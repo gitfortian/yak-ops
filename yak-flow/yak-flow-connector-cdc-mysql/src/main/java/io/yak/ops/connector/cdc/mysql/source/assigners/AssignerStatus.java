@@ -92,7 +92,8 @@ public enum AssignerStatus {
 
         @Override
         public AssignerStatus onBinlogSplitUpdated() {
-            LOG.info("Assigner status changes from NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED to NEWLY_ADDED_ASSIGNING_FINISHED");
+            LOG.info(
+                    "Assigner status changes from NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED to NEWLY_ADDED_ASSIGNING_FINISHED");
             return this.getNextStatus();
         }
     },
@@ -123,24 +124,18 @@ public enum AssignerStatus {
     public abstract AssignerStatus getNextStatus();
 
     public AssignerStatus onFinish() {
-        throw new IllegalStateException(
-                format(
-                        "Invalid call, assigner under %s state can not call onFinish()",
-                        fromStatusCode(this.getStatusCode())));
+        throw new IllegalStateException(format(
+                "Invalid call, assigner under %s state can not call onFinish()", fromStatusCode(this.getStatusCode())));
     }
 
     public AssignerStatus startAssignNewlyTables() {
-        throw new IllegalStateException(
-                format(
-                        "Invalid call, assigner under %s state can not call startAssignNewlyTables()",
-                        fromStatusCode(this.getStatusCode())));
+        throw new IllegalStateException(format(
+                "Invalid call, assigner under %s state can not call startAssignNewlyTables()", fromStatusCode(this.getStatusCode())));
     }
 
     public AssignerStatus onBinlogSplitUpdated() {
-        throw new IllegalStateException(
-                format(
-                        "Invalid call, assigner under %s state can not call onBinlogSplitUpdated()",
-                        fromStatusCode(this.getStatusCode())));
+        throw new IllegalStateException(format(
+                "Invalid call, assigner under %s state can not call onBinlogSplitUpdated()", fromStatusCode(this.getStatusCode())));
     }
 
     // --------------------------------------------------------------------------------------------
@@ -161,10 +156,7 @@ public enum AssignerStatus {
             case 4:
                 return NEWLY_ADDED_ASSIGNING_FINISHED;
             default:
-                throw new IllegalStateException(
-                        format(
-                                "Invalid status code %s,the valid code range is [0, 4]",
-                                statusCode));
+                throw new IllegalStateException(format("Invalid status code %s,the valid code range is [0, 4]", statusCode));
         }
     }
 
