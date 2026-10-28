@@ -243,7 +243,7 @@ class MySqlChunkSplitterTest {
                 List.of());
         var ranges = splitter(url, Map.of(CODES, schema), Map.of(CODES, "code"), 1).splitChunks(CODES);
         assertEquals(List.of(1, 2, 3, 4, 5), scannedIds(url, ranges));
-        assertEquals(3, ranges.size());
+        assertEquals(2, ranges.size());
     }
 
     @Test
