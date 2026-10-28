@@ -24,6 +24,9 @@ import io.yak.ops.dao.mapper.datamap.DataMapTableMapper;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -45,6 +48,8 @@ public class DataMapCrawlWorker {
 
     private static final int TABLE_CEILING = 2_000;
     private static final int ERROR_LENGTH = 1_000;
+    /** Same ceiling the detail read uses, so a retry covers every failure the operator can see. */
+    private static final int RETRY_FAILURE_LIMIT = 200;
 
     private final DataMapCrawlMapper crawlMapper;
 
@@ -106,6 +111,8 @@ public class DataMapCrawlWorker {
 
     private void execute(DataMapCrawlEntity run) {
         DataMapScope scope = new DataMapScope(run.getDatabaseName(), run.getSchemaName());
+        Pattern excluded = compileOrNull(run.getExcludePattern());
+        Set<String> retryNames = retryNames(run);
         List<DataSourceCatalogTableVO> tables;
         try {
             tables = catalogService.listAllTables(
@@ -132,6 +139,7 @@ public class DataMapCrawlWorker {
         int added = 0;
         int updated = 0;
         int failed = 0;
+        int filtered = 0;
         for (DataSourceCatalogTableVO table : tables) {
             if (DateUtils.now().isAfter(deadline)) {
                 crawlMapper.finishFailed(
@@ -145,6 +153,16 @@ public class DataMapCrawlWorker {
                         DateUtils.now());
                 return;
             }
+            // A retry enumerates the source run's failures only; every other table is outside this
+            // run's scope, and the missing sweep is skipped below so it can never retire them.
+            if (!retryNames.isEmpty() && !retryNames.contains(table.getName())) continue;
+            // A deliberately excluded table is confirmed present: keep it ACTIVE and refresh its
+            // sighting without reading columns, so the missing sweep can never retire it either.
+            if (excluded != null && excluded.matcher(table.getName()).find()) {
+                keepAlive(run, scope, table);
+                filtered++;
+                continue;
+            }
             try {
                 List<DataSourceCatalogColumnVO> columns =
                         catalogService.listColumns(run.getDatasourceId(), path(scope, table));
@@ -157,9 +175,59 @@ public class DataMapCrawlWorker {
                 recordFailure(run, table.getName(), failure);
             }
         }
-        int removed = failed == 0 ? markMissing(run, scope) : 0;
+        // A retry never sweeps: its scope is the source run's failures, so anything else it did not
+        // observe says nothing about the namespace and must not be retired.
+        int removed = retryNames.isEmpty() && failed == 0 ? markMissing(run, scope) : 0;
         crawlMapper.finishSucceeded(
-                run.getId(), tables.size(), columnCount, added, updated, removed, failed, DateUtils.now());
+                run.getId(), tables.size(), columnCount, added, updated, removed, failed, filtered, DateUtils.now());
+    }
+
+    /** Compiles the stored exclude pattern; a blank or invalid value filters nothing. */
+    private static Pattern compileOrNull(String excludePattern) {
+        if (excludePattern == null || excludePattern.isBlank()) return null;
+        try {
+            return Pattern.compile(excludePattern);
+        } catch (RuntimeException failure) {
+            LOG.warn("data-map crawl stored an uncompilable exclude pattern; filtering nothing");
+            return null;
+        }
+    }
+
+    /**
+     * Reads the failed table names of the source run.
+     *
+     * @param run claimed run
+     * @return names to re-enumerate, or an empty set for a fresh run
+     */
+    private Set<String> retryNames(DataMapCrawlEntity run) {
+        if (run.getRetryOf() == null) return Set.of();
+        return crawlMapper.listFailures(run.getRetryOf(), RETRY_FAILURE_LIMIT).stream()
+                .map(DataMapCrawlFailureEntity::getTableName)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    /**
+     * Refreshes the sighting of one excluded table without touching its columns.
+     *
+     * <p>Only an already stored asset is refreshed: a table that was never crawled produces no
+     * empty shell just because a pattern mentioned it.
+     *
+     * @param run claimed run
+     * @param scope namespace of the run
+     * @param table excluded observation
+     */
+    private void keepAlive(DataMapCrawlEntity run, DataMapScope scope, DataSourceCatalogTableVO table) {
+        DataMapTableEntity existing = tableMapper.findByIdentity(
+                run.getWorkspaceId(), run.getDatasourceId(), scope.databaseName(), scope.schemaName(), table.getName());
+        if (existing == null) return;
+        tableMapper.updateObserved(
+                run.getWorkspaceId(),
+                existing.getId(),
+                table.getType(),
+                table.getRemarks(),
+                DataMapTableStatus.ACTIVE.name(),
+                run.getStartedTime(),
+                DateUtils.now());
     }
 
     private boolean persist(

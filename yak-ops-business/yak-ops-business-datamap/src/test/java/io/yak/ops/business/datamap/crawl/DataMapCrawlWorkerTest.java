@@ -3,6 +3,8 @@ package io.yak.ops.business.datamap.crawl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -17,6 +19,7 @@ import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.enums.datamap.DataMapErrorCode;
 import io.yak.ops.dao.entity.datamap.DataMapColumnEntity;
 import io.yak.ops.dao.entity.datamap.DataMapCrawlEntity;
+import io.yak.ops.dao.entity.datamap.DataMapCrawlFailureEntity;
 import io.yak.ops.dao.entity.datamap.DataMapTableEntity;
 import io.yak.ops.dao.mapper.datamap.DataMapColumnMapper;
 import io.yak.ops.dao.mapper.datamap.DataMapCrawlMapper;
@@ -81,7 +84,7 @@ class DataMapCrawlWorkerTest {
         worker.run("c1");
         verifyNoInteractions(catalogService);
         verify(crawlMapper, never())
-                .finishSucceeded(any(), anyInt(), anyInt(), anyInt(), anyInt(), anyInt(), anyInt(), any());
+                .finishSucceeded(any(), anyInt(), anyInt(), anyInt(), anyInt(), anyInt(), anyInt(), anyInt(), any());
     }
 
     @Test
@@ -109,7 +112,7 @@ class DataMapCrawlWorkerTest {
         when(catalogService.listColumns(eq("ds"), any())).thenThrow(new IllegalStateException("denied"));
         worker.run("c1");
         verify(crawlMapper).insertFailure(any());
-        verify(crawlMapper).finishSucceeded(eq("c1"), eq(1), eq(0), eq(0), eq(0), eq(0), eq(1), any());
+        verify(crawlMapper).finishSucceeded(eq("c1"), eq(1), eq(0), eq(0), eq(0), eq(0), eq(1), eq(0), any());
         verify(tableMapper, never()).markMissing(any(), any(), any(), any(), any(), any());
         verify(tableMapper, never()).markLegacyMissing(any(), any(), any(), any());
     }
@@ -150,6 +153,54 @@ class DataMapCrawlWorkerTest {
 
         assertEquals(0, claimed.getValue().getNano() % 1_000_000);
         assertEquals(claimed.getValue(), boundary.getValue());
+    }
+
+    @Test
+    void anExcludedTableStaysAliveWithoutItsColumns() {
+        ArgumentCaptor<LocalDateTime> claimed = ArgumentCaptor.forClass(LocalDateTime.class);
+        when(crawlMapper.claim(eq("c1"), claimed.capture())).thenReturn(1);
+        DataMapCrawlEntity excludedRun = run();
+        excludedRun.setExcludePattern("^tmp_");
+        when(crawlMapper.findById("c1")).thenReturn(excludedRun);
+        when(catalogService.listAllTables("ds", "demo", null))
+                .thenReturn(List.of(catalogTable("orders"), catalogTable("tmp_debug")));
+        when(catalogService.listColumns(eq("ds"), any()))
+                .thenReturn(List.of(catalogColumn("id", "INT", null)));
+        when(tableMapper.findByIdentity("ws", "ds", "demo", "", "tmp_debug")).thenReturn(existing());
+
+        worker.run("c1");
+
+        // The excluded table is confirmed present: its sighting refreshed, its columns untouched.
+        verify(tableMapper)
+                .updateObserved(eq("ws"), eq("t1"), eq("TABLE"), isNull(), eq("ACTIVE"), eq(claimed.getValue()), any());
+        verify(catalogService, never())
+                .listColumns(eq("ds"), argThat(path -> "tmp_debug".equals(path.getTable())));
+        verify(crawlMapper).finishSucceeded(eq("c1"), eq(2), eq(1), eq(1), eq(0), eq(0), eq(0), eq(1), any());
+    }
+
+    @Test
+    void aRetryEnumeratesOnlyTheSourceFailuresAndNeverSweeps() {
+        when(crawlMapper.claim(eq("c1"), any())).thenReturn(1);
+        DataMapCrawlEntity retryRun = run();
+        retryRun.setRetryOf("c0");
+        when(crawlMapper.findById("c1")).thenReturn(retryRun);
+        DataMapCrawlFailureEntity failure = new DataMapCrawlFailureEntity();
+        failure.setTableName("orders");
+        when(crawlMapper.listFailures("c0", 200)).thenReturn(List.of(failure));
+        when(catalogService.listAllTables("ds", "demo", null))
+                .thenReturn(List.of(catalogTable("orders"), catalogTable("customers")));
+        when(catalogService.listColumns(eq("ds"), any()))
+                .thenReturn(List.of(catalogColumn("id", "INT", null)));
+        when(tableMapper.findByIdentity("ws", "ds", "demo", "", "orders")).thenReturn(existing());
+        when(columnMapper.listByTable("ws", "t1")).thenReturn(List.of());
+
+        worker.run("c1");
+
+        // customers is outside the retry scope: no identity lookup, no columns, no row.
+        verify(tableMapper, never()).findByIdentity("ws", "ds", "demo", "", "customers");
+        // The missing sweep is skipped: a retry says nothing about tables it did not enumerate.
+        verify(tableMapper, never()).markMissing(any(), any(), any(), any(), any(), any());
+        verify(crawlMapper).finishSucceeded(eq("c1"), eq(2), eq(1), eq(0), eq(1), eq(0), eq(0), eq(0), any());
     }
 
     private static DataMapCrawlEntity run() {

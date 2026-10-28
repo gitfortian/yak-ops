@@ -42,6 +42,21 @@ public class DataMapCrawlVO {
     /** Tables whose columns could not be read. */
     private int failedCount;
 
+    /** Tables kept alive but skipped by the exclude pattern. */
+    private int filteredCount;
+
+    /** How the run was requested: MANUAL or SCHEDULED. */
+    private String triggerType;
+
+    /** Java regex; matching tables were kept alive but not re-crawled. */
+    private String excludePattern;
+
+    /** Wall-clock seconds between claim and the terminal write; null while active. */
+    private Long durationSeconds;
+
+    /** Crawl whose failed tables this run re-attempts; null for a fresh run. */
+    private String retryOf;
+
     /** Run-level failure text; null on success. */
     private String error;
 

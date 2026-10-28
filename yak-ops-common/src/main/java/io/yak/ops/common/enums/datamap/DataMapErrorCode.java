@@ -36,7 +36,11 @@ public enum DataMapErrorCode implements ErrorCode {
     /** The node already runs the maximum number of preview queries. */
     PREVIEW_BUSY(19711, "当前预览查询过多，请稍后重试"),
     /** A crawl was submitted without naming the database to enumerate. */
-    CRAWL_DATABASE_REQUIRED(19712, "请选择要采集的数据库");
+    CRAWL_DATABASE_REQUIRED(19712, "请选择要采集的数据库"),
+    /** The exclude pattern is not a compilable regular expression. */
+    CRAWL_PATTERN_INVALID(19713, "忽略表的正则表达式无法编译，请检查语法"),
+    /** The retry source does not exist, belongs to another Workspace or has no failures. */
+    CRAWL_RETRY_INVALID(19714, "重试来源无效或该任务没有失败表");
 
     private final Integer code;
     private final String message;

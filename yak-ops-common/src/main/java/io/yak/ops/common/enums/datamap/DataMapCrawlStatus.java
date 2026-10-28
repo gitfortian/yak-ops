@@ -8,12 +8,14 @@ public enum DataMapCrawlStatus {
     RUNNING,
     /** Enumeration completed; per-table failures may still exist. */
     SUCCEEDED,
-    /** Enumeration, budget, ceiling or restart stopped the run. */
-    FAILED;
+    /** Enumeration, budget, ceiling or a run-level error stopped the run. */
+    FAILED,
+    /** Swept after an application restart; the scope lock was released in the same statement. */
+    INTERRUPTED;
 
     /** Returns true when the run will not change again without a new submission. */
     public boolean isTerminal() {
-        return this == SUCCEEDED || this == FAILED;
+        return this == SUCCEEDED || this == FAILED || this == INTERRUPTED;
     }
 
     /** Returns true while the run holds its datasource scope lock. */

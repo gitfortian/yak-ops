@@ -36,6 +36,14 @@ public class DataMapCrawlEntity {
     private Integer removedCount;
     /** Tables whose columns could not be read. */
     private Integer failedCount;
+    /** Tables kept alive but skipped by the exclude pattern. */
+    private Integer filteredCount;
+    /** How the run was requested: MANUAL or SCHEDULED. */
+    private String triggerType;
+    /** Java regex; matching tables are kept alive but not re-crawled. */
+    private String excludePattern;
+    /** Crawl whose failed tables this run re-attempts; null for a fresh run. */
+    private String retryOf;
     /** Run-level failure text; null on success. */
     private String error;
     /** Submission timestamp. */

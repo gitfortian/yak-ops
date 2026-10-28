@@ -11,6 +11,7 @@ import io.yak.ops.common.bean.vo.datamap.DataMapCrawlVO;
 import io.yak.ops.common.constant.CommonConstants;
 import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.datamap.DataMapCrawlStatus;
+import io.yak.ops.common.enums.datamap.DataMapCrawlTriggerType;
 import io.yak.ops.common.enums.datamap.DataMapErrorCode;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.page.PageData;
@@ -19,14 +20,17 @@ import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.common.util.IdUtils;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.dao.entity.datamap.DataMapCrawlEntity;
+import io.yak.ops.dao.entity.datamap.DataMapCrawlFailureEntity;
 import io.yak.ops.dao.mapper.datamap.DataMapCrawlMapper;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
 import jakarta.annotation.Resource;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.task.TaskExecutor;
@@ -93,6 +97,30 @@ public class DataMapCrawlServiceImpl implements DataMapCrawlService, DataMapCraw
         if (database == null) throw new BusinessException(DataMapErrorCode.CRAWL_DATABASE_REQUIRED);
         DataMapScope scope = DataMapScope.resolve(database, input.getSchema(), datasource);
 
+        String excludePattern = StringUtils.trimToNull(input.getExcludePattern());
+        if (excludePattern != null) {
+            try {
+                Pattern.compile(excludePattern);
+            } catch (RuntimeException failure) {
+                throw new BusinessException(DataMapErrorCode.CRAWL_PATTERN_INVALID);
+            }
+        }
+
+        // A retry re-enumerates exactly the names the source run failed on, in the same namespace;
+        // anything else makes the retry either a full run or a no-op wearing a retry badge.
+        String retryOf = StringUtils.trimToNull(input.getRetryOf());
+        if (retryOf != null) {
+            DataMapCrawlEntity source = crawlMapper.findByIdForWorkspace(workspaceId, retryOf);
+            List<DataMapCrawlFailureEntity> failures =
+                    source == null ? List.of() : crawlMapper.listFailures(retryOf, FAILURE_LIMIT);
+            if (source == null
+                    || !source.getDatasourceId().equals(datasourceId)
+                    || !source.getDatabaseName().equals(scope.databaseName())
+                    || failures.isEmpty()) {
+                throw new BusinessException(DataMapErrorCode.CRAWL_RETRY_INVALID);
+            }
+        }
+
         LocalDateTime now = DateUtils.now();
         DataMapCrawlEntity row = new DataMapCrawlEntity();
         row.setId(IdUtils.nextId());
@@ -109,6 +137,10 @@ public class DataMapCrawlServiceImpl implements DataMapCrawlService, DataMapCraw
         row.setUpdatedCount(0);
         row.setRemovedCount(0);
         row.setFailedCount(0);
+        row.setFilteredCount(0);
+        row.setTriggerType(DataMapCrawlTriggerType.MANUAL.name());
+        row.setExcludePattern(excludePattern);
+        row.setRetryOf(retryOf);
         row.setCreatedTime(now);
         row.setCreateBy(StringUtils.trimToNull(actor) == null ? CommonConstants.SYSTEM_USER : actor);
         try {
@@ -163,6 +195,10 @@ public class DataMapCrawlServiceImpl implements DataMapCrawlService, DataMapCraw
     }
 
     private static DataMapCrawlVO toVO(DataMapCrawlEntity row) {
+        LocalDateTime finished = row.getFinishedTime();
+        Long duration = finished == null || row.getStartedTime() == null
+                ? null
+                : Duration.between(row.getStartedTime(), finished).getSeconds();
         DataMapCrawlVO vo = new DataMapCrawlVO();
         vo.setId(row.getId());
         vo.setDatasourceId(row.getDatasourceId());
@@ -175,6 +211,11 @@ public class DataMapCrawlServiceImpl implements DataMapCrawlService, DataMapCraw
         vo.setUpdatedCount(row.getUpdatedCount() == null ? 0 : row.getUpdatedCount());
         vo.setRemovedCount(row.getRemovedCount() == null ? 0 : row.getRemovedCount());
         vo.setFailedCount(row.getFailedCount() == null ? 0 : row.getFailedCount());
+        vo.setFilteredCount(row.getFilteredCount() == null ? 0 : row.getFilteredCount());
+        vo.setTriggerType(row.getTriggerType() == null ? DataMapCrawlTriggerType.MANUAL.name() : row.getTriggerType());
+        vo.setExcludePattern(row.getExcludePattern());
+        vo.setDurationSeconds(duration);
+        vo.setRetryOf(row.getRetryOf());
         vo.setError(row.getError());
         vo.setCreatedTime(row.getCreatedTime());
         vo.setStartedTime(row.getStartedTime());

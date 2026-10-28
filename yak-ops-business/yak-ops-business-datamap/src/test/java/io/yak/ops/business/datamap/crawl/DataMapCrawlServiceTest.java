@@ -16,6 +16,7 @@ import io.yak.ops.common.bean.vo.datamap.DataMapCrawlVO;
 import io.yak.ops.common.enums.datamap.DataMapErrorCode;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.dao.entity.datamap.DataMapCrawlEntity;
+import io.yak.ops.dao.entity.datamap.DataMapCrawlFailureEntity;
 import io.yak.ops.dao.mapper.datamap.DataMapCrawlMapper;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
@@ -118,6 +119,65 @@ class DataMapCrawlServiceTest {
         assertEquals(DataMapErrorCode.CRAWL_DATABASE_REQUIRED, failure.getErrorCode());
         verify(crawlMapper, never()).insert(any());
         verify(crawlExecutor, never()).execute(any());
+    }
+
+    @Test
+    void anUncompilableExcludePatternIsRefusedBeforeAnyRunRowExists() {
+        when(dataSourceLookup.dataSource("ws", "ds")).thenReturn(new DataSourceInfo("MYSQL", "demo", null, 7));
+        DataMapCrawlSubmitDTO input = submit("ds", "analytics", null);
+        input.setExcludePattern("^tmp_[a-");
+        BusinessException failure =
+                org.junit.jupiter.api.Assertions.assertThrows(BusinessException.class,
+                        () -> service.submit("ws", "user", input));
+        assertEquals(DataMapErrorCode.CRAWL_PATTERN_INVALID, failure.getErrorCode());
+        verify(crawlMapper, never()).insert(any());
+        verify(crawlExecutor, never()).execute(any());
+    }
+
+    @Test
+    void aRetryMustPointAtAFailedRunWithTheSameNamespace() {
+        when(dataSourceLookup.dataSource("ws", "ds")).thenReturn(new DataSourceInfo("MYSQL", "demo", null, 7));
+        DataMapCrawlSubmitDTO missing = submit("ds", "analytics", null);
+        missing.setRetryOf("c0");
+        BusinessException failure =
+                org.junit.jupiter.api.Assertions.assertThrows(BusinessException.class,
+                        () -> service.submit("ws", "user", missing));
+        assertEquals(DataMapErrorCode.CRAWL_RETRY_INVALID, failure.getErrorCode());
+        verify(crawlMapper, never()).insert(any());
+
+        DataMapCrawlEntity source = new DataMapCrawlEntity();
+        source.setDatasourceId("ds");
+        source.setDatabaseName("analytics");
+        when(crawlMapper.findByIdForWorkspace("ws", "c0")).thenReturn(source);
+        when(crawlMapper.listFailures("c0", 200)).thenReturn(List.of());
+
+        BusinessException noFailures =
+                org.junit.jupiter.api.Assertions.assertThrows(BusinessException.class,
+                        () -> service.submit("ws", "user", missing));
+        assertEquals(DataMapErrorCode.CRAWL_RETRY_INVALID, noFailures.getErrorCode());
+        verify(crawlMapper, never()).insert(any());
+    }
+
+    @Test
+    void aValidRetryAndPatternAreStoredForTheWorker() {
+        when(dataSourceLookup.dataSource("ws", "ds")).thenReturn(new DataSourceInfo("MYSQL", "demo", null, 7));
+        DataMapCrawlEntity source = new DataMapCrawlEntity();
+        source.setDatasourceId("ds");
+        source.setDatabaseName("analytics");
+        DataMapCrawlFailureEntity failure = new DataMapCrawlFailureEntity();
+        failure.setTableName("orders");
+        when(crawlMapper.findByIdForWorkspace("ws", "c0")).thenReturn(source);
+        when(crawlMapper.listFailures("c0", 200)).thenReturn(List.of(failure));
+
+        DataMapCrawlSubmitDTO input = submit("ds", "analytics", null);
+        input.setRetryOf("c0");
+        input.setExcludePattern("^tmp_");
+        DataMapCrawlVO run = service.submit("ws", "user", input);
+
+        assertEquals("c0", run.getRetryOf());
+        assertEquals("^tmp_", run.getExcludePattern());
+        assertEquals("MANUAL", run.getTriggerType());
+        verify(crawlExecutor).execute(any());
     }
 
     @Test
