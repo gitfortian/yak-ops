@@ -1,13 +1,13 @@
 package io.yak.ops.connector.cdc.mysql.source;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.core.types.LogicalTypeRoot;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.debezium.reader.BinlogSplitReader;
@@ -47,7 +47,7 @@ class MySqlCdcKeylessBaselineTest {
     void rejectsKeylessTablesBeforeOpeningAnySourceConnections() {
         var factory = new MySqlCdcSourceFactory();
         assertThrows(IllegalArgumentException.class, () -> factory.validateSchema(KEYLESS));
-        assertThrows(IllegalArgumentException.class, () -> MySqlChunkSplitter.splitKey(KEYLESS));
+        assertThrows(IllegalArgumentException.class, () -> ChunkUtils.requireSupportedSnapshot(KEYLESS, null));
 
         IllegalArgumentException failure = assertThrows(
                 IllegalArgumentException.class,
@@ -73,7 +73,7 @@ class MySqlCdcKeylessBaselineTest {
             assertThrows(IllegalArgumentException.class, () -> factory.validateSchema(schema));
         }
         factory.validateSchema(compositeKey);
-        assertEquals("id", MySqlChunkSplitter.splitKey(KEYED));
+        assertEquals("id", ChunkUtils.requireSupportedSnapshot(KEYED, null).name());
         factory.validateSchema(KEYED);
     }
 
