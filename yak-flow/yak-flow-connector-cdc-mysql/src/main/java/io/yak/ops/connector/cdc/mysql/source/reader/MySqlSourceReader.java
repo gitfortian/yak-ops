@@ -49,12 +49,21 @@ public final class MySqlSourceReader
 
     public MySqlSourceReader(
             MySqlSourceConfig config, SourceReaderContext context, TableMetrics metrics, boolean initial) {
+        this(config, new MySqlSourceReaderContext(context), metrics, initial);
+    }
+
+    private MySqlSourceReader(
+            MySqlSourceConfig config, MySqlSourceReaderContext readerContext, TableMetrics metrics, boolean initial) {
         this(
-                new MySqlSplitReader(config, metrics, context.getIndexOfSubtask()),
-                new MySqlSourceReaderContext(context),
+                new MySqlSplitReader(
+                        config,
+                        metrics,
+                        readerContext.getSourceReaderContext().getIndexOfSubtask(),
+                        readerContext),
+                readerContext,
                 metrics,
                 initial,
-                sourceId(config, context));
+                sourceId(config, readerContext.getSourceReaderContext()));
     }
 
     private MySqlSourceReader(
