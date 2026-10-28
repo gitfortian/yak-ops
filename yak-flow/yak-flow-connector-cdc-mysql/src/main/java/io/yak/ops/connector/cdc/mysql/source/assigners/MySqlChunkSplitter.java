@@ -290,23 +290,5 @@ public final class MySqlChunkSplitter {
             });
     }
 
-    public static String splitKey(TableSchema schema) {
-        return splitKey(schema, null);
-    }
 
-    /**
-     * The selection contract is independent of primary-key discovery, but the current Long-based
-     * snapshot, backfill and checkpoint still require the selected column to be the sole primary key.
-     */
-    public static String splitKey(TableSchema schema, String configuredChunkKey) {
-        var column = ChunkUtils.getChunkKeyColumn(schema, configuredChunkKey);
-        if (schema.primaryKeys().size() != 1 || !schema.primaryKeys().getFirst().equals(column.name())) {
-            throw new IllegalArgumentException(
-                    "MySQL hybrid snapshot currently requires the chunk column to be its sole physical primary key");
-        }
-        if (column.dataType().getTypeRoot() != LogicalTypeRoot.BIGINT || column.nullable()) {
-            throw new IllegalArgumentException("Initial MySQL hybrid snapshot requires a non-null BIGINT key");
-        }
-        return column.name();
-    }
 }
