@@ -223,8 +223,7 @@ public final class MySqlChunkSplitter {
      * Plans a chunk using the Flink CDC ChunkSplitterState that was recovered by the
      * enumerator. The typed boundary is reconstructed only after validating its table.
      */
-    public MySqlSnapshotSplit planNext(TableId table, int tableIndex, ChunkSplitterState state)
-            throws SQLException {
+    public MySqlSnapshotSplit planNext(TableId table, int tableIndex, ChunkSplitterState state) throws SQLException {
         Objects.requireNonNull(state, "chunk splitter state");
         TableId current = state.getCurrentSplittingTableId();
         if (current == null) {
@@ -243,8 +242,8 @@ public final class MySqlChunkSplitter {
         }
         TableSchema schema = Objects.requireNonNull(schemas.get(table), "table schema");
         Column column = ChunkUtils.getChunkKeyColumn(schema, chunkKeyColumns.get(table));
-        ChunkRange cursor =
-                new ChunkRange(table, column.name(), column.dataType().getTypeRoot(), state.getNextChunkStart().getValue(), null);
+        Object nextStart = state.getNextChunkStart().getValue();
+        ChunkRange cursor = new ChunkRange(table, column.name(), column.dataType().getTypeRoot(), nextStart, null);
         return planNext(table, tableIndex, state.getNextChunkId(), cursor);
     }
 
