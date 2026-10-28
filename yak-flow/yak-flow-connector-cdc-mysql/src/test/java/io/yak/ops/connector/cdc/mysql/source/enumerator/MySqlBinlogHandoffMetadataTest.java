@@ -166,12 +166,12 @@ class MySqlBinlogHandoffMetadataTest {
         assertThatThrownBy(() -> enumerator.handleSourceEvent(
                         1, new LatestFinishedSplitsNumberRequestEvent(2)))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> enumerator.handleSourceEvent(
-                        0, new LatestFinishedSplitsNumberRequestEvent(4)))
-                .isInstanceOf(IllegalStateException.class);
+        enumerator.handleSourceEvent(0, new LatestFinishedSplitsNumberRequestEvent(4));
+        var reconciled = (LatestFinishedSplitsNumberEvent) context.toReader0.getLast();
+        assertThat(reconciled.getLatestFinishedSplitsNumber()).isEqualTo(3);
 
         enumerator.handleSourceEvent(0, new BinlogSplitMetaRequestEvent(0, update.getGeneration() - 1));
-        assertThat(context.toReader0.getLast()).isSameAs(current);
+        assertThat(context.toReader0.getLast()).isSameAs(reconciled);
         enumerator.handleSourceEvent(0, new BinlogSplitMetaRequestEvent(0, update.getGeneration()));
         assertThat(context.toReader0.getLast()).isInstanceOf(BinlogSplitMetaEvent.class);
         assertThat(((BinlogSplitMetaEvent) context.toReader0.getLast()).getTotalFinishedSplitSize())
