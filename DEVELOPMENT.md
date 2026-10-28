@@ -51,6 +51,7 @@ bash scripts/tests/run.sh jdbc postgres
 bash scripts/tests/run.sh jdbc oracle
 bash scripts/tests/run.sh pipeline
 bash scripts/tests/run.sh business
+bash scripts/tests/run.sh cdc
 bash scripts/tests/run.sh backend-e2e
 bash scripts/tests/run.sh recovery-e2e
 bash scripts/tests/run.sh full
@@ -71,7 +72,7 @@ JUnit owns shared containers within one module's test execution. Data is isolate
 
 The [Nightly Backend Acceptance workflow](.github/workflows/nightly-backend-acceptance.yml) runs `suite: full` every day at 18:00 UTC (02:00 Asia/Singapore) on the default branch. It is also manually runnable. Nightly is additional coverage, not a replacement for affected PR checks or the full Release Gate; failure, skip or missing evidence must not be treated as success.
 
-The [Backend Tests workflow](.github/workflows/backend-tests.yml) selects registered JDBC, Pipeline, Business, Backend E2E and Recovery E2E suites from the complete PR diff. MySQL CDC Source tests follow the Flink CDC test names and run through the connector unit-test build. Changes to CDC production code select Backend E2E and Recovery E2E; the previous connector-local CDC integration suites, including dedicated cross-database and crash-recovery tests, have been removed. The remaining E2E suites do not establish equivalent coverage for every retired scenario. Shared or unrecognized backend changes still select the full registered matrix, and missing, skipped or failed selected reports block the check.
+The [Backend Tests workflow](.github/workflows/backend-tests.yml) selects registered JDBC, Pipeline, Business, CDC, Backend E2E and Recovery E2E suites from the complete PR diff. MySQL CDC Source unit tests follow Flink CDC test names. The connector-local `cdc` suite exercises the real MySQL Snapshot/Backfill contracts, while CDC production changes also select Backend E2E and Recovery E2E. The new suite does not replace broader cross-process crash-recovery acceptance; remaining E2E suites do not establish equivalent coverage for every retired scenario. Shared or unrecognized backend changes still select the full registered matrix, and missing, skipped or failed selected reports block the check.
 
 Reports live in each module's `target/failsafe-reports/` and `target/test-artifacts/`; the root `target/test-artifacts/result.json` records the tested SHA, command, selected suites and observed method counts. Diagnostics are captured before cleanup, including Boot/container logs, task state, startup timing and process thread dumps on failure. No credentials or full sensitive task payloads belong in reports. A missing Docker daemon, skipped selected test or empty report fails the run.
 
