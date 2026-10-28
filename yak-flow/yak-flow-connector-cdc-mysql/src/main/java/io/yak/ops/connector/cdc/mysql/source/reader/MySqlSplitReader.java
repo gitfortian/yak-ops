@@ -129,6 +129,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
                 } else if (stream.phase() == MySqlBinlogSplit.Phase.STREAMING) {
                     startStreaming(stream);
                 } else if (stream.phase() == MySqlBinlogSplit.Phase.STANDALONE) {
+                    binlogSplit = stream;
                     // A missing offset is an unresolved initial startup, not a checkpointed
                     // position. Bootstrap the schema at a real MySQL position first, then
                     // restart the engine from the selected offset and keep all prefetch
@@ -187,7 +188,8 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             history = discovered;
             binlog.close();
             binlog = new MySqlBinlogSplitReadTask(config);
-            binlog.start(new MySqlBinlogSplit(requested, discovered));
+            binlogSplit = new MySqlBinlogSplit(requested, discovered);
+            binlog.start(binlogSplit);
             // Complete the bootstrap in one mailbox step; checkpoint remains unstarted
             // until an event from the requested position is actually emitted.
             streamOnlyBootstrap = false;
