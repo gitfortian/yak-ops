@@ -1,6 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.enumerator;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.ChunkSplitterState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer;
@@ -34,6 +35,9 @@ class MySqlProgressiveDiscoveryTest {
         assertEquals(0, restored.nextTableIndex());
         assertEquals(1, restored.nextChunkIndex());
         assertEquals(range(10L, null), restored.nextChunkRange());
+        assertEquals(
+                new ChunkSplitterState(TABLE, ChunkSplitterState.ChunkBound.middleOf(10L), 1),
+                restored.getChunkSplitterState());
         assertNull(restored.nextSnapshot());
         assertEquals(java.util.List.of(finished(first,150)), restored.finishedSplits());
 
