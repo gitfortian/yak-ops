@@ -51,7 +51,7 @@ class MySqlSnapshotSplitAssignerDiscoveryTest {
         assertThat(discovered).containsExactly(1);
         var first = assigner.next();
         assertThat(first.chunkRange().start()).isNull();
-        assertThat(first.chunkRange().end()).isEqualTo(1000L);
+        assertThat(first.chunkRange().end()).isEqualTo(100L);
         assigner.finishSnapshot(first.splitId(), offset(150));
 
         SnapshotPendingSplitsState saved = assigner.snapshotState(2);
@@ -65,7 +65,7 @@ class MySqlSnapshotSplitAssignerDiscoveryTest {
         assertThat(schedule(restored, splitter(url), recoveredContext, resumed)).isTrue();
         recoveredContext.runOne();
         assertThat(resumed).containsExactly(2);
-        assertThat(restored.next().chunkRange().start()).isEqualTo(1000L);
+        assertThat(restored.next().chunkRange().start()).isEqualTo(100L);
         assertThat(restored.nextChunkIndex()).isEqualTo(2);
         assertThat(restored.finishedSplits()).isEqualTo(saved.getFinishedSplitInfos());
     }

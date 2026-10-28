@@ -46,13 +46,16 @@ class MySqlChunkSplitterTest {
         var splitter = new MySqlChunkSplitter(() -> DriverManager.getConnection(url), dialect, Map.of(table, schema), 2);
         var first = splitter.planNext(table, 0, 0, null);
         assertNull(first.chunkRange().start());
-        assertEquals(1000L, first.chunkRange().end());
+        assertEquals(100L, first.chunkRange().end());
         var cursor = new ChunkRange(table, "id", LogicalTypeRoot.BIGINT, first.chunkRange().end(), null);
         var second = splitter.planNext(table, 0, 1, cursor);
-        assertEquals(1000L, second.chunkRange().start());
-        assertEquals(6000L, second.chunkRange().end());
-        var last = splitter.planNext(table, 0, 2,
+        assertEquals(100L, second.chunkRange().start());
+        assertEquals(1000L, second.chunkRange().end());
+        var third = splitter.planNext(table, 0, 2,
                 new ChunkRange(table, "id", LogicalTypeRoot.BIGINT, second.chunkRange().end(), null));
+        assertEquals(5000L, third.chunkRange().end());
+        var last = splitter.planNext(table, 0, 3,
+                new ChunkRange(table, "id", LogicalTypeRoot.BIGINT, third.chunkRange().end(), null));
         assertNull(last.chunkRange().end());
 
         // An incomplete Chunk is rescanned from its original half-open bounds.
@@ -72,7 +75,6 @@ class MySqlChunkSplitterTest {
             var whole = restarted.fetch();
             assertEquals(first.splitId(), whole.nextSplit());
             assertEquals(1L, whole.nextRecordFromSplit().row().getLong(0));
-            assertEquals(100L, whole.nextRecordFromSplit().row().getLong(0));
             assertNull(whole.nextRecordFromSplit());
             assertTrue(whole.finishedSplits().contains(first.splitId()));
         }
@@ -173,8 +175,57 @@ class MySqlChunkSplitterTest {
                 2,
                 0.1,
                 10.0);
-        assertEquals(1000L, splitter.nextChunk(CODES, null).end());
+        assertEquals(100L, splitter.nextChunk(CODES, null).end());
         assertNull(splitter.nextChunk(CODES, 1000L).end());
+    }
+
+    @Test
+    void onlyIntegerBigintAndDecimalUseFlinkEvenDistributionOptimization() throws Exception {
+        String url = database();
+        try (var connection = DriverManager.getConnection(url);
+                var statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE codes (id SMALLINT NOT NULL)");
+            statement.execute("INSERT INTO codes VALUES (1),(2),(10),(11)");
+        }
+        var schema = new TableSchema(
+                List.of(new Column("id", LogicalTypes.SMALLINT.copy(false))), List.of());
+        MySqlChunkSplitter splitter = new MySqlChunkSplitter(
+                () -> DriverManager.getConnection(url),
+                JdbcDialects.forUrl("jdbc:mysql:"),
+                Map.of(CODES, schema),
+                Map.of(CODES, "id"),
+                2,
+                0.1,
+                10.0);
+        // A calculated even-distribution factor of 2.75 would yield end=6.
+        // Flink CDC does not apply this optimization to SMALLINT; the actual
+        // keyset boundary is the second smallest key, 2.
+        assertEquals(2L, splitter.nextChunk(CODES, null).end());
+        assertEquals(List.of(1, 2, 10, 11), scannedIds(url, splitter.splitChunks(CODES)));
+    }
+
+    @Test
+    void unevenChunkBoundariesFollowFlinkKeysetWithCheckpointResume() throws Exception {
+        String url = database();
+        try (var connection = DriverManager.getConnection(url);
+                var statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE codes (id BIGINT PRIMARY KEY)");
+            statement.execute("INSERT INTO codes VALUES (1),(100),(1000),(5000),(6000)");
+        }
+        var schema = new TableSchema(
+                List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
+        MySqlChunkSplitter splitter = splitter(url, Map.of(CODES, schema), Map.of(), 2);
+        List<ChunkRange> ranges = splitter.splitChunks(CODES);
+        assertEquals(4, ranges.size());
+        assertEquals(List.of(100L, 1000L, 5000L), ranges.subList(0, 3).stream()
+                .map(ChunkRange::end).toList());
+        assertNull(ranges.getLast().end());
+        assertEquals(List.of(1, 100, 1000, 5000, 6000), scannedIds(url, ranges));
+
+        MySqlChunkSplitter restored = splitter(url, Map.of(CODES, schema), Map.of(), 2);
+        var state = new ChunkSplitterState(
+                CODES, ChunkSplitterState.ChunkBound.middleOf(1000L), 2);
+        assertEquals(ranges.get(2), restored.planNext(CODES, 0, state).chunkRange());
     }
 
     @Test
@@ -213,7 +264,7 @@ class MySqlChunkSplitterTest {
         var splitter = splitter(url, Map.of(PRICES, schema), Map.of(PRICES, "price"), 2);
         List<ChunkRange> ranges = splitter.splitChunks(PRICES);
         assertEquals(2, ranges.size());
-        assertEquals(new BigDecimal("9223372036854775808.00000000"), ranges.getFirst().end());
+        assertEquals(new BigDecimal("1.23000000"), ranges.getFirst().end());
         assertEquals(ranges.getFirst().end(), ranges.getLast().start());
         assertTrue(ranges.getLast().last());
         assertEquals(ranges.getLast(), splitter.nextChunk(PRICES, ranges.getFirst().end()));

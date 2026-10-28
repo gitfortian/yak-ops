@@ -222,9 +222,9 @@ class MySqlSourceEnumeratorTest {
         context.runOne();
         var first = (MySqlSnapshotSplit) context.assignments(1).getFirst();
         assertEquals(LogicalTypeRoot.BIGINT, first.chunkRange().type());
-        assertEquals(5L, first.chunkRange().end());
+        assertEquals(3L, first.chunkRange().end());
         var checkpoint = enumerator.snapshotState(1);
-        assertEquals(5L, ((HybridPendingSplitsState) checkpoint).getSnapshotPendingSplits().nextChunkRange().start());
+        assertEquals(3L, ((HybridPendingSplitsState) checkpoint).getSnapshotPendingSplits().nextChunkRange().start());
         enumerator.close();
     }
 
