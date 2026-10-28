@@ -100,7 +100,11 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
                 batch.recycle();
             }
             afterSnapshot.call();
-            DebeziumOffset high = watermark();
+            // Match Flink CDC's skipSnapshotBackfill contract: High = Low when enabled.
+            // Changes since Low may appear in the consistent view and be replayed by
+            // the resumed Binlog Reader. This setting deliberately gives at-least-once
+            // rather than a fully normalized snapshot.
+            DebeziumOffset high = config.isSkipSnapshotBackfill() ? low : watermark();
             if (low.compareTo(high) > 0) {
                 throw new IllegalStateException("MySQL snapshot watermarks moved backwards");
             }
