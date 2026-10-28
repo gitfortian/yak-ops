@@ -243,7 +243,8 @@ public final class MySqlChunkSplitter {
         TableSchema schema = Objects.requireNonNull(schemas.get(table), "table schema");
         Column column = ChunkUtils.getChunkKeyColumn(schema, chunkKeyColumns.get(table));
         Object nextStart = state.getNextChunkStart().getValue();
-        ChunkRange cursor = new ChunkRange(table, column.name(), column.dataType().getTypeRoot(), nextStart, null);
+        ChunkRange cursor =
+                new ChunkRange(table, column.name(), column.dataType().getTypeRoot(), nextStart, null);
         return planNext(table, tableIndex, state.getNextChunkId(), cursor);
     }
 
