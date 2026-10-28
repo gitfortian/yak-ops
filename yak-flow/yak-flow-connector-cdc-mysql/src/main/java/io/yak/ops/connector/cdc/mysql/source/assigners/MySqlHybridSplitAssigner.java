@@ -144,8 +144,7 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
             BiConsumer<MySqlSnapshotSplit, Integer> onDiscovered,
             BiConsumer<TableId, Throwable> onError) {
         if (phase != HybridPendingSplitsState.Phase.SNAPSHOT) return false;
-        return snapshots.discoverNextAsync(
-                tables, splitter, context, maxPendingChunks, onDiscovered, onError);
+        return snapshots.discoverNextAsync(tables, splitter, context, maxPendingChunks, onDiscovered, onError);
     }
 
     public List<FinishedSnapshotSplitInfo> finishedSplits() {
@@ -220,12 +219,7 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
             handoffCheckpointId = checkpointId;
         }
         return new HybridPendingSplitsState(
-                snapshots.snapshotState(checkpointId),
-                binlogAssigned,
-                pendingBinlog,
-                phase,
-                low,
-                high);
+                snapshots.snapshotState(checkpointId), binlogAssigned, pendingBinlog, phase, low, high);
     }
 
     @Override
