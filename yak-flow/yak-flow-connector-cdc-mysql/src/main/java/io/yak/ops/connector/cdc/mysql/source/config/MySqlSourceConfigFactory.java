@@ -417,8 +417,13 @@ public class MySqlSourceConfigFactory implements Serializable {
             dbs.add(Pattern.quote(t.catalog()));
             tables.add(Pattern.quote(t.catalog()) + "\\." + Pattern.quote(t.table()));
         });
-        List<String> effectiveDatabases = databaseList == null ? List.copyOf(dbs) : databaseList;
-        List<String> effectiveTables = tableList == null ? List.copyOf(tables) : tableList;
+        boolean dynamicTableDiscovery = scanNewlyAddedTableEnabled;
+        List<String> effectiveDatabases = databaseList != null
+                ? databaseList
+                : dynamicTableDiscovery ? List.of() : List.copyOf(dbs);
+        List<String> effectiveTables = tableList != null
+                ? tableList
+                : dynamicTableDiscovery ? List.of() : List.copyOf(tables);
         Properties props = new Properties();
         props.setProperty("database.hostname", Objects.requireNonNull(hostname, "hostname"));
         props.setProperty("database.port", Integer.toString(port));
@@ -426,9 +431,16 @@ public class MySqlSourceConfigFactory implements Serializable {
         props.setProperty("database.password", Objects.requireNonNull(password, "password"));
         props.setProperty("database.server.id", Integer.toString(serverIdRange.getServerId(subtaskId)));
         props.setProperty("topic.prefix", topic);
-        props.setProperty("database.include.list", String.join(",", effectiveDatabases));
-        props.setProperty(
-                "table.include.list", String.join(",", includeTablesExcept(effectiveTables, excludeTableList)));
+        if (!effectiveDatabases.isEmpty()) {
+            props.setProperty("database.include.list", String.join(",", effectiveDatabases));
+        }
+        List<String> includedTables = includeTablesExcept(effectiveTables, excludeTableList);
+        if (!includedTables.isEmpty()) {
+            props.setProperty("table.include.list", String.join(",", includedTables));
+        } else if (excludeTableList != null && !excludeTableList.isBlank()) {
+            // Debezium permits an exclude-only filter when no include patterns were configured.
+            props.setProperty("table.exclude.list", excludeTableList);
+        }
         if (dbzProperties != null) props.putAll(dbzProperties);
         return new MySqlSourceConfig(
                 hostname,
