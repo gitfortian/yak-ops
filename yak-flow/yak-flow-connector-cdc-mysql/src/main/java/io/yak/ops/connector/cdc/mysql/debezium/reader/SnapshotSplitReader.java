@@ -40,11 +40,12 @@ public final class SnapshotSplitReader implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(SnapshotSplitReader.class);
 
-    private static final int FETCH_BATCH = 256;
+    private static final int DEFAULT_FETCH_SIZE = 256;
 
     private final JdbcConnectionProvider connections;
     private final JdbcDialect dialect;
     private final Map<TableId, TableSchema> schemas;
+    private final int fetchSize;
 
     private Connection connection;
     private volatile PreparedStatement statement;
@@ -58,14 +59,21 @@ public final class SnapshotSplitReader implements AutoCloseable {
     private long batchId;
 
     public SnapshotSplitReader(MySqlSourceConfig config) {
-        this(config::openSnapshotConnection, JdbcDialects.forUrl("jdbc:mysql:"), config.schemas());
+        this(config::openSnapshotConnection, JdbcDialects.forUrl("jdbc:mysql:"), config.schemas(), config.getFetchSize());
     }
 
     public SnapshotSplitReader(
             JdbcConnectionProvider connections, JdbcDialect dialect, Map<TableId, TableSchema> schemas) {
+        this(connections, dialect, schemas, DEFAULT_FETCH_SIZE);
+    }
+
+    public SnapshotSplitReader(
+            JdbcConnectionProvider connections, JdbcDialect dialect, Map<TableId, TableSchema> schemas, int fetchSize) {
         this.connections = Objects.requireNonNull(connections, "connections");
         this.dialect = Objects.requireNonNull(dialect, "dialect");
         this.schemas = Map.copyOf(Objects.requireNonNull(schemas, "schemas"));
+        if (fetchSize <= 0) throw new IllegalArgumentException("Snapshot fetch size must be positive");
+        this.fetchSize = fetchSize;
     }
 
     /** Opens a half-open range; typed splits are only consumed by the backfill/freeze stage. */
@@ -115,7 +123,7 @@ public final class SnapshotSplitReader implements AutoCloseable {
             statement = connection.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
             checkCancelled();
             statement.setQueryTimeout(60);
-            statement.setFetchSize(FETCH_BATCH);
+            statement.setFetchSize(fetchSize);
             int parameter = 1;
             if (lower != null) {
                 StatementUtils.setSafeObject(statement, parameter++, lower);
@@ -171,8 +179,8 @@ public final class SnapshotSplitReader implements AutoCloseable {
         }
         MySqlSnapshotSplit split = active;
         long startedNanos = System.nanoTime();
-        List<TableRecord> batch = new ArrayList<>(FETCH_BATCH);
-        for (int remaining = FETCH_BATCH; hasRow && remaining > 0; remaining--) {
+        List<TableRecord> batch = new ArrayList<>(fetchSize);
+        for (int remaining = fetchSize; hasRow && remaining > 0; remaining--) {
             checkCancelled();
             batch.add(new TableRecord(split.tableId(), RowKind.INSERT, converter.toInternal(results)));
             hasRow = results.next();
