@@ -277,6 +277,7 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
 
     /** Ignore stale or premature reader ACKs; only the current assignment may arm handoff. */
     public boolean onBinlogSplitMetaAssembled(long generation) {
+        if (snapshots.isSnapshotMetaReleased()) return false;
         if (generation != binlogAssignmentGeneration
                 || !binlogAssigned
                 || (phase != HybridPendingSplitsState.Phase.HANDOFF
