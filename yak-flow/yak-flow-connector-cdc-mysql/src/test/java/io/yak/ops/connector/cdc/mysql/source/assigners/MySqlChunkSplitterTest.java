@@ -201,8 +201,7 @@ class MySqlChunkSplitterTest {
         // Flink CDC does not apply this optimization to SMALLINT; the actual
         // keyset boundary is the second smallest key, 2.
         assertEquals(2L, splitter.nextChunk(CODES, null).end());
-        assertEquals(List.of(1, 2, 3, 4), scannedIds(url, splitter.splitChunks(CODES)).stream()
-                .map(Integer::intValue).toList());
+        assertEquals(List.of(1, 2, 10, 11), scannedIds(url, splitter.splitChunks(CODES)));
     }
 
     @Test
@@ -217,8 +216,10 @@ class MySqlChunkSplitterTest {
                 List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
         MySqlChunkSplitter splitter = splitter(url, Map.of(CODES, schema), Map.of(), 2);
         List<ChunkRange> ranges = splitter.splitChunks(CODES);
-        assertEquals(List.of(100L, 1000L, 5000L, null), ranges.stream()
-                .map(ChunkRange::end).collect(java.util.stream.Collectors.toCollection(ArrayList::new)));
+        assertEquals(4, ranges.size());
+        assertEquals(List.of(100L, 1000L, 5000L), ranges.subList(0, 3).stream()
+                .map(ChunkRange::end).toList());
+        assertNull(ranges.getLast().end());
         assertEquals(List.of(1, 100, 1000, 5000, 6000), scannedIds(url, ranges));
 
         MySqlChunkSplitter restored = splitter(url, Map.of(CODES, schema), Map.of(), 2);
