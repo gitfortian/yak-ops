@@ -160,7 +160,7 @@ class MySqlHybridIT {
     }
 
     @Test
-    void uncheckpointedSnapshotReplayAppliesLaterSourceDeletionAndUpdates() throws Exception {
+    void largeSnapshotCheckpointRecoveryAppliesLaterSourceDeletionAndUpdates() throws Exception {
         try (Fixture fixture = new Fixture(1, 1000)) {
             StringBuilder values = new StringBuilder();
             for (int i=1;i<=600;i++) {
@@ -168,15 +168,15 @@ class MySqlHybridIT {
                 values.append('(').append(i).append(",'original')");
             }
             fixture.execute("INSERT INTO " + fixture.source(0) + " VALUES " + values);
-            // The first checkpoint captures BOOTSTRAP, before any snapshot chunk is emitted.
-            // A later crash must replay uncheckpointed snapshot rows rather than restoring
-            // obsolete per-row output images. The JDBC sink accepts the repeated UPSERTs.
+            // Persist a completed large snapshot handoff before the source mutates.
+            // A recovered reader must continue from its durable Binlog position and apply
+            // later DELETE/UPDATE/INSERT events without replaying stale snapshot images.
             Saved prepared;
             try (Harness first = new Harness(fixture, null)) {
                 first.start();
-                prepared = first.checkpoint();
-                first.until(() -> fixture.values(0).size() == 600, false);
+                first.until(first::streaming, true);
                 assertEquals(600, fixture.values(0).size());
+                prepared = first.checkpoint();
             }
             fixture.execute("DELETE FROM " + fixture.source(0) + " WHERE id=1",
                     "UPDATE " + fixture.source(0) + " SET name='after-high' WHERE id=300",
