@@ -6,6 +6,7 @@ import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
 import io.yak.ops.connector.base.source.reader.splitreader.SplitReader;
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumSchemaHistorySnapshot;
 import io.yak.ops.connector.cdc.mysql.debezium.reader.BinlogSplitReader;
 import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlBinlogSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlSnapshotSplitReadTask;
@@ -177,6 +178,12 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             byte[] discovered = binlog.snapshotHistory();
             if (discovered.length == 0) return empty();
             DebeziumOffset requested = resolveStreamOnlyStart(bootstrapCandidate.offset());
+            // Debezium 2.7 filters Schema History by the requested Binlog offset.
+            // A schema-only bootstrap from NOW otherwise yields an empty recovered
+            // schema for an older specific/timestamp/earliest position.
+            if (requested.compareTo(bootstrapCandidate.offset()) < 0) {
+                discovered = DebeziumSchemaHistorySnapshot.anchorBootstrap(discovered, requested);
+            }
             history = discovered;
             binlog.close();
             binlog = new MySqlBinlogSplitReadTask(config);
