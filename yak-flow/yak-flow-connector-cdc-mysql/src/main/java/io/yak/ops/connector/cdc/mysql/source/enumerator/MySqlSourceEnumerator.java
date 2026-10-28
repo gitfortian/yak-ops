@@ -370,8 +370,11 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         if (group < 0 || group >= groups) throw new IllegalArgumentException("Invalid Binlog metadata group request");
         int start = group * splitMetaGroupSize;
         int end = Math.min(start + splitMetaGroupSize, infos.size());
+        List<byte[]> frames = infos.subList(start, end).stream()
+                .map(FinishedSnapshotSplitInfo::serialize)
+                .toList();
         context.sendEventToSourceReader(
-                0, new BinlogSplitMetaEvent(group, groups, infos.size(), assignmentGeneration, infos.subList(start, end)));
+                0, new BinlogSplitMetaEvent(group, groups, infos.size(), assignmentGeneration, frames));
     }
 
     private void sendResumeEvents() {
