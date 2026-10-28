@@ -161,7 +161,7 @@ class MySqlSourceReaderTest {
             assertThatThrownBy(
                             () -> reader.handleSourceEvents(new LatestFinishedSplitsNumberEvent(0, 1, true)))
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("more Snapshot fences");
+                    .hasMessageContaining("without completed Snapshot fences");
         }
     }
 
