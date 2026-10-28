@@ -35,11 +35,28 @@ public final class StatementUtils {
     }
 
     /**
-     * Row-count estimate used for Flink CDC's distribution-factor optimization.
-     * JDBC COUNT is exact here because YakFlow does not yet expose Debezium's table statistics.
+     * Port of Flink CDC's approximate table-row count optimization. MySQL exposes its
+     * storage-engine estimate through information_schema; unlike COUNT(*), this lookup
+     * does not scan the entire table. H2 and unsupported databases use exact COUNT.
      */
     public static long queryApproximateRowCnt(Connection connection, JdbcDialect dialect, TableId table)
             throws SQLException {
+        String database = table.catalog() == null ? connection.getCatalog() : table.catalog();
+        if (database != null && !database.isBlank()) {
+            String lookup = "SELECT TABLE_ROWS FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?";
+            try (PreparedStatement estimate = connection.prepareStatement(lookup)) {
+                estimate.setString(1, database);
+                estimate.setString(2, table.table());
+                try (ResultSet rows = estimate.executeQuery()) {
+                    if (rows.next()) {
+                        long count = rows.getLong(1);
+                        if (!rows.wasNull() && count > 0) return count;
+                    }
+                }
+            } catch (SQLException unsupported) {
+                // Other JDBC backends, including the H2 test database, do not expose TABLE_ROWS.
+            }
+        }
         String sql = "SELECT COUNT(*) FROM " + dialect.qualifiedTable(table);
         try (PreparedStatement statement = connection.prepareStatement(sql);
                 ResultSet rows = statement.executeQuery()) {
