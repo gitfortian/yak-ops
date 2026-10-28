@@ -214,7 +214,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             assigner.onFinishedSplits(finished.getFinishedOffsets());
             List<String> acknowledged = new ArrayList<>();
             Map<String, FinishedSnapshotSplitInfo> completed = new LinkedHashMap<>();
-            assigner.getFinishedSplitInfos().forEach(info -> completed.put(info.splitId(), info));
+            assigner.finishedSplits().forEach(info -> completed.put(info.splitId(), info));
             for (String splitId : finished.getFinishedOffsets().keySet()) {
                 FinishedSnapshotSplitInfo info = Objects.requireNonNull(
                         completed.get(splitId), "Completed snapshot metadata must be available after reporting");
