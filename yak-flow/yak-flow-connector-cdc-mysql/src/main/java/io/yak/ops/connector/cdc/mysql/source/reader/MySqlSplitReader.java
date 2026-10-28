@@ -353,8 +353,8 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
         offset.remove("ts_sec");
         offset.put("file", file);
         offset.put("pos", position);
-        offset.put("event", 0);
-        offset.put("row", 0);
+        offset.put("event", requested.getRestartSkipEvents());
+        offset.put("row", requested.getRestartSkipRows());
         offset.put("snapshot", false);
         if (requested.getGtidSet() != null) {
             offset.put("gtids", requested.getGtidSet());
