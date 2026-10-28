@@ -1,6 +1,11 @@
 package io.yak.ops.connector.cdc.mysql.debezium;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -15,7 +20,46 @@ import java.util.Objects;
  */
 public final class DebeziumSchemaHistorySnapshot {
 
+    private static final ObjectMapper JSON = new ObjectMapper();
+
     private DebeziumSchemaHistorySnapshot() {}
+
+    /**
+     * Adapt the schema-only bootstrap to an older, explicitly selected Binlog position.
+     *
+     * <p>Unlike a restored checkpoint, a new stream-only source has no historical
+     * Schema History. Debezium's no_data bootstrap records describe the source schema
+     * at initialization time, so its history positions would be filtered out by
+     * AbstractSchemaHistory.recover when the requested offset is older. Anchor the
+     * complete bootstrap records at the chosen start position without changing
+     * row offsets, preserving the checkpoint's real mailbox progress.
+     *
+     * <p>This is safe only while the selected table schema is unchanged between the
+     * requested point and bootstrap. If historical DDL changed a table's shape, a
+     * schema-only snapshot cannot reconstruct its earlier definition; the source
+     * must fail closed rather than silently claim historical schema consistency.
+     */
+    public static byte[] anchorBootstrap(byte[] history, DebeziumOffset selected) throws IOException {
+        Objects.requireNonNull(selected, "selected");
+        byte[] complete = completePrefix(history);
+        if (complete.length == 0) {
+            throw new IOException("Cannot anchor incomplete MySQL Schema History");
+        }
+        ByteArrayOutputStream result = new ByteArrayOutputStream(complete.length);
+        for (String record : new String(complete, StandardCharsets.UTF_8).split("\\n")) {
+            if (record.isBlank()) continue;
+            JsonNode parsed = JSON.readTree(record);
+            if (!(parsed instanceof ObjectNode json)
+                    || !(json.get("position") instanceof ObjectNode position)) {
+                throw new IOException("Invalid MySQL Schema History record");
+            }
+            position.removeAll();
+            selected.position().forEach((key, value) -> position.set(key, JSON.valueToTree(value)));
+            result.write(JSON.writeValueAsBytes(json));
+            result.write('\n');
+        }
+        return result.toByteArray();
+    }
 
     /**
      * Reads a bounded, complete prefix of a live history file.
