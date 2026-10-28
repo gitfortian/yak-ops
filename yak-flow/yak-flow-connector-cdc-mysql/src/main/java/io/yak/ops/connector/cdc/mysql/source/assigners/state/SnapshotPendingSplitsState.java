@@ -209,7 +209,7 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
         return remainingTables;
     }
 
-    public AssignerStatus getAssignerStatus() {
+    public AssignerStatus getSnapshotAssignerStatus() {
         return assignerStatus;
     }
 

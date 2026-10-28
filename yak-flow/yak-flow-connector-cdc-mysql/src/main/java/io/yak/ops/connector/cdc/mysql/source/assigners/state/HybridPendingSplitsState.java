@@ -42,7 +42,7 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
             throw new IllegalArgumentException("Inconsistent hybrid binlog assignment state");
         }
         if (phase == Phase.HANDOFF || phase == Phase.STREAMING) {
-            AssignerStatus status = snapshotPendingSplits.getAssignerStatus();
+            AssignerStatus status = snapshotPendingSplits.getSnapshotAssignerStatus();
             boolean released = snapshotPendingSplits.isSnapshotMetaReleased();
             if (released) {
                 if (phase != Phase.STREAMING
@@ -60,7 +60,7 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
                     || status == AssignerStatus.NEWLY_ADDED_ASSIGNING_FINISHED) {
                 if (!snapshotPendingSplits.snapshotPlanned()
                         || snapshotPendingSplits.totalSnapshotSplits() == 0
-                        || snapshotPendingSplits.getFinishedSplits().size()
+                        || snapshotPendingSplits.getSplitFinishedOffsets().size()
                                 != snapshotPendingSplits.totalSnapshotSplits()) {
                     throw new IllegalArgumentException("Hybrid handoff requires all snapshot chunks");
                 }
@@ -124,7 +124,7 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
     public String toString() {
         return "HybridPendingSplitsState{phase=" + phase
                 + ", chunks=" + snapshotPendingSplits.totalSnapshotSplits()
-                + ", assignerStatus=" + snapshotPendingSplits.getAssignerStatus()
+                + ", assignerStatus=" + snapshotPendingSplits.getSnapshotAssignerStatus()
                 + ", checkpoint=redacted}";
     }
 }

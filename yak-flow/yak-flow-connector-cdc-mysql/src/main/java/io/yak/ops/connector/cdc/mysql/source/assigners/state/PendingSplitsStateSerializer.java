@@ -65,6 +65,9 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
     @Override
     public byte[] serialize(PendingSplitsState state) throws IOException {
         Objects.requireNonNull(state, "state");
+        if (state.serializedFormCache != null) {
+            return state.serializedFormCache.clone();
+        }
         try (var buffer = new ByteArrayOutputStream();
                 var out = new DataOutputStream(buffer)) {
             out.writeInt(splitSerializer.getVersion());
@@ -88,7 +91,9 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
             checksum.update(body, 0, body.length);
             out.writeInt((int) checksum.getValue());
             out.flush();
-            return buffer.toByteArray();
+            byte[] serialized = buffer.toByteArray();
+            state.serializedFormCache = serialized;
+            return serialized.clone();
         }
     }
 
@@ -171,7 +176,7 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         ChunkRangeStateSerializer.write(out, snapshot.nextChunkRange());
         writeTableIds(out, snapshot.getAlreadyProcessedTables());
         writeTableIds(out, snapshot.getRemainingTables());
-        out.writeInt(snapshot.getAssignerStatus().getStatusCode());
+        out.writeInt(snapshot.getSnapshotAssignerStatus().getStatusCode());
         out.writeBoolean(snapshot.isTableIdCaseSensitive());
         out.writeBoolean(snapshot.isRemainingTablesCheckpointed());
         out.writeBoolean(snapshot.isSnapshotMetaReleased());
