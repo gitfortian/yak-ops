@@ -52,8 +52,8 @@ class FileCheckpointStoreTest {
             assertEquals(7, loaded.checkpointId());
             assertTrue(loaded.fullyFinishedOperators().isEmpty());
             assertTrue(loaded.finishedSubtasks().isEmpty());
-            assertEquals(6, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
-            assertEquals(5, ByteBuffer.wrap(Files.readAllBytes(
+            assertEquals(1, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
+            assertEquals(1, ByteBuffer.wrap(Files.readAllBytes(
                     folder.resolve("checkpoints/chk-7/_metadata"))).getInt(4));
             assertEquals(2, loaded.enumeratorState().version());
             assertArrayEquals(new byte[] {3, 4, 5}, loaded.enumeratorState().bytes());
@@ -192,7 +192,7 @@ class FileCheckpointStoreTest {
             store.save(complete);
             var recovered = store.loadLatest(signature).orElseThrow();
             assertEquals(complete, recovered);
-            assertEquals(6, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
+            assertEquals(1, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
             assertTrue(recovered.fullyFinishedOperators().isEmpty());
             assertTrue(recovered.finishedSubtasks().isEmpty());
             assertEquals(3, recovered.operatorStates().get(key).get("operator/count").version());
@@ -223,7 +223,7 @@ class FileCheckpointStoreTest {
                 Set.of(finished));
         try (FileCheckpointStore store = new FileCheckpointStore(folder)) {
             store.save(snapshot);
-            assertEquals(6, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
+            assertEquals(1, ByteBuffer.wrap(Files.readAllBytes(folder.resolve("checkpoint.bin"))).getInt(4));
             CheckpointSnapshot recovered = store.loadLatest(signature).orElseThrow();
             assertEquals(snapshot, recovered);
             assertEquals(Set.of("source-stable-uid"), recovered.fullyFinishedOperators());
