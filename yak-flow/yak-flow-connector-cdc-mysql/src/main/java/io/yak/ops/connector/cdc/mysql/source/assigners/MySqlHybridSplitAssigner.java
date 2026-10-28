@@ -1,6 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.ChunkSplitterState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.SnapshotPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
@@ -208,6 +209,18 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
 
     public int nextChunkIndex() {
         return nextChunkIndex;
+    }
+
+    /**
+     * Returns Flink CDC's durable chunk splitting position, derived from the currently
+     * checkpointed typed range. Only appendPlan advances this position.
+     */
+    public ChunkSplitterState getChunkSplitterState() {
+        if (nextChunkRange == null) return ChunkSplitterState.NO_SPLITTING_TABLE_STATE;
+        return new ChunkSplitterState(
+                nextChunkRange.tableId(),
+                ChunkSplitterState.ChunkBound.middleOf(nextChunkRange.start()),
+                nextChunkIndex);
     }
 
     public ChunkRange nextChunkRange() {
