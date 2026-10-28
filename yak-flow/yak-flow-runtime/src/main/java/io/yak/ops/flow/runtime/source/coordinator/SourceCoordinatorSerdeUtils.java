@@ -104,7 +104,9 @@ public class SourceCoordinatorSerdeUtils {
             for (int j = 0; j < numSubtasks; j++) {
                 int subtaskId = in.readInt();
                 int numAssignedSplits = in.readInt();
-                if (subtaskId < 0 || numAssignedSplits < 0 || numAssignedSplits > 100_000
+                if (subtaskId < 0
+                        || numAssignedSplits < 0
+                        || numAssignedSplits > 100_000
                         || assignments.containsKey(subtaskId)) {
                     throw new IOException("Invalid Source Coordinator split assignment section");
                 }
