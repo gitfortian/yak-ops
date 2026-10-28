@@ -194,13 +194,42 @@ public final class MySqlChunkSplitter {
                     }
                 }
             }
-            Object maximum =
-                    StatementUtils.queryNextChunkMax(connection, dialect, table, column.name(), type, chunkSize, lower);
-            Object upper = maximum == null
-                    ? null
-                    : StatementUtils.queryMin(connection, dialect, table, column.name(), type, maximum);
+            Object upper = nextChunkEnd(connection, table, column.name(), type, lower);
             return new ChunkRange(table, column.name(), type, lower, upper);
         }
+    }
+
+    /**
+     * Finds the next boundary using Flink CDC's unevenly-sized keyset algorithm.
+     *
+     * <p>queryNextChunkMax returns the greatest value from the next chunkSize rows. A
+     * repeated key at the lower boundary cannot advance the cursor, so queryMin
+     * finds its first strictly greater successor. Under YakFlow's half-open range
+     * contract the first split must not be empty, and a terminal MAX is represented
+     * by a null upper bound. Comparisons for VARCHAR remain database ordered.
+     */
+    private Object nextChunkEnd(
+            Connection connection, TableId table, String column, LogicalTypeRoot type, Object lower)
+            throws SQLException {
+        Object chunkEnd = StatementUtils.queryNextChunkMax(
+                connection, dialect, table, column, type, chunkSize, lower);
+        if (chunkEnd == null) return null;
+        if (lower == null) {
+            // The upstream algorithm allows an empty first split when the first
+            // chunkSize rows all share MIN. YakFlow's half-open SQL requires
+            // advancing past those duplicates instead.
+            Object minimum = StatementUtils.queryMinMax(connection, dialect, table, column, type)[0];
+            if (Objects.equals(chunkEnd, minimum)) {
+                chunkEnd = StatementUtils.queryMin(connection, dialect, table, column, type, chunkEnd);
+            }
+        } else if (Objects.equals(lower, chunkEnd)) {
+            chunkEnd = StatementUtils.queryMin(connection, dialect, table, column, type, chunkEnd);
+        }
+        if (chunkEnd == null) return null;
+        // Do not create an extra final split merely to consume the maximum key.
+        // queryMin performs this check in the source database's collation, not Java.
+        Object next = StatementUtils.queryMin(connection, dialect, table, column, type, chunkEnd);
+        return next == null ? null : chunkEnd;
     }
 
     /**
@@ -211,9 +240,9 @@ public final class MySqlChunkSplitter {
             throws SQLException {
         if (distributionFactorLower <= 0
                 || distributionFactorUpper < distributionFactorLower
-                || (type != LogicalTypeRoot.TINYINT
-                        && type != LogicalTypeRoot.SMALLINT
-                        && type != LogicalTypeRoot.INTEGER
+                // Flink CDC 3.7 optimizes only INTEGER, BIGINT and DECIMAL.
+                // TINYINT(1) can represent BOOLEAN and SMALLINT has a narrow domain.
+                || (type != LogicalTypeRoot.INTEGER
                         && type != LogicalTypeRoot.BIGINT
                         && type != LogicalTypeRoot.DECIMAL)) {
             return null;
