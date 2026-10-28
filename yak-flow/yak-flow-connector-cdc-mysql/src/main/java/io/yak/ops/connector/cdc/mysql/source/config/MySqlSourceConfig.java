@@ -24,17 +24,22 @@ import io.debezium.relational.RelationalTableFilters;
 import io.yak.ops.connector.cdc.mysql.debezium.CheckpointOffsetBackingStore;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumUtils;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
+import io.yak.ops.connector.jdbc.database.internal.convert.MySqlTypeConverter;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.configuration.SchemaEvolutionOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.schema.Schema;
+import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.TableSchema;
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,6 +47,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -66,6 +72,10 @@ public final class MySqlSourceConfig {
     private final int queueCapacity;
     private final Map<String, String> connectionProperties;
     private final Map<TableId, Schema> physicalSchemas;
+    // Runtime-discovered tables are kept separate from the immutable configured schema contract.
+    private final Map<TableId, TableSchema> discoveredSchemas = new LinkedHashMap<>();
+    private final Map<TableId, String> discoveredChunkKeyColumns = new LinkedHashMap<>();
+    private final Map<TableId, Schema> discoveredPhysicalSchemas = new LinkedHashMap<>();
     private final boolean schemaEvolutionEnabled;
     private final MySqlSourceConfigFactory.SourceSettings sourceSettings;
     private final List<String> databaseList;
@@ -347,17 +357,85 @@ public final class MySqlSourceConfig {
         return connectionProperties;
     }
 
-    public Map<TableId, TableSchema> schemas() {
-        return schemas;
+    public synchronized Map<TableId, TableSchema> schemas() {
+        Map<TableId, TableSchema> result = new LinkedHashMap<>(schemas);
+        result.putAll(discoveredSchemas);
+        return Collections.unmodifiableMap(result);
     }
 
     /** Explicit table-level chunk columns; absent entries default to the first physical primary-key column. */
-    public Map<TableId, String> chunkKeyColumns() {
-        return chunkKeyColumns;
+    public synchronized Map<TableId, String> chunkKeyColumns() {
+        Map<TableId, String> result = new LinkedHashMap<>(chunkKeyColumns);
+        result.putAll(discoveredChunkKeyColumns);
+        return Collections.unmodifiableMap(result);
     }
 
-    public Map<TableId, Schema> physicalSchemas() {
-        return physicalSchemas;
+    public synchronized Map<TableId, Schema> physicalSchemas() {
+        Map<TableId, Schema> result = new LinkedHashMap<>(physicalSchemas);
+        result.putAll(discoveredPhysicalSchemas);
+        return Collections.unmodifiableMap(result);
+    }
+
+    /** Discovers a table's logical shape from live JDBC metadata. */
+    public TableSchema discoverTable(TableId table, String requestedChunkKey) throws SQLException {
+        try (Connection connection = openSnapshotConnection()) {
+            return discoverTable(connection, table, requestedChunkKey);
+        }
+    }
+
+    public synchronized TableSchema discoverTable(
+            Connection connection, TableId table, String requestedChunkKey) throws SQLException {
+        Objects.requireNonNull(connection, "connection");
+        Objects.requireNonNull(table, "table");
+        TableSchema existing = discoveredSchemas.get(table);
+        if (existing == null) existing = schemas.get(table);
+        if (existing != null) {
+            if (requestedChunkKey != null) {
+                try {
+                    String selected = ChunkUtils.getChunkKeyColumn(existing, requestedChunkKey).name();
+                    if (!selected.equals(requestedChunkKey)) throw new SQLException("Configured Snapshot key differs from the requested key for " + table);
+                    if (!chunkKeyColumns.containsKey(table)) discoveredChunkKeyColumns.putIfAbsent(table, selected);
+                } catch (IllegalArgumentException invalidKey) {
+                    throw new SQLException("Invalid Snapshot chunk key for " + table, invalidKey);
+                }
+            }
+            return existing;
+        }
+
+        DatabaseMetaData metadata = connection.getMetaData();
+        String catalog = table.catalog() == null ? connection.getCatalog() : table.catalog();
+        TreeMap<Integer, Column> columns = new TreeMap<>();
+        try (ResultSet result = metadata.getColumns(catalog, table.schema(), table.table(), null)) {
+            while (result.next()) {
+                if (!table.table().equals(result.getString("TABLE_NAME"))) continue;
+                String name = result.getString("COLUMN_NAME");
+                int jdbcType = result.getInt("DATA_TYPE");
+                String nativeType = result.getString("TYPE_NAME");
+                int precision = result.getInt("COLUMN_SIZE");
+                int scale = result.getInt("DECIMAL_DIGITS");
+                boolean nullable = result.getInt("NULLABLE") != DatabaseMetaData.columnNoNulls;
+                var logicalType = new MySqlTypeConverter().convertColumn(
+                        jdbcType, nativeType, precision, scale, nullable, name);
+                columns.put(result.getInt("ORDINAL_POSITION"), new Column(name, logicalType));
+            }
+        }
+        if (columns.isEmpty()) throw new SQLException("Cannot discover columns for newly added MySQL table " + table);
+
+        TreeMap<Short, String> primaryKeys = new TreeMap<>();
+        try (ResultSet result = metadata.getPrimaryKeys(catalog, table.schema(), table.table())) {
+            while (result.next()) primaryKeys.put(result.getShort("KEY_SEQ"), result.getString("COLUMN_NAME"));
+        }
+        TableSchema discovered = new TableSchema(new ArrayList<>(columns.values()), new ArrayList<>(primaryKeys.values()));
+        String selectedKey;
+        try {
+            selectedKey = ChunkUtils.getChunkKeyColumn(discovered, requestedChunkKey).name();
+        } catch (RuntimeException invalidKey) {
+            throw new SQLException("Newly added table " + table + " needs a primary key or configured Snapshot chunk key", invalidKey);
+        }
+        discoveredSchemas.put(table, discovered);
+        discoveredChunkKeyColumns.put(table, selectedKey);
+        discoveredPhysicalSchemas.put(table, Schema.from(discovered, null, Map.of(), Map.of()));
+        return discovered;
     }
 
     public boolean schemaEvolutionEnabled() {
@@ -371,8 +449,8 @@ public final class MySqlSourceConfig {
     public MySqlSourceConfig withRuntimeState(SourceReaderContext context) {
         Objects.requireNonNull(context, "context");
         boolean enabled = context.getConfiguration().get(SchemaEvolutionOptions.ENABLED);
-        Map<TableId, Schema> models = new LinkedHashMap<>(physicalSchemas);
-        Map<TableId, TableSchema> shape = new LinkedHashMap<>(schemas);
+        Map<TableId, Schema> models = new LinkedHashMap<>(physicalSchemas());
+        Map<TableId, TableSchema> shape = new LinkedHashMap<>(schemas());
         for (TableId table : schemas.keySet()) {
             var restored = context.restoredSourceSchema(table);
             if (restored.isPresent()) {
@@ -494,21 +572,38 @@ public final class MySqlSourceConfig {
         // Debezium 2.7 passes driver.* values to its own JDBC connections.
         connectionProperties.forEach((key, value) -> properties.setProperty("driver." + key, value));
         properties.setProperty("topic.prefix", topicPrefix);
-        Set<String> databaseNames = new TreeSet<>();
-        schemas.keySet().forEach(table -> databaseNames.add(table.catalog()));
-        properties.setProperty(
-                "database.include.list",
-                databaseNames.stream().map(Pattern::quote).collect(Collectors.joining(",")));
-        properties.setProperty(
-                "table.include.list",
-                String.join(
-                        ",",
-                        MySqlSourceConfigFactory.includeTablesExcept(
-                                schemas.keySet().stream()
-                                        .map(table ->
-                                                Pattern.quote(table.catalog()) + "\\." + Pattern.quote(table.table()))
-                                        .toList(),
-                                excludeTableList)));
+        if (scanNewlyAddedTableEnabled) {
+            if (!databaseList.isEmpty()) properties.setProperty("database.include.list", String.join(",", databaseList));
+            else properties.remove("database.include.list");
+            if (!tableList.isEmpty()) {
+                properties.setProperty(
+                        "table.include.list",
+                        String.join(",", MySqlSourceConfigFactory.includeTablesExcept(tableList, excludeTableList)));
+                properties.remove("table.exclude.list");
+            } else {
+                properties.remove("table.include.list");
+                if (excludeTableList != null && !excludeTableList.isBlank()) {
+                    properties.setProperty("table.exclude.list", excludeTableList);
+                } else {
+                    properties.remove("table.exclude.list");
+                }
+            }
+        } else {
+            Set<String> databaseNames = new TreeSet<>();
+            schemas.keySet().forEach(table -> databaseNames.add(table.catalog()));
+            properties.setProperty(
+                    "database.include.list",
+                    databaseNames.stream().map(Pattern::quote).collect(Collectors.joining(",")));
+            properties.setProperty(
+                    "table.include.list",
+                    String.join(
+                            ",",
+                            MySqlSourceConfigFactory.includeTablesExcept(
+                                    schemas.keySet().stream()
+                                            .map(table -> Pattern.quote(table.catalog()) + "\\\\." + Pattern.quote(table.table()))
+                                            .toList(),
+                                    excludeTableList)));
+        }
         properties.setProperty("snapshot.mode", "no_data");
         properties.setProperty("include.schema.changes", Boolean.toString(schemaEvolutionEnabled));
         // Debezium's row schemas normally omit VARCHAR capacity. Propagate the
@@ -536,7 +631,7 @@ public final class MySqlSourceConfig {
 
     @Override
     public String toString() {
-        return "MySqlSourceConfig{credentials=redacted, tables=" + schemas.size() + "}";
+        return "MySqlSourceConfig{credentials=redacted, tables=" + schemas().size() + "}";
     }
 
     public String getHostname() {
