@@ -95,16 +95,16 @@ class ImpactTest(unittest.TestCase):
             common,
         )
 
-    def test_shared_cdc_base_selects_remaining_e2e_checks(self):
+    def test_shared_cdc_base_selects_cdc_and_e2e_checks(self):
         path = "yak-flow/yak-flow-connector-cdc-base/src/main/java/io/yak/ops/connector/cdc/base/source/assigner/SnapshotSplitAssigner.java"
-        self.assertEqual({"backend-e2e", "recovery-e2e"}, set(impact.select_suites([path])))
+        self.assertEqual({"cdc", "backend-e2e", "recovery-e2e"}, set(impact.select_suites([path])))
         self.assertIn("yak-flow/yak-flow-connector-cdc-mysql", impact.analyze([path])["modules"])
         self.assertEqual([], impact.select_suites([
             "yak-flow/yak-flow-connector-cdc-base/src/test/java/SnapshotSplitAssignerTest.java"]))
 
-    def test_removed_cdc_it_paths_select_surviving_e2e_checks(self):
+    def test_connector_cdc_it_paths_select_owning_suite(self):
         path = impact.CDC + "src/test/java/integration/MySqlCdcToMySqlCrashRecoveryIT.java"
-        self.assertEqual({"backend-e2e", "recovery-e2e"}, set(impact.select_suites([path])))
+        self.assertEqual({"cdc"}, set(impact.select_suites([path])))
         self.assertEqual([], impact.select_suites([impact.CDC + "src/test/java/source/reader/BinlogSplitReaderTest.java"]))
 
     def test_snapshot_and_unknown_cdc_changes_preserve_e2e_coverage(self):
@@ -115,7 +115,7 @@ class ImpactTest(unittest.TestCase):
             impact.CDC_BASE + "src/main/java/source/assigner/SnapshotSplitAssigner.java",
         ):
             with self.subTest(path=path):
-                self.assertEqual({"backend-e2e", "recovery-e2e"}, set(impact.select_suites([path])))
+                self.assertEqual({"cdc", "backend-e2e", "recovery-e2e"}, set(impact.select_suites([path])))
 
     def test_jdbc_vendor_changes_keep_end_to_end_acceptance(self):
         postgres = impact.select_suites([
