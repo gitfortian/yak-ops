@@ -1,5 +1,6 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners;
 
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.ChunkSplitterState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
@@ -215,6 +216,35 @@ public final class MySqlChunkSplitter {
             this.approximateRowCount = approximateRowCount;
             this.dynamicChunkSize = dynamicChunkSize;
         }
+    }
+
+    /**
+     * Plans a chunk using the Flink CDC ChunkSplitterState that was recovered by the
+     * enumerator. The typed boundary is reconstructed only after validating its table.
+     */
+    public MySqlSnapshotSplit planNext(TableId table, int tableIndex, ChunkSplitterState state)
+            throws SQLException {
+        Objects.requireNonNull(state, "chunk splitter state");
+        TableId current = state.getCurrentSplittingTableId();
+        if (current == null) {
+            if (state.getNextChunkStart() != null || state.getNextChunkId() != null) {
+                throw new IllegalArgumentException("Incomplete Flink chunk splitter checkpoint state");
+            }
+            return planNext(table, tableIndex, 0, null);
+        }
+        if (!current.equals(table)
+                || state.getNextChunkId() == null
+                || state.getNextChunkId() <= 0
+                || state.getNextChunkStart() == null
+                || state.getNextChunkStart().getBoundType() != ChunkSplitterState.ChunkBoundType.MIDDLE
+                || state.getNextChunkStart().getValue() == null) {
+            throw new IllegalArgumentException("Restored Flink chunk splitter state differs from its table");
+        }
+        TableSchema schema = Objects.requireNonNull(schemas.get(table), "table schema");
+        Column column = ChunkUtils.getChunkKeyColumn(schema, chunkKeyColumns.get(table));
+        ChunkRange cursor = new ChunkRange(
+                table, column.name(), column.dataType().getTypeRoot(), state.getNextChunkStart().getValue(), null);
+        return planNext(table, tableIndex, state.getNextChunkId(), cursor);
     }
 
     /**
