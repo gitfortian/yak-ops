@@ -33,6 +33,8 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
     private DebeziumOffset low;
     private DebeziumOffset high;
     private Long handoffCheckpointId;
+    private boolean binlogSplitMetaAssembled;
+    private long binlogAssignmentGeneration;
 
     public MySqlHybridSplitAssigner(StartupOptions startupOptions, HybridPendingSplitsState restored) {
         Objects.requireNonNull(startupOptions, "startupOptions");
@@ -181,6 +183,7 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
         }
         high = Objects.requireNonNull(offset, "offset");
         phase = HybridPendingSplitsState.Phase.HANDOFF;
+        binlogSplitMetaAssembled = false;
     }
 
     public boolean restoredHandoffReady() {
@@ -193,7 +196,9 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
      * <p>Fresh in-memory attempts must instead wait for notifyCheckpointComplete.
      */
     public void resumeRestoredHandoff() {
-        if (phase != HybridPendingSplitsState.Phase.HANDOFF || handoffCheckpointId != null) {
+        if (phase != HybridPendingSplitsState.Phase.HANDOFF
+                || handoffCheckpointId != null
+                || !binlogSplitMetaAssembled) {
             throw new IllegalStateException("Expected a restored completed handoff checkpoint");
         }
         phase = HybridPendingSplitsState.Phase.STREAMING;
@@ -203,6 +208,7 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
     public void notifyCheckpointComplete(long checkpointId) {
         snapshots.notifyCheckpointComplete(checkpointId);
         if (phase == HybridPendingSplitsState.Phase.HANDOFF
+                && binlogSplitMetaAssembled
                 && handoffCheckpointId != null
                 && checkpointId >= handoffCheckpointId) {
             phase = HybridPendingSplitsState.Phase.STREAMING;
@@ -210,12 +216,40 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
         }
     }
 
+    /**
+     * Invalidate metadata-assembly ACKs from the previous Binlog Reader attempt.
+     * The generation travels with each metadata group, as in Flink CDC.
+     */
+    public void onBinlogReaderReset() {
+        binlogSplitMetaAssembled = false;
+        handoffCheckpointId = null;
+        binlogAssignmentGeneration++;
+    }
+
+    public long getBinlogAssignmentGeneration() {
+        return binlogAssignmentGeneration;
+    }
+
+    /** Ignore stale or premature reader ACKs; only the current assignment may arm handoff. */
+    public boolean onBinlogSplitMetaAssembled(long generation) {
+        if (generation != binlogAssignmentGeneration
+                || !binlogAssigned
+                || (phase != HybridPendingSplitsState.Phase.HANDOFF
+                        && phase != HybridPendingSplitsState.Phase.STREAMING)) {
+            return false;
+        }
+        binlogSplitMetaAssembled = true;
+        return true;
+    }
+
     @Override
     public HybridPendingSplitsState snapshotState(long checkpointId) {
         if (checkpointId < 0) {
             throw new IllegalArgumentException("Checkpoint ID must not be negative");
         }
-        if (phase == HybridPendingSplitsState.Phase.HANDOFF && handoffCheckpointId == null) {
+        if (phase == HybridPendingSplitsState.Phase.HANDOFF
+                && binlogSplitMetaAssembled
+                && handoffCheckpointId == null) {
             handoffCheckpointId = checkpointId;
         }
         return new HybridPendingSplitsState(
@@ -241,6 +275,7 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
         }
         pendingBinlog = Objects.requireNonNull(split, "split");
         binlogAssigned = false;
+        onBinlogReaderReset();
     }
 
     public void addBack(MySqlSnapshotSplit split) {
