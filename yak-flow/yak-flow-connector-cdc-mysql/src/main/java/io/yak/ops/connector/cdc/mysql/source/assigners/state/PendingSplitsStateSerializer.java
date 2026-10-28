@@ -94,17 +94,15 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
 
     @Override
     public PendingSplitsState deserialize(int version, byte[] bytes) throws IOException {
-        if (version != VERSION
-                || bytes == null
-                || bytes.length < Integer.BYTES * 2
-                || bytes.length > MAX_BYTES) {
+        if (version != VERSION || bytes == null || bytes.length < Integer.BYTES * 2 || bytes.length > MAX_BYTES) {
             throw new IOException("Unsupported MySQL pending splits checkpoint format: " + version);
         }
         if (bytes.length < Integer.BYTES * 3) {
             throw new IOException("Truncated MySQL pending splits checkpoint");
         }
         int payloadLength = bytes.length - Integer.BYTES;
-        int expectedChecksum = ByteBuffer.wrap(bytes, payloadLength, Integer.BYTES).getInt();
+        int expectedChecksum =
+                ByteBuffer.wrap(bytes, payloadLength, Integer.BYTES).getInt();
         CRC32C checksum = new CRC32C();
         checksum.update(bytes, 0, payloadLength);
         if ((int) checksum.getValue() != expectedChecksum) {
@@ -166,8 +164,10 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         // Do not checkpoint a second, independently mutable finished-ID set.
         MySqlSplitSerializer.writeFinishedSplits(out, snapshot.getFinishedSplitInfos());
         out.writeInt(snapshot.nextTableIndex());
-        out.writeInt(snapshot.getChunkSplitterState().getNextChunkId() == null
-                ? 0 : snapshot.getChunkSplitterState().getNextChunkId());
+        out.writeInt(
+                snapshot.getChunkSplitterState().getNextChunkId() == null
+                        ? 0
+                        : snapshot.getChunkSplitterState().getNextChunkId());
         ChunkRangeStateSerializer.write(out, snapshot.nextChunkRange());
         writeTableIds(out, snapshot.getAlreadyProcessedTables());
         writeTableIds(out, snapshot.getRemainingTables());
