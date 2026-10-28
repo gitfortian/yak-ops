@@ -24,6 +24,8 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.state.SnapshotPendingSpli
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
+import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
+import io.yak.ops.core.data.TableId;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -35,6 +37,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiConsumer;
 
 /**
  * Owns snapshot split discovery, assignment, completion and the checkpointed chunk cursor.
@@ -56,6 +59,8 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     private int nextTableIndex;
     private int nextChunkIndex;
     private ChunkRange nextChunkRange;
+    private boolean planning;
+    private boolean closed;
 
     public MySqlSnapshotSplitAssigner() {}
 
@@ -73,6 +78,59 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
 
     @Override
     public void open() {}
+
+    /**
+     * Flink CDC-style asynchronous Chunk discovery owned by the Snapshot Assigner.
+     *
+     * <p>The coordinator supplies the existing async executor, while this assigner owns
+     * discovery scheduling, outstanding-work gating and the durable ChunkSplitterState.
+     */
+    public boolean discoverNextAsync(
+            List<TableId> tables,
+            MySqlChunkSplitter splitter,
+            SplitEnumeratorContext<MySqlSplit> context,
+            int maxPendingChunks,
+            BiConsumer<MySqlSnapshotSplit, Integer> onDiscovered,
+            BiConsumer<TableId, Throwable> onError) {
+        Objects.requireNonNull(tables, "tables");
+        Objects.requireNonNull(splitter, "splitter");
+        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(onDiscovered, "onDiscovered");
+        Objects.requireNonNull(onError, "onError");
+        if (closed || planning || snapshotPlanned || remainingSplits.size() >= maxPendingChunks) return false;
+        int tableIndex = nextTableIndex;
+        int chunkIndex = nextChunkIndex;
+        if (tableIndex >= tables.size()) {
+            throw new IllegalStateException("Incomplete Snapshot table discovery terminal marker");
+        }
+        if ((chunkIndex == 0) != (nextChunkRange == null)) {
+            throw new IllegalStateException("Snapshot Chunk discovery cursor does not match its index");
+        }
+        TableId table = tables.get(tableIndex);
+        ChunkSplitterState cursor = getChunkSplitterState();
+        planning = true;
+        try {
+            context.callAsync(() -> splitter.planNext(table, tableIndex, cursor), (split, failure) -> {
+                planning = false;
+                if (closed) return;
+                if (failure != null) {
+                    onError.accept(table, failure);
+                    return;
+                }
+                try {
+                    appendPlan(split, tables.size());
+                } catch (RuntimeException invalid) {
+                    onError.accept(table, invalid);
+                    return;
+                }
+                onDiscovered.accept(split, chunkIndex + 1);
+            });
+        } catch (RuntimeException schedulingFailure) {
+            planning = false;
+            throw schedulingFailure;
+        }
+        return true;
+    }
 
     /** Registers all the supplied splits and finishes discovery. */
     public void plan(List<MySqlSnapshotSplit> splits) {
@@ -337,7 +395,9 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     }
 
     @Override
-    public void close() {}
+    public void close() {
+        closed = true;
+    }
 
     private static void requireSplit(MySqlSnapshotSplit split) {
         Objects.requireNonNull(split, "split");
