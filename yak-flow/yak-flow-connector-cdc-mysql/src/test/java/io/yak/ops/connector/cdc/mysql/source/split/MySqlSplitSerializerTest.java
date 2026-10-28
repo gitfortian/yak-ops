@@ -47,6 +47,30 @@ class MySqlSplitSerializerTest {
     }
 
     @Test
+    void extendsFinishedSnapshotFencesWithoutRewindingThePausedBinlogOffset() {
+        var low = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000010", "pos", 100L));
+        var oldHigh = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000010", "pos", 200L));
+        var current = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000010", "pos", 250L));
+        var newHigh = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000010", "pos", 300L));
+        var orders = new FinishedSnapshotSplitInfo(new TableId("shop", null, "orders"), "orders-0", null, null, oldHigh);
+        var items = new FinishedSnapshotSplitInfo(new TableId("shop", null, "items"), "items-0", null, null, newHigh);
+        byte[] history = new byte[] {1, 2, 3};
+
+        var running = MySqlBinlogSplit.forInitialSnapshot()
+                .withAnchor(low, history)
+                .startStreaming(oldHigh, java.util.List.of(orders))
+                .withEmittedOffset(current, history);
+        var paused = MySqlBinlogSplit.toSuspendedBinlogSplit(running);
+        var resumed = paused.startStreaming(newHigh, java.util.List.of(orders, items));
+
+        assertEquals(MySqlBinlogSplit.Phase.STREAMING, resumed.phase());
+        assertEquals(current, resumed.offset(), "Metadata updates must preserve the live Binlog offset");
+        assertEquals(newHigh, resumed.highWatermark());
+        assertEquals(java.util.List.of(orders, items), resumed.finishedSplits());
+        assertArrayEquals(history, resumed.schemaHistory());
+    }
+
+    @Test
     void rejectsTruncatedOrUnknownSplitKind() {
         var serializer = new MySqlSplitSerializer();
         assertThrows(IOException.class, () -> serializer.deserialize(serializer.getVersion(), new byte[] {9}));
