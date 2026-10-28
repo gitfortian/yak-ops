@@ -4,6 +4,10 @@ import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.core.data.TableId;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -45,6 +49,24 @@ class BinlogSplitMetaGroupAssemblerTest {
         assertThat(fresh.addGroup(group(0, 2, 3, 8, first))).isFalse();
         assertThatThrownBy(() -> fresh.addGroup(group(1, 2, 3, 8, second)))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void sourceEventUsesSerializableByteFramesWithDefensiveCopies() throws Exception {
+        byte[] fence = FinishedSnapshotSplitInfo.serialize(info("chunk-0", 100));
+        var event = new BinlogSplitMetaEvent(0, 1, 1, 3, List.of(fence));
+        fence[0] = 0;
+        try (var buffer = new ByteArrayOutputStream();
+                var out = new ObjectOutputStream(buffer)) {
+            out.writeObject(event);
+            out.flush();
+            try (var in = new ObjectInputStream(new ByteArrayInputStream(buffer.toByteArray()))) {
+                var restored = (BinlogSplitMetaEvent) in.readObject();
+                var assembler = new BinlogSplitMetaGroupAssembler();
+                assertThat(assembler.addGroup(restored)).isTrue();
+                assertThat(assembler.finishedSplits(offset(100))).hasSize(1);
+            }
+        }
     }
 
     @Test
