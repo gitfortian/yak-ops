@@ -267,9 +267,11 @@ public final class MySqlSourceReader
             }
         } else if (event instanceof LatestFinishedSplitsNumberEvent latest) {
             if (suspendedBinlogSplit == null) return;
-            if (latest.getLatestFinishedSplitsNumber() < suspendedBinlogSplit.finishedSplits().size()) {
-                throw new IllegalStateException("Restored Binlog has more Snapshot fences than the coordinator");
+            if (latest.getLatestFinishedSplitsNumber() == 0) {
+                throw new IllegalStateException("Binlog cannot resume without completed Snapshot fences");
             }
+            // Flink CDC allows the completed count to shrink when tables are removed.
+            // The coordinator's full metadata groups replace the checkpointed fence set.
             if (latest.getBinlogAssignmentGeneration() < pendingBinlogUpdateGeneration) return;
             pendingBinlogUpdateGeneration = latest.getBinlogAssignmentGeneration();
             readerContext.suspendBinlogSplitReader();
