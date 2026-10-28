@@ -56,6 +56,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     private final boolean restoredHandoff;
     private long pendingBinlogUpdateGeneration = -1;
     private boolean binlogReaderSuspended;
+    private boolean pendingMetadataGroupSent;
     private boolean started;
     private boolean closed;
 
@@ -264,6 +265,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                     assignAvailable();
                     planSnapshotAsync();
                 } else {
+                    pendingMetadataGroupSent = true;
                     sendBinlogMetadataGroup(request.getGroupId(), request.getGeneration());
                 }
             } else {
@@ -288,6 +290,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             assigner.onBinlogSplitUpdated();
             pendingBinlogUpdateGeneration = -1;
             binlogReaderSuspended = false;
+            pendingMetadataGroupSent = false;
             waitingReaders.clear();
             assignAvailable();
             planSnapshotAsync();
@@ -463,7 +466,10 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                 || assigner.isSnapshotMetaReleased() || !isNewlyAddedProtocolStatus()
                 || !context.registeredReaders().containsKey(0)) return;
         if (pendingBinlogUpdateGeneration >= 0 && !force) {
-            if (binlogReaderSuspended && !assigner.isAssigningNewlyAddedTables()) {
+            if (binlogReaderSuspended
+                    && !assigner.isAssigningNewlyAddedTables()
+                    && !pendingMetadataGroupSent) {
+                pendingMetadataGroupSent = true;
                 sendBinlogMetadataGroup(0, pendingBinlogUpdateGeneration);
             }
             return;
@@ -471,6 +477,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         assigner.onBinlogReaderReset();
         pendingBinlogUpdateGeneration = assigner.getBinlogAssignmentGeneration();
         binlogReaderSuspended = false;
+        pendingMetadataGroupSent = false;
         context.sendEventToSourceReader(0, new BinlogSplitUpdateRequestEvent(pendingBinlogUpdateGeneration));
     }
 
