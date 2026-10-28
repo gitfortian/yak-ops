@@ -1,18 +1,22 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.ChunkSplitterState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.SnapshotPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
-import java.util.LinkedHashMap;
+import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
+import io.yak.ops.core.data.TableId;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.function.BiConsumer;
 
 /**
  * Orchestrates the hybrid source's four stages without performing JDBC or Binlog I/O.
@@ -20,7 +24,7 @@ import java.util.Objects;
  * <p>The transition from HANDOFF to STREAMING is gated by a completed checkpoint
  * containing all completed snapshot split watermarks, not by a final split delivery acknowledgment.
  */
-public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner<MySqlSplit, HybridPendingSplitsState> {
+public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
 
     private final MySqlSnapshotSplitAssigner snapshots;
     private MySqlBinlogSplit pendingBinlog;
@@ -29,10 +33,8 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner<MySqlS
     private DebeziumOffset low;
     private DebeziumOffset high;
     private Long handoffCheckpointId;
-    private final Map<String, FinishedSnapshotSplitInfo> completed = new LinkedHashMap<>();
-    private int nextTableIndex;
-    private int nextChunkIndex;
-    private ChunkRange nextChunkRange;
+    private boolean binlogSplitMetaAssembled;
+    private long binlogAssignmentGeneration;
 
     public MySqlHybridSplitAssigner(StartupOptions startupOptions, HybridPendingSplitsState restored) {
         Objects.requireNonNull(startupOptions, "startupOptions");
@@ -45,12 +47,6 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner<MySqlS
             binlogAssigned = false;
             phase = HybridPendingSplitsState.Phase.BOOTSTRAP;
         } else {
-            restored.getSnapshotPendingSplits()
-                    .getFinishedSplitInfos()
-                    .forEach(info -> completed.put(info.splitId(), info));
-            nextTableIndex = restored.getSnapshotPendingSplits().nextTableIndex();
-            nextChunkIndex = restored.getSnapshotPendingSplits().nextChunkIndex();
-            nextChunkRange = restored.getSnapshotPendingSplits().nextChunkRange();
             phase = restored.phase();
             low = restored.lowWatermark();
             high = restored.highWatermark();
@@ -59,25 +55,23 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner<MySqlS
             if (binlogAssigned == (pendingBinlog != null)) {
                 throw new IllegalArgumentException("Binlog assignment and pending split state conflict");
             }
-            snapshots = new MySqlSnapshotSplitAssigner(
-                    restored.getSnapshotPendingSplits().getRemainingSplits(),
-                    restored.getSnapshotPendingSplits().getAssignedSplits(),
-                    restored.getSnapshotPendingSplits().getFinishedSplits(),
-                    restored.getSnapshotPendingSplits().totalSnapshotSplits(),
-                    restored.getSnapshotPendingSplits().snapshotPlanned());
+            snapshots = new MySqlSnapshotSplitAssigner(restored.getSnapshotPendingSplits());
         }
     }
 
     @Override
-    public MySqlSplit getNext(int subtaskId) {
-        MySqlBinlogSplit next = nextBinlog(subtaskId);
-        return next != null ? next : nextSnapshot();
+    public void open() {
+        snapshots.open();
     }
 
-    public MySqlBinlogSplit nextBinlog(int subtaskId) {
-        if (subtaskId != 0 || pendingBinlog == null) {
-            return null;
-        }
+    @Override
+    public Optional<MySqlSplit> getNext() {
+        MySqlBinlogSplit next = nextBinlog();
+        return next == null ? Optional.ofNullable(nextSnapshot()) : Optional.of(next);
+    }
+
+    public MySqlBinlogSplit nextBinlog() {
+        if (pendingBinlog == null) return null;
         MySqlBinlogSplit next = pendingBinlog;
         pendingBinlog = null;
         binlogAssigned = true;
@@ -88,7 +82,7 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner<MySqlS
         if (phase != HybridPendingSplitsState.Phase.SNAPSHOT) {
             return null;
         }
-        return snapshots.next();
+        return (MySqlSnapshotSplit) snapshots.getNext().orElse(null);
     }
 
     public void captureLow(DebeziumOffset offset) {
@@ -109,91 +103,70 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner<MySqlS
         snapshots.plan(splits);
     }
 
-    /** Resolves reported watermarks against coordinator-owned assigned split metadata. */
+    @Override
+    public boolean waitingForFinishedSplits() {
+        return snapshots.waitingForFinishedSplits();
+    }
+
+    @Override
+    public List<FinishedSnapshotSplitInfo> getFinishedSplitInfos() {
+        return snapshots.getFinishedSplitInfos();
+    }
+
+    @Override
+    public void onFinishedSplits(Map<String, DebeziumOffset> splitFinishedOffsets) {
+        snapshots.onFinishedSplits(splitFinishedOffsets);
+    }
+
+    /** The Snapshot Assigner alone owns completion metadata and split attribution. */
     public FinishedSnapshotSplitInfo finishSnapshot(String splitId, DebeziumOffset highWatermark) {
-        Objects.requireNonNull(splitId, "splitId");
-        Objects.requireNonNull(highWatermark, "highWatermark");
-        MySqlSnapshotSplit original = snapshots.assigned().get(splitId);
-        if (original == null) {
-            FinishedSnapshotSplitInfo previous = completed.get(splitId);
-            if (previous != null && previous.highWatermark().equals(highWatermark)) return previous;
-            throw new IllegalArgumentException("Unknown or conflicting completed snapshot split");
-        }
-        FinishedSnapshotSplitInfo info = new FinishedSnapshotSplitInfo(
-                original.tableId(),
-                splitId,
-                original.lowerInclusive(),
-                original.upperExclusive(),
-                highWatermark,
-                original.chunkRange());
-        finishSnapshot(info);
-        return info;
+        return snapshots.finishSnapshot(splitId, highWatermark);
     }
 
     public void finishSnapshot(FinishedSnapshotSplitInfo info) {
-        FinishedSnapshotSplitInfo previous = completed.get(info.splitId());
-        if (previous != null) {
-            if (!previous.equals(info)) throw new IllegalStateException("Conflicting completed chunk High watermark");
-            return;
-        }
-        MySqlSnapshotSplit original = snapshots.assigned().get(info.splitId());
-        if (original == null
-                || !original.tableId().equals(info.tableId())
-                || !Objects.equals(original.chunkRange(), info.chunkRange())
-                || !Objects.equals(original.lowerInclusive(), info.lowerInclusive())
-                || !Objects.equals(original.upperExclusive(), info.upperExclusive())) {
-            throw new IllegalArgumentException("Completed chunk differs from its assigned range");
-        }
-        snapshots.complete(info.splitId());
-        completed.put(info.splitId(), info);
+        snapshots.finishSnapshot(info);
     }
 
-    /** Atomically persist one discovered range and advance the durable discovery cursor. */
     public void appendPlan(MySqlSnapshotSplit split, int tableCount) {
-        ChunkRange range = split.chunkRange();
-        if (phase != HybridPendingSplitsState.Phase.SNAPSHOT
-                || tableCount < 1
-                || nextTableIndex < 0
-                || nextTableIndex >= tableCount
-                || range == null) {
-            throw new IllegalStateException("Invalid snapshot discovery transition");
+        if (phase != HybridPendingSplitsState.Phase.SNAPSHOT) {
+            throw new IllegalStateException("Cannot discover snapshot chunks before Binlog anchor");
         }
-        if ((nextChunkIndex == 0 && (nextChunkRange != null || range.start() != null))
-                || (nextChunkIndex > 0
-                        && (nextChunkRange == null
-                                || nextChunkRange.end() != null
-                                || !nextChunkRange.tableId().equals(range.tableId())
-                                || !nextChunkRange.column().equals(range.column())
-                                || nextChunkRange.type() != range.type()
-                                || !Objects.equals(nextChunkRange.start(), range.start())))) {
-            throw new IllegalStateException("Snapshot range differs from the durable discovery cursor");
-        }
+        snapshots.appendPlan(split, tableCount);
+    }
 
-        boolean tableComplete = range.last();
-        int nextTable = tableComplete ? nextTableIndex + 1 : nextTableIndex;
-        int nextChunk = tableComplete ? 0 : nextChunkIndex + 1;
-        ChunkRange nextRange =
-                tableComplete ? null : new ChunkRange(range.tableId(), range.column(), range.type(), range.end(), null);
-        snapshots.append(List.of(split), nextTable == tableCount);
-        nextTableIndex = nextTable;
-        nextChunkIndex = nextChunk;
-        nextChunkRange = nextRange;
+    /**
+     * Delegates asynchronous Chunk discovery to the Snapshot Assigner.
+     * Hybrid owns only bootstrap and Binlog handoff state.
+     */
+    public boolean discoverNextAsync(
+            List<TableId> tables,
+            MySqlChunkSplitter splitter,
+            SplitEnumeratorContext<MySqlSplit> context,
+            int maxPendingChunks,
+            BiConsumer<MySqlSnapshotSplit, Integer> onDiscovered,
+            BiConsumer<TableId, Throwable> onError) {
+        if (phase != HybridPendingSplitsState.Phase.SNAPSHOT) return false;
+        return snapshots.discoverNextAsync(tables, splitter, context, maxPendingChunks, onDiscovered, onError);
     }
 
     public List<FinishedSnapshotSplitInfo> finishedSplits() {
-        return List.copyOf(completed.values());
+        return snapshots.finishedSplits();
     }
 
     public int nextTableIndex() {
-        return nextTableIndex;
+        return snapshots.nextTableIndex();
     }
 
     public int nextChunkIndex() {
-        return nextChunkIndex;
+        return snapshots.nextChunkIndex();
+    }
+
+    public ChunkSplitterState getChunkSplitterState() {
+        return snapshots.getChunkSplitterState();
     }
 
     public ChunkRange nextChunkRange() {
-        return nextChunkRange;
+        return snapshots.nextChunkRange();
     }
 
     public int pendingSnapshotCount() {
@@ -210,6 +183,7 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner<MySqlS
         }
         high = Objects.requireNonNull(offset, "offset");
         phase = HybridPendingSplitsState.Phase.HANDOFF;
+        binlogSplitMetaAssembled = false;
     }
 
     public boolean restoredHandoffReady() {
@@ -222,22 +196,50 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner<MySqlS
      * <p>Fresh in-memory attempts must instead wait for notifyCheckpointComplete.
      */
     public void resumeRestoredHandoff() {
-        if (phase != HybridPendingSplitsState.Phase.HANDOFF || handoffCheckpointId != null) {
+        if (phase != HybridPendingSplitsState.Phase.HANDOFF
+                || handoffCheckpointId != null
+                || !binlogSplitMetaAssembled) {
             throw new IllegalStateException("Expected a restored completed handoff checkpoint");
         }
         phase = HybridPendingSplitsState.Phase.STREAMING;
     }
 
     @Override
-    public boolean notifyCheckpointComplete(long checkpointId) {
+    public void notifyCheckpointComplete(long checkpointId) {
+        snapshots.notifyCheckpointComplete(checkpointId);
         if (phase == HybridPendingSplitsState.Phase.HANDOFF
+                && binlogSplitMetaAssembled
                 && handoffCheckpointId != null
                 && checkpointId >= handoffCheckpointId) {
             phase = HybridPendingSplitsState.Phase.STREAMING;
             handoffCheckpointId = null;
-            return true;
         }
-        return false;
+    }
+
+    /**
+     * Invalidate metadata-assembly ACKs from the previous Binlog Reader attempt.
+     * The generation travels with each metadata group, as in Flink CDC.
+     */
+    public void onBinlogReaderReset() {
+        binlogSplitMetaAssembled = false;
+        handoffCheckpointId = null;
+        binlogAssignmentGeneration++;
+    }
+
+    public long getBinlogAssignmentGeneration() {
+        return binlogAssignmentGeneration;
+    }
+
+    /** Ignore stale or premature reader ACKs; only the current assignment may arm handoff. */
+    public boolean onBinlogSplitMetaAssembled(long generation) {
+        if (generation != binlogAssignmentGeneration
+                || !binlogAssigned
+                || (phase != HybridPendingSplitsState.Phase.HANDOFF
+                        && phase != HybridPendingSplitsState.Phase.STREAMING)) {
+            return false;
+        }
+        binlogSplitMetaAssembled = true;
+        return true;
     }
 
     @Override
@@ -245,37 +247,24 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner<MySqlS
         if (checkpointId < 0) {
             throw new IllegalArgumentException("Checkpoint ID must not be negative");
         }
-        if (phase == HybridPendingSplitsState.Phase.HANDOFF && handoffCheckpointId == null) {
+        if (phase == HybridPendingSplitsState.Phase.HANDOFF
+                && binlogSplitMetaAssembled
+                && handoffCheckpointId == null) {
             handoffCheckpointId = checkpointId;
         }
         return new HybridPendingSplitsState(
-                new SnapshotPendingSplitsState(
-                        snapshots.planned(),
-                        snapshots.total(),
-                        snapshots.pending(),
-                        snapshots.assigned(),
-                        snapshots.finished(),
-                        finishedSplits(),
-                        nextTableIndex,
-                        nextChunkIndex,
-                        nextChunkRange),
-                binlogAssigned,
-                pendingBinlog,
-                phase,
-                low,
-                high);
+                snapshots.snapshotState(checkpointId), binlogAssigned, pendingBinlog, phase, low, high);
     }
 
     @Override
-    public void addSplitsBack(List<MySqlSplit> splits, int subtaskId) {
+    public void addSplits(Collection<MySqlSplit> splits) {
         for (MySqlSplit split : splits) {
             if (split instanceof MySqlSnapshotSplit snapshot) {
                 addBack(snapshot);
             } else if (split instanceof MySqlBinlogSplit binlogSplit) {
-                if (subtaskId != 0) {
-                    throw new IllegalArgumentException("Binlog belongs to reader zero");
-                }
                 addBack(binlogSplit);
+            } else {
+                throw new IllegalArgumentException("Unsupported returned MySQL split");
             }
         }
     }
@@ -286,6 +275,7 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner<MySqlS
         }
         pendingBinlog = Objects.requireNonNull(split, "split");
         binlogAssigned = false;
+        onBinlogReaderReset();
     }
 
     public void addBack(MySqlSnapshotSplit split) {
@@ -306,5 +296,33 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner<MySqlS
 
     public boolean snapshotPlanned() {
         return snapshots.planned();
+    }
+
+    @Override
+    public AssignerStatus getAssignerStatus() {
+        if (phase == HybridPendingSplitsState.Phase.BOOTSTRAP || phase == HybridPendingSplitsState.Phase.SNAPSHOT) {
+            return AssignerStatus.INITIAL_ASSIGNING;
+        }
+        return AssignerStatus.INITIAL_ASSIGNING_FINISHED;
+    }
+
+    @Override
+    public void startAssignNewlyAddedTables() {
+        throw new UnsupportedOperationException("Dynamic MySQL table discovery is not enabled");
+    }
+
+    @Override
+    public boolean noMoreSplits() {
+        return binlogAssigned && snapshots.planned() && snapshots.pending().isEmpty();
+    }
+
+    @Override
+    public void onBinlogSplitUpdated() {
+        throw new UnsupportedOperationException("Dynamic MySQL table discovery is not enabled");
+    }
+
+    @Override
+    public void close() {
+        snapshots.close();
     }
 }

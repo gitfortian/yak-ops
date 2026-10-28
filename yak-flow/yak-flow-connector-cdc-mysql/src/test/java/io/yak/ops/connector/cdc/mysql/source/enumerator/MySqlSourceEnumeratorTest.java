@@ -117,6 +117,34 @@ class MySqlSourceEnumeratorTest {
     }
 
     @Test
+    void neverAssignsReturnedBinlogSplitToSnapshotReaderWhenReaderZeroIsUnavailable() throws Exception {
+        var schema = new TableSchema(
+                List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
+        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
+        var unownedBinlog = assigner.nextBinlog();
+        assigner.captureLow(offset(100));
+        var snapshot = MySqlSnapshotSplit.typed(
+                "snapshot-0", new ChunkRange(ORDERS, "id", LogicalTypeRoot.BIGINT, null, null));
+        assigner.plan(List.of(snapshot));
+        assigner.addBack(unownedBinlog);
+
+        var context = new Coordinator() {
+            @Override
+            public Map<Integer, ReaderInfo> registeredReaders() {
+                return Map.of(1, new ReaderInfo(1, ""));
+            }
+        };
+        var coordinator = enumerator(context, configuration(schema, null), database(), assigner.snapshotState(1));
+        coordinator.start();
+        coordinator.handleSplitRequest(1, null);
+        assertEquals(List.of(snapshot), context.assignments(1));
+        var state = (HybridPendingSplitsState) coordinator.snapshotState(2);
+        assertFalse(state.isBinlogSplitAssigned());
+        assertEquals(unownedBinlog, state.pendingBinlog());
+        coordinator.close();
+    }
+
+    @Test
     void plansKeylessDecimalChunksWithNoPhysicalPrimaryKeyAndPreservesDiscoveryPosition() throws Exception {
         String url = database();
         try (var connection = DriverManager.getConnection(url);
@@ -134,7 +162,7 @@ class MySqlSourceEnumeratorTest {
                 List.of());
         var planner = splitter(url, keyless, "bucket");
         var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
-        assigner.nextBinlog(0);
+        assigner.nextBinlog();
         assigner.captureLow(offset(100));
         MySqlSnapshotSplit first = planner.planNext(ORDERS, 0, 0, null);
         assertEquals(new BigDecimal("9223372036854775808.00000000"), first.chunkRange().end());
@@ -250,7 +278,7 @@ class MySqlSourceEnumeratorTest {
         return new DebeziumOffset(Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", pos));
     }
 
-    private static final class Coordinator implements SplitEnumeratorContext<MySqlSplit> {
+    private static class Coordinator implements SplitEnumeratorContext<MySqlSplit> {
         private final ArrayDeque<Runnable> actions = new ArrayDeque<>();
         private final Map<Integer, List<MySqlSplit>> assigned = new java.util.HashMap<>();
 

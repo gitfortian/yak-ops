@@ -1,19 +1,23 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.ChunkSplitterState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsStateSerializer;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.SnapshotPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.types.LogicalTypeRoot;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 /**
- * Snapshot split assignment contracts adopted from Flink CDC's
- * MySqlSnapshotSplitAssignerTest. YakFlow shares the common SnapshotSplitAssigner
- * instead of copying Flink's database discovery code into the coordinator.
+ * Snapshot split assignment, completion, return and recovery contracts adapted from Flink CDC's
+ * MySqlSnapshotSplitAssignerTest. State is now owned by the MySQL assigner itself.
  */
 class MySqlSnapshotSplitAssignerTest {
 
@@ -30,15 +34,18 @@ class MySqlSnapshotSplitAssignerTest {
         assertThat(assigner.next()).isEqualTo(first);
         assertThat(assigner.next()).isEqualTo(last);
         assertThat(assigner.next()).isNull();
-        assertThat(assigner.allFinished()).isFalse();
+        assertThat(assigner.noMoreSplits()).isTrue();
+        assertThat(assigner.waitingForFinishedSplits()).isTrue();
         assertThat(assigner.assigned().keySet()).containsExactlyInAnyOrder("orders-0", "orders-1");
 
-        assigner.complete("orders-0");
-        assertThat(assigner.allFinished()).isFalse();
-        assigner.complete("orders-1");
-        assertThat(assigner.allFinished()).isTrue();
-        // Flink CDC's snapshot completion reporting is idempotent.
-        assigner.complete("orders-1");
+        assertThatThrownBy(assigner::getFinishedSplitInfos).isInstanceOf(IllegalStateException.class);
+        assigner.onFinishedSplits(Map.of("orders-0", offset(100)));
+        assertThat(assigner.waitingForFinishedSplits()).isTrue();
+        assigner.onFinishedSplits(Map.of("orders-1", offset(200)));
+        assertThat(assigner.waitingForFinishedSplits()).isFalse();
+        assertThat(assigner.getFinishedSplitInfos()).hasSize(2);
+        // Duplicate completion reports do not remove or requeue an already finished split.
+        assigner.onFinishedSplits(Map.of("orders-1", offset(200)));
         assertThat(assigner.finished()).containsExactlyInAnyOrder("orders-0", "orders-1");
     }
 
@@ -50,10 +57,11 @@ class MySqlSnapshotSplitAssignerTest {
         assigner.plan(List.of(order, item));
         assertThat(assigner.next()).isEqualTo(order);
         assertThat(assigner.next()).isEqualTo(item);
-        assigner.complete(item.splitId());
+        assigner.finishSnapshot(item.splitId(), offset(150));
         assertThat(assigner.allFinished()).isFalse();
-        assigner.complete(order.splitId());
+        assigner.finishSnapshot(order.splitId(), offset(200));
         assertThat(assigner.allFinished()).isTrue();
+        assertThat(assigner.getFinishedSplitInfos()).extracting("tableId").containsExactlyInAnyOrder(ORDERS, ITEMS);
     }
 
     @Test
@@ -65,63 +73,117 @@ class MySqlSnapshotSplitAssignerTest {
         initial.next();
         assertThat(initial.assigned()).containsEntry(first.splitId(), first);
 
-        MySqlSnapshotSplitAssigner recovered = new MySqlSnapshotSplitAssigner(
-                initial.pending(), initial.assigned(), initial.finished(), initial.total(), initial.planned());
+        MySqlSnapshotSplitAssigner recovered = new MySqlSnapshotSplitAssigner(initial.snapshotState(5));
         assertThat(recovered.next()).isEqualTo(second);
         assertThat(recovered.allFinished()).isFalse();
         recovered.addBack(first);
         assertThat(recovered.next()).isEqualTo(first);
-        recovered.complete(first.splitId());
-        recovered.complete(second.splitId());
+        recovered.finishSnapshot(first.splitId(), offset(100));
+        recovered.finishSnapshot(second.splitId(), offset(200));
         assertThat(recovered.allFinished()).isTrue();
+        assertThat(recovered.snapshotState(6).getAssignedSplits()).isEmpty();
     }
 
     @Test
     void testIncrementalChunkDiscoveryDoesNotFinishPrematurely() {
-        MySqlSnapshotSplit first = split(ORDERS, "orders-0", null, 100L);
-        MySqlSnapshotSplit last = split(ORDERS, "orders-1", 100L, null);
+        MySqlSnapshotSplit first = MySqlSnapshotSplit.typed(
+                "orders-0", new ChunkRange(ORDERS, "id", LogicalTypeRoot.BIGINT, null, 100L));
+        MySqlSnapshotSplit last = MySqlSnapshotSplit.typed(
+                "orders-1", new ChunkRange(ORDERS, "id", LogicalTypeRoot.BIGINT, 100L, null));
         MySqlSnapshotSplitAssigner assigner = new MySqlSnapshotSplitAssigner();
-        assigner.append(List.of(first), false);
+        assigner.appendPlan(first, 1);
         assertThat(assigner.planned()).isFalse();
         assertThat(assigner.next()).isEqualTo(first);
-        assigner.complete(first.splitId());
+        assigner.finishSnapshot(first.splitId(), offset(150));
         assertThat(assigner.allFinished()).isFalse();
+        assertThat(assigner.getChunkSplitterState())
+                .isEqualTo(new ChunkSplitterState(ORDERS, ChunkSplitterState.ChunkBound.middleOf(100L), 1));
 
-        assigner.append(List.of(last), true);
-        assertThat(assigner.planned()).isTrue();
-        assertThat(assigner.next()).isEqualTo(last);
-        assigner.complete(last.splitId());
-        assertThat(assigner.allFinished()).isTrue();
-        assertThat(assigner.total()).isEqualTo(2);
+        SnapshotPendingSplitsState checkpoint = assigner.snapshotState(8);
+        MySqlSnapshotSplitAssigner restored = new MySqlSnapshotSplitAssigner(checkpoint);
+        assertThat(restored.nextChunkIndex()).isEqualTo(1);
+        restored.appendPlan(last, 1);
+        assertThat(restored.getChunkSplitterState()).isEqualTo(ChunkSplitterState.NO_SPLITTING_TABLE_STATE);
+        assertThat(restored.planned()).isTrue();
+        assertThat(restored.next()).isEqualTo(last);
+        restored.finishSnapshot(last.splitId(), offset(200));
+        assertThat(restored.allFinished()).isTrue();
+        assertThat(restored.total()).isEqualTo(2);
     }
 
     @Test
-    void testDuplicateOrUnassignedCompletionIsRejected() {
-        MySqlSnapshotSplit first = split(ORDERS, "orders-0", null, null);
+    void finishedOffsetsMustMatchAssignedBoundariesAndBatchReportsAreAtomic() {
+        MySqlSnapshotSplit first = split(ORDERS, "orders-0", null, 10L);
+        MySqlSnapshotSplit second = split(ORDERS, "orders-1", 10L, null);
         MySqlSnapshotSplitAssigner assigner = new MySqlSnapshotSplitAssigner();
-        assertThatThrownBy(() -> assigner.plan(List.of(first, first)))
-                .isInstanceOf(IllegalArgumentException.class);
-        assigner.plan(List.of(first));
-        assertThatThrownBy(() -> assigner.complete(first.splitId()))
+        assigner.plan(List.of(first, second));
+
+        assertThatThrownBy(() -> assigner.finishSnapshot(first.splitId(), offset(100)))
                 .isInstanceOf(IllegalArgumentException.class);
         assigner.next();
-        assigner.complete(first.splitId());
-        assertThatThrownBy(() -> assigner.addBack(first))
+        assertThatThrownBy(() -> assigner.onFinishedSplits(Map.of(
+                        first.splitId(), offset(100), "missing", offset(200))))
                 .isInstanceOf(IllegalArgumentException.class);
+        assertThat(assigner.finished()).isEmpty();
+        assertThat(assigner.assigned()).containsKey(first.splitId());
+        assertThatThrownBy(() -> assigner.finishSnapshot(
+                        new io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo(
+                                ORDERS, first.splitId(), 1L, 10L, offset(100))))
+                .isInstanceOf(IllegalArgumentException.class);
+        assigner.finishSnapshot(first.splitId(), offset(100));
+        assertThatThrownBy(() -> assigner.finishSnapshot(first.splitId(), offset(101)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> assigner.addBack(first)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void testInvalidRestoredAssignmentStateFailsClosed() {
         MySqlSnapshotSplit first = split(ORDERS, "orders-0", null, null);
-        assertThatThrownBy(() -> new MySqlSnapshotSplitAssigner(
-                        List.of(first), Map.of(first.splitId(), first), Set.of(), 2, true))
+        assertThatThrownBy(() -> new SnapshotPendingSplitsState(
+                        true, 2, List.of(first), Map.of(first.splitId(), first), Set.of(), List.of(), 0, 0, null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new MySqlSnapshotSplitAssigner(
-                        List.of(), Map.of("other-id", first), Set.of(), 1, true))
+        assertThatThrownBy(() -> new SnapshotPendingSplitsState(
+                        true, 1, List.of(), Map.of("other-id", first), Set.of(), List.of(), 0, 0, null))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void hybridWireFormatRetainsOwnedSnapshotStateAndFinishedMetadata() throws Exception {
+        MySqlSnapshotSplitAssigner assigner = new MySqlSnapshotSplitAssigner();
+        var first = MySqlSnapshotSplit.typed(
+                "orders-0", new ChunkRange(ORDERS, "id", LogicalTypeRoot.BIGINT, null, 100L));
+        var last = MySqlSnapshotSplit.typed(
+                "orders-1", new ChunkRange(ORDERS, "id", LogicalTypeRoot.BIGINT, 100L, null));
+        assigner.appendPlan(first, 1);
+        assigner.next();
+        assigner.finishSnapshot(first.splitId(), offset(100));
+        assigner.appendPlan(last, 1);
+        var state = assigner.snapshotState(10);
+        // Checkpoint wire format remains a Hybrid envelope; restore into the same
+        // snapshot owner and ensure both finished watermark and pending work survive.
+        var wrapped = new io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState(
+                state,
+                false,
+                io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit.forInitialSnapshot(),
+                io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState.Phase.SNAPSHOT,
+                offset(1),
+                null);
+        var serializer = new PendingSplitsStateSerializer();
+        var recovered = (io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState)
+                serializer.deserialize(serializer.getVersion(), serializer.serialize(wrapped));
+        MySqlSnapshotSplitAssigner restored = new MySqlSnapshotSplitAssigner(recovered.getSnapshotPendingSplits());
+        assertThat(restored.finishedSplits()).isEqualTo(assigner.finishedSplits());
+        assertThat(restored.next()).isEqualTo(last);
+        assertThat(restored.nextChunkIndex()).isZero();
+        assertThat(restored.nextTableIndex()).isEqualTo(1);
     }
 
     private static MySqlSnapshotSplit split(TableId table, String id, Long low, Long high) {
         return new MySqlSnapshotSplit(id, table, low, high, null);
+    }
+
+    private static DebeziumOffset offset(long position) {
+        return new DebeziumOffset(
+                Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", position));
     }
 }

@@ -5,11 +5,12 @@ import io.yak.ops.connector.base.source.reader.RecordsBySplits;
 import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
 import io.yak.ops.connector.base.source.reader.splitreader.SplitReader;
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.debezium.reader.BinlogSplitReader;
 import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlBinlogSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlSnapshotSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
-import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
+import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -30,6 +31,7 @@ import java.util.Set;
  */
 public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, MySqlSplit> {
     private final MySqlSourceConfig config;
+    private final MySqlSourceReaderContext readerContext;
     private final MySqlSnapshotSplitReadTask snapshots;
     private final TableMetrics metrics;
     private final long generation;
@@ -37,7 +39,8 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     private final Deque<MySqlSnapshotSplit> pending = new ArrayDeque<>();
     private volatile MySqlBinlogSplitReadTask binlog;
     private volatile byte[] history = new byte[0];
-    private volatile MySqlResumeBinlogEvent resume;
+    private volatile DebeziumOffset resumeHigh;
+    private volatile List<FinishedSnapshotSplitInfo> resumeFinishedSplits;
     private volatile boolean cancelled;
     private MySqlBinlogSplit binlogSplit;
     private BinlogSplitReader filter;
@@ -58,7 +61,13 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     }
 
     public MySqlSplitReader(MySqlSourceConfig config, TableMetrics metrics, int reader) {
+        this(config, metrics, reader, null);
+    }
+
+    MySqlSplitReader(
+            MySqlSourceConfig config, TableMetrics metrics, int reader, MySqlSourceReaderContext readerContext) {
         this.config = Objects.requireNonNull(config, "config");
+        this.readerContext = readerContext;
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         generation = metrics.generation();
         tables = Set.copyOf(config.schemas().keySet());
@@ -75,6 +84,14 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
                     throw new IllegalStateException("MySQL Reader already owns a Binlog split");
                 }
                 binlogSplit = stream;
+                if (readerContext != null) {
+                    readerContext.setHasAssignedBinlogSplit(true);
+                    if (stream.isSuspended() && stream.phase() == MySqlBinlogSplit.Phase.PAUSED) {
+                        readerContext.suspendBinlogSplitReader();
+                    } else {
+                        readerContext.wakeupSuspendedBinlogSplitReader();
+                    }
+                }
                 history = stream.schemaHistory();
                 if (stream.phase() == MySqlBinlogSplit.Phase.BOOTSTRAP) {
                     startBinlog(stream);
@@ -145,8 +162,8 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             snapshots.close();
             snapshotsClosed = true;
         }
-        if (binlogSplit != null && resume != null && !streaming) {
-            startStreaming(binlogSplit.startStreaming(resume.highWatermark(), resume.finishedSplits()));
+        if (binlogSplit != null && resumeHigh != null && !streaming) {
+            startStreaming(binlogSplit.startStreaming(resumeHigh, resumeFinishedSplits));
         }
         if (streaming) {
             BinlogEvent event = filter == null ? binlog.poll() : filter.poll(binlog);
@@ -171,14 +188,18 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
         history = split.schemaHistory();
         startBinlog(split);
         streaming = true;
+        if (readerContext != null) readerContext.wakeupSuspendedBinlogSplitReader();
     }
 
     public void finishSnapshots() {
         snapshotsFinished = true;
     }
 
-    public void resumeBinlog(MySqlResumeBinlogEvent event) {
-        resume = Objects.requireNonNull(event, "event");
+    public void resumeBinlog(DebeziumOffset high, List<FinishedSnapshotSplitInfo> finished) {
+        resumeHigh = Objects.requireNonNull(high, "high");
+        resumeFinishedSplits = List.copyOf(Objects.requireNonNull(finished, "finished"));
+        if (resumeFinishedSplits.isEmpty()) throw new IllegalArgumentException("Missing Binlog metadata");
+        if (readerContext != null) readerContext.wakeupSuspendedBinlogSplitReader();
     }
 
     /**

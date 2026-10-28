@@ -62,12 +62,14 @@ public class TaskPluginConfiguration {
         io.yak.ops.configuration.Configuration options = new io.yak.ops.configuration.Configuration()
                 .set(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, snapshotChunkSize)
                 .set(MySqlSourceOptions.QUEUE_CAPACITY, queueCapacity);
-        ConfigValidator.of(options.toReadonlyConfig()).validate(
-                io.yak.ops.configuration.rule.OptionRule.builder()
-                        .optional(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE,
+        ConfigValidator.of(options.toReadonlyConfig())
+                .validate(io.yak.ops.configuration.rule.OptionRule.builder()
+                        .optional(
+                                MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE,
                                 io.yak.ops.configuration.rule.Conditions.greaterOrEqual(
                                         MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, 1))
-                        .optional(MySqlSourceOptions.QUEUE_CAPACITY,
+                        .optional(
+                                MySqlSourceOptions.QUEUE_CAPACITY,
                                 io.yak.ops.configuration.rule.Conditions.greaterOrEqual(
                                         MySqlSourceOptions.QUEUE_CAPACITY, 1))
                         .build());

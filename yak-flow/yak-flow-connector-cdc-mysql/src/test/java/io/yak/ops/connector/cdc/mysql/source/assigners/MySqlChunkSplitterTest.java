@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotSplitReader;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.ChunkSplitterState;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypeRoot;
@@ -110,6 +111,73 @@ class MySqlChunkSplitterTest {
     }
 
     @Test
+    void appliesFlinkEvenlySizedChunkDistributionAndRestoresTheNextBound() throws Exception {
+        String url = database();
+        try (var connection = DriverManager.getConnection(url);
+                var statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE codes (id BIGINT PRIMARY KEY)");
+            statement.execute("INSERT INTO codes VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10)");
+        }
+        var schema = new TableSchema(
+                List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
+        var tables = Map.of(CODES, schema);
+        var splitter = new MySqlChunkSplitter(
+                () -> DriverManager.getConnection(url),
+                JdbcDialects.forUrl("jdbc:mysql:"),
+                tables,
+                Map.of(),
+                2,
+                0.1,
+                10.0);
+        List<ChunkRange> ranges = splitter.splitChunks(CODES);
+        assertEquals(5, ranges.size());
+        assertEquals(3L, ranges.getFirst().end());
+        assertEquals(3L, ranges.get(1).start());
+        assertEquals(5L, ranges.get(1).end());
+        assertEquals(7L, ranges.get(2).end());
+        assertEquals(9L, ranges.get(3).end());
+        assertNull(ranges.getLast().end());
+
+        // Restore a mid-table checkpoint into a new splitter instance: no duplicates or gaps.
+        var restored = new MySqlChunkSplitter(
+                () -> DriverManager.getConnection(url),
+                JdbcDialects.forUrl("jdbc:mysql:"),
+                tables,
+                Map.of(),
+                2,
+                0.1,
+                10.0);
+        var resume = new ChunkRange(CODES, "id", LogicalTypeRoot.BIGINT, ranges.getFirst().end(), null);
+        assertEquals(ranges.get(1), restored.planNext(CODES, 0, 1, resume).chunkRange());
+    }
+
+    @Test
+    void usesFlinkDistributionFactorButFallsBackForSparseKeys() throws Exception {
+        assertEquals(1.0, MySqlChunkSplitter.calculateDistributionFactor(CODES, 1L, 10L, 10L));
+        assertEquals(2, MySqlChunkSplitter.getDynamicChunkSize(CODES, 1L, 10L, 10L, 2, 0.1, 10.0));
+        assertEquals(-1, MySqlChunkSplitter.getDynamicChunkSize(CODES, 1L, 10000L, 4L, 2, 0.1, 10.0));
+
+        String url = database();
+        try (var connection = DriverManager.getConnection(url);
+                var statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE codes (id BIGINT PRIMARY KEY)");
+            statement.execute("INSERT INTO codes VALUES (1),(100),(1000),(10000)");
+        }
+        var schema = new TableSchema(
+                List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
+        var splitter = new MySqlChunkSplitter(
+                () -> DriverManager.getConnection(url),
+                JdbcDialects.forUrl("jdbc:mysql:"),
+                Map.of(CODES, schema),
+                Map.of(),
+                2,
+                0.1,
+                10.0);
+        assertEquals(1000L, splitter.nextChunk(CODES, null).end());
+        assertNull(splitter.nextChunk(CODES, 1000L).end());
+    }
+
+    @Test
     void usesDatabaseCollationInsteadOfJavaStringOrdering() throws Exception {
         String url = database();
         try (var connection = DriverManager.getConnection(url);
@@ -173,6 +241,32 @@ class MySqlChunkSplitterTest {
         var ranges = splitter.splitChunks(CODES);
         assertEquals(1, ranges.size());
         assertEquals(List.of(1, 2, 3), scannedIds(url, ranges));
+    }
+
+    @Test
+    void rejectsCorruptedFlinkChunkSplitterCheckpointsBeforeOpeningJdbc() {
+        var schema = new TableSchema(
+                List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
+        var splitter = splitter(
+                "jdbc:h2:mem:unused_" + UUID.randomUUID() + ";MODE=MySQL",
+                Map.of(CODES, schema),
+                Map.of(),
+                2);
+        assertThrows(IllegalArgumentException.class, () -> splitter.planNext(
+                CODES,
+                0,
+                new ChunkSplitterState(
+                        PRICES, ChunkSplitterState.ChunkBound.middleOf(10L), 1)));
+        assertThrows(IllegalArgumentException.class, () -> splitter.planNext(
+                CODES,
+                0,
+                new ChunkSplitterState(
+                        CODES, ChunkSplitterState.ChunkBound.END_BOUND, 1)));
+        assertThrows(IllegalArgumentException.class, () -> splitter.planNext(
+                CODES,
+                0,
+                new ChunkSplitterState(
+                        CODES, ChunkSplitterState.ChunkBound.middleOf(10L), null)));
     }
 
     @Test

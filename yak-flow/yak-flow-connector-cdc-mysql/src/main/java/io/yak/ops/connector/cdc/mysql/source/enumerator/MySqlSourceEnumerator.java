@@ -10,6 +10,9 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.state.BinlogPendingSplits
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaAssembledEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaRequestEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsAckEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsReportEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsRequestEvent;
@@ -42,6 +45,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     private final MySqlHybridSplitAssigner assigner;
     private final MySqlBinlogSplitAssigner streamAssigner;
     private final boolean initial;
+    private final int splitMetaGroupSize;
     private final List<TableId> tables;
     private final Set<Integer> waitingReaders = new LinkedHashSet<>();
     private final TableMetrics metrics;
@@ -49,7 +53,6 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     private final boolean restoredHandoff;
     private boolean started;
     private boolean closed;
-    private boolean planning;
 
     public MySqlSourceEnumerator(
             StartupOptions startupOptions,
@@ -91,6 +94,13 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         tables = List.copyOf(config.schemas().keySet());
         this.initial = startupOptions.startupMode() == StartupMode.INITIAL;
+        if (initial && config.isReleaseSnapshotMetadataEnabled()) {
+            throw new UnsupportedOperationException(
+                    "Snapshot metadata release requires a durable released-state checkpoint protocol; "
+                            + "keep scan.incremental.snapshot.metadata.release.enabled=false until that migration");
+        }
+        splitMetaGroupSize = config.getSplitMetaGroupSize();
+        if (splitMetaGroupSize <= 0) throw new IllegalArgumentException("Invalid Binlog split metadata group size");
         if (initial && restored != null && !(restored instanceof HybridPendingSplitsState)) {
             throw new IllegalArgumentException("INITIAL cannot restore Binlog-only checkpoint state");
         }
@@ -162,12 +172,16 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     public void start() {
         if (started || closed) throw new IllegalStateException("MySQL Hybrid enumerator cannot start twice");
         started = true;
+        if (initial) assigner.open();
+        else streamAssigner.open();
         if (!initial) return;
-        if (restoredHandoff) {
-            assigner.resumeRestoredHandoff();
-            sendResumeEvents();
-        } else if (assigner.snapshotComplete()) enterHandoff();
-        else planSnapshotAsync();
+        if (restoredHandoff || assigner.phase() == HybridPendingSplitsState.Phase.STREAMING) {
+            sendBinlogMetadataGroup(0, assigner.getBinlogAssignmentGeneration());
+        } else if (assigner.snapshotComplete()) {
+            enterHandoff();
+        } else {
+            planSnapshotAsync();
+        }
     }
 
     @Override
@@ -177,7 +191,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             throw new IllegalStateException("Unregistered Hybrid reader");
         if (!initial) {
             if (reader != 0) throw new IllegalArgumentException("Binlog-only source requires reader zero");
-            MySqlBinlogSplit next = streamAssigner.getNext(0);
+            MySqlBinlogSplit next = (MySqlBinlogSplit) streamAssigner.getNext().orElse(null);
             if (next != null) context.assignSplit(next, 0);
             return;
         }
@@ -190,9 +204,16 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     public void addReader(int reader) {
         if (closed) return;
         if (!initial) return;
-        if (assigner.phase() == HybridPendingSplitsState.Phase.STREAMING) sendResumeEvent(reader);
-        else if (assigner.phase() == HybridPendingSplitsState.Phase.SNAPSHOT)
+        if ((assigner.phase() == HybridPendingSplitsState.Phase.STREAMING
+                        || assigner.phase() == HybridPendingSplitsState.Phase.HANDOFF)
+                && reader == 0) {
+            assigner.onBinlogReaderReset();
+            sendBinlogMetadataGroup(0, assigner.getBinlogAssignmentGeneration());
+        } else if (assigner.phase() == HybridPendingSplitsState.Phase.STREAMING) {
+            sendResumeEvent(reader);
+        } else if (assigner.phase() == HybridPendingSplitsState.Phase.SNAPSHOT) {
             context.sendEventToSourceReader(reader, new FinishedSnapshotSplitsRequestEvent());
+        }
         assignAvailable();
     }
 
@@ -207,10 +228,27 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             if (!bootstrap) return;
             metrics.phase(generation, TableMetrics.Phase.SNAPSHOT, false);
             planSnapshotAsync();
+        } else if (event instanceof BinlogSplitMetaRequestEvent request) {
+            if (reader != 0) throw new IllegalArgumentException("Only the Binlog owner may request metadata");
+            sendBinlogMetadataGroup(request.getGroupId(), request.getGeneration());
+        } else if (event instanceof BinlogSplitMetaAssembledEvent assembled) {
+            if (reader != 0) throw new IllegalArgumentException("Only the Binlog owner may ACK metadata");
+            if (!assigner.onBinlogSplitMetaAssembled(assembled.getBinlogAssignmentGeneration())) return;
+            if (restoredHandoff && assigner.phase() == HybridPendingSplitsState.Phase.HANDOFF) {
+                // This handoff checkpoint was already durable before recovery.
+                assigner.resumeRestoredHandoff();
+                sendResumeEvents();
+            } else if (assigner.phase() == HybridPendingSplitsState.Phase.STREAMING) {
+                sendResumeEvents();
+            }
         } else if (event instanceof FinishedSnapshotSplitsReportEvent finished) {
+            assigner.onFinishedSplits(finished.getFinishedOffsets());
             List<String> acknowledged = new ArrayList<>();
-            for (var entry : finished.getFinishedOffsets().entrySet()) {
-                FinishedSnapshotSplitInfo info = assigner.finishSnapshot(entry.getKey(), entry.getValue());
+            Map<String, FinishedSnapshotSplitInfo> completed = new LinkedHashMap<>();
+            assigner.finishedSplits().forEach(info -> completed.put(info.splitId(), info));
+            for (String splitId : finished.getFinishedOffsets().keySet()) {
+                FinishedSnapshotSplitInfo info = Objects.requireNonNull(
+                        completed.get(splitId), "Completed snapshot metadata must be available after reporting");
                 metrics.splitFinished(generation, info.splitId(), info.tableId());
                 acknowledged.add(info.splitId());
             }
@@ -228,11 +266,16 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         if (closed || reader < 0 || reader >= context.currentParallelism())
             throw new IllegalStateException("Invalid split return");
         if (initial) {
-            assigner.addSplitsBack(splits, reader);
+            for (MySqlSplit split : splits) {
+                if (split instanceof MySqlBinlogSplit && reader != 0) {
+                    throw new IllegalArgumentException("Binlog belongs to reader zero");
+                }
+            }
+            assigner.addSplits(splits);
             assignAvailable();
         } else {
-            streamAssigner.addSplitsBack(
-                    splits.stream().map(split -> (MySqlBinlogSplit) split).toList(), reader);
+            if (reader != 0) throw new IllegalArgumentException("Binlog belongs to reader zero");
+            streamAssigner.addSplits(splits);
         }
     }
 
@@ -244,7 +287,10 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
 
     @Override
     public void notifyCheckpointComplete(long checkpointId) {
-        boolean handoff = initial && assigner.notifyCheckpointComplete(checkpointId);
+        boolean waitingForHandoff = initial && assigner.phase() == HybridPendingSplitsState.Phase.HANDOFF;
+        if (initial) assigner.notifyCheckpointComplete(checkpointId);
+        else streamAssigner.notifyCheckpointComplete(checkpointId);
+        boolean handoff = waitingForHandoff && assigner.phase() == HybridPendingSplitsState.Phase.STREAMING;
         metrics.checkpointCompleted(generation, checkpointId, handoff);
         if (handoff) sendResumeEvents();
     }
@@ -253,41 +299,29 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     public void close() {
         closed = true;
         if (splitter != null) splitter.cancel();
+        if (assigner != null) assigner.close();
         if (streamAssigner != null) streamAssigner.close();
         metrics.sourceClosed(generation);
         waitingReaders.clear();
     }
 
     private void planSnapshotAsync() {
-        if (!started
-                || closed
-                || planning
-                || assigner.snapshotPlanned()
-                || assigner.phase() != HybridPendingSplitsState.Phase.SNAPSHOT
-                || assigner.pendingSnapshotCount() >= MAX_PENDING_CHUNKS) return;
-        int tableIndex = assigner.nextTableIndex();
-        int chunkIndex = assigner.nextChunkIndex();
-        if (tableIndex >= tables.size()) throw new IllegalStateException("Incomplete discovery terminal marker");
-        TableId table = tables.get(tableIndex);
-        ChunkRange cursor = assigner.nextChunkRange();
-        if ((chunkIndex == 0) != (cursor == null)) {
-            throw new IllegalStateException("Typed chunk discovery cursor does not match its index");
-        }
-        planning = true;
-        context.callAsync(() -> splitter.planNext(table, tableIndex, chunkIndex, cursor), (split, failure) -> {
-            planning = false;
-            if (closed) return;
-            if (failure != null) {
-                metrics.readFailed(generation, table, false);
-                throw new IllegalStateException("MySQL snapshot chunk discovery failed", failure);
-            }
-            boolean tableComplete = split.chunkRange().last();
-            assigner.appendPlan(split, tables.size());
-            // A table's final split count is only known after the terminal range.
-            if (tableComplete) metrics.planned(generation, table, chunkIndex + 1);
-            assignAvailable();
-            planSnapshotAsync();
-        });
+        if (closed || !started || !initial || assigner.phase() != HybridPendingSplitsState.Phase.SNAPSHOT) return;
+        assigner.discoverNextAsync(
+                tables,
+                splitter,
+                context,
+                MAX_PENDING_CHUNKS,
+                (split, tableChunkCount) -> {
+                    if (closed) return;
+                    if (split.chunkRange().last()) metrics.planned(generation, split.tableId(), tableChunkCount);
+                    assignAvailable();
+                    planSnapshotAsync();
+                },
+                (table, failure) -> {
+                    metrics.readFailed(generation, table, false);
+                    throw new IllegalStateException("MySQL snapshot chunk discovery failed", failure);
+                });
     }
 
     private void enterHandoff() {
@@ -297,11 +331,12 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                 .orElseThrow();
         assigner.captureHigh(high);
         metrics.phase(generation, TableMetrics.Phase.HANDOFF, false);
+        sendBinlogMetadataGroup(0, assigner.getBinlogAssignmentGeneration());
     }
 
     private void assignAvailable() {
         if (closed || !started) return;
-        MySqlBinlogSplit binlog = assigner.nextBinlog(0);
+        MySqlBinlogSplit binlog = assigner.nextBinlog();
         if (binlog != null) {
             if (context.registeredReaders().containsKey(0)) context.assignSplit(binlog, 0);
             else assigner.addBack(binlog);
@@ -313,11 +348,38 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                 waitingReaders.remove(reader);
                 continue;
             }
-            MySqlSplit split = assigner.getNext(reader);
+            // Snapshot readers may include subtask IDs other than zero. Keep the Binlog
+            // split reserved for reader zero even if that reader is temporarily unavailable.
+            MySqlSplit split = assigner.nextSnapshot();
             if (split == null) break;
             context.assignSplit(split, reader);
             waitingReaders.remove(reader);
         }
+    }
+
+    /**
+     * Serve a bounded Flink-style metadata group. Reader 0 requests subsequent groups
+     * and ACKs only once its complete set of Snapshot fences has been assembled.
+     */
+    private void sendBinlogMetadataGroup(int group, long assignmentGeneration) {
+        if (closed
+                || !context.registeredReaders().containsKey(0)
+                || assignmentGeneration != assigner.getBinlogAssignmentGeneration()
+                || (assigner.phase() != HybridPendingSplitsState.Phase.HANDOFF
+                        && assigner.phase() != HybridPendingSplitsState.Phase.STREAMING)) {
+            return;
+        }
+        List<FinishedSnapshotSplitInfo> infos = assigner.finishedSplits();
+        if (infos.isEmpty()) throw new IllegalStateException("Hybrid handoff has no completed Chunk metadata");
+        int groups = (int) (((long) infos.size() + splitMetaGroupSize - 1) / splitMetaGroupSize);
+        if (group < 0 || group >= groups) throw new IllegalArgumentException("Invalid Binlog metadata group request");
+        int start = group * splitMetaGroupSize;
+        int end = Math.min(start + splitMetaGroupSize, infos.size());
+        List<byte[]> frames = infos.subList(start, end).stream()
+                .map(FinishedSnapshotSplitInfo::serialize)
+                .toList();
+        context.sendEventToSourceReader(
+                0, new BinlogSplitMetaEvent(group, groups, infos.size(), assignmentGeneration, frames));
     }
 
     private void sendResumeEvents() {
@@ -326,9 +388,6 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
 
     private void sendResumeEvent(int reader) {
         context.sendEventToSourceReader(
-                reader,
-                reader == 0
-                        ? new MySqlResumeBinlogEvent(assigner.high(), assigner.finishedSplits())
-                        : new MySqlStopSnapshotEvent());
+                reader, reader == 0 ? new MySqlResumeBinlogEvent(assigner.high()) : new MySqlStopSnapshotEvent());
     }
 }

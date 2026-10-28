@@ -5,10 +5,15 @@ import io.yak.ops.connector.base.source.reader.SingleThreadMultiplexSourceReader
 import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaAssembledEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaRequestEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsAckEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsReportEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsRequestEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
+import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -44,17 +49,24 @@ public final class MySqlSourceReader
     private final boolean initial;
     private final Map<String, MySqlSnapshotSplit> finishedUnacked = new LinkedHashMap<>();
     private MySqlResumeBinlogEvent resumeEvent;
+    private final BinlogSplitMetaGroupAssembler binlogMetadata = new BinlogSplitMetaGroupAssembler();
     private final java.util.Set<String> acknowledged = new java.util.HashSet<>();
     private final Map<String, Long> finishedCheckpoint = new LinkedHashMap<>();
 
     public MySqlSourceReader(
             MySqlSourceConfig config, SourceReaderContext context, TableMetrics metrics, boolean initial) {
+        this(config, new MySqlSourceReaderContext(context), metrics, initial);
+    }
+
+    private MySqlSourceReader(
+            MySqlSourceConfig config, MySqlSourceReaderContext readerContext, TableMetrics metrics, boolean initial) {
         this(
-                new MySqlSplitReader(config, metrics, context.getIndexOfSubtask()),
-                new MySqlSourceReaderContext(context),
+                new MySqlSplitReader(
+                        config, metrics, readerContext.getSourceReaderContext().getIndexOfSubtask(), readerContext),
+                readerContext,
                 metrics,
                 initial,
-                sourceId(config, context));
+                sourceId(config, readerContext.getSourceReaderContext()));
     }
 
     private MySqlSourceReader(
@@ -101,13 +113,34 @@ public final class MySqlSourceReader
         context.sendSplitRequest();
     }
 
+    /**
+     * Re-report a checkpointed initial Binlog anchor after reader recovery.
+     *
+     * <p>Flink CDC re-reports coordinator messages from restored Reader state. The
+     * BOOTSTRAP -> SNAPSHOT transition must not depend on a heartbeat that was emitted
+     * before the last durable checkpoint. Streaming/suspended update splits are excluded.
+     */
+    @Override
+    public void addSplits(List<MySqlSplit> added) throws Exception {
+        super.addSplits(added);
+        if (!initial) return;
+        for (MySqlSplit split : added) {
+            if (split instanceof MySqlBinlogSplit binlog
+                    && binlog.phase() == MySqlBinlogSplit.Phase.PAUSED
+                    && binlog.finishedSplits().isEmpty()) {
+                context.sendSourceEventToCoordinator(new MySqlLowWatermarkEvent(binlog.offset()));
+                context.sendSplitRequest();
+            }
+        }
+    }
+
     @Override
     protected MySqlSplitState initializedState(MySqlSplit split) {
         MySqlSplitState state = MySqlSplitState.fromSplit(split);
         if (resumeEvent != null
                 && split instanceof MySqlBinlogSplit binlog
                 && binlog.phase() != MySqlBinlogSplit.Phase.STANDALONE) {
-            state.resume(resumeEvent.highWatermark(), resumeEvent.finishedSplits());
+            state.resume(resumeEvent.highWatermark(), binlogMetadata.finishedSplits(resumeEvent.highWatermark()));
         }
         return state;
     }
@@ -181,15 +214,26 @@ public final class MySqlSourceReader
             });
         } else if (event instanceof FinishedSnapshotSplitsRequestEvent) {
             reportFinishedSplits();
+        } else if (event instanceof BinlogSplitMetaEvent group) {
+            if (!MySqlBinlogSplit.ID.equals(group.getSplitId())) {
+                throw new IllegalArgumentException("Metadata delivered for another Binlog split");
+            }
+            if (binlogMetadata.addGroup(group)) {
+                context.sendSourceEventToCoordinator(new BinlogSplitMetaAssembledEvent(binlogMetadata.generation()));
+            } else if (group.getBinlogAssignmentGeneration() == binlogMetadata.generation()) {
+                context.sendSourceEventToCoordinator(
+                        new BinlogSplitMetaRequestEvent(binlogMetadata.nextGroupId(), binlogMetadata.generation()));
+            }
         } else if (event instanceof MySqlResumeBinlogEvent resume) {
+            List<FinishedSnapshotSplitInfo> finished = binlogMetadata.finishedSplits(resume.highWatermark());
             resumeEvent = resume;
             forEachActiveSplitState(state -> {
                 if (state.binlog()) {
-                    state.resume(resume.highWatermark(), resume.finishedSplits());
+                    state.resume(resume.highWatermark(), finished);
                 }
             });
             metrics.streaming(generation);
-            splits.resumeBinlog(resume);
+            splits.resumeBinlog(resume.highWatermark(), finished);
         } else if (event instanceof io.yak.ops.connector.cdc.mysql.source.events.MySqlStopSnapshotEvent) {
             splits.finishSnapshots();
         } else {

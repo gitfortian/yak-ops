@@ -17,6 +17,56 @@ public final class StatementUtils {
     private StatementUtils() {}
 
     /**
+     * Query the minimum and maximum chunk keys, as in Flink CDC's StatementUtils.
+     * The source database retains control of comparison and collation semantics.
+     */
+    public static Object[] queryMinMax(
+            Connection connection, JdbcDialect dialect, TableId table, String column, LogicalTypeRoot type)
+            throws SQLException {
+        String key = dialect.quoteIdentifier(column);
+        String sql = "SELECT MIN(" + key + "), MAX(" + key + ") FROM " + dialect.qualifiedTable(table);
+        try (PreparedStatement statement = connection.prepareStatement(sql);
+                ResultSet rows = statement.executeQuery()) {
+            if (!rows.next()) throw new SQLException("Snapshot chunk MIN/MAX query returned no result");
+            Object lower = read(rows, 1, type);
+            Object upper = read(rows, 2, type);
+            return new Object[] {lower, upper};
+        }
+    }
+
+    /**
+     * Port of Flink CDC's approximate table-row count optimization. MySQL exposes its
+     * storage-engine estimate through information_schema; unlike COUNT(*), this lookup
+     * does not scan the entire table. H2 and unsupported databases use exact COUNT.
+     */
+    public static long queryApproximateRowCnt(Connection connection, JdbcDialect dialect, TableId table)
+            throws SQLException {
+        String database = table.catalog() == null ? connection.getCatalog() : table.catalog();
+        if (database != null && !database.isBlank()) {
+            String lookup =
+                    "SELECT TABLE_ROWS FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?";
+            try (PreparedStatement estimate = connection.prepareStatement(lookup)) {
+                estimate.setString(1, database);
+                estimate.setString(2, table.table());
+                try (ResultSet rows = estimate.executeQuery()) {
+                    if (rows.next()) {
+                        long count = rows.getLong(1);
+                        if (!rows.wasNull() && count > 0) return count;
+                    }
+                }
+            } catch (SQLException unsupported) {
+                // Other JDBC backends, including the H2 test database, do not expose TABLE_ROWS.
+            }
+        }
+        String sql = "SELECT COUNT(*) FROM " + dialect.qualifiedTable(table);
+        try (PreparedStatement statement = connection.prepareStatement(sql);
+                ResultSet rows = statement.executeQuery()) {
+            if (!rows.next()) throw new SQLException("Snapshot chunk row count query returned no result");
+            return rows.getLong(1);
+        }
+    }
+
+    /**
      * Returns the greatest key among the next requested rows. This can equal the lower
      * boundary when multiple physical rows share one chunk-column value.
      */
@@ -119,9 +169,13 @@ public final class StatementUtils {
     }
 
     private static Object read(ResultSet result, LogicalTypeRoot type) throws SQLException {
+        return read(result, 1, type);
+    }
+
+    private static Object read(ResultSet result, int index, LogicalTypeRoot type) throws SQLException {
         return switch (type) {
             case TINYINT, SMALLINT, INTEGER, BIGINT -> {
-                BigDecimal number = result.getBigDecimal(1);
+                BigDecimal number = result.getBigDecimal(index);
                 if (number == null) yield null;
                 try {
                     yield number.longValueExact();
@@ -129,8 +183,8 @@ public final class StatementUtils {
                     throw new SQLException("MySQL snapshot chunk key is outside signed BIGINT range", exception);
                 }
             }
-            case DECIMAL -> result.getBigDecimal(1);
-            case CHAR, VARCHAR -> result.getString(1);
+            case DECIMAL -> result.getBigDecimal(index);
+            case CHAR, VARCHAR -> result.getString(index);
             default -> throw new SQLException("Unsupported MySQL snapshot chunk type: " + type);
         };
     }

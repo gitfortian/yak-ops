@@ -68,44 +68,55 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
         started = true;
         lastQueuedOffset = context.restoredOffset();
         awaitingSchemaSnapshot = lastQueuedOffset == null;
-        directory = Files.createTempDirectory("yakflow-binlog-");
-        historyPath = directory.resolve("schema-history.dat");
-        byte[] history = context.restoredSchemaHistory();
-        if (history.length != 0) {
-            Files.write(historyPath, history);
-        }
-        String connectorName = "yakflow-cdc-" + getSourceConfig().topicPrefix();
-        sessionId = CheckpointOffsetBackingStore.register(connectorName, context.restoredOffset());
-        var properties = getSourceConfig().debeziumProperties(sessionId, historyPath);
-        properties.setProperty("database.server.id", Integer.toString(context.getServerId()));
-        // Snapshot readers share a logical source but must own distinct JMX registrations.
-        properties.setProperty("custom.metric.tags", "reader=" + context.getServerId());
-        engine = DebeziumEngine.create(ChangeEventFormat.of(Connect.class))
-                .using(properties)
-                .notifying(this::handleBatch)
-                .using((success, message, error) -> {
-                    if (!success && !stopped) {
-                        // Preserve the original driver exception instead of only reporting an engine stop.
-                        context.recordFailure(
-                                error != null
-                                        ? error
-                                        : new IllegalStateException("Debezium MySQL connector failed: " + message));
-                    }
-                })
-                .build();
-        worker = Thread.ofVirtual().name("yakflow-mysql-debezium").start(() -> {
-            try {
-                engine.run();
-                if (!stopped) {
-                    context.recordFailure(
-                            new IllegalStateException("Debezium MySQL Binlog engine stopped unexpectedly"));
-                }
-            } catch (Throwable error) {
-                if (!stopped) {
-                    context.recordFailure(error);
-                }
+        try {
+            directory = Files.createTempDirectory("yakflow-binlog-");
+            historyPath = directory.resolve("schema-history.dat");
+            byte[] history = context.restoredSchemaHistory();
+            if (history.length != 0) {
+                Files.write(historyPath, history);
             }
-        });
+            String connectorName = "yakflow-cdc-" + getSourceConfig().topicPrefix();
+            sessionId = CheckpointOffsetBackingStore.register(connectorName, context.restoredOffset());
+            var properties = getSourceConfig().debeziumProperties(sessionId, historyPath);
+            properties.setProperty("database.server.id", Integer.toString(context.getServerId()));
+            // Snapshot readers share a logical source but must own distinct JMX registrations.
+            properties.setProperty("custom.metric.tags", "reader=" + context.getServerId());
+            engine = DebeziumEngine.create(ChangeEventFormat.of(Connect.class))
+                    .using(properties)
+                    .notifying(this::handleBatch)
+                    .using((success, message, error) -> {
+                        if (!success && !stopped) {
+                            // Preserve the original driver exception instead of only reporting an engine stop.
+                            context.recordFailure(
+                                    error != null
+                                            ? error
+                                            : new IllegalStateException("Debezium MySQL connector failed: " + message));
+                        }
+                    })
+                    .build();
+            worker = Thread.ofVirtual().name("yakflow-mysql-debezium").start(() -> {
+                try {
+                    engine.run();
+                    if (!stopped) {
+                        context.recordFailure(
+                                new IllegalStateException("Debezium MySQL Binlog engine stopped unexpectedly"));
+                    }
+                } catch (Throwable error) {
+                    if (!stopped) {
+                        context.recordFailure(error);
+                    }
+                }
+            });
+        } catch (IOException | RuntimeException failure) {
+            // The engine may fail while registering its offset store or loading the
+            // Debezium 2.7 schema history. Release all partially initialized resources.
+            try {
+                close();
+            } catch (Exception cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
     }
 
     private void handleBatch(
@@ -229,24 +240,46 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
         }
     }
 
+    /**
+     * Stop the embedded Debezium 2.7 engine before releasing the offset-store session and
+     * temporary schema history. Cleanup is mandatory even if the engine fails to join.
+     *
+     * <p>This mirrors Flink CDC's fail-safe Reader lifecycle: an earlier close error must
+     * not leave a registered offset store in a subsequent Reader attempt.
+     */
     @Override
     public void close() throws Exception {
         requestStop();
-        if (worker != null) {
-            worker.join(5_000);
-            if (worker.isAlive()) {
-                worker.interrupt();
-                throw new IOException("Debezium MySQL engine failed to stop within timeout");
+        Exception failure = null;
+        try {
+            if (worker != null) {
+                worker.join(5_000);
+                if (worker.isAlive()) {
+                    worker.interrupt();
+                    throw new IOException("Debezium MySQL engine failed to stop within timeout");
+                }
+            }
+        } catch (Exception error) {
+            failure = error;
+            if (error instanceof InterruptedException) Thread.currentThread().interrupt();
+        } finally {
+            try {
+                if (sessionId != null) {
+                    CheckpointOffsetBackingStore.unregister(sessionId);
+                    sessionId = null;
+                }
+            } catch (Exception error) {
+                if (failure == null) failure = error;
+                else failure.addSuppressed(error);
+            }
+            try {
+                if (historyPath != null) Files.deleteIfExists(historyPath);
+                if (directory != null) Files.deleteIfExists(directory);
+            } catch (Exception error) {
+                if (failure == null) failure = error;
+                else failure.addSuppressed(error);
             }
         }
-        if (sessionId != null) {
-            CheckpointOffsetBackingStore.unregister(sessionId);
-        }
-        if (historyPath != null) {
-            Files.deleteIfExists(historyPath);
-        }
-        if (directory != null) {
-            Files.deleteIfExists(directory);
-        }
+        if (failure != null) throw failure;
     }
 }

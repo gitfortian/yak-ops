@@ -2,17 +2,19 @@ package io.yak.ops.connector.cdc.mysql.debezium.task;
 
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumUtils;
 import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotChunkBackfill;
 import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotSplitReader;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import java.sql.Connection;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Callable;
@@ -98,7 +100,11 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
                 batch.recycle();
             }
             afterSnapshot.call();
-            DebeziumOffset high = watermark();
+            // Match Flink CDC's skipSnapshotBackfill contract: High = Low when enabled.
+            // Changes since Low may appear in the consistent view and be replayed by
+            // the resumed Binlog Reader. This setting deliberately gives at-least-once
+            // rather than a fully normalized snapshot.
+            DebeziumOffset high = config.isSkipSnapshotBackfill() ? low : watermark();
             if (low.compareTo(high) > 0) {
                 throw new IllegalStateException("MySQL snapshot watermarks moved backwards");
             }
@@ -209,26 +215,14 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
             watermarkStatement = statement;
             statement.setQueryTimeout(60);
             checkCancelled();
-            ResultSet rows;
-            try {
-                rows = statement.executeQuery("SHOW BINARY LOG STATUS");
-            } catch (SQLException unsupported) {
-                checkCancelled();
-                try {
-                    rows = statement.executeQuery("SHOW MASTER STATUS");
-                } catch (SQLException failure) {
-                    failure.addSuppressed(unsupported);
-                    throw failure;
-                }
-            }
-            try (ResultSet status = rows) {
-                if (!status.next()) throw new SQLException("MySQL binary logging is disabled");
-                String file = status.getString(1);
-                long position = status.getLong(2);
-                if (file == null || file.isBlank() || position < 1)
-                    throw new SQLException("Invalid MySQL Binlog boundary");
-                return new DebeziumOffset(partition, Map.of("file", file, "pos", position));
-            }
+            BinlogOffset current = DebeziumUtils.currentBinlogOffset(statement);
+            checkCancelled();
+            Map<String, Object> position = new LinkedHashMap<>();
+            position.put("file", current.getFilename());
+            position.put("pos", current.getPosition());
+            String gtids = current.getGtidSet();
+            if (gtids != null && !gtids.isBlank()) position.put("gtids", gtids);
+            return new DebeziumOffset(partition, position);
         } finally {
             watermarkStatement = null;
         }

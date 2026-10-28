@@ -138,7 +138,7 @@ class ImpactTest(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 self.assertTrue({"backend-e2e", "recovery-e2e"}.issubset(
-                    set(impact.select_suites([path])))
+                    set(impact.select_suites([path]))))
 
     def test_test_only_changes_do_not_start_database(self):
         self.assertEqual([], impact.select_suites(["yak-flow/yak-flow-connector-jdbc/src/test/java/JdbcBatchExecutionTest.java"]))

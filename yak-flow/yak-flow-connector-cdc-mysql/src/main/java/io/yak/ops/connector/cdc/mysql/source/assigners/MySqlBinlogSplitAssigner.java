@@ -1,14 +1,21 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners;
 
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.BinlogPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /** Assigns the selected stream-only startup to the only replication reader. */
-public final class MySqlBinlogSplitAssigner implements MySqlSplitAssigner<MySqlBinlogSplit, BinlogPendingSplitsState> {
+public final class MySqlBinlogSplitAssigner implements MySqlSplitAssigner {
 
     private MySqlBinlogSplit pending;
     private boolean assigned;
@@ -27,24 +34,43 @@ public final class MySqlBinlogSplitAssigner implements MySqlSplitAssigner<MySqlB
     }
 
     @Override
-    public MySqlBinlogSplit getNext(int subtaskId) {
-        if (subtaskId != 0) {
-            return null;
-        }
+    public void open() {}
+
+    @Override
+    public Optional<MySqlSplit> getNext() {
+        if (pending == null) return Optional.empty();
         MySqlBinlogSplit next = pending;
-        if (next != null) {
-            pending = null;
-            assigned = true;
-        }
-        return next;
+        pending = null;
+        assigned = true;
+        return Optional.of(next);
     }
 
     @Override
-    public void addSplitsBack(List<MySqlBinlogSplit> splits, int subtaskId) {
-        if (subtaskId != 0 || splits.size() != 1 || pending != null || !assigned) {
+    public boolean waitingForFinishedSplits() {
+        return false;
+    }
+
+    @Override
+    public List<FinishedSnapshotSplitInfo> getFinishedSplitInfos() {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public void onFinishedSplits(Map<String, DebeziumOffset> splitFinishedOffsets) {
+        if (!splitFinishedOffsets.isEmpty()) {
+            throw new IllegalArgumentException("Binlog-only assigner cannot finish snapshot splits");
+        }
+    }
+
+    @Override
+    public void addSplits(Collection<MySqlSplit> splits) {
+        if (splits.size() != 1 || pending != null || !assigned) {
             throw new IllegalStateException("Unexpected returned MySQL Binlog split");
         }
-        MySqlBinlogSplit returned = Objects.requireNonNull(splits.getFirst(), "split");
+        MySqlSplit split = splits.iterator().next();
+        if (!(split instanceof MySqlBinlogSplit returned)) {
+            throw new IllegalArgumentException("Binlog-only assigner requires a Binlog split");
+        }
         pending = returned;
         assigned = false;
     }
@@ -58,10 +84,29 @@ public final class MySqlBinlogSplitAssigner implements MySqlSplitAssigner<MySqlB
     }
 
     @Override
-    public boolean notifyCheckpointComplete(long checkpointId) {
-        return false;
+    public void notifyCheckpointComplete(long checkpointId) {}
+
+    @Override
+    public AssignerStatus getAssignerStatus() {
+        return AssignerStatus.INITIAL_ASSIGNING_FINISHED;
     }
 
+    @Override
+    public void startAssignNewlyAddedTables() {
+        throw new UnsupportedOperationException("Binlog-only source does not assign snapshot tables");
+    }
+
+    @Override
+    public boolean noMoreSplits() {
+        return assigned;
+    }
+
+    @Override
+    public void onBinlogSplitUpdated() {
+        throw new UnsupportedOperationException("Binlog-only source does not update snapshot metadata");
+    }
+
+    @Override
     public void close() {
         pending = null;
     }
