@@ -35,12 +35,14 @@ public record SourceConfig(ReadonlyConfig options, IncrementalConfig incremental
             OptionRule.builder().required(CHUNK_KEY).build();
 
     public static SourceConfig from(
-            ReadonlyConfig table, String datasourceId, SolutionType type, List<Step> steps, StartupMode startupMode) {
+            ReadonlyConfig table,
+            String datasourceId,
+            SolutionType type,
+            List<Step> steps,
+            StartupOptions startupOptions) {
         validate(table, TABLE_RULE, "source.tables");
         Map<String, Object> snapshot = table.get(SNAPSHOT);
-        if (snapshot != null
-                && (type != SolutionType.SINGLE_TABLE_REALTIME
-                        || !steps.containsAll(List.of(Step.FULL, Step.INCREMENTAL)))) {
+        if (snapshot != null && (type != SolutionType.SINGLE_TABLE_REALTIME || !steps.contains(Step.FULL))) {
             throw new IllegalArgumentException("Snapshot Chunk Key requires realtime FULL and INCREMENTAL");
         }
         String chunkKey = null;
@@ -69,10 +71,33 @@ public record SourceConfig(ReadonlyConfig options, IncrementalConfig incremental
         physical.put(JobOptions.TYPE.key(), type.sourceIdentifier());
         if (chunkKey != null)
             physical.put(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key(), chunkKey);
-        if (startupMode != null)
-            physical.put(
-                    MySqlSourceOptions.SCAN_STARTUP_MODE.key(),
-                    StartupOptions.of(startupMode).asModeString());
+        if (startupOptions != null) {
+            physical.put(MySqlSourceOptions.SCAN_STARTUP_MODE.key(), startupOptions.asModeString());
+            if (startupOptions.startupMode() == StartupMode.SPECIFIC_OFFSETS) {
+                var offset = startupOptions.binlogOffset;
+                if (offset.getFilename() != null && !offset.getFilename().isBlank()) {
+                    physical.put(MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_FILE.key(), offset.getFilename());
+                    physical.put(MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_POS.key(), offset.getPosition());
+                }
+                if (offset.getGtidSet() != null && !offset.getGtidSet().isBlank()) {
+                    physical.put(MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_GTID_SET.key(), offset.getGtidSet());
+                }
+                if (offset.getRestartSkipEvents() != 0) {
+                    physical.put(
+                            MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_SKIP_EVENTS.key(),
+                            offset.getRestartSkipEvents());
+                }
+                if (offset.getRestartSkipRows() != 0) {
+                    physical.put(
+                            MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_SKIP_ROWS.key(),
+                            offset.getRestartSkipRows());
+                }
+            } else if (startupOptions.startupMode() == StartupMode.TIMESTAMP) {
+                physical.put(
+                        MySqlSourceOptions.SCAN_STARTUP_TIMESTAMP_MILLIS.key(),
+                        Math.multiplyExact(startupOptions.binlogOffset.getTimestampSec(), 1000L));
+            }
+        }
         return new SourceConfig(ReadonlyConfig.fromMap(physical), incremental);
     }
 

@@ -28,7 +28,6 @@ import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
-import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SplitEnumerator;
@@ -50,6 +49,8 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     private final MySqlHybridSplitAssigner assigner;
     private final MySqlBinlogSplitAssigner streamAssigner;
     private final boolean initial;
+    private final boolean snapshotOnly;
+    private boolean snapshotOnlyFinished;
     private final int splitMetaGroupSize;
     private final List<TableId> tables;
     private final Set<Integer> waitingReaders = new LinkedHashSet<>();
@@ -85,7 +86,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                 chunkSize,
                 restored,
                 metrics,
-                startupOptions.startupMode() == StartupMode.INITIAL ? new MySqlChunkSplitter(config, chunkSize) : null);
+                startupOptions.isStreamOnly() ? null : new MySqlChunkSplitter(config, chunkSize));
     }
 
     /** Sets up the mode-specific assigner behind the single Source coordinator. */
@@ -101,7 +102,8 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         Objects.requireNonNull(startupOptions, "startupOptions");
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         tables = List.copyOf(config.schemas().keySet());
-        this.initial = startupOptions.startupMode() == StartupMode.INITIAL;
+        this.initial = !startupOptions.isStreamOnly();
+        this.snapshotOnly = startupOptions.isSnapshotOnly();
         if (initial && config.isReleaseSnapshotMetadataEnabled() && config.isScanNewlyAddedTableEnabled()) {
             throw new IllegalArgumentException(
                     "Snapshot metadata release cannot be enabled with newly-added-table discovery");
@@ -121,7 +123,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             // A removed table is reconciled by the Snapshot Assigner below. For a still-captured
             // table, fail closed if the checkpointed typed cursor no longer matches its key.
             if (schema != null) {
-                var selected = ChunkUtils.getChunkKeyColumn(
+                var selected = ChunkUtils.requireSupportedSnapshot(
                         schema, config.chunkKeyColumns().get(cursor.tableId()));
                 if (!cursor.column().equals(selected.name())
                         || cursor.type() != selected.dataType().getTypeRoot()) {
@@ -183,7 +185,9 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         if (initial) assigner.open();
         else streamAssigner.open();
         if (!initial) return;
-        if (restoredHandoff || assigner.phase() == HybridPendingSplitsState.Phase.STREAMING) {
+        if (snapshotOnly && assigner.snapshotComplete()) {
+            finishSnapshotOnly();
+        } else if (restoredHandoff || assigner.phase() == HybridPendingSplitsState.Phase.STREAMING) {
             AssignerStatus status = assigner.getAssignerStatus();
             if (assigner.phase() == HybridPendingSplitsState.Phase.STREAMING
                     && (status == AssignerStatus.NEWLY_ADDED_ASSIGNING
@@ -210,6 +214,10 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         if (closed) return;
         if (!started || !context.registeredReaders().containsKey(reader))
             throw new IllegalStateException("Unregistered Hybrid reader");
+        if (snapshotOnly && assigner.snapshotComplete()) {
+            if (!snapshotOnlyFinished) finishSnapshotOnly();
+            return;
+        }
         if (!initial) {
             if (reader != 0) throw new IllegalArgumentException("Binlog-only source requires reader zero");
             MySqlBinlogSplit next = (MySqlBinlogSplit) streamAssigner.getNext().orElse(null);
@@ -226,6 +234,11 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     @Override
     public void addReader(int reader) {
         if (closed || !initial) return;
+        if (snapshotOnly && assigner.snapshotComplete()) {
+            if (snapshotOnlyFinished) stopSnapshotOnlyReader(reader);
+            else finishSnapshotOnly();
+            return;
+        }
         if (assigner.phase() == HybridPendingSplitsState.Phase.STREAMING && isNewlyAddedProtocolStatus()) {
             if (reader == 0) {
                 if (pendingBinlogUpdateGeneration >= 0) {
@@ -348,7 +361,10 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             if (!acknowledged.isEmpty()) {
                 context.sendEventToSourceReader(reader, new FinishedSnapshotSplitsAckEvent(acknowledged));
             }
-            if (assigner.snapshotComplete()) enterHandoff();
+            if (assigner.snapshotComplete()) {
+                if (snapshotOnly) finishSnapshotOnly();
+                else enterHandoff();
+            }
             assignAvailable();
             planSnapshotAsync();
         } else throw new IllegalArgumentException("Unsupported MySQL Hybrid source event");
@@ -425,6 +441,20 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                     metrics.readFailed(generation, table, false);
                     throw new IllegalStateException("MySQL snapshot chunk discovery failed", failure);
                 });
+    }
+
+    private void finishSnapshotOnly() {
+        if (snapshotOnlyFinished) return;
+        snapshotOnlyFinished = true;
+        metrics.phase(generation, TableMetrics.Phase.HANDOFF, false);
+        for (int reader : context.registeredReaders().keySet()) {
+            stopSnapshotOnlyReader(reader);
+        }
+    }
+
+    private void stopSnapshotOnlyReader(int reader) {
+        context.sendEventToSourceReader(reader, new MySqlStopSnapshotEvent());
+        context.signalNoMoreSplits(reader);
     }
 
     private void enterHandoff() {

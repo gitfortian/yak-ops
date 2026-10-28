@@ -52,6 +52,7 @@ public final class MySqlSourceReader
     private final TableMetrics metrics;
     private final long generation;
     private final boolean initial;
+    private final boolean snapshotOnly;
     private final Map<String, MySqlSnapshotSplit> finishedUnacked = new LinkedHashMap<>();
     private MySqlResumeBinlogEvent resumeEvent;
     private MySqlBinlogSplit suspendedBinlogSplit;
@@ -73,6 +74,7 @@ public final class MySqlSourceReader
                 readerContext,
                 metrics,
                 initial,
+                config.getStartupOptions().isSnapshotOnly(),
                 sourceId(config, readerContext.getSourceReaderContext()));
     }
 
@@ -81,6 +83,7 @@ public final class MySqlSourceReader
             MySqlSourceReaderContext readerContext,
             TableMetrics metrics,
             boolean initial,
+            boolean snapshotOnly,
             String sourceId) {
         super(
                 () -> splits,
@@ -92,6 +95,7 @@ public final class MySqlSourceReader
         this.generation = metrics.generation();
         this.splits = splits;
         this.initial = initial;
+        this.snapshotOnly = snapshotOnly;
     }
 
     /**
@@ -186,6 +190,11 @@ public final class MySqlSourceReader
         boolean requestNextSplit = false;
         for (var entry : finished.entrySet()) {
             if (entry.getValue().binlog()) {
+                if (snapshotOnly) {
+                    // Bounded snapshot bootstrap is a reader-local schema anchor,
+                    // not a continuous Binlog split requiring metadata handoff.
+                    continue;
+                }
                 if (pendingBinlogUpdateGeneration < 0 || !readerContext.isBinlogSplitReaderSuspended()) {
                     throw new IllegalStateException(
                             "A continuous Binlog split can finish only for a requested metadata update");
@@ -325,7 +334,11 @@ public final class MySqlSourceReader
                 splits.resumeBinlog(resume.highWatermark(), finished);
             }
         } else if (event instanceof io.yak.ops.connector.cdc.mysql.source.events.MySqlStopSnapshotEvent) {
-            splits.finishSnapshots();
+            if (snapshotOnly && context.getIndexOfSubtask() == 0) {
+                splits.stopSnapshotOnly();
+            } else {
+                splits.finishSnapshots();
+            }
         } else {
             throw new IllegalArgumentException("Unsupported MySQL hybrid Reader event");
         }

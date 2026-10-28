@@ -6,19 +6,28 @@ import io.yak.ops.connector.base.source.reader.RecordsWithSplitIds;
 import io.yak.ops.connector.base.source.reader.splitreader.SplitReader;
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumSchemaHistorySnapshot;
 import io.yak.ops.connector.cdc.mysql.debezium.reader.BinlogSplitReader;
 import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlBinlogSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlSnapshotSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
+import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
+import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffsetUtils;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
+import io.yak.ops.connector.cdc.mysql.table.StartupMode;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.TableSchema;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -54,6 +63,8 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     private boolean binlogPauseReported;
     private boolean closed;
     private BinlogEvent bootstrapCandidate;
+    private boolean streamOnlyBootstrap;
+    private volatile boolean snapshotOnlyStop;
 
     public MySqlSplitReader(MySqlSourceConfig config) {
         this(config, new TableMetrics(), 0);
@@ -118,9 +129,15 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
                 } else if (stream.phase() == MySqlBinlogSplit.Phase.STREAMING) {
                     startStreaming(stream);
                 } else if (stream.phase() == MySqlBinlogSplit.Phase.STANDALONE) {
+                    binlogSplit = stream;
+                    // A missing offset is an unresolved initial startup, not a checkpointed
+                    // position. Bootstrap the schema at a real MySQL position first, then
+                    // restart the engine from the selected offset and keep all prefetch
+                    // outside the mailbox-owned split state.
+                    streamOnlyBootstrap = stream.offset() == null;
                     binlog = new MySqlBinlogSplitReadTask(config);
-                    binlog.start(stream);
-                    streaming = true;
+                    binlog.start(streamOnlyBootstrap ? MySqlBinlogSplit.forInitialSnapshot() : stream);
+                    streaming = !streamOnlyBootstrap;
                 }
             } else throw new IllegalArgumentException("Unknown MySQL split");
         }
@@ -143,6 +160,43 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
 
     private RecordsWithSplitIds<MySqlFetchedRecord> fetchRecords() throws Exception {
         if (closed || cancelled) throw new IllegalStateException("MySQL hybrid reader is closed or cancelled");
+        if (snapshotOnlyStop) {
+            snapshotOnlyStop = false;
+            if (binlog != null) {
+                binlog.requestStop();
+                binlog.close();
+                binlog = null;
+            }
+            binlogSplit = null;
+            snapshots.close();
+            snapshotsClosed = true;
+            streaming = false;
+            return new RecordsBySplits<>(Map.of(), Set.of(MySqlBinlogSplit.ID));
+        }
+        if (streamOnlyBootstrap) {
+            if (bootstrapCandidate == null) bootstrapCandidate = binlog.poll();
+            if (bootstrapCandidate == null) return empty();
+            byte[] discovered = binlog.snapshotHistory();
+            if (discovered.length == 0) return empty();
+            DebeziumOffset requested = resolveStreamOnlyStart(bootstrapCandidate.offset());
+            // Debezium 2.7 filters Schema History by the requested Binlog offset.
+            // A schema-only bootstrap from NOW otherwise yields an empty recovered
+            // schema for an older specific/timestamp/earliest position.
+            if (requested.compareTo(bootstrapCandidate.offset()) < 0) {
+                discovered = DebeziumSchemaHistorySnapshot.anchorBootstrap(discovered, requested);
+            }
+            history = discovered;
+            binlog.close();
+            binlog = new MySqlBinlogSplitReadTask(config);
+            binlogSplit = new MySqlBinlogSplit(requested, discovered);
+            binlog.start(binlogSplit);
+            // Complete the bootstrap in one mailbox step; checkpoint remains unstarted
+            // until an event from the requested position is actually emitted.
+            streamOnlyBootstrap = false;
+            streaming = true;
+            bootstrapCandidate = null;
+            return empty();
+        }
         if (binlogSplit != null && binlogSplit.phase() == MySqlBinlogSplit.Phase.BOOTSTRAP) {
             if (bootstrapCandidate == null) bootstrapCandidate = binlog.poll();
             if (bootstrapCandidate == null) return empty();
@@ -210,6 +264,25 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
         if (streaming) {
             BinlogEvent event = filter == null ? binlog.poll() : filter.poll(binlog);
             if (event != null) {
+                // Flink CDC's TIMESTAMP mode starts scanning a containing Binlog file.
+                // Filter the earlier events within that file without converting a
+                // fetched offset into delivered progress ahead of the mailbox.
+                StartupOptions startup = config.getStartupOptions();
+                if (startup.startupMode() == StartupMode.TIMESTAMP
+                        && binlogSplit != null
+                        && binlogSplit.phase() == MySqlBinlogSplit.Phase.STANDALONE) {
+                    Object value = event.offset().position().get("ts_sec");
+                    if (!(value instanceof Number timestamp)) {
+                        if (!event.records().isEmpty()) {
+                            throw new IllegalStateException("Timestamp startup requires Debezium event timestamp");
+                        }
+                    } else if (timestamp.longValue() < startup.binlogOffset.getTimestampSec()) {
+                        return records(
+                                MySqlBinlogSplit.ID,
+                                MySqlFetchedRecord.binlog(new BinlogEvent(List.of(), event.offset())),
+                                false);
+                    }
+                }
                 return records(MySqlBinlogSplit.ID, MySqlFetchedRecord.binlog(event), false);
             }
         } else Thread.sleep(20);
@@ -252,6 +325,50 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
         resumeHigh = null;
         resumeFinishedSplits = null;
         binlogPauseReported = true;
+    }
+
+    /**
+     * Stops the snapshot-only bootstrap split through the fetcher completion marker.
+     * SourceReaderBase removes its mailbox state only after consuming that marker.
+     */
+    public void stopSnapshotOnly() {
+        snapshotsFinished = true;
+        snapshotOnlyStop = true;
+        if (readerContext != null) readerContext.wakeupSuspendedBinlogSplitReader();
+    }
+
+    private DebeziumOffset resolveStreamOnlyStart(DebeziumOffset anchor) throws Exception {
+        StartupOptions options = config.getStartupOptions();
+        if (options.startupMode() == StartupMode.LATEST_OFFSET) return anchor;
+
+        BinlogOffset requested = options.binlogOffset;
+        BinlogOffset resolved = BinlogOffsetUtils.initializeEffectiveOffset(requested, config);
+        String file = resolved.getFilename();
+        long position = resolved.getPosition();
+        if (options.startupMode() == StartupMode.EARLIEST_OFFSET || (file == null || file.isBlank())) {
+            try (Connection connection = config.openSnapshotConnection();
+                    Statement statement = connection.createStatement();
+                    ResultSet rows = statement.executeQuery("SHOW BINARY LOGS")) {
+                if (!rows.next()) throw new IllegalStateException("MySQL has no retained binary logs");
+                file = rows.getString(1);
+                position = 4L;
+            }
+        }
+        if (file == null || file.isBlank() || position < 0) {
+            throw new IllegalArgumentException("Invalid MySQL Binlog startup file and position");
+        }
+        Map<String, Object> offset = new LinkedHashMap<>(anchor.position());
+        offset.remove("gtids");
+        offset.remove("ts_sec");
+        offset.put("file", file);
+        offset.put("pos", position);
+        offset.put("event", requested.getRestartSkipEvents());
+        offset.put("row", requested.getRestartSkipRows());
+        offset.put("snapshot", false);
+        if (requested.getGtidSet() != null) {
+            offset.put("gtids", requested.getGtidSet());
+        }
+        return new DebeziumOffset(anchor.partition(), offset);
     }
 
     public void finishSnapshots() {

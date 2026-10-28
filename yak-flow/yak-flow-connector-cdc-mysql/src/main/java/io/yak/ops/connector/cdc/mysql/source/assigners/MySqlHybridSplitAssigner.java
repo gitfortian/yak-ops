@@ -7,7 +7,6 @@ import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
-import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
 import io.yak.ops.core.data.TableId;
@@ -40,8 +39,8 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
 
     public MySqlHybridSplitAssigner(StartupOptions startupOptions, HybridPendingSplitsState restored) {
         Objects.requireNonNull(startupOptions, "startupOptions");
-        if (startupOptions.startupMode() != StartupMode.INITIAL) {
-            throw new UnsupportedOperationException("MySQL Hybrid Source requires initial startup");
+        if (startupOptions.isStreamOnly()) {
+            throw new IllegalArgumentException("MySQL Hybrid Source requires snapshot startup");
         }
         if (restored == null) {
             snapshots = new MySqlSnapshotSplitAssigner();

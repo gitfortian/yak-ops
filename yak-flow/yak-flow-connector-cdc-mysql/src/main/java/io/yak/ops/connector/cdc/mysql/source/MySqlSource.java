@@ -56,18 +56,12 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
         Objects.requireNonNull(builder, "builder");
         Objects.requireNonNull(startupOptions, "startupOptions").requireSupported();
         builder.startupOptions(startupOptions);
-        return switch (startupOptions.startupMode()) {
-            case INITIAL -> builder.buildHybrid(snapshotChunkSize, metrics);
-            case LATEST_OFFSET -> builder.build(metrics);
-            default ->
-                throw new UnsupportedOperationException(
-                        "MySQL CDC startup mode is not implemented: " + startupOptions.asModeString());
-        };
+        return startupOptions.isStreamOnly() ? builder.build(metrics) : builder.buildHybrid(snapshotChunkSize, metrics);
     }
 
     public static MySqlSource latestOffset(MySqlSourceConfig config, TableMetrics metrics, StartupOptions options) {
-        if (options.startupMode() != StartupMode.LATEST_OFFSET) {
-            throw new UnsupportedOperationException("MySQL Binlog Source requires latest-offset startup");
+        if (!options.isStreamOnly()) {
+            throw new IllegalArgumentException("MySQL Binlog Source requires stream-only startup");
         }
         requirePhysicalPrimaryKeys(config);
         config.schemas().keySet().forEach(metrics::register);
@@ -76,8 +70,8 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
 
     public static MySqlSource initial(
             MySqlSourceConfig config, int chunkSize, TableMetrics metrics, StartupOptions options) {
-        if (options.startupMode() != StartupMode.INITIAL) {
-            throw new UnsupportedOperationException("MySQL Snapshot Source requires initial startup");
+        if (options.isStreamOnly()) {
+            throw new IllegalArgumentException("MySQL Snapshot Source cannot use stream-only startup");
         }
         config.snapshotServerId(15);
         if (chunkSize < 1 || chunkSize > 100_000) {
@@ -103,7 +97,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
     }
 
     public int snapshotChunkSize() {
-        if (startupOptions.startupMode() != StartupMode.INITIAL) {
+        if (startupOptions.isStreamOnly()) {
             throw new IllegalStateException("Stream-only MySQL CDC does not use snapshot chunks");
         }
         return snapshotChunkSize;
@@ -111,7 +105,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
 
     @Override
     public Boundedness getBoundedness() {
-        return Boundedness.CONTINUOUS_UNBOUNDED;
+        return startupOptions.isSnapshotOnly() ? Boundedness.BOUNDED : Boundedness.CONTINUOUS_UNBOUNDED;
     }
 
     @Override
@@ -133,11 +127,11 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
 
     @Override
     public SourceReader<TableRecord, MySqlSplit> createReader(SourceReaderContext context) {
-        boolean initial = startupOptions.startupMode() == StartupMode.INITIAL;
+        boolean initial = !startupOptions.isStreamOnly();
         if (!initial && (context.currentParallelism() != 1 || context.getIndexOfSubtask() != 0)) {
             throw new IllegalArgumentException("Stream-only MySQL CDC requires one SourceReader");
         }
-        if (initial
+        if (startupOptions.startupMode() == StartupMode.INITIAL
                 && context.getConfiguration()
                         .get(CheckpointingOptions.CHECKPOINTING_INTERVAL)
                         .isZero()) {

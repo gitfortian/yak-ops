@@ -144,6 +144,69 @@ public final class StartupOptions implements Serializable {
         };
     }
 
+    /**
+     * Parses every public startup option through the same contract used by the
+     * connector table factory and realtime job configuration.
+     */
+    public static StartupOptions from(
+            String mode,
+            String file,
+            Long position,
+            String gtidSet,
+            Long timestampMillis,
+            Long skipEvents,
+            Long skipRows) {
+        if (mode == null) {
+            throw new IllegalArgumentException("MySQL CDC startup mode must not be null");
+        }
+        boolean hasOffset = file != null || position != null || (gtidSet != null && !gtidSet.isBlank());
+        boolean hasTimestamp = timestampMillis != null;
+        boolean hasSkip = skipEvents != null || skipRows != null;
+        if (hasSkip
+                && (!"specific-offset".equals(mode)
+                        || (skipEvents != null && skipEvents < 0)
+                        || (skipRows != null && skipRows < 0))) {
+            throw new IllegalArgumentException("Specific-offset skip counts must be nonnegative");
+        }
+        if (!"specific-offset".equals(mode) && hasOffset) {
+            throw new IllegalArgumentException("Binlog file/GTID requires specific-offset startup");
+        }
+        if (!"timestamp".equals(mode) && hasTimestamp) {
+            throw new IllegalArgumentException("Timestamp requires timestamp startup");
+        }
+        switch (mode) {
+            case "specific-offset" -> {
+                boolean hasGtid = gtidSet != null && !gtidSet.isBlank();
+                boolean hasFile = file != null && !file.isBlank();
+                if (!hasGtid && (!hasFile || position == null)) {
+                    throw new IllegalArgumentException("Specific-offset requires file/pos or GTID set");
+                }
+                if (position != null && position < 0) {
+                    throw new IllegalArgumentException("Binlog position cannot be negative");
+                }
+                var builder = BinlogOffset.builder();
+                if (hasFile) builder.setBinlogFilePosition(file, position == null ? 4L : position);
+                if (hasGtid) builder.setGtidSet(gtidSet);
+                if (skipEvents != null) builder.setSkipEvents(skipEvents);
+                if (skipRows != null) builder.setSkipRows(skipRows);
+                StartupOptions result = specificOffset(builder.build());
+                result.requireSupported();
+                return result;
+            }
+            case "timestamp" -> {
+                if (timestampMillis == null || timestampMillis <= 0) {
+                    throw new IllegalArgumentException("Timestamp startup requires a positive timestamp-millis");
+                }
+                return timestamp(timestampMillis);
+            }
+            default -> {
+                StartupOptions result = from(mode);
+                result.requireSupported();
+                return result;
+            }
+        }
+    }
+
     public static StartupOptions of(StartupMode mode) {
         return switch (Objects.requireNonNull(mode, "mode")) {
             case INITIAL -> initial();
@@ -171,10 +234,18 @@ public final class StartupOptions implements Serializable {
         };
     }
 
-    /** Runtime support remains restricted to the two checkpoint-validated source paths. */
+    /** Validates the complete Flink CDC startup contract before execution. */
     public void requireSupported() {
-        if (startupMode != StartupMode.INITIAL && startupMode != StartupMode.LATEST_OFFSET) {
-            throw new UnsupportedOperationException("MySQL CDC startup mode is not implemented: " + asModeString());
+        if (startupMode == StartupMode.SPECIFIC_OFFSETS
+                && (binlogOffset == null
+                        || ((binlogOffset.getFilename() == null
+                                        || binlogOffset.getFilename().isBlank())
+                                && (binlogOffset.getGtidSet() == null
+                                        || binlogOffset.getGtidSet().isBlank())))) {
+            throw new IllegalArgumentException("Specific-offset startup requires a binlog file or GTID set");
+        }
+        if (startupMode == StartupMode.TIMESTAMP && (binlogOffset == null || binlogOffset.getTimestampSec() <= 0)) {
+            throw new IllegalArgumentException("Timestamp startup requires a positive epoch timestamp");
         }
     }
 }
