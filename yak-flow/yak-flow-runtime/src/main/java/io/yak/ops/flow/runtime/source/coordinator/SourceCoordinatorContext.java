@@ -181,7 +181,8 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
     Map<Integer, List<SplitT>> checkpointedAssignments() {
         assertCoordinatorThread();
         Map<Integer, java.util.LinkedHashMap<String, SplitT>> all = new java.util.LinkedHashMap<>();
-        for (Map<Integer, LinkedHashSet<SplitT>> checkpoint : assignments.assignmentsByCheckpointId().values()) {
+        for (Map<Integer, LinkedHashSet<SplitT>> checkpoint :
+                assignments.assignmentsByCheckpointId().values()) {
             for (Map.Entry<Integer, LinkedHashSet<SplitT>> entry : checkpoint.entrySet()) {
                 java.util.LinkedHashMap<String, SplitT> bucket =
                         all.computeIfAbsent(entry.getKey(), ignored -> new java.util.LinkedHashMap<>());
@@ -190,7 +191,8 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
                 }
             }
         }
-        for (Map.Entry<Integer, LinkedHashSet<SplitT>> entry : assignments.uncheckpointedAssignments().entrySet()) {
+        for (Map.Entry<Integer, LinkedHashSet<SplitT>> entry :
+                assignments.uncheckpointedAssignments().entrySet()) {
             java.util.LinkedHashMap<String, SplitT> bucket =
                     all.computeIfAbsent(entry.getKey(), ignored -> new java.util.LinkedHashMap<>());
             for (SplitT split : entry.getValue()) {
@@ -267,12 +269,14 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
         // A delivery failure afterwards fails the job and restores the last durable checkpoint.
         Set<String> splitIds = new LinkedHashSet<>();
         Set<String> outstandingIds = new HashSet<>(inFlight.keySet());
-        for (LinkedHashSet<SplitT> splits : assignments.uncheckpointedAssignments().values()) {
+        for (LinkedHashSet<SplitT> splits :
+                assignments.uncheckpointedAssignments().values()) {
             for (SplitT split : splits) {
                 outstandingIds.add(split.splitId());
             }
         }
-        for (Map<Integer, LinkedHashSet<SplitT>> checkpoint : assignments.assignmentsByCheckpointId().values()) {
+        for (Map<Integer, LinkedHashSet<SplitT>> checkpoint :
+                assignments.assignmentsByCheckpointId().values()) {
             for (LinkedHashSet<SplitT> splits : checkpoint.values()) {
                 for (SplitT split : splits) {
                     outstandingIds.add(split.splitId());
