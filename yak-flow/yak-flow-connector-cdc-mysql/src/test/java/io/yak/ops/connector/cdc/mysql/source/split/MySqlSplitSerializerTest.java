@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
+import io.yak.ops.core.types.LogicalTypeRoot;
 import io.yak.ops.core.data.TableId;
 import java.io.IOException;
 import java.util.Map;
@@ -71,4 +73,17 @@ class MySqlSplitSerializerTest {
         }
     }
 
+    @Test
+    void classConversionPreservesTheCurrentTypedSplitCheckpointContract() throws Exception {
+        TableId TABLE = new TableId("shop", null, "orders");
+        ChunkRange range = new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, 100L, 200L);
+        MySqlSnapshotSplit split = MySqlSnapshotSplit.typed("orders:0", range);
+        MySqlSplitSerializer serializer = new MySqlSplitSerializer();
+        byte[] serialized = serializer.serialize(split);
+        MySqlSnapshotSplit restored =
+                (MySqlSnapshotSplit) serializer.deserialize(serializer.getVersion(), serialized);
+        assertEquals(split, restored);
+        assertArrayEquals(split.getSplitStart(), restored.getSplitStart());
+        assertArrayEquals(split.getSplitEnd(), restored.getSplitEnd());
+    }
 }
