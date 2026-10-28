@@ -286,8 +286,7 @@ public final class CheckpointCoordinator implements AutoCloseable {
         Objects.requireNonNull(snapshot, "snapshot must not be null");
         SimpleVersionedSerializer<SourceSplit> serializer = source.getSplitSerializer();
         Map<Integer, Map<String, SourceSplit>> merged = new LinkedHashMap<>();
-        deserializeInto(merged, snapshot.assignments(), serializer);
-        // The reader snapshot takes precedence over older assignment state for the same split ID.
+        // The Reader checkpoint owns all assigned splits in Flink's normal Source protocol.
         deserializeInto(merged, snapshot.readerSplits(), serializer);
         Map<Integer, List<SourceSplit>> result = new LinkedHashMap<>();
         merged.forEach((index, splits) -> result.put(index, List.copyOf(splits.values())));
@@ -297,7 +296,10 @@ public final class CheckpointCoordinator implements AutoCloseable {
     public static Object restoreEnumerator(CheckpointSnapshot snapshot, Source<?, SourceSplit, Object> source)
             throws IOException {
         var state = snapshot.enumeratorState();
-        return source.getEnumeratorCheckpointSerializer().deserialize(state.version(), state.bytes());
+        if (state.version() != 1) {
+            throw new IOException("Unsupported Source Coordinator envelope version: " + state.version());
+        }
+        return SourceCoordinator.deserializeCheckpoint(state.bytes(), source.getEnumeratorCheckpointSerializer());
     }
 
     private static void deserializeInto(
@@ -548,8 +550,9 @@ public final class CheckpointCoordinator implements AutoCloseable {
             readerStates.put(sourceTask.taskInfo().subtaskIndex(), splits);
             receiveAcknowledgeMessage(pending, id);
         }
-        SourceCoordinatorCheckpoint<SourceSplit, Object> sourceState =
-                await(coordinator.snapshotCoordinator(checkpointId));
+        CompletableFuture<byte[]> coordinatorCheckpoint = new CompletableFuture<>();
+        coordinator.checkpointCoordinator(checkpointId, coordinatorCheckpoint);
+        byte[] sourceState = await(coordinatorCheckpoint);
         // The Reader and Enumerator are paused *now*. Serialize their potentially mutable
         // Split/Enumerator objects before either one is allowed to resume. Downstream barrier
         // alignment may take time and must never change the recorded source offset.
@@ -611,20 +614,18 @@ public final class CheckpointCoordinator implements AutoCloseable {
 
     private CheckpointSnapshot serialize(
             long checkpointId,
-            SourceCoordinatorCheckpoint<SourceSplit, Object> sourceState,
+            byte[] sourceState,
             Map<Integer, List<SourceSplit>> readerStates,
             Map<CheckpointSnapshot.OperatorSubtask, Map<String, CheckpointSnapshot.SerializedState>> operatorStates)
             throws Exception {
         SimpleVersionedSerializer<SourceSplit> splits = source.getSplitSerializer();
-        SimpleVersionedSerializer<Object> enumerator = source.getEnumeratorCheckpointSerializer();
-        var state = new CheckpointSnapshot.SerializedState(
-                enumerator.getVersion(), enumerator.serialize(sourceState.enumeratorState()));
+        var state = new CheckpointSnapshot.SerializedState(1, sourceState);
         return new CheckpointSnapshot(
                 checkpointId,
                 graphSignature,
                 state,
                 serializeSplits(readerStates, splits),
-                serializeSplits(sourceState.assignedSinceLastCompletedCheckpoint(), splits),
+                Map.of(),
                 System.currentTimeMillis(),
                 operatorStates);
     }

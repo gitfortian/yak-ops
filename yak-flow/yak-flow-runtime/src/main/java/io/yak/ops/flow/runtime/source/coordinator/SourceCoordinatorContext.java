@@ -173,38 +173,7 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
         assignments.onCheckpointComplete(checkpointId);
     }
 
-    /**
-     * Whole-job recovery keeps in-flight assignment history together with Reader state.
-     * Flink uses these buckets for subtask reset; YakFlow currently restores the complete job.
-     * This adapter does not change the Flink SplitAssignmentTracker algorithm.
-     */
-    Map<Integer, List<SplitT>> checkpointedAssignments() {
-        assertCoordinatorThread();
-        Map<Integer, java.util.LinkedHashMap<String, SplitT>> all = new java.util.LinkedHashMap<>();
-        for (Map<Integer, LinkedHashSet<SplitT>> checkpoint :
-                assignments.assignmentsByCheckpointId().values()) {
-            for (Map.Entry<Integer, LinkedHashSet<SplitT>> entry : checkpoint.entrySet()) {
-                java.util.LinkedHashMap<String, SplitT> bucket =
-                        all.computeIfAbsent(entry.getKey(), ignored -> new java.util.LinkedHashMap<>());
-                for (SplitT split : entry.getValue()) {
-                    bucket.putIfAbsent(split.splitId(), split);
-                }
-            }
-        }
-        for (Map.Entry<Integer, LinkedHashSet<SplitT>> entry :
-                assignments.uncheckpointedAssignments().entrySet()) {
-            java.util.LinkedHashMap<String, SplitT> bucket =
-                    all.computeIfAbsent(entry.getKey(), ignored -> new java.util.LinkedHashMap<>());
-            for (SplitT split : entry.getValue()) {
-                bucket.putIfAbsent(split.splitId(), split);
-            }
-        }
-        Map<Integer, List<SplitT>> result = new java.util.LinkedHashMap<>();
-        all.forEach((subtask, splits) -> result.put(subtask, List.copyOf(splits.values())));
-        return Map.copyOf(result);
-    }
-
-    SplitAssignmentTracker<SplitT> assignmentTracker() {
+    SplitAssignmentTracker<SplitT> getAssignmentTracker() {
         assertCoordinatorThread();
         return assignments;
     }
