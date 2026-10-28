@@ -12,6 +12,8 @@ import java.util.Objects;
 public final class MySqlSourceReaderContext {
     private final SourceReaderContext context;
     private final SchemaChangeHandler schemaChanges;
+    private volatile boolean isBinlogSplitReaderSuspended;
+    private volatile boolean hasAssignedBinlogSplit;
 
     public MySqlSourceReaderContext(SourceReaderContext context) {
         this.context = Objects.requireNonNull(context, "context");
@@ -25,4 +27,25 @@ public final class MySqlSourceReaderContext {
     public SchemaChangeHandler schemaChanges() {
         return schemaChanges;
     }
+    /** Flink CDC's shared reader/split-reader suspension flag. */
+    public boolean isBinlogSplitReaderSuspended() {
+        return isBinlogSplitReaderSuspended;
+    }
+
+    public void suspendBinlogSplitReader() {
+        isBinlogSplitReaderSuspended = true;
+    }
+
+    public void wakeupSuspendedBinlogSplitReader() {
+        isBinlogSplitReaderSuspended = false;
+    }
+
+    public boolean isHasAssignedBinlogSplit() {
+        return hasAssignedBinlogSplit;
+    }
+
+    public void setHasAssignedBinlogSplit(boolean hasAssignedBinlogSplit) {
+        this.hasAssignedBinlogSplit = hasAssignedBinlogSplit;
+    }
+
 }
