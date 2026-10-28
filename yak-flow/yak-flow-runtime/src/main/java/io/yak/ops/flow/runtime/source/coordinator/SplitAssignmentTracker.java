@@ -148,8 +148,10 @@ public class SplitAssignmentTracker<SplitT extends SourceSplit> {
 
     private void addSplitAssignment(
             SplitsAssignment<SplitT> additionalAssignment, Map<Integer, LinkedHashSet<SplitT>> assignments) {
-        additionalAssignment.assignment().forEach((id, splits) -> assignments
-                .computeIfAbsent(id, ignored -> new LinkedHashSet<>())
-                .addAll(splits));
+        additionalAssignment
+                .assignment()
+                .forEach((id, splits) -> assignments
+                        .computeIfAbsent(id, ignored -> new LinkedHashSet<>())
+                        .addAll(splits));
     }
 }
