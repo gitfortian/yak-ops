@@ -1,17 +1,20 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
+import java.lang.reflect.Proxy;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 /** Tests the source/split reader coordination flags ported from Flink CDC. */
 class MySqlSourceReaderContextTest {
 
     @Test
     void tracksBinlogAssignmentAndSuspendWakeup() {
-        SourceReaderContext delegate = mock(SourceReaderContext.class);
+        SourceReaderContext delegate = (SourceReaderContext) Proxy.newProxyInstance(
+                SourceReaderContext.class.getClassLoader(),
+                new Class<?>[] {SourceReaderContext.class},
+                (proxy, method, args) -> null);
         MySqlSourceReaderContext context = new MySqlSourceReaderContext(delegate);
         assertThat(context.getSourceReaderContext()).isSameAs(delegate);
         assertThat(context.isHasAssignedBinlogSplit()).isFalse();
