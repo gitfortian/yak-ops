@@ -1,9 +1,14 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.assigners.AssignerStatus;
+import io.yak.ops.core.data.TableId;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -26,7 +31,14 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
     private final int nextTableIndex;
     private final int nextChunkIndex;
     private final ChunkRange nextChunkRange;
+    private final List<TableId> alreadyProcessedTables;
+    private final List<TableId> remainingTables;
+    private final AssignerStatus assignerStatus;
+    private final boolean tableIdCaseSensitive;
+    private final boolean remainingTablesCheckpointed;
+    private final boolean snapshotMetaReleased;
 
+    /** Legacy constructor retained for version-9 checkpoint migration. */
     public SnapshotPendingSplitsState(
             boolean snapshotPlanned,
             int totalSnapshotSplits,
@@ -37,48 +49,80 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
             int nextTableIndex,
             int nextChunkIndex,
             ChunkRange nextChunkRange) {
+        this(snapshotPlanned, totalSnapshotSplits, remainingSplits, assignedSplits, finishedSplits,
+                finishedSplitInfos, nextTableIndex, nextChunkIndex, nextChunkRange, List.of(), List.of(),
+                AssignerStatus.INITIAL_ASSIGNING, false, false, false);
+    }
+
+    public SnapshotPendingSplitsState(
+            boolean snapshotPlanned,
+            int totalSnapshotSplits,
+            List<MySqlSnapshotSplit> remainingSplits,
+            Map<String, MySqlSnapshotSplit> assignedSplits,
+            Set<String> finishedSplits,
+            List<FinishedSnapshotSplitInfo> finishedSplitInfos,
+            int nextTableIndex,
+            int nextChunkIndex,
+            ChunkRange nextChunkRange,
+            List<TableId> alreadyProcessedTables,
+            List<TableId> remainingTables,
+            AssignerStatus assignerStatus,
+            boolean tableIdCaseSensitive,
+            boolean remainingTablesCheckpointed,
+            boolean snapshotMetaReleased) {
         this.remainingSplits = List.copyOf(Objects.requireNonNull(remainingSplits, "remainingSplits"));
-        this.assignedSplits = Map.copyOf(Objects.requireNonNull(assignedSplits, "assignedSplits"));
-        this.finishedSplits = Set.copyOf(Objects.requireNonNull(finishedSplits, "finishedSplits"));
+        this.assignedSplits = Collections.unmodifiableMap(new LinkedHashMap<>(Objects.requireNonNull(assignedSplits, "assignedSplits")));
+        this.finishedSplits = Collections.unmodifiableSet(new LinkedHashSet<>(Objects.requireNonNull(finishedSplits, "finishedSplits")));
         this.finishedSplitInfos = List.copyOf(Objects.requireNonNull(finishedSplitInfos, "finishedSplitInfos"));
+        this.alreadyProcessedTables = List.copyOf(Objects.requireNonNull(alreadyProcessedTables, "alreadyProcessedTables"));
+        this.remainingTables = List.copyOf(Objects.requireNonNull(remainingTables, "remainingTables"));
+        this.assignerStatus = Objects.requireNonNull(assignerStatus, "assignerStatus");
         if (nextTableIndex < 0
                 || nextChunkIndex < 0
                 || nextChunkIndex > 10_000
                 || (nextChunkIndex > 0 && nextChunkRange == null)
-                || (nextChunkRange != null
-                        && (nextChunkIndex < 1 || nextChunkRange.start() == null || nextChunkRange.end() != null))) {
+                || (nextChunkRange != null && (nextChunkIndex < 1 || nextChunkRange.start() == null || nextChunkRange.end() != null))) {
             throw new IllegalArgumentException("Invalid snapshot chunk discovery cursor");
         }
         Set<String> ids = new HashSet<>();
         for (FinishedSnapshotSplitInfo info : this.finishedSplitInfos) {
-            if (!ids.add(info.splitId())) {
-                throw new IllegalArgumentException("Duplicate finished snapshot split metadata");
-            }
+            if (!ids.add(info.splitId())) throw new IllegalArgumentException("Duplicate finished snapshot split metadata");
         }
-        if (!ids.equals(this.finishedSplits)) {
+        if (!snapshotMetaReleased && !ids.equals(this.finishedSplits)) {
             throw new IllegalArgumentException("Finished split IDs have incomplete watermark metadata");
         }
+        if (snapshotMetaReleased
+                && (!snapshotPlanned || !this.remainingSplits.isEmpty() || !this.assignedSplits.isEmpty()
+                        || !this.finishedSplits.isEmpty() || !this.finishedSplitInfos.isEmpty()
+                        || !AssignerStatus.isAssigningFinished(assignerStatus))) {
+            throw new IllegalArgumentException("Snapshot metadata may only be released after assignment is finished");
+        }
         for (MySqlSnapshotSplit split : this.remainingSplits) {
-            if (!ids.add(split.splitId())) {
-                throw new IllegalArgumentException("Duplicate pending snapshot split");
-            }
+            if (!ids.add(split.splitId())) throw new IllegalArgumentException("Duplicate pending snapshot split");
         }
         for (var entry : this.assignedSplits.entrySet()) {
             if (!entry.getKey().equals(entry.getValue().splitId()) || !ids.add(entry.getKey())) {
                 throw new IllegalArgumentException("Duplicate assigned snapshot split");
             }
         }
-        if (totalSnapshotSplits < 0
-                || totalSnapshotSplits > 10_000
-                || this.remainingSplits.size() + this.assignedSplits.size() + this.finishedSplits.size()
-                        != totalSnapshotSplits) {
+        if (totalSnapshotSplits < 0 || totalSnapshotSplits > 10_000
+                || (!snapshotMetaReleased && this.remainingSplits.size() + this.assignedSplits.size()
+                        + this.finishedSplits.size() != totalSnapshotSplits)) {
             throw new IllegalArgumentException("Inconsistent snapshot split accounting");
+        }
+        if (this.alreadyProcessedTables.stream().anyMatch(Objects::isNull)
+                || this.remainingTables.stream().anyMatch(Objects::isNull)
+                || new LinkedHashSet<>(this.remainingTables).size() != this.remainingTables.size()) {
+            throw new IllegalArgumentException("Invalid snapshot table discovery state");
         }
         this.snapshotPlanned = snapshotPlanned;
         this.totalSnapshotSplits = totalSnapshotSplits;
         this.nextTableIndex = nextTableIndex;
         this.nextChunkIndex = nextChunkIndex;
         this.nextChunkRange = nextChunkRange;
+        this.tableIdCaseSensitive = tableIdCaseSensitive;
+        this.remainingTablesCheckpointed = remainingTablesCheckpointed;
+        this.snapshotMetaReleased = snapshotMetaReleased;
     }
 
     public boolean snapshotPlanned() {
@@ -117,6 +161,13 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
         return nextChunkRange;
     }
 
+    public List<TableId> getAlreadyProcessedTables() { return alreadyProcessedTables; }
+    public List<TableId> getRemainingTables() { return remainingTables; }
+    public AssignerStatus getAssignerStatus() { return assignerStatus; }
+    public boolean isTableIdCaseSensitive() { return tableIdCaseSensitive; }
+    public boolean isRemainingTablesCheckpointed() { return remainingTablesCheckpointed; }
+    public boolean isSnapshotMetaReleased() { return snapshotMetaReleased; }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) return true;
@@ -125,6 +176,12 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
                 && totalSnapshotSplits == state.totalSnapshotSplits
                 && nextTableIndex == state.nextTableIndex
                 && nextChunkIndex == state.nextChunkIndex
+                && tableIdCaseSensitive == state.tableIdCaseSensitive
+                && remainingTablesCheckpointed == state.remainingTablesCheckpointed
+                && snapshotMetaReleased == state.snapshotMetaReleased
+                && alreadyProcessedTables.equals(state.alreadyProcessedTables)
+                && remainingTables.equals(state.remainingTables)
+                && assignerStatus == state.assignerStatus
                 && remainingSplits.equals(state.remainingSplits)
                 && assignedSplits.equals(state.assignedSplits)
                 && finishedSplits.equals(state.finishedSplits)
@@ -143,6 +200,12 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
                 finishedSplitInfos,
                 nextTableIndex,
                 nextChunkIndex,
-                nextChunkRange);
+                nextChunkRange,
+                alreadyProcessedTables,
+                remainingTables,
+                assignerStatus,
+                tableIdCaseSensitive,
+                remainingTablesCheckpointed,
+                snapshotMetaReleased);
     }
 }

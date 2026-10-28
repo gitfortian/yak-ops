@@ -2,6 +2,8 @@ package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
+import io.yak.ops.connector.cdc.mysql.source.assigners.AssignerStatus;
+import io.yak.ops.core.data.TableId;
 import io.yak.ops.connector.cdc.mysql.source.split.ChunkRangeStateSerializer;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -33,7 +35,8 @@ import java.util.Set;
  * frames. Old checkpoints are rejected rather than reinterpreted.
  */
 public final class PendingSplitsStateSerializer implements SimpleVersionedSerializer<PendingSplitsState> {
-    private static final int VERSION = 9;
+    private static final int VERSION = 10;
+    private static final int PREVIOUS_VERSION = 9;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final int MAX_SPLITS = 10_000;
     // Match Flink CDC's state discriminators. Snapshot-only is reserved for future use.
@@ -81,7 +84,8 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
 
     @Override
     public PendingSplitsState deserialize(int version, byte[] bytes) throws IOException {
-        if (version != VERSION || bytes == null || bytes.length < Integer.BYTES * 2 || bytes.length > MAX_BYTES) {
+        if ((version != VERSION && version != PREVIOUS_VERSION)
+                || bytes == null || bytes.length < Integer.BYTES * 2 || bytes.length > MAX_BYTES) {
             throw new IOException("Unsupported MySQL pending splits checkpoint format: " + version);
         }
         try (var in = new DataInputStream(new ByteArrayInputStream(bytes))) {
@@ -93,7 +97,7 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
             PendingSplitsState state =
                     switch (kind) {
                         case BINLOG_PENDING_SPLITS_STATE_FLAG -> readBinlog(in, splitVersion);
-                        case HYBRID_PENDING_SPLITS_STATE_FLAG -> readHybrid(in, splitVersion);
+                        case HYBRID_PENDING_SPLITS_STATE_FLAG -> readHybrid(in, splitVersion, version);
                         default -> throw new IOException("Unknown MySQL pending splits state kind: " + kind);
                     };
             if (in.available() != 0) {
@@ -143,9 +147,15 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         out.writeInt(snapshot.nextTableIndex());
         out.writeInt(snapshot.nextChunkIndex());
         ChunkRangeStateSerializer.write(out, snapshot.nextChunkRange());
+        writeTableIds(out, snapshot.getAlreadyProcessedTables());
+        writeTableIds(out, snapshot.getRemainingTables());
+        out.writeInt(snapshot.getAssignerStatus().getStatusCode());
+        out.writeBoolean(snapshot.isTableIdCaseSensitive());
+        out.writeBoolean(snapshot.isRemainingTablesCheckpointed());
+        out.writeBoolean(snapshot.isSnapshotMetaReleased());
     }
 
-    private HybridPendingSplitsState readHybrid(DataInputStream in, int splitVersion) throws IOException {
+    private HybridPendingSplitsState readHybrid(DataInputStream in, int splitVersion, int version) throws IOException {
         int phaseIndex = in.readUnsignedByte();
         if (phaseIndex >= HybridPendingSplitsState.Phase.values().length) {
             throw new IOException("Unknown MySQL hybrid phase");
@@ -177,8 +187,23 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         int nextTable = in.readInt();
         int nextChunk = in.readInt();
         ChunkRange typedCursor = ChunkRangeStateSerializer.read(in);
-        SnapshotPendingSplitsState snapshot = new SnapshotPendingSplitsState(
-                planned, total, pendingSnapshots, assigned, finished, finishedInfos, nextTable, nextChunk, typedCursor);
+        SnapshotPendingSplitsState snapshot;
+        if (version >= VERSION) {
+            List<TableId> alreadyProcessedTables = readTableIds(in);
+            List<TableId> remainingTables = readTableIds(in);
+            AssignerStatus status;
+            try { status = AssignerStatus.fromStatusCode(in.readInt()); }
+            catch (IllegalStateException invalidStatus) { throw new IOException("Unknown MySQL Snapshot Assigner status", invalidStatus); }
+            boolean tableIdCaseSensitive = in.readBoolean();
+            boolean remainingTablesCheckpointed = in.readBoolean();
+            boolean snapshotMetaReleased = in.readBoolean();
+            snapshot = new SnapshotPendingSplitsState(planned, total, pendingSnapshots, assigned, finished,
+                    finishedInfos, nextTable, nextChunk, typedCursor, alreadyProcessedTables, remainingTables,
+                    status, tableIdCaseSensitive, remainingTablesCheckpointed, snapshotMetaReleased);
+        } else {
+            snapshot = new SnapshotPendingSplitsState(
+                    planned, total, pendingSnapshots, assigned, finished, finishedInfos, nextTable, nextChunk, typedCursor);
+        }
         return new HybridPendingSplitsState(
                 snapshot, binlogAssigned, pending, HybridPendingSplitsState.Phase.values()[phaseIndex], low, high);
     }
@@ -225,6 +250,38 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
             throw new IOException("Invalid MySQL split count");
         }
         return count;
+    }
+
+
+    private static void writeTableIds(DataOutputStream out, List<TableId> tables) throws IOException {
+        if (tables.size() > MAX_SPLITS) throw new IOException("Too many MySQL Snapshot tables in checkpoint");
+        out.writeInt(tables.size());
+        for (TableId table : tables) {
+            writeNullableString(out, table.catalog());
+            writeNullableString(out, table.schema());
+            out.writeUTF(table.table());
+        }
+    }
+
+    private static List<TableId> readTableIds(DataInputStream in) throws IOException {
+        int count = boundedCount(in);
+        List<TableId> tables = new ArrayList<>(count);
+        Set<TableId> unique = new LinkedHashSet<>();
+        for (int i = 0; i < count; i++) {
+            TableId table = new TableId(readNullableString(in), readNullableString(in), in.readUTF());
+            if (!unique.add(table)) throw new IOException("Duplicate table in MySQL Snapshot checkpoint");
+            tables.add(table);
+        }
+        return List.copyOf(tables);
+    }
+
+    private static void writeNullableString(DataOutputStream out, String value) throws IOException {
+        out.writeBoolean(value != null);
+        if (value != null) out.writeUTF(value);
+    }
+
+    private static String readNullableString(DataInputStream in) throws IOException {
+        return in.readBoolean() ? in.readUTF() : null;
     }
 
     private static void writeOffset(DataOutputStream out, DebeziumOffset offset) throws IOException {

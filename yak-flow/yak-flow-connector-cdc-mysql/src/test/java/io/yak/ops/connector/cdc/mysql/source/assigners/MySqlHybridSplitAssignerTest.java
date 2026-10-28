@@ -111,6 +111,11 @@ class MySqlHybridSplitAssignerTest {
         assertFalse(assigner.waitingForFinishedSplits());
         assigner.captureHigh(new DebeziumOffset(
                 Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 200L)));
+        assertEquals(AssignerStatus.INITIAL_ASSIGNING, assigner.getAssignerStatus());
+        // Assignment completion is durable only after the checkpoint containing all finished
+        // Snapshot split metadata completes.
+        assigner.snapshotState(22);
+        assigner.notifyCheckpointComplete(22);
         assertEquals(AssignerStatus.INITIAL_ASSIGNING_FINISHED, assigner.getAssignerStatus());
     }
 

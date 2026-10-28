@@ -29,8 +29,8 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -53,6 +53,9 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     private final Deque<MySqlSnapshotSplit> remainingSplits = new ArrayDeque<>();
     private final Map<String, MySqlSnapshotSplit> assignedSplits = new LinkedHashMap<>();
     private final Map<String, FinishedSnapshotSplitInfo> finishedSplitInfos = new LinkedHashMap<>();
+    private final Set<String> ignoredSplitIds = new LinkedHashSet<>();
+    private final Deque<TableId> remainingTables = new ArrayDeque<>();
+    private final Set<TableId> alreadyProcessedTables = new LinkedHashSet<>();
     private int totalSnapshotSplits;
     private boolean snapshotPlanned;
     private int nextTableIndex;
@@ -60,11 +63,22 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     private ChunkRange nextChunkRange;
     private boolean planning;
     private boolean closed;
+    private boolean restoredFromState;
+    private boolean tablesInitialized;
+    private boolean remainingTablesCheckpointed;
+    private boolean tableIdCaseSensitive = true;
+    private boolean snapshotMetaReleased;
+    private boolean scanNewlyAddedTablesEnabled;
+    private boolean releaseSnapshotMetadataEnabled;
+    private AssignerStatus assignerStatus = AssignerStatus.INITIAL_ASSIGNING;
+    private Long checkpointIdToFinish;
+    private List<TableId> capturedTables = List.of();
 
     public MySqlSnapshotSplitAssigner() {}
 
     public MySqlSnapshotSplitAssigner(SnapshotPendingSplitsState restored) {
         Objects.requireNonNull(restored, "restored");
+        restoredFromState = true;
         remainingSplits.addAll(restored.getRemainingSplits());
         assignedSplits.putAll(restored.getAssignedSplits());
         restored.getFinishedSplitInfos().forEach(info -> finishedSplitInfos.put(info.splitId(), info));
@@ -73,10 +87,122 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
         nextTableIndex = restored.nextTableIndex();
         nextChunkIndex = restored.nextChunkIndex();
         nextChunkRange = restored.nextChunkRange();
+        alreadyProcessedTables.addAll(restored.getAlreadyProcessedTables());
+        remainingTables.addAll(restored.getRemainingTables());
+        assignerStatus = restored.getAssignerStatus();
+        tableIdCaseSensitive = restored.isTableIdCaseSensitive();
+        remainingTablesCheckpointed = restored.isRemainingTablesCheckpointed();
+        snapshotMetaReleased = restored.isSnapshotMetaReleased();
     }
 
     @Override
     public void open() {}
+
+    /** Reconciles checkpointed table work with the current configured source tables. */
+    public boolean initializeTables(List<TableId> tables, boolean scanNewlyAddedTablesEnabled, boolean releaseSnapshotMetadataEnabled) {
+        Objects.requireNonNull(tables, "tables");
+        if (tablesInitialized) return false;
+        if (scanNewlyAddedTablesEnabled && releaseSnapshotMetadataEnabled) {
+            throw new IllegalArgumentException("Snapshot metadata release cannot be enabled with newly-added-table discovery");
+        }
+        this.scanNewlyAddedTablesEnabled = scanNewlyAddedTablesEnabled;
+        this.releaseSnapshotMetadataEnabled = releaseSnapshotMetadataEnabled;
+        LinkedHashSet<TableId> unique = new LinkedHashSet<>(tables);
+        if (unique.contains(null) || unique.size() != tables.size()) throw new IllegalArgumentException("MySQL snapshot table list contains null or duplicate identifiers");
+        capturedTables = List.copyOf(unique);
+        tablesInitialized = true;
+        if (!restoredFromState) {
+            if (!snapshotPlanned && remainingTables.isEmpty()) remainingTables.addAll(capturedTables);
+            remainingTablesCheckpointed = true;
+            return false;
+        }
+        if (!remainingTablesCheckpointed) restoreLegacyTableState();
+        // A checkpoint can capture all finished splits immediately before notifyCheckpointComplete
+        // advances the in-memory status. Since a restored checkpoint is durable, reconcile that
+        // state before looking for newly configured tables.
+        if (AssignerStatus.isAssigningSnapshotSplits(assignerStatus) && allFinished()) {
+            assignerStatus = assignerStatus.onFinish();
+            checkpointIdToFinish = null;
+        }
+        Set<TableId> known = knownTables();
+        LinkedHashSet<TableId> current = new LinkedHashSet<>(capturedTables);
+        LinkedHashSet<TableId> removed = new LinkedHashSet<>(known);
+        removed.removeAll(current);
+        removeTablesNoLongerCaptured(removed);
+        LinkedHashSet<TableId> newlyAdded = new LinkedHashSet<>(current);
+        newlyAdded.removeAll(known);
+        if (scanNewlyAddedTablesEnabled && !newlyAdded.isEmpty() && AssignerStatus.isAssigningFinished(assignerStatus)) {
+            if (snapshotMetaReleased) throw new IllegalStateException("Cannot discover new tables after Snapshot metadata was released");
+            remainingTables.addAll(newlyAdded);
+            snapshotPlanned = false;
+            startAssignNewlyAddedTables();
+            return true;
+        }
+        return false;
+    }
+
+    private void restoreLegacyTableState() {
+        assignedSplits.values().forEach(split -> alreadyProcessedTables.add(split.tableId()));
+        finishedSplitInfos.values().forEach(info -> alreadyProcessedTables.add(info.tableId()));
+        if (snapshotPlanned) {
+            if (remainingSplits.isEmpty() && assignedSplits.isEmpty() && finishedSplitInfos.size() == totalSnapshotSplits) assignerStatus = AssignerStatus.INITIAL_ASSIGNING_FINISHED;
+            remainingTablesCheckpointed = true;
+            return;
+        }
+        TableId cursorTable = nextChunkRange == null ? null : nextChunkRange.tableId();
+        int start = cursorTable == null ? Math.min(nextTableIndex, capturedTables.size()) : capturedTables.indexOf(cursorTable);
+        if (cursorTable != null && start < 0) start = Math.min(nextTableIndex, capturedTables.size());
+        for (int i = start; i < capturedTables.size(); i++) {
+            TableId table = capturedTables.get(i);
+            if (Objects.equals(table, cursorTable) || !hasPlannedSplitsForTable(table)) {
+                if (!remainingTables.contains(table)) remainingTables.addLast(table);
+            }
+        }
+        remainingTablesCheckpointed = true;
+    }
+
+    private boolean hasPlannedSplitsForTable(TableId table) {
+        return remainingSplits.stream().anyMatch(split -> split.tableId().equals(table))
+                || assignedSplits.values().stream().anyMatch(split -> split.tableId().equals(table))
+                || finishedSplitInfos.values().stream().anyMatch(info -> info.tableId().equals(table));
+    }
+
+    private Set<TableId> knownTables() {
+        LinkedHashSet<TableId> known = new LinkedHashSet<>(alreadyProcessedTables);
+        known.addAll(remainingTables);
+        remainingSplits.forEach(split -> known.add(split.tableId()));
+        assignedSplits.values().forEach(split -> known.add(split.tableId()));
+        finishedSplitInfos.values().forEach(info -> known.add(info.tableId()));
+        if (nextChunkRange != null) known.add(nextChunkRange.tableId());
+        return known;
+    }
+
+    private void removeTablesNoLongerCaptured(Set<TableId> removed) {
+        if (removed.isEmpty()) return;
+        if (snapshotMetaReleased) {
+            alreadyProcessedTables.removeAll(removed);
+            remainingTables.removeIf(removed::contains);
+            return;
+        }
+        int count = 0;
+        for (var iterator = remainingSplits.iterator(); iterator.hasNext();) {
+            if (removed.contains(iterator.next().tableId())) { iterator.remove(); count++; }
+        }
+        for (var iterator = assignedSplits.entrySet().iterator(); iterator.hasNext();) {
+            var entry = iterator.next();
+            if (removed.contains(entry.getValue().tableId())) { ignoredSplitIds.add(entry.getKey()); iterator.remove(); count++; }
+        }
+        for (var iterator = finishedSplitInfos.entrySet().iterator(); iterator.hasNext();) {
+            var entry = iterator.next();
+            if (removed.contains(entry.getValue().tableId())) { iterator.remove(); count++; }
+        }
+        remainingTables.removeIf(removed::contains);
+        alreadyProcessedTables.removeAll(removed);
+        totalSnapshotSplits -= count;
+        if (totalSnapshotSplits < 0) throw new IllegalStateException("Removed more Snapshot splits than were planned");
+        if (nextChunkRange != null && removed.contains(nextChunkRange.tableId())) { nextChunkRange = null; nextChunkIndex = 0; nextTableIndex = 0; }
+        snapshotPlanned = remainingTables.isEmpty() && nextChunkRange == null;
+    }
 
     /**
      * Flink CDC-style asynchronous Chunk discovery owned by the Snapshot Assigner.
@@ -96,16 +222,15 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(onDiscovered, "onDiscovered");
         Objects.requireNonNull(onError, "onError");
-        if (closed || planning || snapshotPlanned || remainingSplits.size() >= maxPendingChunks) return false;
-        int tableIndex = nextTableIndex;
-        int chunkIndex = nextChunkIndex;
-        if (tableIndex >= tables.size()) {
-            throw new IllegalStateException("Incomplete Snapshot table discovery terminal marker");
-        }
-        if ((chunkIndex == 0) != (nextChunkRange == null)) {
-            throw new IllegalStateException("Snapshot Chunk discovery cursor does not match its index");
-        }
-        TableId table = tables.get(tableIndex);
+        if (!tablesInitialized) initializeTables(tables, false, false);
+        if (closed || planning || snapshotPlanned || !AssignerStatus.isAssigningSnapshotSplits(assignerStatus)
+                || remainingSplits.size() >= maxPendingChunks) return false;
+        TableId table = nextChunkRange == null ? remainingTables.peekFirst() : nextChunkRange.tableId();
+        if (table == null) { snapshotPlanned = true; return false; }
+        int tableIndex = capturedTables.indexOf(table);
+        int chunkIndex = nextChunkRange == null ? 0 : nextChunkIndex;
+        if (tableIndex < 0) throw new IllegalStateException("Snapshot table is not in the current configured table list");
+        if ((chunkIndex == 0) != (nextChunkRange == null)) throw new IllegalStateException("Snapshot Chunk discovery cursor does not match its index");
         ChunkSplitterState cursor = getChunkSplitterState();
         planning = true;
         try {
@@ -134,6 +259,10 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     /** Registers all the supplied splits and finishes discovery. */
     public void plan(List<MySqlSnapshotSplit> splits) {
         append(splits, true);
+        remainingTables.clear();
+        nextChunkRange = null;
+        nextChunkIndex = 0;
+        if (!capturedTables.isEmpty()) nextTableIndex = capturedTables.size();
     }
 
     /** Adds newly discovered snapshot splits without declaring the table scan complete. */
@@ -163,30 +292,31 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     public void appendPlan(MySqlSnapshotSplit split, int tableCount) {
         Objects.requireNonNull(split, "split");
         ChunkRange range = split.chunkRange();
-        if (tableCount < 1 || nextTableIndex < 0 || nextTableIndex >= tableCount || range == null) {
-            throw new IllegalStateException("Invalid snapshot discovery transition");
-        }
+        if (range == null) throw new IllegalStateException("Invalid snapshot discovery transition");
+        if (capturedTables.isEmpty()) { capturedTables = List.of(range.tableId()); tablesInitialized = true; }
+        if (remainingTables.isEmpty() && !snapshotPlanned) remainingTables.add(range.tableId());
+        if (remainingTables.isEmpty() || !remainingTables.peekFirst().equals(range.tableId())) throw new IllegalStateException("Snapshot Chunk does not belong to the head of the table queue");
         if ((nextChunkIndex == 0 && (nextChunkRange != null || range.start() != null))
-                || (nextChunkIndex > 0
-                        && (nextChunkRange == null
-                                || nextChunkRange.end() != null
-                                || !nextChunkRange.tableId().equals(range.tableId())
-                                || !nextChunkRange.column().equals(range.column())
-                                || nextChunkRange.type() != range.type()
-                                || !Objects.equals(nextChunkRange.start(), range.start())))) {
+                || (nextChunkIndex > 0 && (nextChunkRange == null || nextChunkRange.end() != null
+                        || !nextChunkRange.tableId().equals(range.tableId()) || !nextChunkRange.column().equals(range.column())
+                        || nextChunkRange.type() != range.type() || !Objects.equals(nextChunkRange.start(), range.start())))) {
             throw new IllegalStateException("Snapshot range differs from the durable discovery cursor");
         }
-        boolean tableComplete = range.last();
-        ChunkRange following =
-                tableComplete ? null : new ChunkRange(range.tableId(), range.column(), range.type(), range.end(), null);
-        append(List.of(split), tableComplete && nextTableIndex + 1 == tableCount);
-        if (tableComplete) {
-            nextTableIndex++;
+        int tableIndex = capturedTables.indexOf(range.tableId());
+        if (tableIndex < 0) throw new IllegalStateException("Snapshot range refers to an unknown table");
+        append(List.of(split), false);
+        if (range.last()) {
+            remainingTables.removeFirst();
+            nextTableIndex = remainingTables.isEmpty() ? Math.max(nextTableIndex, tableIndex + 1) : capturedTables.indexOf(remainingTables.peekFirst());
             nextChunkIndex = 0;
+            nextChunkRange = null;
+            snapshotPlanned = remainingTables.isEmpty();
         } else {
+            nextTableIndex = tableIndex;
             nextChunkIndex++;
+            nextChunkRange = new ChunkRange(range.tableId(), range.column(), range.type(), range.end(), null);
+            snapshotPlanned = false;
         }
-        nextChunkRange = following;
     }
 
     @Override
@@ -197,7 +327,7 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     /** Assigning a split is never evidence that its reader has completed it. */
     public MySqlSnapshotSplit next() {
         MySqlSnapshotSplit split = remainingSplits.pollFirst();
-        if (split != null) assignedSplits.put(split.splitId(), split);
+        if (split != null) { assignedSplits.put(split.splitId(), split); alreadyProcessedTables.add(split.tableId()); }
         return split;
     }
 
@@ -215,7 +345,7 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
         if (waitingForFinishedSplits()) {
             throw new IllegalStateException("Snapshot splits have not all reported their high watermarks");
         }
-        return finishedSplits();
+        return snapshotMetaReleased ? List.of() : finishedSplits();
     }
 
     @Override
@@ -224,6 +354,7 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
         // Validate an entire report before mutating any assignment state.
         List<FinishedSnapshotSplitInfo> accepted = new ArrayList<>();
         for (var entry : offsets.entrySet()) {
+            if (ignoredSplitIds.contains(entry.getKey())) continue;
             accepted.add(finishedInfo(entry.getKey(), entry.getValue()));
         }
         accepted.forEach(this::finishSnapshot);
@@ -239,6 +370,7 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     private FinishedSnapshotSplitInfo finishedInfo(String splitId, DebeziumOffset highWatermark) {
         Objects.requireNonNull(splitId, "splitId");
         Objects.requireNonNull(highWatermark, "highWatermark");
+        if (snapshotMetaReleased) throw new IllegalStateException("Snapshot metadata has already been released");
         FinishedSnapshotSplitInfo previous = finishedSplitInfos.get(splitId);
         if (previous != null) {
             if (!previous.highWatermark().equals(highWatermark)) {
@@ -260,6 +392,7 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     /** Accepts one finished Chunk only after its ID, boundaries and watermark agree. */
     public void finishSnapshot(FinishedSnapshotSplitInfo info) {
         Objects.requireNonNull(info, "info");
+        if (snapshotMetaReleased) throw new IllegalStateException("Snapshot metadata has already been released");
         FinishedSnapshotSplitInfo previous = finishedSplitInfos.get(info.splitId());
         if (previous != null) {
             if (!previous.equals(info)) throw new IllegalStateException("Conflicting completed snapshot metadata");
@@ -304,10 +437,9 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     }
 
     public boolean allFinished() {
-        return snapshotPlanned
-                && remainingSplits.isEmpty()
-                && assignedSplits.isEmpty()
-                && finishedSplitInfos.size() == totalSnapshotSplits;
+        return snapshotPlanned && remainingSplits.isEmpty() && assignedSplits.isEmpty()
+                && remainingTables.isEmpty() && nextChunkRange == null
+                && (snapshotMetaReleased || finishedSplitInfos.size() == totalSnapshotSplits);
     }
 
     public boolean planned() {
@@ -323,7 +455,7 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     }
 
     public Map<String, MySqlSnapshotSplit> assigned() {
-        return Map.copyOf(assignedSplits);
+        return java.util.Collections.unmodifiableMap(new LinkedHashMap<>(assignedSplits));
     }
 
     public Set<String> finished() {
@@ -331,8 +463,11 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     }
 
     public List<FinishedSnapshotSplitInfo> finishedSplits() {
-        return List.copyOf(finishedSplitInfos.values());
+        return snapshotMetaReleased ? List.of() : List.copyOf(finishedSplitInfos.values());
     }
+
+    public List<TableId> remainingTables() { return List.copyOf(remainingTables); }
+    public List<TableId> alreadyProcessedTables() { return List.copyOf(alreadyProcessedTables); }
 
     public int nextTableIndex() {
         return nextTableIndex;
@@ -357,40 +492,60 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
     @Override
     public SnapshotPendingSplitsState snapshotState(long checkpointId) {
         if (checkpointId < 0) throw new IllegalArgumentException("Checkpoint ID must not be negative");
-        return new SnapshotPendingSplitsState(
-                snapshotPlanned,
-                totalSnapshotSplits,
-                pending(),
-                assigned(),
-                finished(),
-                finishedSplits(),
-                nextTableIndex,
-                nextChunkIndex,
-                nextChunkRange);
+        SnapshotPendingSplitsState state = new SnapshotPendingSplitsState(
+                snapshotPlanned, totalSnapshotSplits, pending(), assigned(), finished(), finishedSplits(),
+                nextTableIndex, nextChunkIndex, nextChunkRange, alreadyProcessedTables(), remainingTables(),
+                assignerStatus, tableIdCaseSensitive, true, snapshotMetaReleased);
+        if (checkpointIdToFinish == null && AssignerStatus.isAssigningSnapshotSplits(assignerStatus) && allFinished()) {
+            checkpointIdToFinish = checkpointId;
+        }
+        return state;
     }
 
     @Override
-    public void notifyCheckpointComplete(long checkpointId) {}
+    public void notifyCheckpointComplete(long checkpointId) {
+        if (checkpointIdToFinish != null && checkpointId >= checkpointIdToFinish
+                && AssignerStatus.isAssigningSnapshotSplits(assignerStatus) && allFinished()) {
+            assignerStatus = assignerStatus.onFinish();
+            checkpointIdToFinish = null;
+        }
+    }
 
     @Override
-    public AssignerStatus getAssignerStatus() {
-        return allFinished() ? AssignerStatus.INITIAL_ASSIGNING_FINISHED : AssignerStatus.INITIAL_ASSIGNING;
-    }
+    public AssignerStatus getAssignerStatus() { return assignerStatus; }
 
     @Override
     public void startAssignNewlyAddedTables() {
-        throw new UnsupportedOperationException("Dynamic table discovery has not been enabled");
+        if (!AssignerStatus.isAssigningFinished(assignerStatus)) throw new IllegalStateException("New tables can only be assigned after the previous assignment is finished");
+        if (snapshotMetaReleased || releaseSnapshotMetadataEnabled) throw new IllegalStateException("Cannot assign newly added tables after Snapshot metadata release");
+        if (remainingTables.isEmpty()) throw new IllegalStateException("Newly-added-table assignment requires a non-empty table queue");
+        snapshotPlanned = false;
+        checkpointIdToFinish = null;
+        assignerStatus = assignerStatus.startAssignNewlyTables();
     }
 
     @Override
-    public boolean noMoreSplits() {
-        return snapshotPlanned && remainingSplits.isEmpty();
-    }
+    public boolean noMoreSplits() { return snapshotPlanned && remainingSplits.isEmpty() && remainingTables.isEmpty() && nextChunkRange == null; }
 
     @Override
     public void onBinlogSplitUpdated() {
-        throw new UnsupportedOperationException("Snapshot assigner does not own a Binlog split");
+        if (assignerStatus == AssignerStatus.NEWLY_ADDED_ASSIGNING_FINISHED) return;
+        if (assignerStatus != AssignerStatus.NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED) throw new IllegalStateException("Binlog split update ACK is invalid while Snapshot Assigner is " + assignerStatus);
+        assignerStatus = assignerStatus.onBinlogSplitUpdated();
     }
+
+    /** Releases per-split metadata after a durable Binlog handoff checkpoint. */
+    public void releaseSnapshotMetadata() {
+        if (snapshotMetaReleased) return;
+        if (!releaseSnapshotMetadataEnabled) throw new IllegalStateException("Snapshot metadata release is not enabled");
+        if (!AssignerStatus.isAssigningFinished(assignerStatus) || !allFinished()) throw new IllegalStateException("Snapshot metadata cannot be released before assignment is complete");
+        assignedSplits.clear();
+        finishedSplitInfos.clear();
+        ignoredSplitIds.clear();
+        snapshotMetaReleased = true;
+    }
+
+    public boolean isSnapshotMetaReleased() { return snapshotMetaReleased; }
 
     @Override
     public void close() {

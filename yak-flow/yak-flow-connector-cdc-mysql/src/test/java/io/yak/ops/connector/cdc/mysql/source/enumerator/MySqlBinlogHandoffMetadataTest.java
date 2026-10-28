@@ -88,7 +88,7 @@ class MySqlBinlogHandoffMetadataTest {
     }
 
     @Test
-    void rejectsSnapshotMetadataReleaseWithoutDurableReleasedStateProtocol() {
+    void acceptsSnapshotMetadataReleaseWhenReleasedStateIsCheckpointed() {
         var source = MySqlSource.builder()
                 .hostname("localhost")
                 .username("user")
@@ -102,10 +102,9 @@ class MySqlBinlogHandoffMetadataTest {
                                 List.of(new Column("id", LogicalTypes.BIGINT.copy(false))),
                                 List.of("id")))
                 .buildHybrid(2);
-        assertThatThrownBy(() -> new MySqlSourceEnumerator(
+        assertThatCode(() -> new MySqlSourceEnumerator(
                         StartupOptions.initial(), new Context(), source.config(), 2, handoffState(), new TableMetrics()))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessageContaining("durable released-state checkpoint");
+                .doesNotThrowAnyException();
     }
 
     private static HybridPendingSplitsState handoffState() {

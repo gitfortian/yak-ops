@@ -1,25 +1,15 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.source.assigners.AssignerStatus;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import java.util.Objects;
 
-/**
- * A checkpoint of hybrid source split assignment.
- *
- * <p>Snapshot split discovery and watermarks live in SnapshotPendingSplitsState, following
- * Flink CDC. YakFlow's Debezium 2.7 bootstrap anchor and deferred binlog reader are
- * retained here until the runtime can construct the upstream binlog split directly.
- */
+/** A checkpoint of hybrid source split assignment and Snapshot lifecycle. */
 public final class HybridPendingSplitsState extends PendingSplitsState {
 
-    public enum Phase {
-        BOOTSTRAP,
-        SNAPSHOT,
-        HANDOFF,
-        STREAMING
-    }
+    public enum Phase { BOOTSTRAP, SNAPSHOT, HANDOFF, STREAMING }
 
     private final SnapshotPendingSplitsState snapshotPendingSplits;
     private final boolean binlogAssigned;
@@ -47,45 +37,49 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
             throw new IllegalArgumentException("Inconsistent hybrid binlog assignment state");
         }
         if (phase == Phase.HANDOFF || phase == Phase.STREAMING) {
-            if (!snapshotPendingSplits.snapshotPlanned()
-                    || snapshotPendingSplits.totalSnapshotSplits() == 0
-                    || snapshotPendingSplits.getFinishedSplits().size()
-                            != snapshotPendingSplits.totalSnapshotSplits()) {
-                throw new IllegalArgumentException("Hybrid handoff requires all snapshot chunks");
-            }
-            DebeziumOffset maximum = snapshotPendingSplits.getFinishedSplitInfos().stream()
-                    .map(FinishedSnapshotSplitInfo::highWatermark)
-                    .max(DebeziumOffset::compareTo)
-                    .orElseThrow();
-            if (highWatermark.compareTo(maximum) != 0 || lowWatermark.compareTo(highWatermark) > 0) {
+            AssignerStatus status = snapshotPendingSplits.getAssignerStatus();
+            boolean released = snapshotPendingSplits.isSnapshotMetaReleased();
+            if (released) {
+                if (phase != Phase.STREAMING
+                        || !snapshotPendingSplits.snapshotPlanned()
+                        || !snapshotPendingSplits.getRemainingSplits().isEmpty()
+                        || !snapshotPendingSplits.getAssignedSplits().isEmpty()
+                        || !snapshotPendingSplits.getFinishedSplitInfos().isEmpty()
+                        || !AssignerStatus.isAssigningFinished(status)) {
+                    throw new IllegalArgumentException("Released Snapshot metadata has an invalid hybrid phase");
+                }
+            } else if (phase == Phase.HANDOFF
+                    || status == AssignerStatus.INITIAL_ASSIGNING
+                    || status == AssignerStatus.INITIAL_ASSIGNING_FINISHED
+                    || status == AssignerStatus.NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED
+                    || status == AssignerStatus.NEWLY_ADDED_ASSIGNING_FINISHED) {
+                if (!snapshotPendingSplits.snapshotPlanned()
+                        || snapshotPendingSplits.totalSnapshotSplits() == 0
+                        || snapshotPendingSplits.getFinishedSplits().size()
+                                != snapshotPendingSplits.totalSnapshotSplits()) {
+                    throw new IllegalArgumentException("Hybrid handoff requires all snapshot chunks");
+                }
+                DebeziumOffset maximum = snapshotPendingSplits.getFinishedSplitInfos().stream()
+                        .map(FinishedSnapshotSplitInfo::highWatermark)
+                        .max(DebeziumOffset::compareTo)
+                        .orElseThrow();
+                if (highWatermark.compareTo(maximum) != 0 || lowWatermark.compareTo(highWatermark) > 0) {
+                    throw new IllegalArgumentException("Hybrid checkpoint watermarks are inconsistent");
+                }
+            } else if (lowWatermark.compareTo(highWatermark) > 0) {
+                // During a newly-added-table scan the existing Binlog High watermark remains
+                // authoritative until the new table Snapshot is checkpointed and handed off.
                 throw new IllegalArgumentException("Hybrid checkpoint watermarks are inconsistent");
             }
         }
     }
 
-    public SnapshotPendingSplitsState getSnapshotPendingSplits() {
-        return snapshotPendingSplits;
-    }
-
-    public boolean isBinlogSplitAssigned() {
-        return binlogAssigned;
-    }
-
-    public MySqlBinlogSplit pendingBinlog() {
-        return pendingBinlog;
-    }
-
-    public Phase phase() {
-        return phase;
-    }
-
-    public DebeziumOffset lowWatermark() {
-        return lowWatermark;
-    }
-
-    public DebeziumOffset highWatermark() {
-        return highWatermark;
-    }
+    public SnapshotPendingSplitsState getSnapshotPendingSplits() { return snapshotPendingSplits; }
+    public boolean isBinlogSplitAssigned() { return binlogAssigned; }
+    public MySqlBinlogSplit pendingBinlog() { return pendingBinlog; }
+    public Phase phase() { return phase; }
+    public DebeziumOffset lowWatermark() { return lowWatermark; }
+    public DebeziumOffset highWatermark() { return highWatermark; }
 
     @Override
     public boolean equals(Object other) {
@@ -108,6 +102,7 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
     public String toString() {
         return "HybridPendingSplitsState{phase=" + phase
                 + ", chunks=" + snapshotPendingSplits.totalSnapshotSplits()
+                + ", assignerStatus=" + snapshotPendingSplits.getAssignerStatus()
                 + ", checkpoint=redacted}";
     }
 }
