@@ -35,11 +35,11 @@ class ImpactTest(unittest.TestCase):
             ("yak-flow/yak-flow-connector-cdc-mysql/pom.xml", True),
             ("yak-ops-bom/pom.xml", False),
         )
-        with patch.object(impact, "suite_registration_changes", return_value={"cdc-binlog"}):
+        with patch.object(impact, "suite_registration_changes", return_value={"backend-e2e"}):
             for path, expected in paths:
                 with self.subTest(path=path):
                     self.assertEqual(expected, impact.analyze([path])["preflight"])
-            self.assertEqual({"cdc-binlog"}, impact.analyze(["scripts/tests/backend_tests.py"])["suites"])
+            self.assertEqual({"backend-e2e"}, impact.analyze(["scripts/tests/backend_tests.py"])["suites"])
 
     def test_fast_preflight_full_scope_for_build_and_workflow(self):
         for path in ("pom.xml", "tools/maven/checkstyle.xml",
@@ -87,81 +87,58 @@ class ImpactTest(unittest.TestCase):
         vendor = impact.select_suites(["yak-flow/yak-flow-connector-jdbc/src/main/java/dialect/MySqlDialect.java"])
         self.assertIn("jdbc-mysql", vendor)
         self.assertNotIn("jdbc-oracle", vendor)
+        self.assertIn("backend-e2e", vendor)
+        self.assertIn("recovery-e2e", vendor)
         common = impact.select_suites(["yak-flow/yak-flow-connector-jdbc/src/main/java/internal/JdbcOutputFormat.java"])
-        self.assertEqual(["jdbc-mysql", "jdbc-postgres", "jdbc-oracle", "pipeline", "cdc-pipeline-mysql", "cdc-pipeline-postgres", "cdc-pipeline-oracle", "cdc-acceptance-postgres", "cdc-acceptance-oracle", "cdc-recovery"], common)
+        self.assertEqual(
+            ["jdbc-mysql", "jdbc-postgres", "jdbc-oracle", "pipeline", "backend-e2e", "recovery-e2e"],
+            common,
+        )
 
-    def test_shared_cdc_base_runs_affected_cdc_suites(self):
+    def test_shared_cdc_base_selects_remaining_e2e_checks(self):
         path = "yak-flow/yak-flow-connector-cdc-base/src/main/java/io/yak/ops/connector/cdc/base/source/assigner/SnapshotSplitAssigner.java"
-        self.assertEqual(set(impact.CDC_SUITES) | {"recovery-e2e"}, set(impact.select_suites([path])))
+        self.assertEqual({"backend-e2e", "recovery-e2e"}, set(impact.select_suites([path])))
         self.assertIn("yak-flow/yak-flow-connector-cdc-mysql", impact.analyze([path])["modules"])
         self.assertEqual([], impact.select_suites([
             "yak-flow/yak-flow-connector-cdc-base/src/test/java/SnapshotSplitAssignerTest.java"]))
 
-    def test_cdc_it_owner_is_selected_without_unrelated_databases(self):
-        root = "yak-flow/yak-flow-connector-cdc-mysql/src/test/java/"
-        expected = {
-            "source/MySqlBinlogIT.java": "cdc-binlog",
-            "source/MySqlHybridIT.java": "cdc-hybrid",
-            "source/reader/MySqlBackfillIT.java": "cdc-snapshot",
-            "source/reader/MySqlKeylessBackfillIT.java": "cdc-snapshot",
-            "integration/MySqlCdcToMySqlIT.java": "cdc-pipeline-mysql",
-            "integration/MySqlCdcToPostgresIT.java": "cdc-pipeline-postgres",
-            "integration/MySqlCdcToOracleIT.java": "cdc-pipeline-oracle",
-            "integration/MySqlCdcToMySqlCrashRecoveryIT.java": "cdc-recovery",
-        }
-        for path, selected in expected.items():
+    def test_removed_cdc_it_paths_select_surviving_e2e_checks(self):
+        path = impact.CDC + "src/test/java/integration/MySqlCdcToMySqlCrashRecoveryIT.java"
+        self.assertEqual({"backend-e2e", "recovery-e2e"}, set(impact.select_suites([path])))
+        self.assertEqual([], impact.select_suites([impact.CDC + "src/test/java/source/reader/BinlogSplitReaderTest.java"]))
+
+    def test_snapshot_and_unknown_cdc_changes_preserve_e2e_coverage(self):
+        for path in (
+            impact.CDC + "src/main/java/io/yak/ops/connector/cdc/mysql/source/assigners/MySqlChunkSplitter.java",
+            impact.CDC + "src/main/java/source/UnexpectedChange.java",
+            impact.CDC + "src/main/java/source/CheckpointOffset.java",
+            impact.CDC_BASE + "src/main/java/source/assigner/SnapshotSplitAssigner.java",
+        ):
             with self.subTest(path=path):
-                actual = set(impact.select_suites([root + path]))
-                if selected == "cdc-pipeline-postgres":
-                    self.assertEqual({"cdc-pipeline-postgres", "cdc-acceptance-postgres"}, actual)
-                elif selected == "cdc-pipeline-oracle":
-                    self.assertEqual({"cdc-pipeline-oracle", "cdc-acceptance-oracle"}, actual)
-                else:
-                    self.assertEqual({selected}, actual)
-        self.assertEqual(set(impact.CDC_PIPELINES + impact.CDC_ACCEPTANCE) | {"cdc-recovery"}, set(impact.select_suites([
-            root + "integration/MySqlCdcPipelineTestBase.java",
-        ])))
+                self.assertEqual({"backend-e2e", "recovery-e2e"}, set(impact.select_suites([path])))
 
-    def test_snapshot_and_shared_cdc_change_preserve_recovery_coverage(self):
-        snapshot = impact.select_suites([
-            impact.CDC + "src/main/java/io/yak/ops/connector/cdc/mysql/source/assigners/MySqlChunkSplitter.java"
-        ])
-        self.assertEqual(
-            {"cdc-snapshot", "cdc-hybrid", "cdc-recovery", "recovery-e2e"} | set(impact.CDC_PIPELINES),
-            set(snapshot),
-        )
-        self.assertNotIn("cdc-binlog", snapshot)
-        self.assertNotIn("cdc-acceptance-postgres", snapshot)
-        self.assertNotIn("cdc-acceptance-oracle", snapshot)
-        unknown = impact.select_suites([impact.CDC + "src/main/java/source/UnexpectedChange.java"])
-        self.assertEqual(set(impact.CDC_SUITES), set(unknown))
-        checkpoint = impact.select_suites([impact.CDC + "src/main/java/source/CheckpointOffset.java"])
-        self.assertEqual(set(impact.CDC_SUITES) | {"recovery-e2e"}, set(checkpoint))
-
-    def test_vendor_specific_cdc_pipeline_and_mysql_xa(self):
+    def test_jdbc_vendor_changes_keep_end_to_end_acceptance(self):
         postgres = impact.select_suites([
             impact.JDBC + "src/main/java/io/yak/ops/connector/jdbc/database/dialect/PostgresDialect.java"
         ])
-        self.assertIn("cdc-pipeline-postgres", postgres)
-        self.assertIn("cdc-acceptance-postgres", postgres)
-        self.assertNotIn("cdc-acceptance-oracle", postgres)
-        self.assertNotIn("cdc-pipeline-oracle", postgres)
-        self.assertNotIn("cdc-recovery", postgres)
+        self.assertIn("jdbc-postgres", postgres)
+        self.assertIn("backend-e2e", postgres)
+        self.assertNotIn("recovery-e2e", postgres)
         mysql = impact.select_suites([
             impact.JDBC + "src/main/java/io/yak/ops/connector/jdbc/database/dialect/MySqlDialect.java"
         ])
-        self.assertIn("cdc-recovery", mysql)
-        self.assertIn("cdc-pipeline-mysql", mysql)
+        self.assertIn("jdbc-mysql", mysql)
+        self.assertIn("recovery-e2e", mysql)
 
-    def test_unknown_cdc_and_shared_runtime_require_all_cross_db_acceptance(self):
+    def test_unknown_cdc_and_shared_runtime_keep_recovery(self):
         for path in (
             impact.CDC + "src/main/java/source/UnknownSource.java",
             impact.CDC_BASE + "src/main/java/source/assigner/SnapshotSplitAssigner.java",
             impact.RUNTIME + "src/main/java/execution/CheckpointCoordinator.java",
         ):
             with self.subTest(path=path):
-                selected = set(impact.select_suites([path]))
-                self.assertTrue(set(impact.CDC_ACCEPTANCE).issubset(selected))
+                self.assertTrue({"backend-e2e", "recovery-e2e"}.issubset(
+                    set(impact.select_suites([path]))))
 
     def test_test_only_changes_do_not_start_database(self):
         self.assertEqual([], impact.select_suites(["yak-flow/yak-flow-connector-jdbc/src/test/java/JdbcBatchExecutionTest.java"]))
@@ -194,8 +171,8 @@ class ImpactTest(unittest.TestCase):
 
 
     def test_registry_change_only_selects_affected_suite(self):
-        before = 'SUITES = {"cdc-binlog": (1, 2), "backend-e2e": (1, 2)}\n\ndef runner():\n    return True\n'
-        after = 'SUITES = {"cdc-binlog": (1, 2), "backend-e2e": (1, 3)}\n\ndef runner():\n    return True\n'
+        before = 'SUITES = {"jdbc-mysql": (1, 2), "backend-e2e": (1, 2)}\n\ndef runner():\n    return True\n'
+        after = 'SUITES = {"jdbc-mysql": (1, 2), "backend-e2e": (1, 3)}\n\ndef runner():\n    return True\n'
         self.assertEqual({"backend-e2e"}, impact.compare_suite_registry(before, after))
         self.assertEqual(set(), impact.compare_suite_registry(before, before + "# comment only\n"))
 
