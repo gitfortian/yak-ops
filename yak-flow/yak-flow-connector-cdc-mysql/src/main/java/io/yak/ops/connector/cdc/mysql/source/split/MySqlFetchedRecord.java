@@ -27,8 +27,7 @@ public record MySqlFetchedRecord(
     }
 
     public static MySqlFetchedRecord binlog(BinlogEvent event) {
-        return new MySqlFetchedRecord(
-                event.records(), event.offset(), false, null, event.schemaChange());
+        return new MySqlFetchedRecord(event.records(), event.offset(), false, null, event.schemaChange());
     }
 
     public static MySqlFetchedRecord lowWatermark(DebeziumOffset offset) {
@@ -41,7 +40,9 @@ public record MySqlFetchedRecord(
 
     @Override
     public String toString() {
-        int count = preparedSnapshot == null ? rows.size() : preparedSnapshot.output().rows().size();
+        int count = preparedSnapshot == null
+                ? rows.size()
+                : preparedSnapshot.output().rows().size();
         return "MySqlFetchedRecord{rowCount=" + count + ", values=redacted}";
     }
 }

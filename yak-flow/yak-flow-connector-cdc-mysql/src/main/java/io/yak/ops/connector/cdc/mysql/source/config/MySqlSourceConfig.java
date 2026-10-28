@@ -18,32 +18,32 @@
 package io.yak.ops.connector.cdc.mysql.source.config;
 
 import com.github.shyiko.mysql.binlog.BinaryLogClient;
+import io.debezium.config.Configuration;
+import io.debezium.connector.mysql.MySqlConnectorConfig;
+import io.debezium.relational.RelationalTableFilters;
 import io.yak.ops.connector.cdc.mysql.debezium.CheckpointOffsetBackingStore;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumUtils;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.configuration.SchemaEvolutionOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.schema.Schema;
 import io.yak.ops.core.types.TableSchema;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.util.List;
-import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
-import io.debezium.config.Configuration;
-import io.debezium.connector.mysql.MySqlConnectorConfig;
-import io.debezium.relational.RelationalTableFilters;
-import java.util.function.Predicate;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -170,8 +170,18 @@ public final class MySqlSourceConfig {
             Map<TableId, String> chunkKeyColumns,
             Map<TableId, Schema> physicalSchemas,
             boolean schemaEvolutionEnabled) {
-        this(hostname, port, username, password, serverId, topicPrefix, schemas,
-                queueCapacity, connectionProperties, chunkKeyColumns, physicalSchemas,
+        this(
+                hostname,
+                port,
+                username,
+                password,
+                serverId,
+                topicPrefix,
+                schemas,
+                queueCapacity,
+                connectionProperties,
+                chunkKeyColumns,
+                physicalSchemas,
                 schemaEvolutionEnabled,
                 MySqlSourceConfigFactory.defaultSettings(serverId));
     }
@@ -430,7 +440,9 @@ public final class MySqlSourceConfig {
 
     /** Returns the reserved replication ID for one of at most sixteen snapshot readers. */
     public int snapshotServerId(int reader) {
-        if (reader < 0 || reader >= 16 || serverId > Integer.MAX_VALUE - 16
+        if (reader < 0
+                || reader >= 16
+                || serverId > Integer.MAX_VALUE - 16
                 || (serverIdRange != null && serverId + reader + 1 > serverIdRange.getEndServerId())) {
             throw new IllegalArgumentException("Hybrid source requires a reserved range of seventeen replication IDs");
         }
@@ -493,7 +505,8 @@ public final class MySqlSourceConfig {
                         ",",
                         MySqlSourceConfigFactory.includeTablesExcept(
                                 schemas.keySet().stream()
-                                        .map(table -> Pattern.quote(table.catalog()) + "\\." + Pattern.quote(table.table()))
+                                        .map(table ->
+                                                Pattern.quote(table.catalog()) + "\\." + Pattern.quote(table.table()))
                                         .toList(),
                                 excludeTableList)));
         properties.setProperty("snapshot.mode", "no_data");
@@ -525,6 +538,7 @@ public final class MySqlSourceConfig {
     public String toString() {
         return "MySqlSourceConfig{credentials=redacted, tables=" + schemas.size() + "}";
     }
+
     public String getHostname() {
         return hostname;
     }
@@ -657,7 +671,9 @@ public final class MySqlSourceConfig {
                         .map(Pattern::compile)
                         .toList();
         return tableId -> tableFilters.dataCollectionFilter().isIncluded(tableId)
-                && exclusions.stream().noneMatch(pattern -> pattern.matcher(tableId.toString()).matches());
+                && exclusions.stream()
+                        .noneMatch(
+                                pattern -> pattern.matcher(tableId.toString()).matches());
     }
 
     public Properties getJdbcProperties() {

@@ -17,27 +17,24 @@
 
 package io.yak.ops.connector.cdc.mysql.source.config;
 
+import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.TableSchema;
-import io.yak.ops.connector.base.metrics.TableMetrics;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.Objects;
-import java.util.Set;
-import java.util.regex.Pattern;
-
-
 import java.io.Serializable;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
-
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /** A factory to construct {@link MySqlSourceConfig}. */
 public class MySqlSourceConfigFactory implements Serializable {
@@ -252,8 +249,7 @@ public class MySqlSourceConfigFactory implements Serializable {
     }
 
     /** Whether the {@link MySqlSource} should output the transaction metadata events or not. */
-    public MySqlSourceConfigFactory includeTransactionMetadataEvents(
-            boolean includeTransactionMetadataEvents) {
+    public MySqlSourceConfigFactory includeTransactionMetadataEvents(boolean includeTransactionMetadataEvents) {
         this.includeTransactionMetadataEvents = includeTransactionMetadataEvents;
         return this;
     }
@@ -269,8 +265,7 @@ public class MySqlSourceConfigFactory implements Serializable {
      * binlog phase to reduce JobManager memory. Incompatible with {@link
      * #scanNewlyAddedTableEnabled(boolean)}; disabled by default.
      */
-    public MySqlSourceConfigFactory releaseSnapshotMetadataEnabled(
-            boolean releaseSnapshotMetadataEnabled) {
+    public MySqlSourceConfigFactory releaseSnapshotMetadataEnabled(boolean releaseSnapshotMetadataEnabled) {
         this.releaseSnapshotMetadataEnabled = releaseSnapshotMetadataEnabled;
         return this;
     }
@@ -359,7 +354,6 @@ public class MySqlSourceConfigFactory implements Serializable {
         return this;
     }
 
-
     // YakFlow-specific identity, prepared table schemas and bounded queue capacity.
     private final Map<TableId, TableSchema> schemas = new LinkedHashMap<>();
     private String topicPrefix;
@@ -437,9 +431,19 @@ public class MySqlSourceConfigFactory implements Serializable {
                 "table.include.list", String.join(",", includeTablesExcept(effectiveTables, excludeTableList)));
         if (dbzProperties != null) props.putAll(dbzProperties);
         return new MySqlSourceConfig(
-                hostname, port, username, password, serverIdRange.getStartServerId(),
-                topic, schemas, queueCapacity, connectionProperties, chunkKeyColumns, null,
-                false, sourceSettings(props, effectiveDatabases, effectiveTables));
+                hostname,
+                port,
+                username,
+                password,
+                serverIdRange.getStartServerId(),
+                topic,
+                schemas,
+                queueCapacity,
+                connectionProperties,
+                chunkKeyColumns,
+                null,
+                false,
+                sourceSettings(props, effectiveDatabases, effectiveTables));
     }
 
     /**
@@ -472,8 +476,7 @@ public class MySqlSourceConfigFactory implements Serializable {
         return factory.sourceSettings(new Properties(), List.of(), List.of());
     }
 
-    private SourceSettings sourceSettings(
-            Properties props, List<String> databases, List<String> tables) {
+    private SourceSettings sourceSettings(Properties props, List<String> databases, List<String> tables) {
         Properties jdbc = new Properties();
         if (jdbcProperties != null) jdbc.putAll(jdbcProperties);
         else jdbc.putAll(connectionProperties);
@@ -544,8 +547,7 @@ public class MySqlSourceConfigFactory implements Serializable {
         return buildHybrid(chunkSize, new TableMetrics());
     }
 
-    public MySqlSource buildHybrid(
-            int chunkSize, TableMetrics metrics) {
+    public MySqlSource buildHybrid(int chunkSize, TableMetrics metrics) {
         splitSize(chunkSize);
         if (!explicitStartupOptions) startupOptions(StartupOptions.initial());
         return MySqlSource.initial(createConfig(0), chunkSize, metrics, startupOptions);

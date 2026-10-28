@@ -13,8 +13,7 @@ public final class MySqlBinlogSplitAssigner implements MySqlSplitAssigner<MySqlB
     private MySqlBinlogSplit pending;
     private boolean assigned;
 
-    public MySqlBinlogSplitAssigner(
-            StartupOptions startupOptions, BinlogPendingSplitsState restored) {
+    public MySqlBinlogSplitAssigner(StartupOptions startupOptions, BinlogPendingSplitsState restored) {
         Objects.requireNonNull(startupOptions, "startupOptions");
         if (startupOptions.startupMode() != StartupMode.LATEST_OFFSET) {
             throw new UnsupportedOperationException("MySQL Binlog Source requires latest-offset startup");

@@ -37,11 +37,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
     private final MySqlSplitSerializer splitSerializer = MySqlSplitSerializer.INSTANCE;
     private final PendingSplitsStateSerializer stateSerializer = new PendingSplitsStateSerializer(splitSerializer);
 
-    private MySqlSource(
-            StartupOptions options,
-            MySqlSourceConfig config,
-            int chunkSize,
-            TableMetrics metrics) {
+    private MySqlSource(StartupOptions options, MySqlSourceConfig config, int chunkSize, TableMetrics metrics) {
         this.startupOptions = Objects.requireNonNull(options, "startupOptions");
         this.config = Objects.requireNonNull(config, "config");
         this.snapshotChunkSize = chunkSize;
@@ -53,7 +49,10 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
     }
 
     public static MySqlSource create(
-            MySqlSourceConfigFactory builder, StartupOptions startupOptions, int snapshotChunkSize, TableMetrics metrics) {
+            MySqlSourceConfigFactory builder,
+            StartupOptions startupOptions,
+            int snapshotChunkSize,
+            TableMetrics metrics) {
         Objects.requireNonNull(builder, "builder");
         Objects.requireNonNull(startupOptions, "startupOptions").requireSupported();
         builder.startupOptions(startupOptions);
@@ -129,8 +128,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
 
     private MySqlSourceEnumerator createEnumerator(
             SplitEnumeratorContext<MySqlSplit> context, PendingSplitsState checkpointState) {
-        return new MySqlSourceEnumerator(
-                startupOptions, context, config, snapshotChunkSize, checkpointState, metrics);
+        return new MySqlSourceEnumerator(startupOptions, context, config, snapshotChunkSize, checkpointState, metrics);
     }
 
     @Override
@@ -165,5 +163,4 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
                     "Keyless MySQL CDC is not executable until Binlog handoff and RETRACT are supported");
         }
     }
-
 }

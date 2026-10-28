@@ -18,7 +18,6 @@
 
 package io.yak.ops.core.api.connector.source;
 
-
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;

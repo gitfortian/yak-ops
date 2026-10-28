@@ -12,8 +12,8 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.Files;
 import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -22,8 +22,6 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +29,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.zip.CRC32;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Exclusive local checkpoint store for a single running job.
@@ -46,6 +46,7 @@ public final class FileCheckpointStore implements CompletedCheckpointStore {
     private static final int MAGIC = 0x59414B43; // YAKC
     /** One complete Source-to-Sink snapshot layout. Older formats are intentionally unsupported. */
     private static final int FORMAT_VERSION = 5;
+
     private static final int POINTER_VERSION = 6;
     private static final String CHECKPOINT_DIRECTORY = "checkpoints";
     private static final String METADATA_FILE = "_metadata";
@@ -186,8 +187,8 @@ public final class FileCheckpointStore implements CompletedCheckpointStore {
             latestCheckpointKnown = true;
         }
         if (checkpoint.checkpointId() <= lastCheckpointId) {
-            throw new IOException("Checkpoint ID must advance beyond the latest durable checkpoint: "
-                    + lastCheckpointId);
+            throw new IOException(
+                    "Checkpoint ID must advance beyond the latest durable checkpoint: " + lastCheckpointId);
         }
         byte[] payload;
         try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -237,8 +238,10 @@ public final class FileCheckpointStore implements CompletedCheckpointStore {
             discardSubsumedCheckpoints(checkpoint.checkpointId(), previousCheckpointId);
         } catch (IOException | RuntimeException cleanupFailure) {
             // A completed checkpoint must not become a failed one due to best-effort retention.
-            LOG.warn("Completed checkpoint retention cleanup failed, checkpointId={}",
-                    checkpoint.checkpointId(), cleanupFailure);
+            LOG.warn(
+                    "Completed checkpoint retention cleanup failed, checkpointId={}",
+                    checkpoint.checkpointId(),
+                    cleanupFailure);
         }
     }
 
@@ -246,7 +249,8 @@ public final class FileCheckpointStore implements CompletedCheckpointStore {
         if (checkpointId <= 0) {
             throw new IOException("Invalid checkpoint metadata ID");
         }
-        return directory.resolve(CHECKPOINT_DIRECTORY)
+        return directory
+                .resolve(CHECKPOINT_DIRECTORY)
                 .resolve("chk-" + checkpointId)
                 .resolve(METADATA_FILE);
     }
@@ -306,11 +310,7 @@ public final class FileCheckpointStore implements CompletedCheckpointStore {
                 channel.force(true);
             }
             try {
-                Files.move(
-                        temp,
-                        destination,
-                        StandardCopyOption.ATOMIC_MOVE,
-                        StandardCopyOption.REPLACE_EXISTING);
+                Files.move(temp, destination, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (AtomicMoveNotSupportedException failure) {
                 throw new IOException("Checkpoint storage does not support atomic publication", failure);
             }
@@ -607,8 +607,11 @@ public final class FileCheckpointStore implements CompletedCheckpointStore {
             canonical.append("|keygroups-murmur3-v1:").append(maxParallelism);
         }
         if (!definitionIdentity.isEmpty()) {
-            canonical.append("|task-definition-v1:").append(definitionIdentity.length())
-                    .append(':').append(definitionIdentity);
+            canonical
+                    .append("|task-definition-v1:")
+                    .append(definitionIdentity.length())
+                    .append(':')
+                    .append(definitionIdentity);
         }
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")

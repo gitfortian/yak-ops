@@ -201,7 +201,9 @@ public final class StreamingJobGraphGenerator {
                 throw new IllegalArgumentException("Stateful Sink requires a non-null writer state serializer");
             }
         }
-        FileCheckpointStore.graphSignature(streamGraph, configuration.get(PipelineOptions.MAX_PARALLELISM),
+        FileCheckpointStore.graphSignature(
+                streamGraph,
+                configuration.get(PipelineOptions.MAX_PARALLELISM),
                 configuration.get(CheckpointingOptions.DEFINITION_IDENTITY));
     }
 

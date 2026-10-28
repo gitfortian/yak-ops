@@ -18,7 +18,6 @@
 
 package io.yak.ops.core.api.connector.source;
 
-
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;

@@ -223,7 +223,8 @@ public final class ExecutionGraph {
         }
         try (FileCheckpointStore store = new FileCheckpointStore(Path.of(directory))) {
             return store.loadLatest(FileCheckpointStore.graphSignature(
-                            jobGraph.graph(), jobGraph.configuration().get(PipelineOptions.MAX_PARALLELISM),
+                            jobGraph.graph(),
+                            jobGraph.configuration().get(PipelineOptions.MAX_PARALLELISM),
                             jobGraph.configuration().get(CheckpointingOptions.DEFINITION_IDENTITY)))
                     .isPresent();
         } catch (IOException | RuntimeException notRestorable) {

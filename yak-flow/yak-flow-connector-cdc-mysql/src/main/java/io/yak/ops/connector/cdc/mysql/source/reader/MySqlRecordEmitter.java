@@ -1,13 +1,12 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
-import io.yak.ops.connector.cdc.mysql.source.utils.MySqlChangeEventIds;
-
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.RecordEmitter;
 import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitState;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitState;
+import io.yak.ops.connector.cdc.mysql.source.utils.MySqlChangeEventIds;
 import io.yak.ops.core.api.connector.source.ReaderOutput;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.data.ChangeEventId;
@@ -31,7 +30,8 @@ public final class MySqlRecordEmitter implements RecordEmitter<MySqlFetchedRecor
 
     public MySqlRecordEmitter(
             MySqlSourceReaderContext readerContext, MySqlSplitReader splits, TableMetrics metrics, String sourceId) {
-        this.schemaChanges = Objects.requireNonNull(readerContext, "readerContext").schemaChanges();
+        this.schemaChanges =
+                Objects.requireNonNull(readerContext, "readerContext").schemaChanges();
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         generation = metrics.generation();
         this.sourceId = Objects.requireNonNull(sourceId, "sourceId");
@@ -53,8 +53,7 @@ public final class MySqlRecordEmitter implements RecordEmitter<MySqlFetchedRecor
             var rows = prepared.output().rows();
             for (int ordinal = 0; ordinal < rows.size(); ordinal++) {
                 TableRecord row = rows.get(ordinal);
-                ChangeEventId identity = ChangeEventId.snapshot(
-                        sourceId, state.snapshotSplitId(), ordinal);
+                ChangeEventId identity = ChangeEventId.snapshot(sourceId, state.snapshotSplitId(), ordinal);
                 output.collect(row.withChangeEventId(identity));
                 metrics.read(generation, row.tableId(), false);
             }
@@ -68,9 +67,8 @@ public final class MySqlRecordEmitter implements RecordEmitter<MySqlFetchedRecor
                 : null;
         for (int index = 0; index < count; index++) {
             TableRecord row = event.rows().get(index);
-            ChangeEventId identity = eventPosition == null
-                    ? null
-                    : new ChangeEventId(sourceId, eventPosition, index, count);
+            ChangeEventId identity =
+                    eventPosition == null ? null : new ChangeEventId(sourceId, eventPosition, index, count);
             output.collect(identity == null ? row : row.withChangeEventId(identity));
             metrics.read(generation, row.tableId(), state.binlog());
         }

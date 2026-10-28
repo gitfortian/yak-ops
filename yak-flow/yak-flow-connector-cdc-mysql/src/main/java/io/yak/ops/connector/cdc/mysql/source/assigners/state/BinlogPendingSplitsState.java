@@ -33,8 +33,7 @@ public final class BinlogPendingSplitsState extends PendingSplitsState {
     public boolean equals(Object object) {
         if (this == object) return true;
         if (!(object instanceof BinlogPendingSplitsState other)) return false;
-        return splitAssigned == other.splitAssigned
-                && Objects.equals(pendingSplit, other.pendingSplit);
+        return splitAssigned == other.splitAssigned && Objects.equals(pendingSplit, other.pendingSplit);
     }
 
     @Override

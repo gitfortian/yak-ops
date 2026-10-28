@@ -3,13 +3,13 @@ package io.yak.ops.connector.cdc.mysql.source.utils;
 import io.yak.ops.connector.jdbc.database.dialect.JdbcDialect;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.LogicalTypeRoot;
+import io.yak.ops.core.types.TableSchema;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import io.yak.ops.core.types.TableSchema;
 import java.util.stream.Collectors;
 
 /** JDBC keyset boundaries whose ordering is determined by the source database. */
@@ -71,8 +71,7 @@ public final class StatementUtils {
      * PreparedStatement#setObject may narrow a MySQL BIGINT UNSIGNED parameter to a signed long.
      * Ported from Flink CDC StatementUtils#setSafeObject.
      */
-    public static void setSafeObject(PreparedStatement ps, int parameterIndex, Object value)
-            throws SQLException {
+    public static void setSafeObject(PreparedStatement ps, int parameterIndex, Object value) throws SQLException {
         if (value instanceof BigInteger) {
             BigInteger bigIntValue = (BigInteger) value;
             if (bigIntValue.compareTo(BigInteger.valueOf(Long.MAX_VALUE)) > 0
@@ -102,10 +101,8 @@ public final class StatementUtils {
         String projection = schema.columns().stream()
                 .map(column -> dialect.quoteIdentifier(column.name()))
                 .collect(Collectors.joining(", "));
-        StringBuilder sql = new StringBuilder("SELECT ")
-                .append(projection)
-                .append(" FROM ")
-                .append(dialect.qualifiedTable(table));
+        StringBuilder sql =
+                new StringBuilder("SELECT ").append(projection).append(" FROM ").append(dialect.qualifiedTable(table));
         if (!isFirstSplit || !isLastSplit) {
             sql.append(" WHERE ");
             if (!isFirstSplit) {

@@ -134,7 +134,15 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
 
     @Override
     public int hashCode() {
-        return Objects.hash(snapshotPlanned, totalSnapshotSplits, remainingSplits, assignedSplits,
-                finishedSplits, finishedSplitInfos, nextTableIndex, nextChunkIndex, nextChunkRange);
+        return Objects.hash(
+                snapshotPlanned,
+                totalSnapshotSplits,
+                remainingSplits,
+                assignedSplits,
+                finishedSplits,
+                finishedSplitInfos,
+                nextTableIndex,
+                nextChunkIndex,
+                nextChunkRange);
     }
 }

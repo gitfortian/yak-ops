@@ -46,17 +46,17 @@ public final class MySqlBinlogSplit extends MySqlSplit implements StreamSplit {
     }
 
     /** Restores an anchored initial split without a second wrapper type. */
-    public static MySqlBinlogSplit forPausedSnapshot(
-            DebeziumOffset low, byte[] schemaHistory) {
+    public static MySqlBinlogSplit forPausedSnapshot(DebeziumOffset low, byte[] schemaHistory) {
         return forInitialSnapshot().withAnchor(low, schemaHistory);
     }
 
     /** Builds the completed streaming split from its per-chunk high watermarks. */
     public static MySqlBinlogSplit forCompletedSnapshot(
-            DebeziumOffset startingOffset, byte[] schemaHistory,
-            DebeziumOffset highWatermark, List<FinishedSnapshotSplitInfo> finished) {
-        return new MySqlBinlogSplit(startingOffset, schemaHistory,
-                Phase.STREAMING, highWatermark, finished);
+            DebeziumOffset startingOffset,
+            byte[] schemaHistory,
+            DebeziumOffset highWatermark,
+            List<FinishedSnapshotSplitInfo> finished) {
+        return new MySqlBinlogSplit(startingOffset, schemaHistory, Phase.STREAMING, highWatermark, finished);
     }
 
     private MySqlBinlogSplit(
@@ -67,7 +67,8 @@ public final class MySqlBinlogSplit extends MySqlSplit implements StreamSplit {
             List<FinishedSnapshotSplitInfo> finishedSnapshotSplitInfos) {
         super(ID);
         this.offset = offset;
-        this.schemaHistory = Objects.requireNonNull(schemaHistory, "schemaHistory").clone();
+        this.schemaHistory =
+                Objects.requireNonNull(schemaHistory, "schemaHistory").clone();
         this.phase = Objects.requireNonNull(phase, "phase");
         this.finishedSnapshotSplitInfos =
                 List.copyOf(Objects.requireNonNull(finishedSnapshotSplitInfos, "finishedSnapshotSplitInfos"));
@@ -146,8 +147,7 @@ public final class MySqlBinlogSplit extends MySqlSplit implements StreamSplit {
         if (phase != Phase.BOOTSTRAP) {
             throw new IllegalStateException("Binlog low watermark is already anchored");
         }
-        return new MySqlBinlogSplit(Objects.requireNonNull(low, "low"), history,
-                Phase.PAUSED, null, List.of());
+        return new MySqlBinlogSplit(Objects.requireNonNull(low, "low"), history, Phase.PAUSED, null, List.of());
     }
 
     /** Resumes the suspended binlog when snapshot completion has been durably acknowledged. */
@@ -159,16 +159,15 @@ public final class MySqlBinlogSplit extends MySqlSplit implements StreamSplit {
             throw new IllegalArgumentException("No finished snapshot watermarks");
         }
         if (!finishedSnapshotSplitInfos.isEmpty()) {
-            if (!finishedSnapshotSplitInfos.equals(completed)
-                    || !Objects.equals(highWatermark, high)) {
+            if (!finishedSnapshotSplitInfos.equals(completed) || !Objects.equals(highWatermark, high)) {
                 throw new IllegalStateException("Suspended Binlog metadata conflicts with snapshot handoff");
             }
-            return new MySqlBinlogSplit(offset, schemaHistory,
-                    Phase.STREAMING, highWatermark, finishedSnapshotSplitInfos);
+            return new MySqlBinlogSplit(
+                    offset, schemaHistory, Phase.STREAMING, highWatermark, finishedSnapshotSplitInfos);
         }
         DebeziumOffset start = RecordUtils.getStartingOffsetOfBinlogSplit(completed);
-        return new MySqlBinlogSplit(start, schemaHistory, Phase.STREAMING,
-                Objects.requireNonNull(high, "high"), completed);
+        return new MySqlBinlogSplit(
+                start, schemaHistory, Phase.STREAMING, Objects.requireNonNull(high, "high"), completed);
     }
 
     /** Advances only after the emitted binlog event is acknowledged by the mailbox. */
@@ -176,8 +175,8 @@ public final class MySqlBinlogSplit extends MySqlSplit implements StreamSplit {
         if (phase != Phase.STREAMING) {
             throw new IllegalStateException("A suspended Binlog must not advance its offset");
         }
-        return new MySqlBinlogSplit(Objects.requireNonNull(next, "next"), history,
-                phase, highWatermark, finishedSnapshotSplitInfos);
+        return new MySqlBinlogSplit(
+                Objects.requireNonNull(next, "next"), history, phase, highWatermark, finishedSnapshotSplitInfos);
     }
 
     public MySqlBinlogSplit withProgress(DebeziumOffset next, byte[] history) {
@@ -193,8 +192,12 @@ public final class MySqlBinlogSplit extends MySqlSplit implements StreamSplit {
             return split;
         }
         if (split.phase == Phase.PAUSED && !split.finishedSnapshotSplitInfos.isEmpty()) {
-            return new MySqlBinlogSplit(split.offset, split.schemaHistory,
-                    Phase.STREAMING, split.highWatermark, split.finishedSnapshotSplitInfos);
+            return new MySqlBinlogSplit(
+                    split.offset,
+                    split.schemaHistory,
+                    Phase.STREAMING,
+                    split.highWatermark,
+                    split.finishedSnapshotSplitInfos);
         }
         throw new IllegalStateException("Snapshot handoff must complete before Binlog is resumed");
     }
@@ -207,14 +210,17 @@ public final class MySqlBinlogSplit extends MySqlSplit implements StreamSplit {
         if (split.phase == Phase.STANDALONE) {
             throw new IllegalStateException("Binlog-only sources do not use snapshot handoff");
         }
-        return new MySqlBinlogSplit(split.offset, split.schemaHistory,
-                Phase.PAUSED, split.highWatermark, split.finishedSnapshotSplitInfos);
+        return new MySqlBinlogSplit(
+                split.offset, split.schemaHistory, Phase.PAUSED, split.highWatermark, split.finishedSnapshotSplitInfos);
     }
 
     /** Used only by the source split serializer to reconstruct validated immutable state. */
     static MySqlBinlogSplit restore(
-            DebeziumOffset offset, byte[] history, Phase phase,
-            DebeziumOffset high, List<FinishedSnapshotSplitInfo> infos) {
+            DebeziumOffset offset,
+            byte[] history,
+            Phase phase,
+            DebeziumOffset high,
+            List<FinishedSnapshotSplitInfo> infos) {
         return new MySqlBinlogSplit(offset, history, phase, high, infos);
     }
 

@@ -1,16 +1,16 @@
 package io.yak.ops.connector.cdc.mysql.debezium.task;
 
 import io.debezium.embedded.Connect;
+import io.debezium.engine.DebeziumEngine;
+import io.debezium.engine.RecordChangeEvent;
+import io.debezium.engine.format.ChangeEventFormat;
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
 import io.yak.ops.connector.cdc.mysql.debezium.CheckpointOffsetBackingStore;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.debezium.task.context.StatefulTaskContext;
-import io.debezium.engine.DebeziumEngine;
-import io.debezium.engine.RecordChangeEvent;
-import io.debezium.engine.format.ChangeEventFormat;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
-import io.yak.ops.connector.cdc.mysql.source.utils.RecordUtils;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.utils.RecordUtils;
 import io.yak.ops.core.data.TableId;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -86,7 +86,8 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
                 .using((success, message, error) -> {
                     if (!success && !stopped) {
                         // Preserve the original driver exception instead of only reporting an engine stop.
-                        context.recordFailure(error != null
+                        context.recordFailure(
+                                error != null
                                         ? error
                                         : new IllegalStateException("Debezium MySQL connector failed: " + message));
                     }
@@ -96,7 +97,8 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
             try {
                 engine.run();
                 if (!stopped) {
-                    context.recordFailure(new IllegalStateException("Debezium MySQL Binlog engine stopped unexpectedly"));
+                    context.recordFailure(
+                            new IllegalStateException("Debezium MySQL Binlog engine stopped unexpectedly"));
                 }
             } catch (Throwable error) {
                 if (!stopped) {
@@ -122,7 +124,8 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
                     // completed snapshot offset. Earlier records must never anchor Hybrid.
                     if (RecordUtils.isHeartbeatEvent(source)) {
                         if (getSourceConfig().schemaEvolutionEnabled()
-                                && !bootstrapTables.containsAll(getSourceConfig().schemas().keySet())) {
+                                && !bootstrapTables.containsAll(
+                                        getSourceConfig().schemas().keySet())) {
                             throw new IllegalStateException(
                                     "MySQL CDC initial schema snapshot did not register all selected tables: "
                                             + getSourceConfig().schemas().keySet().stream()
@@ -132,7 +135,8 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
                         if (snapshotHistory().length == 0) {
                             throw new IllegalStateException("MySQL CDC initial schema snapshot has no Schema History");
                         }
-                        BinlogEvent anchor = Objects.requireNonNull(context.converter().convert(source), "snapshot heartbeat");
+                        BinlogEvent anchor =
+                                Objects.requireNonNull(context.converter().convert(source), "snapshot heartbeat");
                         enqueue(anchor);
                         lastQueuedOffset = anchor.offset();
                         awaitingSchemaSnapshot = false;

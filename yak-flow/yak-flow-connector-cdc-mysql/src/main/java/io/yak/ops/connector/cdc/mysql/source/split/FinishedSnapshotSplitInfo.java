@@ -73,9 +73,11 @@ public final class FinishedSnapshotSplitInfo implements FinishedSnapshotSplit<De
     public Long lowerInclusive() {
         return lowerInclusive;
     }
+
     public Long upperExclusive() {
         return upperExclusive;
     }
+
     @Override
     public DebeziumOffset highWatermark() {
         return highWatermark;
@@ -93,14 +95,17 @@ public final class FinishedSnapshotSplitInfo implements FinishedSnapshotSplit<De
     public String getSplitId() {
         return splitId;
     }
+
     public Object[] getSplitStart() {
         Object start = chunkRange != null ? chunkRange.start() : lowerInclusive;
         return start == null ? null : new Object[] {start};
     }
+
     public Object[] getSplitEnd() {
         Object end = chunkRange != null ? chunkRange.end() : upperExclusive;
         return end == null ? null : new Object[] {end};
     }
+
     public DebeziumOffset getHighWatermark() {
         return highWatermark;
     }

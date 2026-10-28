@@ -113,8 +113,8 @@ public final class MySqlChunkSplitter {
      * <p>The cursor identifies the next lower boundary, not a row identity or Reader
      * progress position. Non-unique key values stay within one half-open chunk.
      */
-    public MySqlSnapshotSplit planNext(
-            TableId table, int tableIndex, int chunkIndex, ChunkRange cursor) throws SQLException {
+    public MySqlSnapshotSplit planNext(TableId table, int tableIndex, int chunkIndex, ChunkRange cursor)
+            throws SQLException {
         if (cancelled || tableIndex < 0 || chunkIndex < 0 || chunkIndex >= MAX_CHUNKS_PER_TABLE) {
             throw new SQLException("MySQL typed chunk discovery is cancelled or exceeds its range limit");
         }

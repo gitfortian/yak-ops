@@ -17,9 +17,7 @@
 
 package io.yak.ops.connector.cdc.mysql.source.config;
 
-
 import java.io.Serializable;
-
 
 /**
  * This class defines a range of server id. The boundaries of the range are inclusive.
@@ -54,13 +52,12 @@ public class ServerIdRange implements Serializable {
     public int getServerId(int subTaskId) {
         if (subTaskId < 0) throw new IllegalArgumentException("Subtask ID must not be negative");
         if (subTaskId >= getNumberOfServerIds()) {
-            throw new IllegalArgumentException(
-                    String.format(
-                            "Subtask ID %s is out of server id range %s, "
-                                    + "please adjust the server id range to "
-                                    + "make the number of server id larger than "
-                                    + "the source parallelism.",
-                            subTaskId, this.toString()));
+            throw new IllegalArgumentException(String.format(
+                    "Subtask ID %s is out of server id range %s, "
+                            + "please adjust the server id range to "
+                            + "make the number of server id larger than "
+                            + "the source parallelism.",
+                    subTaskId, this.toString()));
         }
         return startServerId + subTaskId;
     }
@@ -90,12 +87,9 @@ public class ServerIdRange implements Serializable {
             String[] idArray = range.split("-");
             if (idArray.length != 2) {
                 throw new IllegalArgumentException(
-                        String.format(
-                                "The server id range should be syntax like '5400-5500', but got: %s",
-                                range));
+                        String.format("The server id range should be syntax like '5400-5500', but got: %s", range));
             }
-            return new ServerIdRange(
-                    parseServerId(idArray[0].trim()), parseServerId(idArray[1].trim()));
+            return new ServerIdRange(parseServerId(idArray[0].trim()), parseServerId(idArray[1].trim()));
         } else {
             int serverId = parseServerId(range);
             return new ServerIdRange(serverId, serverId);

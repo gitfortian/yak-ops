@@ -19,7 +19,6 @@
 package io.yak.ops.core.api.connector.source;
 
 import io.yak.ops.core.api.metrics.groups.SplitEnumeratorMetricGroup;
-
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
@@ -159,10 +158,7 @@ public interface SplitEnumeratorContext<SplitT extends SourceSplit> {
      * @param periodMillis the period between two invocations of the callable, in milliseconds.
      */
     <T> void callAsync(
-            Callable<T> callable,
-            BiConsumer<T, Throwable> handler,
-            long initialDelayMillis,
-            long periodMillis);
+            Callable<T> callable, BiConsumer<T, Throwable> handler, long initialDelayMillis, long periodMillis);
 
     /**
      * Invoke the given runnable in the source coordinator thread.

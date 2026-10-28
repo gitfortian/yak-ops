@@ -1,26 +1,25 @@
 package io.yak.ops.connector.cdc.mysql.source.reader;
 
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
-
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 import io.yak.ops.connector.cdc.base.source.reader.SchemaChangeHandler;
-import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitState;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
-import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsAckEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsReportEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsRequestEvent;
-import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitState;
 import io.yak.ops.core.api.connector.source.InputStatus;
 import io.yak.ops.core.api.connector.source.ReaderOutput;
 import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
-import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.core.configuration.ExecutionOptions;
+import io.yak.ops.core.data.TableRecord;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,7 +34,8 @@ import java.util.concurrent.CompletableFuture;
  * the Enumerator confirms receipt of their completion. The Binlog gate opens only through
  * a coordinator event after the snapshot handoff checkpoint completes.
  */
-public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBase<MySqlFetchedRecord, TableRecord, MySqlSplit, MySqlSplitState> {
+public final class MySqlSourceReader
+        extends SingleThreadMultiplexSourceReaderBase<MySqlFetchedRecord, TableRecord, MySqlSplit, MySqlSplitState> {
 
     private final MySqlSplitReader splits;
     private final SchemaChangeHandler schemaChanges;
@@ -48,10 +48,7 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
     private final Map<String, Long> finishedCheckpoint = new LinkedHashMap<>();
 
     public MySqlSourceReader(
-            MySqlSourceConfig config,
-            SourceReaderContext context,
-            TableMetrics metrics,
-            boolean initial) {
+            MySqlSourceConfig config, SourceReaderContext context, TableMetrics metrics, boolean initial) {
         this(
                 new MySqlSplitReader(config, metrics, context.getIndexOfSubtask()),
                 new MySqlSourceReaderContext(context),
@@ -90,9 +87,7 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
 
     @Override
     public final InputStatus pollNext(ReaderOutput<TableRecord> output) throws Exception {
-        return schemaChanges.tryCompleteSchemaChange()
-                ? super.pollNext(output)
-                : InputStatus.NOTHING_AVAILABLE;
+        return schemaChanges.tryCompleteSchemaChange() ? super.pollNext(output) : InputStatus.NOTHING_AVAILABLE;
     }
 
     @Override
@@ -109,7 +104,9 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
     @Override
     protected MySqlSplitState initializedState(MySqlSplit split) {
         MySqlSplitState state = MySqlSplitState.fromSplit(split);
-        if (resumeEvent != null && split instanceof MySqlBinlogSplit binlog && binlog.phase() != MySqlBinlogSplit.Phase.STANDALONE) {
+        if (resumeEvent != null
+                && split instanceof MySqlBinlogSplit binlog
+                && binlog.phase() != MySqlBinlogSplit.Phase.STANDALONE) {
             state.resume(resumeEvent.highWatermark(), resumeEvent.finishedSplits());
         }
         return state;
@@ -131,7 +128,8 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
             finishedUnacked.put(snapshot.splitId(), snapshot);
             finishedOffsets.put(
                     snapshot.splitId(),
-                    Objects.requireNonNull(snapshot.finished(), "Finished chunk has no watermark").highWatermark());
+                    Objects.requireNonNull(snapshot.finished(), "Finished chunk has no watermark")
+                            .highWatermark());
         }
         if (!finishedOffsets.isEmpty()) {
             context.sendSourceEventToCoordinator(new FinishedSnapshotSplitsReportEvent(finishedOffsets));
@@ -142,7 +140,8 @@ public final class MySqlSourceReader extends SingleThreadMultiplexSourceReaderBa
     private void reportFinishedSplits() {
         Map<String, DebeziumOffset> finishedOffsets = new LinkedHashMap<>();
         finishedUnacked.forEach((id, split) -> {
-            if (split.finished() != null) finishedOffsets.put(id, split.finished().highWatermark());
+            if (split.finished() != null)
+                finishedOffsets.put(id, split.finished().highWatermark());
         });
         if (!finishedOffsets.isEmpty()) {
             context.sendSourceEventToCoordinator(new FinishedSnapshotSplitsReportEvent(finishedOffsets));

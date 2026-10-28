@@ -19,8 +19,6 @@
 package io.yak.ops.core.api.connector.source;
 
 import io.yak.ops.core.api.common.state.CheckpointListener;
-
-
 import java.io.IOException;
 import java.util.List;
 
@@ -28,8 +26,7 @@ import java.util.List;
  * The interface for a split enumerator responsible for discovering the source splits, and assigning
  * them to the {@link SourceReader}.
  */
-public interface SplitEnumerator<SplitT extends SourceSplit, CheckpointT>
-        extends AutoCloseable, CheckpointListener {
+public interface SplitEnumerator<SplitT extends SourceSplit, CheckpointT> extends AutoCloseable, CheckpointListener {
 
     /**
      * Start the split enumerator.
