@@ -109,8 +109,8 @@ class CdcAuditTest(unittest.TestCase):
         source = self.sources / "ExampleIT.java"
         source.write_text(
             source.read_text(encoding="utf-8").replace(
-                "}\\n",
-                "  public <G extends Gauge<Long>> G metric(G gauge) { return gauge; }\\n}\\n",
+                "}\n",
+                "  public <G extends Gauge<Long>> G metric(G gauge) { return gauge; }\n}\n",
             ),
             encoding="utf-8",
         )

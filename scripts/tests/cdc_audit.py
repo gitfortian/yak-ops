@@ -37,7 +37,7 @@ def test_sources(test_root: Path, classname: str) -> list[Path]:
     result = [source]
     declaration = source.read_text(encoding="utf-8")
     base = re.search(
-        r"\\bclass\\s+" + re.escape(classname) + r"\\s*(?:<[^{}]+>\\s*)?extends\\s+(\\w+)",
+        r"\bclass\s+" + re.escape(classname) + r"\s*(?:<[^{}]+>\s*)?extends\s+(\w+)",
         declaration,
     )
     if base:
