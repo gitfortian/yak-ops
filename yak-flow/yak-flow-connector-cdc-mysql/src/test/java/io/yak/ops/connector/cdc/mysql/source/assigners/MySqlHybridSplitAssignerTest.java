@@ -165,6 +165,56 @@ class MySqlHybridSplitAssignerTest {
         assertEquals(state, restored.snapshotState(2));
     }
 
+    @Test
+    void metadataReleaseRequiresCompletedStreamingCheckpointAndRemainsRecoverable() throws Exception {
+        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
+        TableId table = new TableId("shop", null, "orders");
+        assigner.initializeTables(List.of(table), false, true);
+        var split = new MySqlSnapshotSplit("orders-0", table, null, null, null);
+        var low = new DebeziumOffset(
+                Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
+        var high = new DebeziumOffset(
+                Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 200L));
+        assigner.nextBinlog();
+        assigner.captureLow(low);
+        assigner.plan(List.of(split));
+        assigner.nextSnapshot();
+        assigner.finishSnapshot(finished(split, 200));
+        assigner.captureHigh(high);
+        assertTrue(assigner.onBinlogSplitMetaAssembled(assigner.getBinlogAssignmentGeneration()));
+
+        var handoffCheckpoint = assigner.snapshotState(10);
+        assigner.notifyCheckpointComplete(9);
+        assertEquals(HybridPendingSplitsState.Phase.HANDOFF, assigner.phase());
+        assigner.notifyCheckpointComplete(10);
+        assertEquals(HybridPendingSplitsState.Phase.STREAMING, assigner.phase());
+
+        // Reader's streaming split and Binlog schema history must first be durable.
+        var priorToRelease = assigner.snapshotState(11);
+        assertFalse(priorToRelease.getSnapshotPendingSplits().isSnapshotMetaReleased());
+        assigner.notifyCheckpointComplete(10);
+        assertFalse(assigner.isSnapshotMetaReleased());
+        assigner.notifyCheckpointComplete(11);
+        assertTrue(assigner.isSnapshotMetaReleased());
+        var released = assigner.snapshotState(12);
+        assertTrue(released.getSnapshotPendingSplits().isSnapshotMetaReleased());
+        assertEquals(0, released.getSnapshotPendingSplits().getFinishedSplitInfos().size());
+
+        var serializer = new PendingSplitsStateSerializer();
+        var restoredPrior = new MySqlHybridSplitAssigner(
+                StartupOptions.initial(),
+                (HybridPendingSplitsState) serializer.deserialize(
+                        serializer.getVersion(), serializer.serialize(priorToRelease)));
+        assertFalse(restoredPrior.isSnapshotMetaReleased());
+        var restoredReleased = new MySqlHybridSplitAssigner(
+                StartupOptions.initial(),
+                (HybridPendingSplitsState) serializer.deserialize(
+                        serializer.getVersion(), serializer.serialize(released)));
+        assertTrue(restoredReleased.isSnapshotMetaReleased());
+        assertEquals(HybridPendingSplitsState.Phase.STREAMING, restoredReleased.phase());
+        assertEquals(HybridPendingSplitsState.Phase.HANDOFF, handoffCheckpoint.phase());
+    }
+
     private static io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo finished(
             MySqlSnapshotSplit split, long position) {
         return new io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo(split.tableId(),
