@@ -54,6 +54,14 @@ public final class DebeziumSchemaHistorySnapshot {
             }
             position.removeAll();
             selected.position().forEach((key, value) -> position.set(key, JSON.valueToTree(value)));
+            // This is the schema in force BEFORE the requested Binlog event.
+            // Debezium can initialize its in-event row cursor to -1 on restore;
+            // history at the same file/pos with row=0 then compares AFTER it,
+            // causing recovery to skip the entire table definition.
+            Object startingPosition = selected.position().get("pos");
+            if (startingPosition instanceof Number number && number.longValue() > 0) {
+                position.put("pos", number.longValue() - 1L);
+            }
             result.write(JSON.writeValueAsBytes(json));
             result.write('\n');
         }
