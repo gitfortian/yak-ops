@@ -16,9 +16,13 @@ import io.yak.ops.core.types.TableSchema;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.sql.ResultSet;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -38,6 +42,7 @@ public final class MySqlChunkSplitter {
     private final JdbcConnectionProvider connections;
     private final JdbcDialect dialect;
     private final Map<TableId, TableSchema> schemas;
+    private MySqlSourceConfig sourceConfig;
     private final Map<TableId, String> chunkKeyColumns;
     private final int chunkSize;
     private final double distributionFactorLower;
@@ -55,6 +60,7 @@ public final class MySqlChunkSplitter {
                 chunkSize,
                 config.getDistributionFactorLower(),
                 config.getDistributionFactorUpper());
+        this.sourceConfig = Objects.requireNonNull(config, "config");
     }
 
     public MySqlChunkSplitter(
@@ -81,14 +87,60 @@ public final class MySqlChunkSplitter {
             double distributionFactorUpper) {
         this.connections = Objects.requireNonNull(connections, "connections");
         this.dialect = Objects.requireNonNull(dialect, "dialect");
-        this.schemas = Map.copyOf(Objects.requireNonNull(schemas, "schemas"));
-        this.chunkKeyColumns = Map.copyOf(Objects.requireNonNull(chunkKeyColumns, "chunkKeyColumns"));
+        this.schemas = new ConcurrentHashMap<>(Objects.requireNonNull(schemas, "schemas"));
+        this.chunkKeyColumns = new ConcurrentHashMap<>(Objects.requireNonNull(chunkKeyColumns, "chunkKeyColumns"));
+        this.sourceConfig = null;
         if (chunkSize < 1 || chunkSize > 100_000) {
             throw new IllegalArgumentException("MySQL snapshot chunk size must be between 1 and 100000");
         }
         this.chunkSize = chunkSize;
         this.distributionFactorLower = distributionFactorLower;
         this.distributionFactorUpper = distributionFactorUpper;
+    }
+
+    /**
+     * Discovers tables matching Debezium's effective database/table filters. Newly discovered
+     * table schemas and chunk keys are registered before any split for those tables is planned.
+     */
+    public List<TableId> discoverTables() throws SQLException {
+        if (sourceConfig == null) throw new IllegalStateException("Runtime table discovery requires MySqlSourceConfig");
+        List<TableId> configured = List.copyOf(sourceConfig.schemas().keySet());
+        LinkedHashSet<TableId> discovered = new LinkedHashSet<>();
+        try (Connection connection = connections.getConnection()) {
+            DatabaseMetaData metadata = connection.getMetaData();
+            var filter = sourceConfig.getTableFilter();
+            try (ResultSet result = metadata.getTables(null, null, "%", new String[] {"TABLE"})) {
+                while (result.next()) {
+                    String catalog = result.getString("TABLE_CAT");
+                    if (catalog == null) catalog = connection.getCatalog();
+                    String schema = result.getString("TABLE_SCHEM");
+                    String name = result.getString("TABLE_NAME");
+                    if (catalog == null || name == null) continue;
+                    io.debezium.relational.TableId debeziumId =
+                            new io.debezium.relational.TableId(catalog, schema, name);
+                    if (!filter.test(debeziumId)) continue;
+                    TableId table = new TableId(catalog, schema, name);
+                    TableSchema tableSchema =
+                            sourceConfig.discoverTable(connection, table, sourceConfig.chunkKeyColumns().get(table));
+                    schemas.put(table, tableSchema);
+                    chunkKeyColumns.put(table, sourceConfig.chunkKeyColumns().get(table));
+                    discovered.add(table);
+                }
+            }
+        }
+        if (discovered.isEmpty()) {
+            throw new SQLException("No MySQL tables match the configured database/table filters");
+        }
+        List<TableId> ordered = new ArrayList<>();
+        for (TableId table : configured) {
+            if (discovered.remove(table)) ordered.add(table);
+        }
+        discovered.stream()
+                .sorted(Comparator.comparing((TableId table) -> Objects.toString(table.catalog(), ""))
+                        .thenComparing(table -> Objects.toString(table.schema(), ""))
+                        .thenComparing(TableId::table))
+                .forEach(ordered::add);
+        return List.copyOf(ordered);
     }
 
     /**
