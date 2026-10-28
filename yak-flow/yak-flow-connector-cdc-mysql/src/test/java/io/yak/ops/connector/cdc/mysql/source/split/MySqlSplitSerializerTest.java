@@ -55,4 +55,20 @@ class MySqlSplitSerializerTest {
         return java.util.List.of(new FinishedSnapshotSplitInfo(
                 new io.yak.ops.core.data.TableId("shop", null, "orders"), "chunk", null, null, high));
     }
+    /** The repeated-serialization contract from Flink CDC's MySqlSplitSerializerTest. */
+    @Test
+    void testRepeatedSerializationCache() throws Exception {
+        var serializer = MySqlSplitSerializer.INSTANCE;
+        MySqlSnapshotSplit snapshot = new MySqlSnapshotSplit(
+                "repeated", new TableId("shop", null, "orders"), null, 100L, null);
+        byte[] original = serializer.serialize(snapshot);
+        for (int index = 0; index < 4; index++) {
+            assertArrayEquals(original, serializer.serialize(snapshot));
+            assertArrayEquals(
+                    original,
+                    serializer.serialize(
+                            serializer.deserialize(serializer.getVersion(), original)));
+        }
+    }
+
 }
