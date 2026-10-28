@@ -418,12 +418,10 @@ public class MySqlSourceConfigFactory implements Serializable {
             tables.add(Pattern.quote(t.catalog()) + "\\." + Pattern.quote(t.table()));
         });
         boolean dynamicTableDiscovery = scanNewlyAddedTableEnabled;
-        List<String> effectiveDatabases = databaseList != null
-                ? databaseList
-                : dynamicTableDiscovery ? List.of() : List.copyOf(dbs);
-        List<String> effectiveTables = tableList != null
-                ? tableList
-                : dynamicTableDiscovery ? List.of() : List.copyOf(tables);
+        List<String> effectiveDatabases =
+                databaseList != null ? databaseList : dynamicTableDiscovery ? List.of() : List.copyOf(dbs);
+        List<String> effectiveTables =
+                tableList != null ? tableList : dynamicTableDiscovery ? List.of() : List.copyOf(tables);
         Properties props = new Properties();
         props.setProperty("database.hostname", Objects.requireNonNull(hostname, "hostname"));
         props.setProperty("database.port", Integer.toString(port));

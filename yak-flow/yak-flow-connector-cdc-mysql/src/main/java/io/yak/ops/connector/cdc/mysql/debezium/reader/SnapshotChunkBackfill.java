@@ -95,8 +95,7 @@ public final class SnapshotChunkBackfill {
             if (records.keyless()) {
                 Object oldKey = before.row().getField(chunkColumn);
                 Object newKey = after.row().getField(chunkColumn);
-                if (oldKey == null || newKey == null
-                        || !sameChunkKey(oldKey, newKey)) {
+                if (oldKey == null || newKey == null || !sameChunkKey(oldKey, newKey)) {
                     throw new UnsupportedOperationException(
                             "Source without physical primary keys cannot change Chunk Key during Backfill");
                 }
@@ -143,10 +142,8 @@ public final class SnapshotChunkBackfill {
     private boolean sameChunkKey(Object left, Object right) {
         // Numeric JDBC and Debezium values can have different Java types and scales.
         // These two half-open comparisons are true together only for equivalent keys.
-        return SplitKeyUtils.splitKeyRangeContains(
-                        new Object[] {left}, new Object[] {right}, null)
-                && SplitKeyUtils.splitKeyRangeContains(
-                        new Object[] {right}, new Object[] {left}, null);
+        return SplitKeyUtils.splitKeyRangeContains(new Object[] {left}, new Object[] {right}, null)
+                && SplitKeyUtils.splitKeyRangeContains(new Object[] {right}, new Object[] {left}, null);
     }
 
     private void ensureOpen() {

@@ -121,8 +121,7 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
                     // Reordering within (LOW, HIGH] would cause overwritten snapshot
                     // images and cannot be repaired by a later checkpoint.
                     if (event.offset().compareTo(lastBackfillOffset) < 0) {
-                        throw new IllegalStateException(
-                                "MySQL Snapshot Backfill events are out of Binlog order");
+                        throw new IllegalStateException("MySQL Snapshot Backfill events are out of Binlog order");
                     }
                     lastBackfillOffset = event.offset();
                     if (backfillEvent(event, low, high, split.tableId(), buffer)) break;
@@ -144,11 +143,7 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
      * Returning true is equivalent to reaching the backfill BINLOG_END boundary.
      */
     static boolean backfillEvent(
-            BinlogEvent event,
-            DebeziumOffset low,
-            DebeziumOffset high,
-            TableId table,
-            SnapshotChunkBackfill buffer) {
+            BinlogEvent event, DebeziumOffset low, DebeziumOffset high, TableId table, SnapshotChunkBackfill buffer) {
         Objects.requireNonNull(event, "event");
         int highOrder = event.offset().compareTo(high);
         if (event.offset().compareTo(low) > 0 && highOrder <= 0) {

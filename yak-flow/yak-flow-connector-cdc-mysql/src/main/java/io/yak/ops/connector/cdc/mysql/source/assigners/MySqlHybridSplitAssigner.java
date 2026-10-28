@@ -67,9 +67,11 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
     }
 
     /** Initializes Snapshot table discovery and reconciles restored table state. */
-    public boolean initializeTables(List<TableId> tables, boolean scanNewlyAddedTablesEnabled, boolean releaseSnapshotMetadataEnabled) {
+    public boolean initializeTables(
+            List<TableId> tables, boolean scanNewlyAddedTablesEnabled, boolean releaseSnapshotMetadataEnabled) {
         this.releaseSnapshotMetadataEnabled = releaseSnapshotMetadataEnabled;
-        boolean started = snapshots.initializeTables(tables, scanNewlyAddedTablesEnabled, releaseSnapshotMetadataEnabled);
+        boolean started =
+                snapshots.initializeTables(tables, scanNewlyAddedTablesEnabled, releaseSnapshotMetadataEnabled);
         if (snapshots.getAssignerStatus() == AssignerStatus.NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED
                 && !snapshots.isSnapshotMetaReleased()) {
             refreshHighWatermark();
@@ -77,10 +79,21 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
         return started;
     }
 
-    public boolean isSnapshotMetaReleased() { return snapshots.isSnapshotMetaReleased(); }
-    public boolean isAssigningNewlyAddedTables() { return snapshots.getAssignerStatus() == AssignerStatus.NEWLY_ADDED_ASSIGNING; }
-    public boolean isNewlyAddedSnapshotFinished() { return snapshots.getAssignerStatus() == AssignerStatus.NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED; }
-    public boolean isNewlyAddedAssignmentFinished() { return snapshots.getAssignerStatus() == AssignerStatus.NEWLY_ADDED_ASSIGNING_FINISHED; }
+    public boolean isSnapshotMetaReleased() {
+        return snapshots.isSnapshotMetaReleased();
+    }
+
+    public boolean isAssigningNewlyAddedTables() {
+        return snapshots.getAssignerStatus() == AssignerStatus.NEWLY_ADDED_ASSIGNING;
+    }
+
+    public boolean isNewlyAddedSnapshotFinished() {
+        return snapshots.getAssignerStatus() == AssignerStatus.NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED;
+    }
+
+    public boolean isNewlyAddedAssignmentFinished() {
+        return snapshots.getAssignerStatus() == AssignerStatus.NEWLY_ADDED_ASSIGNING_FINISHED;
+    }
 
     @Override
     public Optional<MySqlSplit> getNext() {
@@ -352,18 +365,27 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
     }
 
     @Override
-    public AssignerStatus getAssignerStatus() { return snapshots.getAssignerStatus(); }
-
-    @Override
-    public void startAssignNewlyAddedTables() { snapshots.startAssignNewlyAddedTables(); }
-
-    @Override
-    public boolean noMoreSplits() {
-        return binlogAssigned && snapshots.planned() && snapshots.pending().isEmpty() && snapshots.remainingTables().isEmpty();
+    public AssignerStatus getAssignerStatus() {
+        return snapshots.getAssignerStatus();
     }
 
     @Override
-    public void onBinlogSplitUpdated() { snapshots.onBinlogSplitUpdated(); }
+    public void startAssignNewlyAddedTables() {
+        snapshots.startAssignNewlyAddedTables();
+    }
+
+    @Override
+    public boolean noMoreSplits() {
+        return binlogAssigned
+                && snapshots.planned()
+                && snapshots.pending().isEmpty()
+                && snapshots.remainingTables().isEmpty();
+    }
+
+    @Override
+    public void onBinlogSplitUpdated() {
+        snapshots.onBinlogSplitUpdated();
+    }
 
     @Override
     public void close() {
