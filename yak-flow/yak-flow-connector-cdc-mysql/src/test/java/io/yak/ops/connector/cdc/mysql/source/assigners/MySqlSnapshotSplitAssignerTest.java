@@ -178,6 +178,71 @@ class MySqlSnapshotSplitAssignerTest {
         assertThat(restored.nextTableIndex()).isEqualTo(1);
     }
 
+    @Test
+    void newlyAddedTablesRestoreThroughSnapshotFinishedAndBinlogUpdatedStates() {
+        MySqlSnapshotSplitAssigner initial = new MySqlSnapshotSplitAssigner();
+        initial.initializeTables(List.of(ORDERS), true, false);
+        MySqlSnapshotSplit original = split(ORDERS, "orders-0", null, null);
+        initial.plan(List.of(original));
+        initial.next();
+        initial.finishSnapshot(original.splitId(), offset(100));
+        initial.snapshotState(1);
+        initial.notifyCheckpointComplete(1);
+        assertThat(initial.getAssignerStatus()).isEqualTo(AssignerStatus.INITIAL_ASSIGNING_FINISHED);
+
+        MySqlSnapshotSplitAssigner restored = new MySqlSnapshotSplitAssigner(initial.snapshotState(2));
+        assertThat(restored.initializeTables(List.of(ORDERS, ITEMS), true, false)).isTrue();
+        assertThat(restored.getAssignerStatus()).isEqualTo(AssignerStatus.NEWLY_ADDED_ASSIGNING);
+        assertThat(restored.remainingTables()).containsExactly(ITEMS);
+
+        MySqlSnapshotSplit added = split(ITEMS, "items-0", null, null);
+        restored.plan(List.of(added));
+        assertThat(restored.next()).isEqualTo(added);
+        restored.finishSnapshot(added.splitId(), offset(200));
+        restored.snapshotState(3);
+        restored.notifyCheckpointComplete(3);
+        assertThat(restored.getAssignerStatus())
+                .isEqualTo(AssignerStatus.NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED);
+
+        restored.onBinlogSplitUpdated();
+        assertThat(restored.getAssignerStatus()).isEqualTo(AssignerStatus.NEWLY_ADDED_ASSIGNING_FINISHED);
+        assertThat(restored.finishedSplits()).hasSize(2);
+    }
+
+    @Test
+    void releasedSnapshotMetadataIsPersistedAndRestoredWithoutReconstruction() throws Exception {
+        MySqlSnapshotSplitAssigner assigner = new MySqlSnapshotSplitAssigner();
+        assigner.initializeTables(List.of(ORDERS), false, true);
+        MySqlSnapshotSplit only = split(ORDERS, "orders-0", null, null);
+        assigner.plan(List.of(only));
+        assigner.next();
+        assigner.finishSnapshot(only.splitId(), offset(200));
+        assigner.snapshotState(1);
+        assigner.notifyCheckpointComplete(1);
+        assigner.releaseSnapshotMetadata();
+
+        SnapshotPendingSplitsState released = assigner.snapshotState(2);
+        assertThat(released.isSnapshotMetaReleased()).isTrue();
+        assertThat(released.getFinishedSplitInfos()).isEmpty();
+        assertThat(released.getAlreadyProcessedTables()).containsExactly(ORDERS);
+
+        var hybrid = new io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState(
+                released,
+                true,
+                null,
+                io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState.Phase.STREAMING,
+                offset(1),
+                offset(200));
+        PendingSplitsStateSerializer serializer = new PendingSplitsStateSerializer();
+        var recovered = (io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState)
+                serializer.deserialize(serializer.getVersion(), serializer.serialize(hybrid));
+        SnapshotPendingSplitsState restored = recovered.getSnapshotPendingSplits();
+        assertThat(restored.isSnapshotMetaReleased()).isTrue();
+        assertThat(restored.getFinishedSplitInfos()).isEmpty();
+        assertThat(restored.getAlreadyProcessedTables()).containsExactly(ORDERS);
+        assertThat(new MySqlSnapshotSplitAssigner(restored).allFinished()).isTrue();
+    }
+
     private static MySqlSnapshotSplit split(TableId table, String id, Long low, Long high) {
         return new MySqlSnapshotSplit(id, table, low, high, null);
     }
