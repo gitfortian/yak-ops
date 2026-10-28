@@ -131,6 +131,33 @@ class MySqlSnapshotBackfillIT {
     }
 
     @Test
+    void realMysqlWideChunkLargerThanFourMiBCompletesWithoutDroppingImages() throws Exception {
+        execute("ALTER TABLE snapshot_contract MODIFY name VARCHAR(20000) NOT NULL");
+        String payload = "w".repeat(12_000);
+        try (var connection = MYSQL.metadata().connect();
+                var statement = connection.prepareStatement(
+                        "INSERT INTO snapshot_contract (id,name) VALUES (?,?)")) {
+            for (int index = 0; index < 300; index++) {
+                statement.setLong(1, index);
+                statement.setString(2, payload);
+                statement.addBatch();
+            }
+            statement.executeBatch();
+        }
+        var wideSchema = new TableSchema(
+                List.of(
+                        new Column("id", LogicalTypes.BIGINT.copy(false)),
+                        new Column("name", LogicalTypes.varchar(20_000).copy(false))),
+                List.of("id"));
+        try (MySqlSnapshotSplitReadTask reader = new MySqlSnapshotSplitReadTask(config(wideSchema), 0)) {
+            MySqlSnapshotSplit prepared = reader.read(split(null, null));
+            assertThat(prepared.output().rows()).hasSize(300);
+            assertThat(prepared.output().rows())
+                    .allSatisfy(row -> assertThat(row.row().getString(1)).isEqualTo(payload));
+        }
+    }
+
+    @Test
     void failedMidChunkCollectionDoesNotCheckpointFinishedFenceAndCanReplay() throws Exception {
         execute("INSERT INTO snapshot_contract VALUES (1,'first'),(2,'second')");
         var config = config();
@@ -224,6 +251,10 @@ class MySqlSnapshotBackfillIT {
     }
 
     private static MySqlSourceConfig config() {
+        return config(SCHEMA);
+    }
+
+    private static MySqlSourceConfig config(TableSchema schema) {
         var database = MYSQL.metadata();
         return MySqlSource.builder()
                 .hostname(database.host())
@@ -233,7 +264,7 @@ class MySqlSnapshotBackfillIT {
                 .serverId(23_400)
                 .topicPrefix("yak-snapshot-contract")
                 .connectionProperties(Map.of("useSSL", "false", "allowPublicKeyRetrieval", "true"))
-                .table(TABLE, SCHEMA)
+                .table(TABLE, schema)
                 .buildHybrid(32)
                 .config();
     }
