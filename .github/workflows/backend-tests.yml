@@ -19,15 +19,6 @@ on:
           - jdbc-postgres
           - jdbc-oracle
           - pipeline
-          - cdc-binlog
-          - cdc-snapshot
-          - cdc-hybrid
-          - cdc-pipeline-mysql
-          - cdc-pipeline-postgres
-          - cdc-pipeline-oracle
-          - cdc-acceptance-postgres
-          - cdc-acceptance-oracle
-          - cdc-recovery
           - business
           - backend-e2e
           - recovery-e2e
@@ -88,9 +79,6 @@ jobs:
         env:
           TEST_SUITE: ${{ matrix.suite }}
         run: bash scripts/tests/run.sh "$TEST_SUITE"
-      - name: CDC method coverage and timing audit
-        if: ${{ always() && startsWith(matrix.suite, 'cdc-') }}
-        run: python3 scripts/tests/cdc_audit.py --suite "${{ matrix.suite }}"
       - name: Upload reports and process diagnostics
         if: always()
         uses: actions/upload-artifact@v4

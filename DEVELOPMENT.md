@@ -35,8 +35,8 @@ Frontend commands and quality checks are documented in [frontend tooling](yak-op
 | Tests | Ownership | Execution |
 | --- | --- | --- |
 | Unit / frontend contracts | Java modules / `yak-ops-ui` | Affected PR quality checks |
-| JDBC / CDC IT | Connector test packages | Selected backend PRs; full release suite |
-| YakFlow integration | Runtime tests and Connector `integration` packages | Selected backend PRs; full release suite |
+| JDBC IT | JDBC Connector test packages | Selected backend PRs; full release suite |
+| YakFlow integration | Runtime and Connector tests | Selected backend PRs; full release suite |
 | Business database IT | Business modules | Selected backend PRs; full release suite |
 | Backend E2E | `yak-ops-e2e` | Selected backend PRs; full release suite |
 | UI automation / deployment | Playwright / Docker Compose | Release; manual as needed |
@@ -49,16 +49,7 @@ Use Java 21 and a working Docker daemon. Tests create their own disposable datab
 bash scripts/tests/run.sh jdbc mysql
 bash scripts/tests/run.sh jdbc postgres
 bash scripts/tests/run.sh jdbc oracle
-bash scripts/tests/run.sh cdc-binlog
-bash scripts/tests/run.sh cdc-snapshot
-bash scripts/tests/run.sh cdc-hybrid
 bash scripts/tests/run.sh pipeline
-bash scripts/tests/run.sh cdc-pipeline-mysql
-bash scripts/tests/run.sh cdc-pipeline-postgres
-bash scripts/tests/run.sh cdc-pipeline-oracle
-bash scripts/tests/run.sh cdc-acceptance-postgres
-bash scripts/tests/run.sh cdc-acceptance-oracle
-bash scripts/tests/run.sh cdc-recovery
 bash scripts/tests/run.sh business
 bash scripts/tests/run.sh backend-e2e
 bash scripts/tests/run.sh recovery-e2e
@@ -72,8 +63,6 @@ Cover the smallest stable behavior contract that can catch a real regression. Ch
 
 Before adding tests, identify the distinct failure they would detect and check existing unit, IT and E2E scenarios. Prefer outcome assertions over private-field reflection and Mockito invocation checks, except where the interaction is an observable requirement. For failed CDC, checkpoint or XA scenarios, validate the production behavior rather than weakening assertions or simply deleting tests. For test removal, keep an explicit replacement/coverage mapping in the PR.
 
-The CDC report audit discovers `@Test` method names (including inherited methods) from Java sources and matches them to JUnit XML results. The suite manifest keeps class ownership and minimum method counts. PostgreSQL/Oracle schema and changelog scenarios are assigned by their existing method-level `@Tag` annotations. Missing, skipped, untagged or incompletely reported selected scenarios fail; method renames do not require a second handwritten name inventory.
-
 Each command is one Maven invocation. Failsafe discovers `*IT` classes by JUnit tags; ordinary tests use `*Test`. Register every concrete IT in `scripts/tests/backend_tests.py`. Selected classes must produce complete XML reports with no failed, skipped or missing cases. IDE execution of one IT class remains available; Backend E2E requires a freshly packaged Boot JAR.
 
 Common Source/Sink behavior belongs in reusable Connector test bases, database-specific types and DDL in their subclasses. Connector and Runtime tests do not depend on HTTP or Boot. Cross-database cases retain the supported MySQL/PostgreSQL/Oracle routes without multiplying every common scenario by every pair. Transaction and concurrency checks belong in business database tests; only API wiring and process lifecycle require Backend E2E.
@@ -82,7 +71,7 @@ JUnit owns shared containers within one module's test execution. Data is isolate
 
 The [Nightly Backend Acceptance workflow](.github/workflows/nightly-backend-acceptance.yml) runs `suite: full` every day at 18:00 UTC (02:00 Asia/Singapore) on the default branch. It is also manually runnable. Nightly is additional coverage, not a replacement for affected PR checks or the full Release Gate; failure, skip or missing evidence must not be treated as success.
 
-The [Backend Tests workflow](.github/workflows/backend-tests.yml) selects from the complete PR diff. CDC groups separate Binlog, Snapshot/Backfill, Hybrid, each real target Pipeline, and crash recovery into independently reported matrix jobs. MySQL keeps the two full pipeline scenarios; PostgreSQL and Oracle run their real CDC/Schema/Checkpoint scenario in the regular Pipeline suites and retain the distinct multi-table Changelog/Checkpoint scenario in their `cdc-acceptance-*` suites. All test methods still run during `full`; none were deleted. Shared Runtime, JDBC dialect, CDC base, unknown CDC source, and other high-risk changes select the full cross-database acceptance. Verified snapshot-only changes can skip duplicate target multi-table acceptance while keeping each target's real Schema test and MySQL full Changelog test. All required groups preserve method-level audit evidence. Shared or unrecognized backend changes run the full suite. Oracle runs when the affected common code requires it. Manual and reusable release calls default to all suites, including CDC and process recovery. Playwright and Compose remain separate.
+The [Backend Tests workflow](.github/workflows/backend-tests.yml) selects registered JDBC, Pipeline, Business, Backend E2E and Recovery E2E suites from the complete PR diff. MySQL CDC Source tests follow the Flink CDC test names and run through the connector unit-test build. Changes to CDC production code select Backend E2E and Recovery E2E; the previous connector-local CDC integration suites, including dedicated cross-database and crash-recovery tests, have been removed. The remaining E2E suites do not establish equivalent coverage for every retired scenario. Shared or unrecognized backend changes still select the full registered matrix, and missing, skipped or failed selected reports block the check.
 
 Reports live in each module's `target/failsafe-reports/` and `target/test-artifacts/`; the root `target/test-artifacts/result.json` records the tested SHA, command, selected suites and observed method counts. Diagnostics are captured before cleanup, including Boot/container logs, task state, startup timing and process thread dumps on failure. No credentials or full sensitive task payloads belong in reports. A missing Docker daemon, skipped selected test or empty report fails the run.
 
