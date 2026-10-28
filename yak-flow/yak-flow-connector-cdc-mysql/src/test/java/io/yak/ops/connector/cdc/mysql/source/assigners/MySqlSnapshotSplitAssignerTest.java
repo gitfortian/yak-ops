@@ -243,6 +243,47 @@ class MySqlSnapshotSplitAssignerTest {
         assertThat(new MySqlSnapshotSplitAssigner(restored).allFinished()).isTrue();
     }
 
+    @Test
+    void staticSnapshotRestoreRejectsCaptureChangesRatherThanDroppingPendingRows() {
+        MySqlSnapshotSplitAssigner source = new MySqlSnapshotSplitAssigner();
+        source.initializeTables(List.of(ORDERS), false, false);
+        source.plan(List.of(split(ORDERS, "orders-0", null, null)));
+        SnapshotPendingSplitsState durable = source.snapshotState(20);
+
+        MySqlSnapshotSplitAssigner removed = new MySqlSnapshotSplitAssigner(durable);
+        assertThatThrownBy(() -> removed.initializeTables(List.of(ITEMS), false, false))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("table set differs");
+        MySqlSnapshotSplitAssigner newlyAdded = new MySqlSnapshotSplitAssigner(durable);
+        assertThatThrownBy(() -> newlyAdded.initializeTables(List.of(ORDERS, ITEMS), false, false))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("table set differs");
+
+        MySqlSnapshotSplitAssigner unchanged = new MySqlSnapshotSplitAssigner(durable);
+        assertThat(unchanged.initializeTables(List.of(ORDERS), false, false)).isFalse();
+        assertThat(unchanged.next().splitId()).isEqualTo("orders-0");
+    }
+
+    @Test
+    void completedCheckpointCanAdvanceAssignerStatusOnlyAfterDurableCompletion() {
+        MySqlSnapshotSplitAssigner source = new MySqlSnapshotSplitAssigner();
+        source.initializeTables(List.of(ORDERS), false, false);
+        source.plan(List.of(split(ORDERS, "orders-0", null, null)));
+        source.next();
+        source.finishSnapshot("orders-0", offset(250));
+        SnapshotPendingSplitsState pendingCheckpoint = source.snapshotState(41);
+        source.notifyCheckpointComplete(40);
+        assertThat(source.getAssignerStatus()).isEqualTo(AssignerStatus.INITIAL_ASSIGNING);
+        source.notifyCheckpointComplete(41);
+        assertThat(source.getAssignerStatus()).isEqualTo(AssignerStatus.INITIAL_ASSIGNING_FINISHED);
+
+        // The persisted state was taken before the coordinator's completion callback.
+        // Restore from that completed checkpoint and reconcile the durable split metadata.
+        MySqlSnapshotSplitAssigner restored = new MySqlSnapshotSplitAssigner(pendingCheckpoint);
+        restored.initializeTables(List.of(ORDERS), false, false);
+        assertThat(restored.getAssignerStatus()).isEqualTo(AssignerStatus.INITIAL_ASSIGNING_FINISHED);
+    }
+
     private static MySqlSnapshotSplit split(TableId table, String id, Long low, Long high) {
         return new MySqlSnapshotSplit(id, table, low, high, null);
     }

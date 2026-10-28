@@ -70,6 +70,69 @@ class PendingSplitsStateSerializerTest {
                 .isInstanceOf(IOException.class);
     }
 
+    @Test
+    void checksumProtectsTheEntireEnumeratorCheckpointAndRejectsMismatchedVersion() throws Exception {
+        TableId table = new TableId("shop", null, "orders");
+        MySqlSnapshotSplit pending = new MySqlSnapshotSplit("orders-0", table, 1L, 100L, null);
+        SnapshotPendingSplitsState snapshot = new SnapshotPendingSplitsState(
+                false, 1, List.of(pending), Map.of(), Set.of(), List.of(), 0, 0, null,
+                List.of(), List.of(table),
+                io.yak.ops.connector.cdc.mysql.source.assigners.AssignerStatus.INITIAL_ASSIGNING,
+                true, true, false);
+        HybridPendingSplitsState original = new HybridPendingSplitsState(
+                snapshot, true, null, HybridPendingSplitsState.Phase.BOOTSTRAP, null, null);
+        byte[] protectedState = serializer.serialize(original);
+        assertThat(serializer.getVersion()).isEqualTo(11);
+        assertThat(serializer.deserialize(11, protectedState)).isEqualTo(original);
+
+        byte[] changed = protectedState.clone();
+        changed[16] ^= 0x01;
+        assertThatThrownBy(() -> serializer.deserialize(11, changed))
+                .isInstanceOf(IOException.class).hasMessageContaining("checksum");
+        byte[] damagedTail = protectedState.clone();
+        damagedTail[damagedTail.length - 1] ^= 0x01;
+        assertThatThrownBy(() -> serializer.deserialize(11, damagedTail))
+                .isInstanceOf(IOException.class).hasMessageContaining("checksum");
+        assertThatThrownBy(() -> serializer.deserialize(10, protectedState))
+                .isInstanceOf(IOException.class);
+    }
+
+    @Test
+    void versionTenCheckpointRestoresWithoutChecksumAndUpgradesOnNextWrite() throws Exception {
+        TableId table = new TableId("shop", null, "orders");
+        MySqlSnapshotSplit split = new MySqlSnapshotSplit("orders-0", table, null, null, null);
+        SnapshotPendingSplitsState snapshot = new SnapshotPendingSplitsState(
+                false, 1, List.of(split), Map.of(), Set.of(), List.of(), 0, 0, null,
+                List.of(), List.of(table),
+                io.yak.ops.connector.cdc.mysql.source.assigners.AssignerStatus.INITIAL_ASSIGNING,
+                true, true, false);
+        HybridPendingSplitsState original = new HybridPendingSplitsState(
+                snapshot, true, null, HybridPendingSplitsState.Phase.BOOTSTRAP, null, null);
+        // Version 11 intentionally leaves the old v10 payload unchanged, adding only CRC32C.
+        byte[] version11 = serializer.serialize(original);
+        byte[] version10 = Arrays.copyOf(version11, version11.length - Integer.BYTES);
+        HybridPendingSplitsState restored =
+                (HybridPendingSplitsState) serializer.deserialize(10, version10);
+        assertThat(restored).isEqualTo(original);
+        assertThat(serializer.deserialize(11, serializer.serialize(restored))).isEqualTo(original);
+    }
+
+    @Test
+    void versionNineLegacyCheckpointUsesOriginalFieldsWithoutV10Extension() throws Exception {
+        SnapshotPendingSplitsState snapshot = new SnapshotPendingSplitsState(
+                true, 0, List.of(), Map.of(), Set.of(), List.of(), 0, 0, null);
+        HybridPendingSplitsState original = new HybridPendingSplitsState(
+                snapshot, true, null, HybridPendingSplitsState.Phase.BOOTSTRAP, null, null);
+        byte[] modern = serializer.serialize(original);
+        // The v10 extension added two empty table-list counts, one assigner status and
+        // three state flags (15 bytes); v11 appends another 4 bytes of checksum.
+        byte[] legacyV9 = Arrays.copyOf(modern, modern.length - 4 - 15);
+        HybridPendingSplitsState restored =
+                (HybridPendingSplitsState) serializer.deserialize(9, legacyV9);
+        assertThat(restored).isEqualTo(original);
+        assertThat(serializer.deserialize(11, serializer.serialize(restored))).isEqualTo(original);
+    }
+
     private PendingSplitsState roundTrip(PendingSplitsState state) throws IOException {
         byte[] bytes = serializer.serialize(state);
         return serializer.deserialize(serializer.getVersion(), bytes);

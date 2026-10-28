@@ -126,6 +126,15 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
         }
         Set<TableId> known = knownTables();
         LinkedHashSet<TableId> current = new LinkedHashSet<>(capturedTables);
+        // Flink CDC distinguishes table discovery from checkpoint recovery. A static source
+        // must not reinterpret an in-flight checkpoint against a different capture set:
+        // dropping the old work or ignoring newly configured tables could silently lose rows.
+        // Explicitly enabled dynamic-table discovery owns those changes below.
+        if (!scanNewlyAddedTablesEnabled && !known.equals(current)) {
+            throw new IllegalStateException(
+                    "Restored MySQL Snapshot checkpoint table set differs from the configured capture set; "
+                            + "enable scan newly added tables or restore the original source definition");
+        }
         LinkedHashSet<TableId> removed = new LinkedHashSet<>(known);
         removed.removeAll(current);
         removeTablesNoLongerCaptured(removed);

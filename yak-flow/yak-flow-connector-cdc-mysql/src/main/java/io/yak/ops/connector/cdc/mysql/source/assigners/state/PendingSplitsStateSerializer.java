@@ -15,6 +15,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.zip.CRC32C;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -32,10 +35,14 @@ import java.util.Set;
  * while pending, so an interrupted latest-offset reader cannot accidentally seek to NOW.
  *
  * <p>The on-disk format intentionally differs from earlier YakFlow nested enumerator
- * frames. Old checkpoints are rejected rather than reinterpreted.
+ * frames. Versions 9 and 10 remain readable using their original layout; version 11
+ * adds a corruption checksum without changing the Flink-style state ownership contract.
+ * Flink CDC 3.7's numeric versions (5/6 for pending state, 4 for splits) are not wire-compatible
+ * with YakFlow's serialized Debezium 2.7 offset and typed Chunk representation.
  */
 public final class PendingSplitsStateSerializer implements SimpleVersionedSerializer<PendingSplitsState> {
-    private static final int VERSION = 10;
+    private static final int VERSION = 11;
+    private static final int VERSION_WITHOUT_CHECKSUM = 10;
     private static final int PREVIOUS_VERSION = 9;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final int MAX_SPLITS = 10_000;
@@ -75,18 +82,39 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
                         "Unsupported pending splits state: " + state.getClass().getName());
             }
             out.flush();
-            if (buffer.size() > MAX_BYTES) {
+            // Version 11 appends CRC32C over the entire previous v10 body. The state kind,
+            // nested split format, high/low offsets and Snapshot progress are protected.
+            // Never silently reinterpret a damaged state as an older version.
+            if (buffer.size() > MAX_BYTES - Integer.BYTES) {
                 throw new IOException("Oversized MySQL enumerator checkpoint");
             }
+            byte[] body = buffer.toByteArray();
+            CRC32C checksum = new CRC32C();
+            checksum.update(body, 0, body.length);
+            out.writeInt((int) checksum.getValue());
+            out.flush();
             return buffer.toByteArray();
         }
     }
 
     @Override
     public PendingSplitsState deserialize(int version, byte[] bytes) throws IOException {
-        if ((version != VERSION && version != PREVIOUS_VERSION)
+        if ((version != VERSION && version != VERSION_WITHOUT_CHECKSUM && version != PREVIOUS_VERSION)
                 || bytes == null || bytes.length < Integer.BYTES * 2 || bytes.length > MAX_BYTES) {
             throw new IOException("Unsupported MySQL pending splits checkpoint format: " + version);
+        }
+        if (version == VERSION) {
+            if (bytes.length < Integer.BYTES * 3) {
+                throw new IOException("Truncated checksummed MySQL pending splits checkpoint");
+            }
+            int payloadLength = bytes.length - Integer.BYTES;
+            int expectedChecksum = ByteBuffer.wrap(bytes, payloadLength, Integer.BYTES).getInt();
+            CRC32C checksum = new CRC32C();
+            checksum.update(bytes, 0, payloadLength);
+            if ((int) checksum.getValue() != expectedChecksum) {
+                throw new IOException("MySQL pending splits checkpoint checksum mismatch");
+            }
+            bytes = Arrays.copyOf(bytes, payloadLength);
         }
         try (var in = new DataInputStream(new ByteArrayInputStream(bytes))) {
             int splitVersion = in.readInt();
@@ -188,7 +216,7 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         int nextChunk = in.readInt();
         ChunkRange typedCursor = ChunkRangeStateSerializer.read(in);
         SnapshotPendingSplitsState snapshot;
-        if (version >= VERSION) {
+        if (version >= VERSION_WITHOUT_CHECKSUM) {
             List<TableId> alreadyProcessedTables = readTableIds(in);
             List<TableId> remainingTables = readTableIds(in);
             AssignerStatus status;
