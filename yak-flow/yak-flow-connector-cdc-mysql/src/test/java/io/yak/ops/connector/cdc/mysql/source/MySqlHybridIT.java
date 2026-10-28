@@ -308,7 +308,6 @@ class MySqlHybridIT {
         private final SplitEnumerator<MySqlSplit,PendingSplitsState> enumerator;
         private final JdbcOutputFormat output;
         private final List<TableRecord> observed = new ArrayList<>();
-        private final Set<String> checkpointedPreparation = new java.util.HashSet<>();
         private long checkpoint;
 
         private Harness(Fixture fixture, Saved saved) throws Exception {
@@ -336,19 +335,6 @@ class MySqlHybridIT {
         }
         private HybridPendingSplitsState state() throws Exception { return (HybridPendingSplitsState) enumerator.snapshotState(checkpoint+1); }
         private boolean streaming() throws Exception { return state().phase()==HybridPendingSplitsState.Phase.STREAMING; }
-        private boolean hasPreparedOutput() throws Exception {
-            for(var reader:readers) for(var split:reader.snapshotState(checkpoint+1)) {
-                if(split instanceof MySqlSnapshotSplit snapshot && snapshot.output()!=null) return true;
-            }
-            return false;
-        }
-        private boolean needsPreparationCheckpoint() throws Exception {
-            for(var reader:readers) for(var split:reader.snapshotState(checkpoint+1)) {
-                if(split instanceof MySqlSnapshotSplit snapshot && snapshot.output()!=null
-                        && !checkpointedPreparation.contains(snapshot.splitId())) return true;
-            }
-            return false;
-        }
         private Saved checkpoint() throws Exception {
             long id=++checkpoint;
             List<List<byte[]>> states=new ArrayList<>();
@@ -356,7 +342,6 @@ class MySqlHybridIT {
                 List<byte[]> encoded=new ArrayList<>();
                 for(var split:reader.snapshotState(id)) {
                     encoded.add(fixture.source.getSplitSerializer().serialize(split));
-                    if(split instanceof MySqlSnapshotSplit snapshot && snapshot.output()!=null) checkpointedPreparation.add(snapshot.splitId());
                 }
                 states.add(List.copyOf(encoded));
             }
@@ -377,8 +362,7 @@ class MySqlHybridIT {
                 output.flush();
                 while(!events.isEmpty()) events.removeFirst().run();
                 if(condition.met()) return;
-                if(checkpointAutomatically && (needsPreparationCheckpoint()
-                        || state().phase()==HybridPendingSplitsState.Phase.HANDOFF)) checkpoint();
+                if(checkpointAutomatically && state().phase()==HybridPendingSplitsState.Phase.HANDOFF) checkpoint();
                 Thread.sleep(10);
             }
             throw new AssertionError("Hybrid condition timed out; phase="+state().phase()+", rows="+observed.size());
