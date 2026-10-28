@@ -59,7 +59,11 @@ public final class SnapshotSplitReader implements AutoCloseable {
     private long batchId;
 
     public SnapshotSplitReader(MySqlSourceConfig config) {
-        this(config::openSnapshotConnection, JdbcDialects.forUrl("jdbc:mysql:"), config.schemas(), config.getFetchSize());
+        this(
+                config::openSnapshotConnection,
+                JdbcDialects.forUrl("jdbc:mysql:"),
+                config.schemas(),
+                config.getFetchSize());
     }
 
     public SnapshotSplitReader(
