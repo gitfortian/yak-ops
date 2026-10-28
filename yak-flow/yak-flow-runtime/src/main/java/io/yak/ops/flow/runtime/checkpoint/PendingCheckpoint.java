@@ -14,6 +14,14 @@ import java.util.Set;
  */
 public final class PendingCheckpoint {
 
+    /** The task acknowledgement result, following Flink's PendingCheckpoint. */
+    public enum TaskAcknowledgeResult {
+        SUCCESS, // successful acknowledge of the task
+        DUPLICATE, // acknowledge message is a duplicate
+        UNKNOWN, // unknown task acknowledged
+        DISCARDED // pending checkpoint has been discarded
+    }
+
     public enum Status {
         PENDING,
         PERSISTED,
@@ -24,6 +32,7 @@ public final class PendingCheckpoint {
 
     private final long checkpointId;
     private final Set<CheckpointSnapshot.OperatorSubtask> notYetAcknowledgedTasks;
+    private final Set<CheckpointSnapshot.OperatorSubtask> acknowledgedTasks = new HashSet<>();
     private Status status = Status.PENDING;
 
     public PendingCheckpoint(long checkpointId, Set<CheckpointSnapshot.OperatorSubtask> tasksToAcknowledge) {
@@ -42,7 +51,7 @@ public final class PendingCheckpoint {
         }
     }
 
-    public long checkpointId() {
+    public long getCheckpointID() {
         return checkpointId;
     }
 
@@ -50,7 +59,7 @@ public final class PendingCheckpoint {
         return status;
     }
 
-    public int numberOfNonAcknowledgedTasks() {
+    public int getNumberOfNonAcknowledgedTasks() {
         return notYetAcknowledgedTasks.size();
     }
 
@@ -58,25 +67,37 @@ public final class PendingCheckpoint {
         return notYetAcknowledgedTasks.isEmpty();
     }
 
-    /** Each physical task can acknowledge exactly once, and only during the pending phase. */
-    public void acknowledgeTask(CheckpointSnapshot.OperatorSubtask task) {
-        require(Status.PENDING);
-        if (!notYetAcknowledgedTasks.remove(Objects.requireNonNull(task, "task"))) {
-            throw new IllegalArgumentException("Unexpected or duplicate checkpoint task acknowledgement: " + task);
+    /** Processes the acknowledgement and distinguishes duplicate, unknown and discarded tasks. */
+    public TaskAcknowledgeResult acknowledgeTask(CheckpointSnapshot.OperatorSubtask task) {
+        Objects.requireNonNull(task, "task");
+        if (status != Status.PENDING) {
+            return TaskAcknowledgeResult.DISCARDED;
         }
+        if (!notYetAcknowledgedTasks.remove(task)) {
+            if (acknowledgedTasks.contains(task)) {
+                return TaskAcknowledgeResult.DUPLICATE;
+            }
+            return TaskAcknowledgeResult.UNKNOWN;
+        }
+        acknowledgedTasks.add(task);
+        return TaskAcknowledgeResult.SUCCESS;
     }
 
     /**
-     * Records the durable publication point. Only the storage layer, after successful
-     * sync and atomic publication, may cause this transition.
+     * Finalizes the checkpoint after all acknowledgements. Only the completed store can
+     * durably publish the state; a failed publication keeps this checkpoint pending.
      */
-    public void markPersisted(CheckpointSnapshot snapshot) {
+    public CheckpointSnapshot finalizeCheckpoint(CheckpointSnapshot snapshot, CompletedCheckpointStore store)
+            throws java.io.IOException {
         require(Status.PENDING);
         Objects.requireNonNull(snapshot, "snapshot");
+        Objects.requireNonNull(store, "store");
         if (snapshot.checkpointId() != checkpointId || !isFullyAcknowledged()) {
-            throw new IllegalStateException("Cannot persist an incompletely acknowledged checkpoint");
+            throw new IllegalStateException("Cannot finalize an incompletely acknowledged checkpoint");
         }
+        store.save(snapshot);
         status = Status.PERSISTED;
+        return snapshot;
     }
 
     /** All external committers and coordinator callbacks have finished successfully. */

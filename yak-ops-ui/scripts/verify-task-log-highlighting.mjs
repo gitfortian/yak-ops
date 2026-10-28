@@ -8,13 +8,13 @@ import {
 } from "../apps/web/app/data-sync/detail/log/task-instance-log-parser.ts";
 
 const entry =
-  "2026-10-22 15:48:07.418 INFO [yak-local-checkpoint-0] i.y.o.f.r.c.AlignedCheckpointCoordinator - YakFlow checkpoint saved, jobId=01785c, checkpointId=689";
+  "2026-10-22 15:48:07.418 INFO [yak-local-checkpoint-0] i.y.o.f.r.c.CheckpointCoordinator - YakFlow checkpoint saved, jobId=01785c, checkpointId=689";
 const parsed = parseLogLine(entry);
 assert.equal(parsed.kind, "structured");
 assert.equal(parsed.timestamp, "2026-10-22 15:48:07.418");
 assert.equal(parsed.level, "INFO");
 assert.equal(parsed.thread, "yak-local-checkpoint-0");
-assert.equal(parsed.logger, "i.y.o.f.r.c.AlignedCheckpointCoordinator");
+assert.equal(parsed.logger, "i.y.o.f.r.c.CheckpointCoordinator");
 assert.deepEqual(
   parsed.message?.filter((token) => token.kind !== "text"),
   [

@@ -44,10 +44,10 @@ public final class FileCheckpointStore implements CompletedCheckpointStore {
     private static final Logger LOG = LoggerFactory.getLogger(FileCheckpointStore.class);
 
     private static final int MAGIC = 0x59414B43; // YAKC
-    /** One complete Source-to-Sink snapshot layout. Older formats are intentionally unsupported. */
-    private static final int FORMAT_VERSION = 5;
+    /** Initial Source-to-Sink snapshot layout. Pre-release formats are intentionally unsupported. */
+    private static final int FORMAT_VERSION = 1;
 
-    private static final int POINTER_VERSION = 6;
+    private static final int POINTER_VERSION = 1;
     private static final String CHECKPOINT_DIRECTORY = "checkpoints";
     private static final String METADATA_FILE = "_metadata";
     private static final int MAX_FILE_BYTES = 64 * 1024 * 1024;

@@ -36,11 +36,11 @@ public final class CheckpointPlan {
         return fullyFinishedOperators;
     }
 
-    public List<CheckpointSnapshot.OperatorSubtask> triggerTasks() {
+    public List<CheckpointSnapshot.OperatorSubtask> getTasksToTrigger() {
         return triggerTasks;
     }
 
-    public Set<CheckpointSnapshot.OperatorSubtask> tasksToAcknowledge() {
+    public Set<CheckpointSnapshot.OperatorSubtask> getTasksToWaitFor() {
         return tasksToAcknowledge;
     }
 

@@ -28,8 +28,8 @@ class CheckpointPlanTest {
     @Test
     void allRunningTasksTriggerAtSourceAndWaitForDownstream() throws Exception {
         CheckpointPlan plan = CheckpointPlan.calculate(1, graph(), Set.of());
-        assertEquals(Set.of(source(0), source(1)), Set.copyOf(plan.triggerTasks()));
-        assertEquals(Set.of(source(0), source(1), sink(0), sink(1)), plan.tasksToAcknowledge());
+        assertEquals(Set.of(source(0), source(1)), Set.copyOf(plan.getTasksToTrigger()));
+        assertEquals(Set.of(source(0), source(1), sink(0), sink(1)), plan.getTasksToWaitFor());
         assertTrue(plan.fullyFinishedOperators().isEmpty());
         assertTrue(plan.finishedSubtasks(1, Set.of(), Map.of()).isEmpty());
     }
@@ -38,8 +38,8 @@ class CheckpointPlanTest {
     void fullyFinishedSourceMovesCheckpointRootsToRunningSink() throws Exception {
         CheckpointPlan plan = CheckpointPlan.calculate(2, graph(), Set.of(source(0), source(1)));
         assertEquals(Set.of("source-uid"), plan.fullyFinishedOperators());
-        assertEquals(Set.of(sink(0), sink(1)), Set.copyOf(plan.triggerTasks()));
-        assertEquals(Set.of(sink(0), sink(1)), plan.tasksToAcknowledge());
+        assertEquals(Set.of(sink(0), sink(1)), Set.copyOf(plan.getTasksToTrigger()));
+        assertEquals(Set.of(sink(0), sink(1)), plan.getTasksToWaitFor());
         assertEquals(Set.of(sink(0), sink(1)),
                 plan.finishedSubtasks(2, Set.of(sink(0), sink(1)), Map.of()));
     }
