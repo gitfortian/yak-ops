@@ -208,9 +208,13 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             metrics.phase(generation, TableMetrics.Phase.SNAPSHOT, false);
             planSnapshotAsync();
         } else if (event instanceof FinishedSnapshotSplitsReportEvent finished) {
+            assigner.onFinishedSplits(finished.getFinishedOffsets());
             List<String> acknowledged = new ArrayList<>();
-            for (var entry : finished.getFinishedOffsets().entrySet()) {
-                FinishedSnapshotSplitInfo info = assigner.finishSnapshot(entry.getKey(), entry.getValue());
+            Map<String, FinishedSnapshotSplitInfo> completed = new LinkedHashMap<>();
+            assigner.getFinishedSplitInfos().forEach(info -> completed.put(info.splitId(), info));
+            for (String splitId : finished.getFinishedOffsets().keySet()) {
+                FinishedSnapshotSplitInfo info = Objects.requireNonNull(
+                        completed.get(splitId), "Completed snapshot metadata must be available after reporting");
                 metrics.splitFinished(generation, info.splitId(), info.tableId());
                 acknowledged.add(info.splitId());
             }
@@ -322,7 +326,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                 waitingReaders.remove(reader);
                 continue;
             }
-            MySqlSplit split = assigner.nextSnapshot();
+            MySqlSplit split = assigner.getNext().orElse(null);
             if (split == null) break;
             context.assignSplit(split, reader);
             waitingReaders.remove(reader);
