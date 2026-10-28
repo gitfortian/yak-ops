@@ -29,7 +29,7 @@ class MySqlTypedEnumeratorCheckpointTest {
     @Test
     void keepsTypedDiscoveryBoundaryAndCompletedChunkWatermarks() throws Exception {
         var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
-        assigner.nextBinlog(0);
+        assigner.nextBinlog();
         assigner.captureLow(offset(100));
         BigDecimal boundary = new BigDecimal("9223372036854775808.00000000");
         var first = MySqlSnapshotSplit.typed("chunk-0", new ChunkRange(TABLE, "amount", LogicalTypeRoot.DECIMAL, null, boundary));
@@ -61,7 +61,7 @@ class MySqlTypedEnumeratorCheckpointTest {
     @Test
     void rejectsOldDiscoveryCheckpointVersionsWithoutGuessingTheNextRange() throws Exception {
         var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
-        assigner.nextBinlog(0);
+        assigner.nextBinlog();
         assigner.captureLow(offset(100));
         byte[] persisted = SERIALIZER.serialize(assigner.snapshotState(1));
         assertThrows(IOException.class, () -> SERIALIZER.deserialize(2, persisted));
