@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Verifies upstream offset discovery behavior using YakFlow's JDBC/DBZ 2.7 connection boundary. */
 class DebeziumUtilsTest {
@@ -34,6 +35,33 @@ class DebeziumUtilsTest {
         assertThat(found.getPosition()).isEqualTo(123L);
         assertThat(found.getGtidSet()).isNull();
         assertThat(statements.get()).isEqualTo(2);
+    }
+
+    @Test
+    void snapshotWatermarksUseSameStatusParserAndPreserveGtid() throws SQLException {
+        AtomicInteger queries = new AtomicInteger();
+        Connection connection = fakeConnection(false, 5, queries);
+        Statement statement = connection.createStatement();
+        statement.setQueryTimeout(60);
+        BinlogOffset watermark = DebeziumUtils.currentBinlogOffset(statement);
+        assertThat(watermark.getFilename()).isEqualTo("mysql-bin.000008");
+        assertThat(watermark.getPosition()).isEqualTo(123L);
+        assertThat(watermark.getGtidSet()).isEqualTo("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-2");
+        assertThat(queries.get()).isEqualTo(1);
+    }
+
+    @Test
+    void refusesBinlogStatusWithoutValidFileOrPosition() {
+        ResultSet rows = proxy(ResultSet.class, (self, method, args) -> switch (method.getName()) {
+            case "next" -> true;
+            case "getString" -> "";
+            case "getLong" -> 0L;
+            default -> null;
+        });
+        Statement statement = proxy(Statement.class, (self, method, args) ->
+                method.getName().equals("executeQuery") ? rows : null);
+        assertThatThrownBy(() -> DebeziumUtils.currentBinlogOffset(statement))
+                .isInstanceOf(SQLException.class);
     }
 
     private static Connection fakeConnection(boolean fallback, int columns, AtomicInteger statements) {
