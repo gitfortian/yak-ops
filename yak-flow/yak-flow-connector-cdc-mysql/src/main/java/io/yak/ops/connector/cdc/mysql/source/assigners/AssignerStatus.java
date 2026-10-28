@@ -130,12 +130,14 @@ public enum AssignerStatus {
 
     public AssignerStatus startAssignNewlyTables() {
         throw new IllegalStateException(format(
-                "Invalid call, assigner under %s state can not call startAssignNewlyTables()", fromStatusCode(this.getStatusCode())));
+                "Invalid call, assigner under %s state can not call startAssignNewlyTables()",
+                fromStatusCode(this.getStatusCode())));
     }
 
     public AssignerStatus onBinlogSplitUpdated() {
         throw new IllegalStateException(format(
-                "Invalid call, assigner under %s state can not call onBinlogSplitUpdated()", fromStatusCode(this.getStatusCode())));
+                "Invalid call, assigner under %s state can not call onBinlogSplitUpdated()",
+                fromStatusCode(this.getStatusCode())));
     }
 
     // --------------------------------------------------------------------------------------------
@@ -156,7 +158,8 @@ public enum AssignerStatus {
             case 4:
                 return NEWLY_ADDED_ASSIGNING_FINISHED;
             default:
-                throw new IllegalStateException(format("Invalid status code %s,the valid code range is [0, 4]", statusCode));
+                throw new IllegalStateException(
+                        format("Invalid status code %s,the valid code range is [0, 4]", statusCode));
         }
     }
 
@@ -175,8 +178,7 @@ public enum AssignerStatus {
      * splits for newly added tables or not.
      */
     public static boolean isAssigningFinished(AssignerStatus assignerStatus) {
-        return assignerStatus == INITIAL_ASSIGNING_FINISHED
-                || assignerStatus == NEWLY_ADDED_ASSIGNING_FINISHED;
+        return assignerStatus == INITIAL_ASSIGNING_FINISHED || assignerStatus == NEWLY_ADDED_ASSIGNING_FINISHED;
     }
 
     /** Returns whether the split assigner is assigning snapshot splits. */
