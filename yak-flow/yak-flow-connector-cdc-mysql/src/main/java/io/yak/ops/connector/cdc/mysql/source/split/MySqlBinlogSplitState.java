@@ -64,7 +64,7 @@ public final class MySqlBinlogSplitState extends MySqlSplitState {
             return binlog;
         }
         if (emittedOffset == null || history == null || history.length == 0) {
-            throw new IllegalStateException("Binlog checkpoint requires offset and schema history");
+            throw new IllegalStateException("MySQL Binlog has no complete offset/schema-history checkpoint");
         }
         return binlog.phase() == MySqlBinlogSplit.Phase.STREAMING
                 ? binlog.withEmittedOffset(emittedOffset, history)

@@ -200,7 +200,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             try {
                 byte[] current = active.snapshotHistory();
                 if (current.length == 0) {
-                    throw new IllegalStateException("Active MySQL Binlog has no schema history");
+                    throw new IllegalStateException("MySQL Binlog has no complete offset/schema-history checkpoint");
                 }
                 history = current;
             } catch (java.io.IOException failure) {
