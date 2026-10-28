@@ -69,7 +69,12 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
     /** Initializes Snapshot table discovery and reconciles restored table state. */
     public boolean initializeTables(List<TableId> tables, boolean scanNewlyAddedTablesEnabled, boolean releaseSnapshotMetadataEnabled) {
         this.releaseSnapshotMetadataEnabled = releaseSnapshotMetadataEnabled;
-        return snapshots.initializeTables(tables, scanNewlyAddedTablesEnabled, releaseSnapshotMetadataEnabled);
+        boolean started = snapshots.initializeTables(tables, scanNewlyAddedTablesEnabled, releaseSnapshotMetadataEnabled);
+        if (snapshots.getAssignerStatus() == AssignerStatus.NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED
+                && !snapshots.isSnapshotMetaReleased()) {
+            refreshHighWatermark();
+        }
+        return started;
     }
 
     public boolean isSnapshotMetaReleased() { return snapshots.isSnapshotMetaReleased(); }
