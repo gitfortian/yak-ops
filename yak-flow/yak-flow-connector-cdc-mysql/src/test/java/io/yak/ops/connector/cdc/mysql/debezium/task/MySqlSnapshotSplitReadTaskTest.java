@@ -67,23 +67,27 @@ class MySqlSnapshotSplitReadTaskTest {
     @Test
     void usesSameNumericChunkBoundsForSnapshotAndBackfill() {
         // Values beyond signed BIGINT must never be narrowed to longValue().
-        BigInteger from = BigInteger.valueOf(Long.MAX_VALUE - 1L);
-        BigInteger inside = new BigInteger("9223372036854775808");
-        BigInteger to = new BigInteger("9223372036854775810");
-        SnapshotChunkBackfill buffer = buffer(from, to);
-        buffer.addSnapshot(row(TABLE, RowKind.INSERT, inside, "unsigned snapshot"));
-        buffer.addSnapshot(row(TABLE, RowKind.INSERT, from, "at low"));
+        // The persisted ChunkRange deliberately retains its existing signed-long
+        // boundary format. Debezium can nevertheless supply a BigInteger row image
+        // beyond signed LONG_MAX; its wrapped longValue() must not re-enter this chunk.
+        BigInteger inside = BigInteger.valueOf(Long.MAX_VALUE - 1L);
+        BigInteger beyond = BigInteger.valueOf(Long.MAX_VALUE).add(BigInteger.ONE);
+        SnapshotChunkBackfill buffer = buffer(Long.MIN_VALUE, Long.MAX_VALUE);
+        buffer.addSnapshot(row(TABLE, RowKind.INSERT, inside, "snapshot"));
         assertThat(replay(buffer, 100, 200, event(150,
-                row(TABLE, RowKind.UPDATE_BEFORE, inside, "unsigned snapshot"),
-                row(TABLE, RowKind.UPDATE_AFTER, inside, "unsigned updated"))))
+                row(TABLE, RowKind.UPDATE_BEFORE, inside, "snapshot"),
+                row(TABLE, RowKind.UPDATE_AFTER, inside, "updated"))))
                 .isFalse();
         assertThat(replay(buffer, 100, 200, event(160,
-                row(TABLE, RowKind.INSERT, to, "outside"))))
+                row(TABLE, RowKind.INSERT, beyond, "outside unsigned"))))
+                .isFalse();
+        assertThat(replay(buffer, 100, 200, event(170,
+                row(TABLE, RowKind.INSERT, Long.MIN_VALUE, "at low"))))
                 .isFalse();
 
         assertThat(buffer.finish())
                 .extracting(record -> record.row().getField(1))
-                .containsExactlyInAnyOrder("unsigned updated", "at low");
+                .containsExactlyInAnyOrder("updated", "at low");
     }
 
     @Test
