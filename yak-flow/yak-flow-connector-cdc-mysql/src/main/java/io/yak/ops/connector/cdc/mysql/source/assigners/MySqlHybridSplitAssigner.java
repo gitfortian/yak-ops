@@ -35,6 +35,8 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
     private Long handoffCheckpointId;
     private boolean binlogSplitMetaAssembled;
     private long binlogAssignmentGeneration;
+    private boolean releaseSnapshotMetadataEnabled;
+    private Long releaseMetadataCheckpointId;
 
     public MySqlHybridSplitAssigner(StartupOptions startupOptions, HybridPendingSplitsState restored) {
         Objects.requireNonNull(startupOptions, "startupOptions");
@@ -64,6 +66,17 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
         snapshots.open();
     }
 
+    /** Initializes Snapshot table discovery and reconciles restored table state. */
+    public boolean initializeTables(List<TableId> tables, boolean scanNewlyAddedTablesEnabled, boolean releaseSnapshotMetadataEnabled) {
+        this.releaseSnapshotMetadataEnabled = releaseSnapshotMetadataEnabled;
+        return snapshots.initializeTables(tables, scanNewlyAddedTablesEnabled, releaseSnapshotMetadataEnabled);
+    }
+
+    public boolean isSnapshotMetaReleased() { return snapshots.isSnapshotMetaReleased(); }
+    public boolean isAssigningNewlyAddedTables() { return snapshots.getAssignerStatus() == AssignerStatus.NEWLY_ADDED_ASSIGNING; }
+    public boolean isNewlyAddedSnapshotFinished() { return snapshots.getAssignerStatus() == AssignerStatus.NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED; }
+    public boolean isNewlyAddedAssignmentFinished() { return snapshots.getAssignerStatus() == AssignerStatus.NEWLY_ADDED_ASSIGNING_FINISHED; }
+
     @Override
     public Optional<MySqlSplit> getNext() {
         MySqlBinlogSplit next = nextBinlog();
@@ -79,9 +92,8 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
     }
 
     public MySqlSnapshotSplit nextSnapshot() {
-        if (phase != HybridPendingSplitsState.Phase.SNAPSHOT) {
-            return null;
-        }
+        if (phase != HybridPendingSplitsState.Phase.SNAPSHOT
+                && snapshots.getAssignerStatus() != AssignerStatus.NEWLY_ADDED_ASSIGNING) return null;
         return (MySqlSnapshotSplit) snapshots.getNext().orElse(null);
     }
 
@@ -128,8 +140,9 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
     }
 
     public void appendPlan(MySqlSnapshotSplit split, int tableCount) {
-        if (phase != HybridPendingSplitsState.Phase.SNAPSHOT) {
-            throw new IllegalStateException("Cannot discover snapshot chunks before Binlog anchor");
+        if (phase != HybridPendingSplitsState.Phase.SNAPSHOT
+                && snapshots.getAssignerStatus() != AssignerStatus.NEWLY_ADDED_ASSIGNING) {
+            throw new IllegalStateException("Cannot discover snapshot chunks outside a Snapshot assignment phase");
         }
         snapshots.appendPlan(split, tableCount);
     }
@@ -145,7 +158,8 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
             int maxPendingChunks,
             BiConsumer<MySqlSnapshotSplit, Integer> onDiscovered,
             BiConsumer<TableId, Throwable> onError) {
-        if (phase != HybridPendingSplitsState.Phase.SNAPSHOT) return false;
+        if (phase != HybridPendingSplitsState.Phase.SNAPSHOT
+                && snapshots.getAssignerStatus() != AssignerStatus.NEWLY_ADDED_ASSIGNING) return false;
         return snapshots.discoverNextAsync(tables, splitter, context, maxPendingChunks, onDiscovered, onError);
     }
 
@@ -206,7 +220,13 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
 
     @Override
     public void notifyCheckpointComplete(long checkpointId) {
+        AssignerStatus previousStatus = snapshots.getAssignerStatus();
         snapshots.notifyCheckpointComplete(checkpointId);
+        AssignerStatus currentStatus = snapshots.getAssignerStatus();
+        if (previousStatus == AssignerStatus.NEWLY_ADDED_ASSIGNING
+                && currentStatus == AssignerStatus.NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED) {
+            refreshHighWatermark();
+        }
         if (phase == HybridPendingSplitsState.Phase.HANDOFF
                 && binlogSplitMetaAssembled
                 && handoffCheckpointId != null
@@ -214,6 +234,26 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
             phase = HybridPendingSplitsState.Phase.STREAMING;
             handoffCheckpointId = null;
         }
+        if (phase == HybridPendingSplitsState.Phase.STREAMING
+                && releaseSnapshotMetadataEnabled
+                && !snapshots.isSnapshotMetaReleased()
+                && AssignerStatus.isAssigningFinished(snapshots.getAssignerStatus())
+                && releaseMetadataCheckpointId != null
+                && checkpointId >= releaseMetadataCheckpointId) {
+            snapshots.releaseSnapshotMetadata();
+            releaseMetadataCheckpointId = null;
+        }
+    }
+
+    private void refreshHighWatermark() {
+        DebeziumOffset maximum = snapshots.finishedSplits().stream()
+                .map(FinishedSnapshotSplitInfo::highWatermark)
+                .max(DebeziumOffset::compareTo)
+                .orElseThrow(() -> new IllegalStateException("Completed Snapshot assignment has no watermarks"));
+        if (low != null && low.compareTo(maximum) > 0) {
+            throw new IllegalStateException("Snapshot High watermark moved behind the Binlog anchor");
+        }
+        high = maximum;
     }
 
     /**
@@ -252,8 +292,15 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
                 && handoffCheckpointId == null) {
             handoffCheckpointId = checkpointId;
         }
-        return new HybridPendingSplitsState(
-                snapshots.snapshotState(checkpointId), binlogAssigned, pendingBinlog, phase, low, high);
+        var snapshotState = snapshots.snapshotState(checkpointId);
+        if (phase == HybridPendingSplitsState.Phase.STREAMING
+                && releaseSnapshotMetadataEnabled
+                && !snapshots.isSnapshotMetaReleased()
+                && AssignerStatus.isAssigningFinished(snapshots.getAssignerStatus())
+                && releaseMetadataCheckpointId == null) {
+            releaseMetadataCheckpointId = checkpointId;
+        }
+        return new HybridPendingSplitsState(snapshotState, binlogAssigned, pendingBinlog, phase, low, high);
     }
 
     @Override
@@ -299,27 +346,18 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
     }
 
     @Override
-    public AssignerStatus getAssignerStatus() {
-        if (phase == HybridPendingSplitsState.Phase.BOOTSTRAP || phase == HybridPendingSplitsState.Phase.SNAPSHOT) {
-            return AssignerStatus.INITIAL_ASSIGNING;
-        }
-        return AssignerStatus.INITIAL_ASSIGNING_FINISHED;
-    }
+    public AssignerStatus getAssignerStatus() { return snapshots.getAssignerStatus(); }
 
     @Override
-    public void startAssignNewlyAddedTables() {
-        throw new UnsupportedOperationException("Dynamic MySQL table discovery is not enabled");
-    }
+    public void startAssignNewlyAddedTables() { snapshots.startAssignNewlyAddedTables(); }
 
     @Override
     public boolean noMoreSplits() {
-        return binlogAssigned && snapshots.planned() && snapshots.pending().isEmpty();
+        return binlogAssigned && snapshots.planned() && snapshots.pending().isEmpty() && snapshots.remainingTables().isEmpty();
     }
 
     @Override
-    public void onBinlogSplitUpdated() {
-        throw new UnsupportedOperationException("Dynamic MySQL table discovery is not enabled");
-    }
+    public void onBinlogSplitUpdated() { snapshots.onBinlogSplitUpdated(); }
 
     @Override
     public void close() {
