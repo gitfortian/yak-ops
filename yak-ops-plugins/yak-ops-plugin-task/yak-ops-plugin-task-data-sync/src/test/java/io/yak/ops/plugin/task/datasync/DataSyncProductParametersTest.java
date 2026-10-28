@@ -76,7 +76,6 @@ class DataSyncProductParametersTest {
         for (String invalid : List.of(
                 latest.replace("\"startup\":{\"mode\":\"latest-offset\"},", ""),
                 latest.replace("latest-offset", "initial"),
-                latest.replace("latest-offset", "earliest-offset"),
                 latest.replace("\"mode\":\"latest-offset\"", "\"mode\":\"latest-offset\",\"offset\":1"),
                 latest.replace("\"id\":\"orders\",\"table\":\"orders\"",
                         "\"id\":\"orders\",\"table\":\"orders\",\"snapshot\":{\"chunkKeyColumn\":\"id\"}"))) {
@@ -85,6 +84,39 @@ class DataSyncProductParametersTest {
         assertThrows(TaskPluginException.class,
                 () -> plugin.parse(json(false).replace("\"tables\":[",
                         "\"startup\":{\"mode\":\"latest-offset\"},\"tables\":[")));
+    }
+
+    @Test
+    void sixModeStartupOptionsRetainExplicitBinlogPositionAndSnapshotOnlySteps() {
+        String realtime = json(true);
+        String incremental = realtime
+                .replace("[\"FULL\",\"INCREMENTAL\"]", "[\"INCREMENTAL\"]");
+        for (String mode : List.of("earliest-offset", "latest-offset")) {
+            var parsed = plugin.parse(incremental.replace(
+                    "\"source\":{\"datasourceId\":\"source\"",
+                    "\"source\":{\"datasourceId\":\"source\",\"startup\":{\"mode\":\"" + mode + "\"}"));
+            assertEquals(mode, JobConfig.from(parsed).source().get(MySqlSourceOptions.SCAN_STARTUP_MODE));
+        }
+        var specific = plugin.parse(incremental.replace(
+                "\"source\":{\"datasourceId\":\"source\"",
+                "\"source\":{\"datasourceId\":\"source\",\"startup\":{\"mode\":\"specific-offset\","
+                        + "\"file\":\"mysql-bin.000001\",\"pos\":4}"));
+        assertEquals("mysql-bin.000001", JobConfig.from(specific).source().get(
+                MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_FILE));
+        assertEquals(4L, JobConfig.from(specific).source().get(
+                MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_POS));
+        var timestamp = plugin.parse(incremental.replace(
+                "\"source\":{\"datasourceId\":\"source\"",
+                "\"source\":{\"datasourceId\":\"source\",\"startup\":{\"mode\":\"timestamp\","
+                        + "\"timestampMillis\":1700000000000}"));
+        assertEquals(1700000000000L, JobConfig.from(timestamp).source().get(
+                MySqlSourceOptions.SCAN_STARTUP_TIMESTAMP_MILLIS));
+
+        var snapshot = plugin.parse(realtime.replace(
+                "[\"FULL\",\"INCREMENTAL\"]", "[\"FULL\"]")
+                .replace("\"source\":{\"datasourceId\":\"source\"",
+                        "\"source\":{\"datasourceId\":\"source\",\"startup\":{\"mode\":\"snapshot\"}"));
+        assertEquals("snapshot", JobConfig.from(snapshot).source().get(MySqlSourceOptions.SCAN_STARTUP_MODE));
     }
 
     @Test
