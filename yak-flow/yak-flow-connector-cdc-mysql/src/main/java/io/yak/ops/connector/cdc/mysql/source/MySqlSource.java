@@ -135,7 +135,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
         if (!initial && (context.currentParallelism() != 1 || context.getIndexOfSubtask() != 0)) {
             throw new IllegalArgumentException("Stream-only MySQL CDC requires one SourceReader");
         }
-        if (initial
+        if (startupOptions.startupMode() == StartupMode.INITIAL
                 && context.getConfiguration()
                         .get(CheckpointingOptions.CHECKPOINTING_INTERVAL)
                         .isZero()) {
