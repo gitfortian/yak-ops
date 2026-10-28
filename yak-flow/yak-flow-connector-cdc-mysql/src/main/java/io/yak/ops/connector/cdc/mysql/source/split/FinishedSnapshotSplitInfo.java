@@ -4,6 +4,12 @@ import io.yak.ops.connector.cdc.base.source.meta.split.FinishedSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.core.data.TableId;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -80,6 +86,38 @@ public final class FinishedSnapshotSplitInfo implements FinishedSnapshotSplit<De
 
     public ChunkRange chunkRange() {
         return chunkRange;
+    }
+
+    /**
+     * Flink CDC-style transport encoding for one completed Chunk fence. The existing
+     * MySqlSplitSerializer owns the physical offset and typed ChunkRange encoding.
+     */
+    public static byte[] serialize(FinishedSnapshotSplitInfo info) {
+        Objects.requireNonNull(info, "info");
+        try (var bytes = new ByteArrayOutputStream();
+                var out = new DataOutputStream(bytes)) {
+            MySqlSplitSerializer.writeFinishedSplits(out, List.of(info));
+            out.flush();
+            return bytes.toByteArray();
+        } catch (IOException error) {
+            throw new IllegalStateException("Cannot serialize completed Snapshot metadata", error);
+        }
+    }
+
+    public static FinishedSnapshotSplitInfo deserialize(byte[] bytes) {
+        Objects.requireNonNull(bytes, "bytes");
+        if (bytes.length == 0 || bytes.length > 8 * 1024 * 1024) {
+            throw new IllegalArgumentException("Invalid completed Snapshot metadata size");
+        }
+        try (var in = new DataInputStream(new ByteArrayInputStream(bytes))) {
+            List<FinishedSnapshotSplitInfo> infos = MySqlSplitSerializer.readFinishedSplits(in);
+            if (infos.size() != 1 || in.available() != 0) {
+                throw new IOException("Invalid completed Snapshot metadata frame");
+            }
+            return infos.getFirst();
+        } catch (IOException error) {
+            throw new IllegalArgumentException("Corrupt completed Snapshot metadata frame", error);
+        }
     }
 
     // Flink CDC getter names and non-record value semantics.
