@@ -11,6 +11,7 @@ import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaRequestEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsAckEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsReportEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsRequestEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
@@ -110,6 +111,27 @@ public final class MySqlSourceReader
     @Override
     public final void start() {
         context.sendSplitRequest();
+    }
+
+    /**
+     * Re-report a checkpointed initial Binlog anchor after reader recovery.
+     *
+     * <p>Flink CDC re-reports coordinator messages from restored Reader state. The
+     * BOOTSTRAP -> SNAPSHOT transition must not depend on a heartbeat that was emitted
+     * before the last durable checkpoint. Streaming/suspended update splits are excluded.
+     */
+    @Override
+    public void addSplits(List<MySqlSplit> added) throws Exception {
+        super.addSplits(added);
+        if (!initial) return;
+        for (MySqlSplit split : added) {
+            if (split instanceof MySqlBinlogSplit binlog
+                    && binlog.phase() == MySqlBinlogSplit.Phase.PAUSED
+                    && binlog.finishedSplits().isEmpty()) {
+                context.sendSourceEventToCoordinator(new MySqlLowWatermarkEvent(binlog.offset()));
+                context.sendSplitRequest();
+            }
+        }
     }
 
     @Override
