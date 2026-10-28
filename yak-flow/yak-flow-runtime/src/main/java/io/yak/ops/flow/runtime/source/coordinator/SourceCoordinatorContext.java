@@ -181,12 +181,11 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
     Map<Integer, List<SplitT>> checkpointedAssignments() {
         assertCoordinatorThread();
         Map<Integer, java.util.LinkedHashMap<String, SplitT>> all = new java.util.LinkedHashMap<>();
-        assignments.assignmentsByCheckpointId().values().forEach(checkpoint ->
-                checkpoint.forEach((subtask, splits) -> {
-                    java.util.LinkedHashMap<String, SplitT> bucket =
-                            all.computeIfAbsent(subtask, ignored -> new java.util.LinkedHashMap<>());
-                    splits.forEach(split -> bucket.putIfAbsent(split.splitId(), split));
-                }));
+        assignments.assignmentsByCheckpointId().values().forEach(checkpoint -> checkpoint.forEach((subtask, splits) -> {
+            java.util.LinkedHashMap<String, SplitT> bucket =
+                    all.computeIfAbsent(subtask, ignored -> new java.util.LinkedHashMap<>());
+            splits.forEach(split -> bucket.putIfAbsent(split.splitId(), split));
+        }));
         assignments.uncheckpointedAssignments().forEach((subtask, splits) -> {
             java.util.LinkedHashMap<String, SplitT> bucket =
                     all.computeIfAbsent(subtask, ignored -> new java.util.LinkedHashMap<>());
@@ -262,11 +261,10 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
         // A delivery failure afterwards fails the job and restores the last durable checkpoint.
         Set<String> splitIds = new LinkedHashSet<>();
         Set<String> outstandingIds = new HashSet<>(inFlight.keySet());
-        assignments.uncheckpointedAssignments().values()
-                .forEach(splits -> splits.forEach(split -> outstandingIds.add(split.splitId())));
-        assignments.assignmentsByCheckpointId().values()
-                .forEach(checkpoint -> checkpoint.values()
-                        .forEach(splits -> splits.forEach(split -> outstandingIds.add(split.splitId()))));
+        assignments.uncheckpointedAssignments().values().forEach(splits ->
+                splits.forEach(split -> outstandingIds.add(split.splitId())));
+        assignments.assignmentsByCheckpointId().values().forEach(checkpoint ->
+                checkpoint.values().forEach(splits -> splits.forEach(split -> outstandingIds.add(split.splitId()))));
         Map<Integer, AddSplitEvent<SplitT>> events = new HashMap<>();
         for (Map.Entry<Integer, List<SplitT>> entry : requested.entrySet()) {
             int reader = Objects.requireNonNull(entry.getKey(), "reader");
