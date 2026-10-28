@@ -18,13 +18,13 @@
 package io.yak.ops.connector.cdc.mysql.debezium;
 
 import com.github.shyiko.mysql.binlog.BinaryLogClient;
+import com.github.shyiko.mysql.binlog.event.EventData;
+import com.github.shyiko.mysql.binlog.event.EventHeaderV4;
+import com.github.shyiko.mysql.binlog.event.RotateEventData;
 import io.debezium.config.Configuration;
 import io.debezium.connector.mysql.MySqlConnectorConfig;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
-import com.github.shyiko.mysql.binlog.event.EventData;
-import com.github.shyiko.mysql.binlog.event.EventHeaderV4;
-import com.github.shyiko.mysql.binlog.event.RotateEventData;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -32,9 +32,9 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.Objects;
 
 /** Utilities related to Debezium. */
 public final class DebeziumUtils {
@@ -132,7 +132,6 @@ public final class DebeziumUtils {
         }
         return timestamp;
     }
-
 
     /** Creates a new {@link BinaryLogClient} for consuming MySQL binlog. */
     public static BinaryLogClient createBinaryClient(Configuration dbzConfiguration) {
