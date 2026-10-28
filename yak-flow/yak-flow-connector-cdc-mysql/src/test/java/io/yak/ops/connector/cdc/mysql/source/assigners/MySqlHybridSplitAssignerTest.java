@@ -56,6 +56,30 @@ class MySqlHybridSplitAssignerTest {
 
 
     @Test
+    void reportsUpstreamAssignmentStatusWithoutTreatingAssignmentAsCompletion() {
+        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
+        assertEquals(AssignerStatus.INITIAL_ASSIGNING, assigner.getAssignerStatus());
+        assertTrue(assigner.waitingForFinishedSplits());
+        assertFalse(assigner.noMoreSplits());
+
+        assigner.nextBinlog();
+        assigner.captureLow(new DebeziumOffset(
+                Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L)));
+        var split = new MySqlSnapshotSplit("snap-1", new TableId("shop", null, "orders"), null, null, null);
+        assigner.plan(List.of(split));
+        assertEquals(split, assigner.getNext().orElseThrow());
+        assertTrue(assigner.noMoreSplits());
+        assertTrue(assigner.waitingForFinishedSplits());
+
+        assigner.onFinishedSplits(Map.of("snap-1", new DebeziumOffset(
+                Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 200L)));
+        assertFalse(assigner.waitingForFinishedSplits());
+        assigner.captureHigh(new DebeziumOffset(
+                Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 200L)));
+        assertEquals(AssignerStatus.INITIAL_ASSIGNING_FINISHED, assigner.getAssignerStatus());
+    }
+
+    @Test
     void checkpointDuringAsyncSnapshotPlanningRestartsPlanFromDurableState() throws Exception {
         var low = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
         var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
