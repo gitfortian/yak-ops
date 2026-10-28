@@ -58,9 +58,10 @@ public final class MySqlRecordEmitter implements RecordEmitter<MySqlFetchedRecor
             // when the reconstructed result contains inserted/deleted keys.
             // Flink CDC's backfill uses physical keys for keyed images and full-row
             // identity for keyless ones; use the same distinction here.
+            var schema = splits.snapshotSchema(prepared.tableId());
             Map<String, Integer> occurrences = new HashMap<>();
             for (TableRecord row : rows) {
-                String rowIdentity = MySqlChangeEventIds.fromSnapshot(row, splits.snapshotSchema(row.tableId()));
+                String rowIdentity = MySqlChangeEventIds.fromSnapshot(row, schema);
                 int occurrence = occurrences.merge(rowIdentity, 1, Integer::sum) - 1;
                 ChangeEventId identity = new ChangeEventId(
                         sourceId, "snapshot:" + state.snapshotSplitId() + ":" + rowIdentity + ":" + occurrence, 0, 1);
