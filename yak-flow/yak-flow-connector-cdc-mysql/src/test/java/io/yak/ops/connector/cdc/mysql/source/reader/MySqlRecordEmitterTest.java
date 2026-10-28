@@ -214,10 +214,8 @@ class MySqlRecordEmitterTest {
     void keylessSnapshotIdentitiesPreserveDuplicateOccurrenceAndIgnoreOtherRowInsertions() throws Exception {
         var schema = new TableSchema(
                 List.of(new Column("name", LogicalTypes.varchar(100))), List.of());
-        var config = MySqlSource.builder()
-                .hostname("localhost").username("user").password("secret")
-                .serverId(9031).topicPrefix("keyless-identity-test").table(TABLE, schema)
-                .build().config();
+        var config = new io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig(
+                "localhost", 3306, "user", "secret", 9031, "keyless-identity-test", Map.of(TABLE, schema), 128);
         try (var splitReader = new MySqlSplitReader(config)) {
             var emitter = new MySqlRecordEmitter(
                     new MySqlSourceReaderContext(context()), splitReader, new TableMetrics(), config.topicPrefix());
