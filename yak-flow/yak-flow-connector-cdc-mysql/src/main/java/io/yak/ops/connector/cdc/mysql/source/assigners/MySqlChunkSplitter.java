@@ -152,8 +152,8 @@ public final class MySqlChunkSplitter {
      * Returns the effective chunk distribution using Flink CDC's evenly-sized split heuristic.
      * Non-numeric columns always retain the database-ordered keyset algorithm.
      */
-    private ChunkDistribution distributionFor(
-            Connection connection, TableId table, String column, LogicalTypeRoot type) throws SQLException {
+    private ChunkDistribution distributionFor(Connection connection, TableId table, String column, LogicalTypeRoot type)
+            throws SQLException {
         if (distributionFactorLower <= 0
                 || distributionFactorUpper < distributionFactorLower
                 || (type != LogicalTypeRoot.TINYINT
@@ -199,7 +199,8 @@ public final class MySqlChunkSplitter {
     static double calculateDistributionFactor(TableId table, Object min, Object max, long approximateRowCnt) {
         if (approximateRowCnt <= 0) return Double.MAX_VALUE;
         BigDecimal difference = ObjectUtils.minus(max, min);
-        return difference.add(BigDecimal.ONE)
+        return difference
+                .add(BigDecimal.ONE)
                 .divide(BigDecimal.valueOf(approximateRowCnt), 4, RoundingMode.CEILING)
                 .doubleValue();
     }
