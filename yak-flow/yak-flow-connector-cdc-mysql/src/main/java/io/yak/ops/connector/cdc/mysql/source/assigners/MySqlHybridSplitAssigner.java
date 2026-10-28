@@ -114,7 +114,7 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
 
     @Override
     public boolean waitingForFinishedSplits() {
-        return phase == HybridPendingSplitsState.Phase.SNAPSHOT && !snapshots.allFinished();
+        return !snapshots.allFinished();
     }
 
     @Override
@@ -325,9 +325,10 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
 
     @Override
     public AssignerStatus getAssignerStatus() {
-        return phase == HybridPendingSplitsState.Phase.STREAMING
-                ? AssignerStatus.INITIAL_ASSIGNING_FINISHED
-                : AssignerStatus.INITIAL_ASSIGNING;
+        return phase == HybridPendingSplitsState.Phase.BOOTSTRAP
+                        || phase == HybridPendingSplitsState.Phase.SNAPSHOT
+                ? AssignerStatus.INITIAL_ASSIGNING
+                : AssignerStatus.INITIAL_ASSIGNING_FINISHED;
     }
 
     @Override
@@ -337,7 +338,7 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
 
     @Override
     public boolean noMoreSplits() {
-        return phase == HybridPendingSplitsState.Phase.STREAMING && binlogAssigned;
+        return binlogAssigned && snapshots.planned() && snapshots.pending().isEmpty();
     }
 
     @Override
