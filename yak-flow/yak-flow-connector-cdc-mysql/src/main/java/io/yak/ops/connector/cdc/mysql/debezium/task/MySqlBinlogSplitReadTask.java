@@ -134,9 +134,10 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
             if (stopped) {
                 throw new InterruptedException("MySQL Binlog reader was stopped");
             }
+            DebeziumOffset engineOffset = null;
             try {
                 SourceRecord source = event.record();
-                DebeziumOffset engineOffset = sourceOffset(source);
+                engineOffset = sourceOffset(source);
                 if (!awaitingSchemaSnapshot) {
                     requireNonRegressing(lastEngineOffset, engineOffset, "Debezium Engine");
                 }
