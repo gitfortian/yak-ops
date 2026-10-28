@@ -181,13 +181,13 @@ class MySqlBinlogHandoffMetadataTest {
         assertThat(context.toReader0.getLast()).isInstanceOf(MySqlResumeBinlogEvent.class);
         enumerator.handleSourceEvent(0, new BinlogSplitUpdateAckEvent(update.getGeneration() - 1));
         assertThat(((HybridPendingSplitsState) enumerator.snapshotState(1))
-                        .getSnapshotPendingSplits().getAssignerStatus())
+                        .getSnapshotPendingSplits().getSnapshotAssignerStatus())
                 .isEqualTo(AssignerStatus.NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED);
 
         enumerator.handleSourceEvent(0, new BinlogSplitUpdateAckEvent(update.getGeneration()));
         enumerator.handleSourceEvent(0, new BinlogSplitUpdateAckEvent(update.getGeneration()));
         assertThat(((HybridPendingSplitsState) enumerator.snapshotState(2))
-                        .getSnapshotPendingSplits().getAssignerStatus())
+                        .getSnapshotPendingSplits().getSnapshotAssignerStatus())
                 .isEqualTo(AssignerStatus.NEWLY_ADDED_ASSIGNING_FINISHED);
         enumerator.close();
     }
