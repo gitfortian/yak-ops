@@ -22,8 +22,8 @@ public final class MySqlBinlogSplitAssigner implements MySqlSplitAssigner {
 
     public MySqlBinlogSplitAssigner(StartupOptions startupOptions, BinlogPendingSplitsState restored) {
         Objects.requireNonNull(startupOptions, "startupOptions");
-        if (startupOptions.startupMode() != StartupMode.LATEST_OFFSET) {
-            throw new UnsupportedOperationException("MySQL Binlog Source requires latest-offset startup");
+        if (!startupOptions.isStreamOnly()) {
+            throw new IllegalArgumentException("MySQL Binlog Source requires stream-only startup");
         }
         if (restored == null) {
             pending = new MySqlBinlogSplit(null, new byte[0]);
