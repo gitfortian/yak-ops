@@ -40,10 +40,7 @@ const NO_OWNER = "__none__";
 const Fact = ({ label, value }: { label: string; value: string }) => (
   <div className="min-w-0">
     <dt className="text-xs text-[var(--yak-components-muted-text)]">{label}</dt>
-    <dd
-      className="mt-0.5 truncate text-[13px] text-[var(--yak-components-panel-text)]"
-      title={value}
-    >
+    <dd className="mt-0.5 truncate text-sm text-[var(--yak-components-panel-text)]" title={value}>
       {value || "-"}
     </dd>
   </div>
@@ -187,9 +184,7 @@ export default function BasicsTab({ detail, editing, onCancel, onSaved }: Props)
             <FieldLabel>业务标签</FieldLabel>
             <div className="flex flex-wrap items-center gap-2">
               {detail.tags.length === 0 ? (
-                <span className="text-[13px] text-[var(--yak-components-muted-text)]">
-                  未打标签
-                </span>
+                <span className="text-sm text-[var(--yak-components-muted-text)]">未打标签</span>
               ) : (
                 detail.tags.map((tag) => (
                   <Badge key={tag.id} tone="info">

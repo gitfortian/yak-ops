@@ -46,7 +46,7 @@ export default function WarehousePlanningPage() {
       <PageHeader
         title="数仓规划"
         bordered
-        className="bg-white px-6 max-md:px-4"
+        className="bg-[var(--yak-color-background)] px-6 max-md:px-4"
         extra={
           view === "plan" ? (
             <>

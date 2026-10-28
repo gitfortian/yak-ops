@@ -1,4 +1,4 @@
-import { Alert, Button, PageHeader, Tabs, TabsList, TabsTab } from "@yak-ops/yak-ui";
+import { Alert, Button, Card, PageHeader, Tabs, TabsList, TabsTab } from "@yak-ops/yak-ui";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -67,10 +67,14 @@ export default function PersonalPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageHeader title="我的数据" bordered className="bg-white px-6 max-md:px-4" />
+      <PageHeader
+        title="我的数据"
+        bordered
+        className="bg-[var(--yak-color-background)] px-6 max-md:px-4"
+      />
 
       <div className="flex min-h-0 flex-1 flex-col px-6 pb-4 pt-5 max-md:px-4">
-        <div className="flex min-h-0 flex-1 flex-col bg-white p-4">
+        <Card className="flex min-h-0 flex-1 flex-col p-4">
           <Tabs
             value={tab}
             onValueChange={(value) => write({ tab: readTab(value as string), pageNo: 1 })}
@@ -130,7 +134,7 @@ export default function PersonalPage() {
               />
             )}
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

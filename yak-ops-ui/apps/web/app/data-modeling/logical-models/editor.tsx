@@ -2,6 +2,9 @@ import {
   Alert,
   Badge,
   Button,
+  Card,
+  CardContent,
+  CardHeader,
   Field,
   FieldError,
   FieldLabel,
@@ -149,13 +152,10 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-[var(--yak-components-panel-border)] bg-white">
-      <header className="flex items-center justify-between border-b border-[#eaecf0] px-4 py-2.5">
-        <h2 className="text-sm font-medium">{title}</h2>
-        {extra}
-      </header>
-      <div className="px-4 py-4">{children}</div>
-    </section>
+    <Card>
+      <CardHeader title={title} extra={extra} />
+      <CardContent>{children}</CardContent>
+    </Card>
   );
 }
 
@@ -710,7 +710,7 @@ export default function LogicalModelEditorPage() {
   if (loadFailed)
     return (
       <div className="flex h-full flex-col">
-        <PageHeader title="逻辑模型" bordered className="bg-white px-6" />
+        <PageHeader title="逻辑模型" bordered className="bg-[var(--yak-color-background)] px-6" />
         <div className="p-6">
           <Alert>
             模型加载失败，可能已被删除。
@@ -727,7 +727,7 @@ export default function LogicalModelEditorPage() {
       <PageHeader
         title={editing ? "编辑逻辑模型" : "新建逻辑模型"}
         bordered
-        className="bg-white px-6 max-md:px-4"
+        className="bg-[var(--yak-color-background)] px-6 max-md:px-4"
         extra={
           <div className="flex items-center gap-2">
             {editing && savedModel && !unknownType && (
@@ -950,7 +950,7 @@ export default function LogicalModelEditorPage() {
                   {composerActive ? (
                     <>
                       <div className="flex flex-wrap items-center gap-1">
-                        <span className="shrink-0 font-mono text-xs text-[#667475]">
+                        <span className="shrink-0 font-mono text-xs text-[var(--yak-color-text-secondary)]">
                           {prefix ? `${prefix}_` : "—"}
                         </span>
                         <Select
@@ -991,7 +991,7 @@ export default function LogicalModelEditorPage() {
                           </SelectContent>
                         </Select>
                         <span
-                          className="shrink-0 font-mono text-xs text-[#667475]"
+                          className="shrink-0 font-mono text-xs text-[var(--yak-color-text-secondary)]"
                           title="业务过程编码"
                         >
                           _{processCode || "过程编码"}
@@ -1023,16 +1023,21 @@ export default function LogicalModelEditorPage() {
                       <FieldError match={Boolean(errors.nameSuffix)}>
                         {errors.nameSuffix}
                       </FieldError>
-                      <p className="mt-1 text-[11px] leading-4 text-[#667085]">
+                      <p className="mt-1 text-xs leading-4 text-[var(--yak-color-text-secondary)]">
                         {prefix && suffix
                           ? `完整表名：${prefix}_${suffix}`
                           : "表名 = 分层前缀 + 词根 + 业务过程编码 + 可选限定词"}
                         {nameState === "checking" && " · 校验中"}
                         {nameState === "available" && " · 可用"}
-                        {nameState === "taken" && <span className="text-[#b42318]"> · 已存在</span>}
+                        {nameState === "taken" && (
+                          <span className="text-[var(--yak-components-badge-danger-text)]">
+                            {" "}
+                            · 已存在
+                          </span>
+                        )}
                         {nameState === "error" && " · 名称校验失败"}
                       </p>
-                      <p className="mt-1 text-[11px] leading-4 text-[#667085]">
+                      <p className="mt-1 text-xs leading-4 text-[var(--yak-color-text-secondary)]">
                         该分层已启用命名规则：后缀须以「词根_业务过程编码」开头，可再跟一个「_限定词」，
                         总长不超过 41 个字符；词根在「数据标准 · 命名词典」维护
                       </p>
@@ -1040,7 +1045,7 @@ export default function LogicalModelEditorPage() {
                   ) : (
                     <>
                       <div className="flex items-center gap-1">
-                        <span className="shrink-0 font-mono text-xs text-[#667475]">
+                        <span className="shrink-0 font-mono text-xs text-[var(--yak-color-text-secondary)]">
                           {prefix ? `${prefix}_` : "—"}
                         </span>
                         <Input
@@ -1063,13 +1068,18 @@ export default function LogicalModelEditorPage() {
                       <FieldError match={Boolean(errors.nameSuffix)}>
                         {errors.nameSuffix}
                       </FieldError>
-                      <p className="mt-1 text-[11px] leading-4 text-[#667085]">
+                      <p className="mt-1 text-xs leading-4 text-[var(--yak-color-text-secondary)]">
                         {prefix && suffix
                           ? `完整表名：${prefix}_${suffix}`
                           : "表名由分层前缀与后缀拼成"}
                         {nameState === "checking" && " · 校验中"}
                         {nameState === "available" && " · 可用"}
-                        {nameState === "taken" && <span className="text-[#b42318]"> · 已存在</span>}
+                        {nameState === "taken" && (
+                          <span className="text-[var(--yak-components-badge-danger-text)]">
+                            {" "}
+                            · 已存在
+                          </span>
+                        )}
                         {nameState === "error" && " · 名称校验失败"}
                       </p>
                     </>
@@ -1134,11 +1144,19 @@ export default function LogicalModelEditorPage() {
                 />
               </div>
             </div>
-            {errors.ownership && <p className="mt-2 text-xs text-[#b42318]">{errors.ownership}</p>}
+            {errors.ownership && (
+              <p className="mt-2 text-xs text-[var(--yak-components-badge-danger-text)]">
+                {errors.ownership}
+              </p>
+            )}
           </Section>
           <Section
             title="字段定义"
-            extra={<span className="text-xs text-[#667475]">整表保存，字段顺序即写入顺序</span>}
+            extra={
+              <span className="text-xs text-[var(--yak-color-text-secondary)]">
+                整表保存，字段顺序即写入顺序
+              </span>
+            }
           >
             <FieldEditor
               rows={rows}
@@ -1153,9 +1171,11 @@ export default function LogicalModelEditorPage() {
       </div>
       {/* Pinned to the bottom of the viewport: a long field table scrolls behind it instead of
           pushing the actions out of reach. */}
-      <div className="sticky bottom-0 z-10 flex items-center justify-end gap-2 border-t border-[#eaecf0] bg-white px-6 py-3">
+      <div className="sticky bottom-0 z-10 flex items-center justify-end gap-2 border-t border-[var(--yak-components-panel-border)] bg-[var(--yak-components-panel-bg)] px-6 py-3">
         {processBlocked && (
-          <span className="mr-auto text-xs text-[#667475]">请先选择「业务过程」后再保存</span>
+          <span className="mr-auto text-xs text-[var(--yak-color-text-secondary)]">
+            请先选择「业务过程」后再保存
+          </span>
         )}
         <Button size="small" onClick={() => navigate("/data-modeling/dimension-modeling")}>
           取消

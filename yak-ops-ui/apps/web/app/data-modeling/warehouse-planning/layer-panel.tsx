@@ -79,7 +79,9 @@ export default function LayerPanel() {
       render: (_, row) => (
         <span>
           {row.cnName}
-          {row.builtin && <span className="ml-1 text-xs text-[#667085]">（默认）</span>}
+          {row.builtin && (
+            <span className="ml-1 text-xs text-[var(--yak-color-text-secondary)]">（默认）</span>
+          )}
         </span>
       ),
     },
@@ -88,7 +90,10 @@ export default function LayerPanel() {
       title: "物理数据源",
       key: "dataSource",
       width: 200,
-      render: (_, row) => row.dataSourceName ?? <span className="text-[#98a2b3]">未绑定</span>,
+      render: (_, row) =>
+        row.dataSourceName ?? (
+          <span className="text-[var(--yak-components-muted-text)]">未绑定</span>
+        ),
     },
     {
       title: "描述",
@@ -110,7 +115,9 @@ export default function LayerPanel() {
             disabled={loading || toggling !== null}
             onCheckedChange={(checked) => void toggle(row, checked)}
           />
-          <span className="text-xs text-[#667085]">{row.enabled ? "启用" : "禁用"}</span>
+          <span className="text-xs text-[var(--yak-color-text-secondary)]">
+            {row.enabled ? "启用" : "禁用"}
+          </span>
         </label>
       ),
     },
@@ -119,7 +126,7 @@ export default function LayerPanel() {
       key: "naming",
       width: 100,
       render: (_, row) => (
-        <span className="text-xs text-[#667085]">
+        <span className="text-xs text-[var(--yak-color-text-secondary)]">
           {row.namingRuleEnabled ? "已启用" : "未启用"}
         </span>
       ),
@@ -136,7 +143,7 @@ export default function LayerPanel() {
             size="small"
             variant="ghost"
             disabled={loading}
-            className="px-0.5 font-normal text-[#667085]"
+            className="px-0.5 font-normal text-[var(--yak-color-text-secondary)]"
             onClick={() => setNaming(row)}
           >
             命名规则
@@ -150,13 +157,16 @@ export default function LayerPanel() {
           >
             编辑
           </Button>
-          <span aria-hidden="true" className="h-3 w-px shrink-0 bg-[#e4e7ec]" />
+          <span
+            aria-hidden="true"
+            className="h-3 w-px shrink-0 bg-[var(--yak-components-panel-border)]"
+          />
           <Button
             size="small"
             variant="ghost"
             disabled={loading || row.builtin}
             title={row.builtin ? "默认分层不允许删除" : undefined}
-            className="px-0.5 font-normal text-[#667085] hover:text-[#d92d20]"
+            className="px-0.5 font-normal text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-danger-text)]"
             onClick={() => setDeleting(row)}
           >
             删除
@@ -171,7 +181,7 @@ export default function LayerPanel() {
       <div className="mb-3 flex items-start justify-between gap-4">
         <div>
           <h2 className="text-sm font-medium">数仓分层</h2>
-          <p className="mt-1 text-xs text-[#667085]">
+          <p className="mt-1 text-xs text-[var(--yak-color-text-secondary)]">
             维度建模只可选用启用状态的分层；物理发布时按分层绑定的数据源执行。
           </p>
         </div>

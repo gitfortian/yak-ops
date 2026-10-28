@@ -289,10 +289,14 @@ function LookupDialog(props: { draft: LookupDraft; onClose: () => void; onSaved:
               </Button>
             </div>
             {input.values.length >= MAX_VALUES && (
-              <p className="text-xs text-[#b54708]">一个标准代码最多 {MAX_VALUES} 个值。</p>
+              <p className="text-xs text-[var(--yak-components-badge-warning-text)]">
+                一个标准代码最多 {MAX_VALUES} 个值。
+              </p>
             )}
             {input.values.length === 0 && (
-              <p className="text-xs text-[#667085]">标准代码至少需要一个值。</p>
+              <p className="text-xs text-[var(--yak-color-text-secondary)]">
+                标准代码至少需要一个值。
+              </p>
             )}
             {input.values.map((row, index) => (
               <div key={index}>
@@ -333,7 +337,7 @@ function LookupDialog(props: { draft: LookupDraft; onClose: () => void; onSaved:
                     variant="ghost"
                     aria-label="删除该值"
                     disabled={saving || loading}
-                    className="text-[#667085] hover:text-[#d92d20]"
+                    className="text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-danger-text)]"
                     onClick={() =>
                       setInput((previous) => ({
                         ...previous,
@@ -345,7 +349,9 @@ function LookupDialog(props: { draft: LookupDraft; onClose: () => void; onSaved:
                   </Button>
                 </div>
                 {errors["value-" + index] && (
-                  <p className="mt-1 text-xs text-[#d92d20]">{errors["value-" + index]}</p>
+                  <p className="mt-1 text-xs text-[var(--yak-components-danger-text)]">
+                    {errors["value-" + index]}
+                  </p>
                 )}
               </div>
             ))}
@@ -433,7 +439,7 @@ export default function LookupSection(props: Props) {
           size="small"
           variant="ghost"
           disabled={props.unavailable}
-          className="px-0.5 font-normal text-[#667085] hover:text-[#d92d20]"
+          className="px-0.5 font-normal text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-danger-text)]"
           onClick={() => props.onDelete({ kind: "lookup", node: row })}
         >
           删除
@@ -461,7 +467,9 @@ export default function LookupSection(props: Props) {
         createDisabled={!props.selectedId || props.kindBlocked}
         hint={
           props.kindBlocked ? (
-            <span className="text-xs text-[#667085]">当前标准集存放字段标准</span>
+            <span className="text-xs text-[var(--yak-color-text-secondary)]">
+              当前标准集存放字段标准
+            </span>
           ) : null
         }
         onCreate={() => {

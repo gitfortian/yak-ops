@@ -60,7 +60,7 @@ export default function AssetTable({
         <div className="min-w-0">
           <Link
             to={tablePath(record.id)}
-            className="block truncate text-[13px] font-medium [color:var(--yak-color-primary)] hover:underline"
+            className="block truncate text-sm font-medium [color:var(--yak-color-primary)] hover:underline"
             title={record.name}
           >
             {record.name}
@@ -77,7 +77,7 @@ export default function AssetTable({
       minWidth: 220,
       render: (_value, record) => (
         <div className="min-w-0">
-          <div className="line-clamp-2 text-[13px]" title={record.description ?? undefined}>
+          <div className="line-clamp-2 text-sm" title={record.description ?? undefined}>
             {record.description || record.remarks || "-"}
           </div>
           {record.matchedColumns.length > 0 && (

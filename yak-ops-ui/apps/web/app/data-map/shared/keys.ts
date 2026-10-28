@@ -21,8 +21,51 @@ export const dataMapKeys = {
     [...dataMapKeys.all, "changes", ...scope, tableId] as const,
   preview: (scope: DataMapScope, tableId: string) =>
     [...dataMapKeys.all, "preview", ...scope, tableId] as const,
-  crawls: (scope: DataMapScope, datasourceId: string, pageNo: number, pageSize: number) =>
-    [...dataMapKeys.all, "crawls", ...scope, datasourceId, pageNo, pageSize] as const,
+  tasks: (scope: DataMapScope, pageNo: number, pageSize: number) =>
+    [...dataMapKeys.all, "tasks", ...scope, pageNo, pageSize] as const,
+  task: (scope: DataMapScope, taskId: string) =>
+    [...dataMapKeys.all, "task", ...scope, taskId] as const,
+  taskSchedulePreview: (scope: DataMapScope, cronExpression: string) =>
+    [...dataMapKeys.all, "task-schedule-preview", ...scope, cronExpression] as const,
+  tableOptions: (
+    scope: DataMapScope,
+    datasourceId: string,
+    database: string,
+    schema: string,
+    keyword: string,
+  ) =>
+    [
+      ...dataMapKeys.all,
+      "table-options",
+      ...scope,
+      datasourceId,
+      database,
+      schema,
+      keyword,
+    ] as const,
+  excludePreview: (
+    scope: DataMapScope,
+    datasourceId: string,
+    database: string,
+    schema: string,
+    regex: string,
+  ) =>
+    [
+      ...dataMapKeys.all,
+      "exclude-preview",
+      ...scope,
+      datasourceId,
+      database,
+      schema,
+      regex,
+    ] as const,
+  crawls: (
+    scope: DataMapScope,
+    datasourceId: string,
+    taskId: string,
+    pageNo: number,
+    pageSize: number,
+  ) => [...dataMapKeys.all, "crawls", ...scope, datasourceId, taskId, pageNo, pageSize] as const,
   crawl: (scope: DataMapScope, crawlId: string) =>
     [...dataMapKeys.all, "crawl", ...scope, crawlId] as const,
   favorites: (scope: DataMapScope, pageNo: number, pageSize: number) =>

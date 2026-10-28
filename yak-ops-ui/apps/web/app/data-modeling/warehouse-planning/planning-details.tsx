@@ -41,16 +41,19 @@ export default function PlanningDetails(props: Props) {
         <Button
           size="small"
           variant="ghost"
-          className="px-0.5 text-xs font-normal text-[#667085] hover:text-[var(--yak-color-primary)]"
+          className="px-0.5 text-xs font-normal text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-color-primary)]"
           onClick={() => props.onEdit(row)}
         >
           编辑
         </Button>
-        <span aria-hidden="true" className="h-3 w-px shrink-0 bg-[#e4e7ec]" />
+        <span
+          aria-hidden="true"
+          className="h-3 w-px shrink-0 bg-[var(--yak-components-panel-border)]"
+        />
         <Button
           size="small"
           variant="ghost"
-          className="px-0.5 text-xs font-normal text-[#667085] hover:text-[#d92d20]"
+          className="px-0.5 text-xs font-normal text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-danger-text)]"
           onClick={() => props.onDelete(row)}
         >
           删除

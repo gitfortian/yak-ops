@@ -35,7 +35,7 @@ function Meta({ icon, label, children }: { icon: ReactNode; label: string; child
     <div className={META_CLASS}>
       <span className="shrink-0 text-[var(--yak-components-muted-text)]">{icon}</span>
       <span className={META_LABEL_CLASS}>{label}</span>
-      <span className="min-w-0 truncate text-[13px] text-[var(--yak-components-panel-text)]">
+      <span className="min-w-0 truncate text-sm text-[var(--yak-components-panel-text)]">
         {children}
       </span>
     </div>
@@ -96,7 +96,7 @@ export default function DetailHeader({ detail, onEdit, onToggleFavorite, favorit
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2.5">
               <h1
-                className="truncate text-[20px] font-semibold leading-7 text-[var(--yak-components-panel-text)]"
+                className="truncate text-lg font-semibold leading-7 text-[var(--yak-components-panel-text)]"
                 title={detail.name}
               >
                 {detail.name}
@@ -133,7 +133,11 @@ export default function DetailHeader({ detail, onEdit, onToggleFavorite, favorit
               <Star
                 size={13}
                 aria-hidden="true"
-                className={detail.favorited ? "fill-current text-[#f5a623]" : undefined}
+                className={
+                  detail.favorited
+                    ? "fill-current text-[var(--yak-components-alert-warning-icon)]"
+                    : undefined
+                }
               />
               {detail.favorited ? "已收藏" : "收藏"}
             </Button>

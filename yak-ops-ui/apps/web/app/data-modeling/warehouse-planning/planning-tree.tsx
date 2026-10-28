@@ -104,19 +104,23 @@ export default function PlanningTree(props: Props) {
   return (
     <nav aria-label="数仓规划目录" className="space-y-4">
       <section aria-label="公共层业务分类">
-        <p className="mb-1 px-1 text-xs text-[#667085]">公共层 · 业务分类</p>
+        <p className="mb-1 px-1 text-xs text-[var(--yak-color-text-secondary)]">
+          公共层 · 业务分类
+        </p>
         {props.tree.categories.length > 0 ? (
           renderNodes(props.tree.categories)
         ) : (
-          <p className="px-1 text-xs text-[#98a2b3]">暂无业务分类</p>
+          <p className="px-1 text-xs text-[var(--yak-components-muted-text)]">暂无业务分类</p>
         )}
       </section>
       <section aria-label="应用层数据集市">
-        <p className="mb-1 px-1 text-xs text-[#667085]">应用层 · 数据集市</p>
+        <p className="mb-1 px-1 text-xs text-[var(--yak-color-text-secondary)]">
+          应用层 · 数据集市
+        </p>
         {props.tree.datamarts.length > 0 ? (
           renderNodes(props.tree.datamarts)
         ) : (
-          <p className="px-1 text-xs text-[#98a2b3]">暂无数据集市</p>
+          <p className="px-1 text-xs text-[var(--yak-components-muted-text)]">暂无数据集市</p>
         )}
       </section>
     </nav>

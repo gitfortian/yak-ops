@@ -58,7 +58,7 @@ export default function LayerDeleteDialog({ layer, onClose, onDeleted }: Props) 
     >
       <DialogContent className="w-[480px] rounded-xl p-5 shadow-none">
         <DialogTitle className="text-sm font-medium">删除分层</DialogTitle>
-        <p className="mt-3 text-sm text-[#475467]">
+        <p className="mt-3 text-sm text-[var(--yak-color-text-secondary)]">
           确认删除分层「{layer.cnName}（{layer.enCode}）」？删除后该分层不再可选。
         </p>
         {conflict && <Alert>数据已变更，请关闭弹窗并刷新后重试。</Alert>}

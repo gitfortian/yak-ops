@@ -248,7 +248,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
     >
       <DialogContent className="w-[860px] max-w-[95vw] rounded-xl p-5 shadow-none">
         <DialogTitle className="text-sm font-medium">发布到物理表</DialogTitle>
-        <DialogDescription className="mt-2 text-xs leading-5 text-[#667475]">
+        <DialogDescription className="mt-2 text-xs leading-5 text-[var(--yak-color-text-secondary)]">
           发布会使用已保存的模型定义生成建表脚本。目标表不存在时创建；已存在时只做结构校验，
           不会修改它，也不会删除任何数据。
         </DialogDescription>
@@ -266,17 +266,17 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
               <div className="grid gap-1 text-xs">
                 <span className="font-medium">分层</span>
-                <span className="text-[#475467]">{layerName || "-"}</span>
+                <span className="text-[var(--yak-components-field-label)]">{layerName || "-"}</span>
               </div>
               <div className="grid gap-1 text-xs">
                 <span className="font-medium">数据源</span>
-                <span className="text-[#475467]">
+                <span className="text-[var(--yak-components-field-label)]">
                   {datasourceName || datasourceId}（{ENV_LABEL[connection ?? ""] ?? "环境未知"}）
                 </span>
               </div>
               <div className="grid gap-1 text-xs">
                 <span className="font-medium">物理表</span>
-                <span className="text-[#475467]">{model.name}</span>
+                <span className="text-[var(--yak-components-field-label)]">{model.name}</span>
               </div>
             </div>
 
@@ -327,7 +327,9 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
               ) : (
                 <div className="grid gap-1 text-xs">
                   <span className="font-medium">目标 Schema</span>
-                  <span className="text-[#667475]">该引擎以数据库作为 Schema，无需单独选择。</span>
+                  <span className="text-[var(--yak-color-text-secondary)]">
+                    该引擎以数据库作为 Schema，无需单独选择。
+                  </span>
                 </div>
               )}
             </div>
@@ -359,7 +361,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
               >
                 生成建表脚本
               </Button>
-              <span className="text-xs text-[#667475]">
+              <span className="text-xs text-[var(--yak-color-text-secondary)]">
                 {problem
                   ? problem.message
                   : previewKey === targetKey && preview
@@ -373,12 +375,12 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
               </div>
             )}
             {previewKey === targetKey && preview && (
-              <pre className="mt-3 max-h-56 overflow-auto rounded-lg border border-[#e4e7ec] bg-[#f9fafb] p-3 text-xs leading-5 whitespace-pre-wrap text-[#344054]">
+              <pre className="mt-3 max-h-56 overflow-auto rounded-lg border border-[var(--yak-components-panel-border)] bg-[var(--yak-color-surface)] p-3 text-xs leading-5 whitespace-pre-wrap text-[var(--yak-components-field-label)]">
                 {preview.ddl}
               </pre>
             )}
             {previewKey === targetKey && preview && (
-              <div className="mt-3 flex items-start gap-2 rounded-lg border border-[#e4e7ec] px-3 py-2 text-xs text-[#475467]">
+              <div className="mt-3 flex items-start gap-2 rounded-lg border border-[var(--yak-components-panel-border)] px-3 py-2 text-xs text-[var(--yak-components-field-label)]">
                 <Checkbox
                   aria-label="确认发布目标"
                   checked={confirmed}
@@ -396,7 +398,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
               </div>
             )}
             {result && (
-              <div className="mt-3 rounded-lg border border-[#e4e7ec] px-3 py-2 text-xs text-[#475467]">
+              <div className="mt-3 rounded-lg border border-[var(--yak-components-panel-border)] px-3 py-2 text-xs text-[var(--yak-components-field-label)]">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">本次发布结果</span>
                   {result.status ? (
@@ -428,7 +430,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
 
             <div className="mt-4">
               <h3 className="text-sm font-medium">发布历史</h3>
-              <p className="mt-1 text-xs text-[#667475]">
+              <p className="mt-1 text-xs text-[var(--yak-color-text-secondary)]">
                 最近 50 次发布记录。失败记录不会自动重试，「结果未知」只能对账。
               </p>
               <div className="mt-2">

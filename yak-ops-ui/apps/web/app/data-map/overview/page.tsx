@@ -1,4 +1,4 @@
-import { Alert, Button, PageHeader } from "@yak-ops/yak-ui";
+import { Alert, Button, Card, CardContent, CardHeader, PageHeader } from "@yak-ops/yak-ui";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
@@ -11,16 +11,15 @@ import { dataMapKeys } from "../shared/keys";
 import { DATA_MAP_BASE } from "../shared/labels";
 import { useDataMapScope } from "../shared/scope";
 
-const CARD_CLASS =
-  "flex min-w-0 flex-col gap-1 border border-[var(--yak-components-panel-border)] bg-white px-4 py-3";
-
 const StatCard = ({ label, value }: { label: string; value: number | undefined }) => (
-  <div className={CARD_CLASS}>
-    <span className="text-xs text-[var(--yak-components-muted-text)]">{label}</span>
-    <span className="text-xl font-semibold text-[var(--yak-components-panel-text)]">
-      {value === undefined ? "—" : countLabel(value)}
-    </span>
-  </div>
+  <Card>
+    <CardContent className="p-4">
+      <div className="text-xs text-[var(--yak-components-muted-text)]">{label}</div>
+      <div className="mt-1.5 text-xl font-semibold text-[var(--yak-components-panel-text)]">
+        {value === undefined ? "—" : countLabel(value)}
+      </div>
+    </CardContent>
+  </Card>
 );
 
 export default function OverviewPage() {
@@ -42,9 +41,9 @@ export default function OverviewPage() {
       <PageHeader
         title="数据地图概述"
         bordered
-        className="bg-white px-6 max-md:px-4"
+        className="bg-[var(--yak-color-background)] px-6 max-md:px-4"
         extra={
-          <Button size="small" onClick={() => navigate(`${DATA_MAP_BASE}/crawls`)}>
+          <Button size="small" onClick={() => navigate(`${DATA_MAP_BASE}/tasks`)}>
             采集任务
           </Button>
         }
@@ -67,40 +66,40 @@ export default function OverviewPage() {
           <StatCard label="未分类" value={overview.data?.unclassifiedCount} />
         </div>
 
-        <section className="flex min-h-0 flex-1 flex-col bg-white p-4">
-          <h2 className="mb-3 text-[13px] font-medium text-[var(--yak-components-panel-text)]">
-            热门资产
-          </h2>
+        <Card className="flex min-h-0 flex-1 flex-col">
+          <CardHeader title="热门资产" />
           {hotTablesEmpty ? (
-            assetCount === 0 ? (
-              <DataMapEmptyState
-                title="还没有采集任何资产"
-                description="发起一次采集，把数据源中的表和字段同步到资产目录，这里会显示访问最多的表。"
-                action={
-                  <Button
-                    size="small"
-                    variant="primary"
-                    onClick={() => navigate(`${DATA_MAP_BASE}/crawls?create=1`)}
-                  >
-                    发起采集
-                  </Button>
-                }
-              />
-            ) : (
-              <DataMapEmptyState
-                title="暂无访问记录"
-                description="打开任意资产详情后，访问次数最多的表会出现在这里。"
-                action={
-                  <Button size="small" onClick={() => navigate(`${DATA_MAP_BASE}/catalog`)}>
-                    去资产目录
-                  </Button>
-                }
-              />
-            )
+            <CardContent>
+              {assetCount === 0 ? (
+                <DataMapEmptyState
+                  title="还没有采集任何资产"
+                  description="发起一次采集，把数据源中的表和字段同步到资产目录，这里会显示访问最多的表。"
+                  action={
+                    <Button
+                      size="small"
+                      variant="primary"
+                      onClick={() => navigate(`${DATA_MAP_BASE}/tasks/new`)}
+                    >
+                      发起采集
+                    </Button>
+                  }
+                />
+              ) : (
+                <DataMapEmptyState
+                  title="暂无访问记录"
+                  description="打开任意资产详情后，访问次数最多的表会出现在这里。"
+                  action={
+                    <Button size="small" onClick={() => navigate(`${DATA_MAP_BASE}/catalog`)}>
+                      去资产目录
+                    </Button>
+                  }
+                />
+              )}
+            </CardContent>
           ) : (
             <AssetTable records={hotTables} loading={overview.isPending} />
           )}
-        </section>
+        </Card>
       </div>
     </div>
   );

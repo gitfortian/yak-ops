@@ -73,15 +73,15 @@ function TreeItem(props: {
       onClick={props.onClick}
       style={{ paddingLeft: 8 + props.level * 12 }}
       className={[
-        "flex w-full items-center gap-2 rounded-md py-1 pr-2 text-left text-[13px] transition-colors",
+        "flex w-full items-center gap-2 rounded-md py-1 pr-2 text-left text-sm transition-colors",
         props.active
           ? "bg-[var(--yak-color-primary-subtle)] font-semibold text-[var(--yak-color-primary)]"
-          : "text-[#26282c] hover:bg-[#f2f2f2]",
+          : "text-[var(--yak-components-panel-text)] hover:bg-[var(--yak-color-hover)]",
       ].join(" ")}
     >
       <span className="truncate">{props.label}</span>
       {props.meta && (
-        <span className="ml-auto shrink-0 text-[11px] font-normal text-[#98a2b3]">
+        <span className="ml-auto shrink-0 text-xs font-normal text-[var(--yak-components-muted-text)]">
           {props.meta}
         </span>
       )}
@@ -92,7 +92,7 @@ function TreeItem(props: {
 function GroupLabel({ children, level }: { children: ReactNode; level: number }) {
   return (
     <div
-      className="pb-0.5 pt-2 text-[11px] font-medium text-[#8b929e]"
+      className="pb-0.5 pt-2 text-xs font-medium text-[var(--yak-components-muted-text)]"
       style={{ paddingLeft: 8 + level * 12 }}
     >
       {children}
@@ -503,7 +503,7 @@ export default function DimensionModelingPage() {
       <PageHeader
         title="维度建模"
         bordered
-        className="bg-white px-6 max-md:px-4"
+        className="bg-[var(--yak-color-background)] px-6 max-md:px-4"
         extra={
           <div className="flex items-center gap-2">
             <Button
@@ -589,7 +589,7 @@ export default function DimensionModelingPage() {
                         ))}
                         {(dimensionsByOwner.get(domain.id) ?? []).length === 0 && (
                           <p
-                            className="pb-1 text-[11px] text-[#98a2b3]"
+                            className="pb-1 text-xs text-[var(--yak-components-muted-text)]"
                             style={{ paddingLeft: 8 + 2 * 12 }}
                           >
                             暂无维度
@@ -663,7 +663,10 @@ export default function DimensionModelingPage() {
                     </div>
                   ))}
                   {(dimensionsByOwner.get(datamart.id) ?? []).length === 0 && (
-                    <p className="pb-1 text-[11px] text-[#98a2b3]" style={{ paddingLeft: 8 + 12 }}>
+                    <p
+                      className="pb-1 text-xs text-[var(--yak-components-muted-text)]"
+                      style={{ paddingLeft: 8 + 12 }}
+                    >
                       暂无维度
                     </p>
                   )}
