@@ -19,6 +19,8 @@ import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitUpdateRequestEven
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsAckEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsReportEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsRequestEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.LatestFinishedSplitsNumberEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.LatestFinishedSplitsNumberRequestEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlStopSnapshotEvent;
@@ -221,10 +223,21 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     public void addReader(int reader) {
         if (closed || !initial) return;
         if (assigner.phase() == HybridPendingSplitsState.Phase.STREAMING
-                && (assigner.isAssigningNewlyAddedTables()
-                        || assigner.isNewlyAddedSnapshotFinished()
-                        || assigner.isNewlyAddedAssignmentFinished())) {
-            if (reader == 0) requestBinlogSplitUpdateIfNeed(true);
+                && isNewlyAddedProtocolStatus()) {
+            if (reader == 0) {
+                if (pendingBinlogUpdateGeneration >= 0) {
+                    // A reader attempt can restart while the coordinator remains alive.
+                    // Resend the current generation, not a new one on every addReader callback.
+                    binlogReaderSuspended = false;
+                    pendingMetadataGroupSent = false;
+                    context.sendEventToSourceReader(
+                            0, new BinlogSplitUpdateRequestEvent(pendingBinlogUpdateGeneration));
+                } else {
+                    requestBinlogSplitUpdateIfNeed(assigner.isNewlyAddedAssignmentFinished());
+                }
+            } else if (assigner.isAssigningNewlyAddedTables()) {
+                context.sendEventToSourceReader(reader, new FinishedSnapshotSplitsRequestEvent());
+            }
             return;
         }
         if ((assigner.phase() == HybridPendingSplitsState.Phase.STREAMING
@@ -253,6 +266,29 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             if (!bootstrap) return;
             metrics.phase(generation, TableMetrics.Phase.SNAPSHOT, false);
             planSnapshotAsync();
+        } else if (event instanceof LatestFinishedSplitsNumberRequestEvent request) {
+            if (reader != 0) {
+                throw new IllegalArgumentException("Only the Binlog owner may request finished Snapshot count");
+            }
+            if (assigner.phase() != HybridPendingSplitsState.Phase.STREAMING
+                    || assigner.isSnapshotMetaReleased()) {
+                return;
+            }
+            if (isNewlyAddedProtocolStatus() && pendingBinlogUpdateGeneration < 0) {
+                // Region failover can restore an older PAUSED reader against an already
+                // completed Snapshot Assigner. Restart the handoff using the current state.
+                requestBinlogSplitUpdateIfNeed(assigner.isNewlyAddedAssignmentFinished());
+            }
+            int latest = assigner.finishedSplits().size();
+            // The reader may have more old fences after captured tables were removed.
+            // The authoritative completed metadata is sent in the following group exchange.
+            long updateGeneration = pendingBinlogUpdateGeneration >= 0
+                    ? pendingBinlogUpdateGeneration
+                    : assigner.getBinlogAssignmentGeneration();
+            context.sendEventToSourceReader(
+                    0,
+                    new LatestFinishedSplitsNumberEvent(
+                            latest, updateGeneration, !assigner.isAssigningNewlyAddedTables()));
         } else if (event instanceof BinlogSplitMetaRequestEvent request) {
             if (reader != 0) throw new IllegalArgumentException("Only the Binlog owner may request metadata");
             AssignerStatus status = assigner.getAssignerStatus();

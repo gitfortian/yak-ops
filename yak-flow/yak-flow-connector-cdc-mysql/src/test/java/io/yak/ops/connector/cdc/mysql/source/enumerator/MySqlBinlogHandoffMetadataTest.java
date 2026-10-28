@@ -3,11 +3,16 @@ package io.yak.ops.connector.cdc.mysql.source.enumerator;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
+import io.yak.ops.connector.cdc.mysql.source.assigners.AssignerStatus;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.SnapshotPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaAssembledEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaRequestEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitUpdateAckEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitUpdateRequestEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.LatestFinishedSplitsNumberEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.LatestFinishedSplitsNumberRequestEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlStopSnapshotEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
@@ -32,6 +37,7 @@ import java.util.function.BiConsumer;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Exercises metadata groups, stale ACK rejection and restored HANDOFF to STREAMING. */
@@ -105,6 +111,85 @@ class MySqlBinlogHandoffMetadataTest {
         assertThatCode(() -> new MySqlSourceEnumerator(
                         StartupOptions.initial(), new Context(), source.config(), 2, handoffState(), new TableMetrics()))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void restoredNewTableSnapshotRequestsCurrentBinlogMetadataAndAcknowledgesUpdate() {
+        var context = new Context();
+        var source = MySqlSource.builder()
+                .hostname("localhost")
+                .username("user")
+                .password("secret")
+                .serverId(9322)
+                .topicPrefix("new-table-handoff")
+                .scanNewlyAddedTableEnabled(true)
+                .table(
+                        TABLE,
+                        new TableSchema(
+                                List.of(new Column("id", LogicalTypes.BIGINT.copy(false))),
+                                List.of("id")))
+                .buildHybrid(2);
+        var finished = new SnapshotPendingSplitsState(
+                true,
+                3,
+                List.of(),
+                Map.of(),
+                Set.of("chunk-0", "chunk-1", "chunk-2"),
+                List.of(info("chunk-0", 100), info("chunk-1", 200), info("chunk-2", 300)),
+                1,
+                0,
+                null,
+                List.of(TABLE),
+                List.of(),
+                AssignerStatus.NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED,
+                false,
+                true,
+                false);
+        var restored = new HybridPendingSplitsState(
+                finished, true, null, HybridPendingSplitsState.Phase.STREAMING, offset(50), offset(300));
+        var enumerator = new MySqlSourceEnumerator(
+                StartupOptions.initial(), context, source.config(), 2, restored, new TableMetrics());
+        enumerator.start();
+
+        var update = (BinlogSplitUpdateRequestEvent) context.toReader0.getFirst();
+        assertThat(update.getGeneration()).isPositive();
+        enumerator.addReader(0);
+        assertThat(((BinlogSplitUpdateRequestEvent) context.toReader0.getLast()).getGeneration())
+                .isEqualTo(update.getGeneration());
+
+        enumerator.handleSourceEvent(0, new LatestFinishedSplitsNumberRequestEvent(2));
+        var current = (LatestFinishedSplitsNumberEvent) context.toReader0.getLast();
+        assertThat(current.getLatestFinishedSplitsNumber()).isEqualTo(3);
+        assertThat(current.getBinlogAssignmentGeneration()).isEqualTo(update.getGeneration());
+        assertThat(current.isSnapshotFinished()).isTrue();
+
+        assertThatThrownBy(() -> enumerator.handleSourceEvent(
+                        1, new LatestFinishedSplitsNumberRequestEvent(2)))
+                .isInstanceOf(IllegalArgumentException.class);
+        enumerator.handleSourceEvent(0, new LatestFinishedSplitsNumberRequestEvent(4));
+        var reconciled = (LatestFinishedSplitsNumberEvent) context.toReader0.getLast();
+        assertThat(reconciled.getLatestFinishedSplitsNumber()).isEqualTo(3);
+
+        enumerator.handleSourceEvent(0, new BinlogSplitMetaRequestEvent(0, update.getGeneration() - 1));
+        assertThat(context.toReader0.getLast()).isSameAs(reconciled);
+        enumerator.handleSourceEvent(0, new BinlogSplitMetaRequestEvent(0, update.getGeneration()));
+        assertThat(context.toReader0.getLast()).isInstanceOf(BinlogSplitMetaEvent.class);
+        assertThat(((BinlogSplitMetaEvent) context.toReader0.getLast()).getTotalFinishedSplitSize())
+                .isEqualTo(3);
+
+        enumerator.handleSourceEvent(0, new BinlogSplitMetaAssembledEvent(update.getGeneration()));
+        assertThat(context.toReader0.getLast()).isInstanceOf(MySqlResumeBinlogEvent.class);
+        enumerator.handleSourceEvent(0, new BinlogSplitUpdateAckEvent(update.getGeneration() - 1));
+        assertThat(((HybridPendingSplitsState) enumerator.snapshotState(1))
+                        .getSnapshotPendingSplits().getAssignerStatus())
+                .isEqualTo(AssignerStatus.NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED);
+
+        enumerator.handleSourceEvent(0, new BinlogSplitUpdateAckEvent(update.getGeneration()));
+        enumerator.handleSourceEvent(0, new BinlogSplitUpdateAckEvent(update.getGeneration()));
+        assertThat(((HybridPendingSplitsState) enumerator.snapshotState(2))
+                        .getSnapshotPendingSplits().getAssignerStatus())
+                .isEqualTo(AssignerStatus.NEWLY_ADDED_ASSIGNING_FINISHED);
+        enumerator.close();
     }
 
     private static HybridPendingSplitsState handoffState() {
