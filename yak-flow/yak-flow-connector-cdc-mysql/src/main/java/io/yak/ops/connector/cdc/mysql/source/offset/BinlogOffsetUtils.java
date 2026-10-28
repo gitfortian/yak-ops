@@ -41,7 +41,8 @@ public class BinlogOffsetUtils {
                 return BinlogOffset.ofBinlogFilePosition("", 0);
             case TIMESTAMP:
                 try (Connection connection = mySqlSourceConfig.openSnapshotConnection()) {
-                    return DebeziumUtils.findBinlogOffset(offset.getTimestampSec() * 1000, connection, mySqlSourceConfig);
+                    return DebeziumUtils.findBinlogOffset(
+                            offset.getTimestampSec() * 1000, connection, mySqlSourceConfig);
                 } catch (SQLException exception) {
                     throw new IllegalStateException("Cannot resolve MySQL binlog offset", exception);
                 }
