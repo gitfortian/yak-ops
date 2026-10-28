@@ -197,12 +197,10 @@ public final class MySqlSourceReader
                 throw new IllegalArgumentException("Metadata delivered for another Binlog split");
             }
             if (binlogMetadata.addGroup(group)) {
-                context.sendSourceEventToCoordinator(
-                        new BinlogSplitMetaAssembledEvent(binlogMetadata.generation()));
+                context.sendSourceEventToCoordinator(new BinlogSplitMetaAssembledEvent(binlogMetadata.generation()));
             } else if (group.getBinlogAssignmentGeneration() == binlogMetadata.generation()) {
                 context.sendSourceEventToCoordinator(
-                        new BinlogSplitMetaRequestEvent(
-                                binlogMetadata.nextGroupId(), binlogMetadata.generation()));
+                        new BinlogSplitMetaRequestEvent(binlogMetadata.nextGroupId(), binlogMetadata.generation()));
             }
         } else if (event instanceof MySqlResumeBinlogEvent resume) {
             List<FinishedSnapshotSplitInfo> finished = binlogMetadata.finishedSplits(resume.highWatermark());
