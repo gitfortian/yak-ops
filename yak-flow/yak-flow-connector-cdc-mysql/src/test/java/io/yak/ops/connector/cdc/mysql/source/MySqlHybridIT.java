@@ -160,7 +160,7 @@ class MySqlHybridIT {
     }
 
     @Test
-    void partialExternalWritesRecoverFrozenChunkAndApplyLaterSourceDeletion() throws Exception {
+    void uncheckpointedSnapshotReplayAppliesLaterSourceDeletionAndUpdates() throws Exception {
         try (Fixture fixture = new Fixture(1, 1000)) {
             StringBuilder values = new StringBuilder();
             for (int i=1;i<=600;i++) {
@@ -168,15 +168,15 @@ class MySqlHybridIT {
                 values.append('(').append(i).append(",'original')");
             }
             fixture.execute("INSERT INTO " + fixture.source(0) + " VALUES " + values);
+            // The first checkpoint captures BOOTSTRAP, before any snapshot chunk is emitted.
+            // A later crash must replay uncheckpointed snapshot rows rather than restoring
+            // obsolete per-row output images. The JDBC sink accepts the repeated UPSERTs.
             Saved prepared;
             try (Harness first = new Harness(fixture, null)) {
                 first.start();
-                first.until(first::hasPreparedOutput, false);
-                assertTrue(fixture.values(0).isEmpty(), "Prepared rows must not be written before a completed checkpoint");
                 prepared = first.checkpoint();
-                first.until(() -> fixture.values(0).size() >= 256, false);
-                assertTrue(fixture.values(0).containsKey(1L));
-                assertTrue(fixture.values(0).size() < 600, "Failure must occur after only part of the normalized output");
+                first.until(() -> fixture.values(0).size() == 600, false);
+                assertEquals(600, fixture.values(0).size());
             }
             fixture.execute("DELETE FROM " + fixture.source(0) + " WHERE id=1",
                     "UPDATE " + fixture.source(0) + " SET name='after-high' WHERE id=300",
