@@ -89,7 +89,7 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
         nextChunkRange = restored.nextChunkRange();
         alreadyProcessedTables.addAll(restored.getAlreadyProcessedTables());
         remainingTables.addAll(restored.getRemainingTables());
-        assignerStatus = restored.getAssignerStatus();
+        assignerStatus = restored.getSnapshotAssignerStatus();
         tableIdCaseSensitive = restored.isTableIdCaseSensitive();
         remainingTablesCheckpointed = restored.isRemainingTablesCheckpointed();
         snapshotMetaReleased = restored.isSnapshotMetaReleased();

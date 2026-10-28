@@ -34,16 +34,13 @@ import java.util.zip.CRC32C;
  * assigned-binlog state. A binlog split returned to the enumerator remains checkpointed
  * while pending, so an interrupted latest-offset reader cannot accidentally seek to NOW.
  *
- * <p>The on-disk format intentionally differs from earlier YakFlow nested enumerator
- * frames. Versions 9 and 10 remain readable using their original layout; version 11
- * adds a corruption checksum without changing the Flink-style state ownership contract.
- * Flink CDC 3.7's numeric versions (5/6 for pending state, 4 for splits) are not wire-compatible
- * with YakFlow's serialized Debezium 2.7 offset and typed Chunk representation.
+ * <p>Version 1 starts a clean YakFlow CDC state layout. Pre-release checkpoint
+ * versions are intentionally unsupported. Flink CDC 3.7's numeric versions
+ * (5/6 for pending state, 4 for splits) are not byte-compatible with the
+ * Debezium 2.7 offset representation and typed Chunk cursor used here.
  */
 public final class PendingSplitsStateSerializer implements SimpleVersionedSerializer<PendingSplitsState> {
-    private static final int VERSION = 11;
-    private static final int VERSION_WITHOUT_CHECKSUM = 10;
-    private static final int PREVIOUS_VERSION = 9;
+    private static final int VERSION = 1;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final int MAX_SPLITS = 10_000;
     // Match Flink CDC's state discriminators. Snapshot-only is reserved for future use.
@@ -68,6 +65,9 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
     @Override
     public byte[] serialize(PendingSplitsState state) throws IOException {
         Objects.requireNonNull(state, "state");
+        if (state.serializedFormCache != null) {
+            return state.serializedFormCache.clone();
+        }
         try (var buffer = new ByteArrayOutputStream();
                 var out = new DataOutputStream(buffer)) {
             out.writeInt(splitSerializer.getVersion());
@@ -82,9 +82,7 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
                         "Unsupported pending splits state: " + state.getClass().getName());
             }
             out.flush();
-            // Version 11 appends CRC32C over the entire previous v10 body. The state kind,
-            // nested split format, high/low offsets and Snapshot progress are protected.
-            // Never silently reinterpret a damaged state as an older version.
+            // Protect the state kind, split format and Snapshot progress with CRC32C.
             if (buffer.size() > MAX_BYTES - Integer.BYTES) {
                 throw new IOException("Oversized MySQL enumerator checkpoint");
             }
@@ -93,32 +91,29 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
             checksum.update(body, 0, body.length);
             out.writeInt((int) checksum.getValue());
             out.flush();
-            return buffer.toByteArray();
+            byte[] serialized = buffer.toByteArray();
+            state.serializedFormCache = serialized;
+            return serialized.clone();
         }
     }
 
     @Override
     public PendingSplitsState deserialize(int version, byte[] bytes) throws IOException {
-        if ((version != VERSION && version != VERSION_WITHOUT_CHECKSUM && version != PREVIOUS_VERSION)
-                || bytes == null
-                || bytes.length < Integer.BYTES * 2
-                || bytes.length > MAX_BYTES) {
+        if (version != VERSION || bytes == null || bytes.length < Integer.BYTES * 2 || bytes.length > MAX_BYTES) {
             throw new IOException("Unsupported MySQL pending splits checkpoint format: " + version);
         }
-        if (version == VERSION) {
-            if (bytes.length < Integer.BYTES * 3) {
-                throw new IOException("Truncated checksummed MySQL pending splits checkpoint");
-            }
-            int payloadLength = bytes.length - Integer.BYTES;
-            int expectedChecksum =
-                    ByteBuffer.wrap(bytes, payloadLength, Integer.BYTES).getInt();
-            CRC32C checksum = new CRC32C();
-            checksum.update(bytes, 0, payloadLength);
-            if ((int) checksum.getValue() != expectedChecksum) {
-                throw new IOException("MySQL pending splits checkpoint checksum mismatch");
-            }
-            bytes = Arrays.copyOf(bytes, payloadLength);
+        if (bytes.length < Integer.BYTES * 3) {
+            throw new IOException("Truncated MySQL pending splits checkpoint");
         }
+        int payloadLength = bytes.length - Integer.BYTES;
+        int expectedChecksum =
+                ByteBuffer.wrap(bytes, payloadLength, Integer.BYTES).getInt();
+        CRC32C checksum = new CRC32C();
+        checksum.update(bytes, 0, payloadLength);
+        if ((int) checksum.getValue() != expectedChecksum) {
+            throw new IOException("MySQL pending splits checkpoint checksum mismatch");
+        }
+        bytes = Arrays.copyOf(bytes, payloadLength);
         try (var in = new DataInputStream(new ByteArrayInputStream(bytes))) {
             int splitVersion = in.readInt();
             if (splitVersion != splitSerializer.getVersion()) {
@@ -128,7 +123,7 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
             PendingSplitsState state =
                     switch (kind) {
                         case BINLOG_PENDING_SPLITS_STATE_FLAG -> readBinlog(in, splitVersion);
-                        case HYBRID_PENDING_SPLITS_STATE_FLAG -> readHybrid(in, splitVersion, version);
+                        case HYBRID_PENDING_SPLITS_STATE_FLAG -> readHybrid(in, splitVersion);
                         default -> throw new IOException("Unknown MySQL pending splits state kind: " + kind);
                     };
             if (in.available() != 0) {
@@ -170,23 +165,24 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
             out.writeUTF(entry.getKey());
             writeSplit(out, entry.getValue());
         }
-        out.writeInt(snapshot.getFinishedSplits().size());
-        for (String id : snapshot.getFinishedSplits()) {
-            out.writeUTF(id);
-        }
+        // FinishedSnapshotSplitInfo already contains the split ID and high watermark.
+        // Do not checkpoint a second, independently mutable finished-ID set.
         MySqlSplitSerializer.writeFinishedSplits(out, snapshot.getFinishedSplitInfos());
         out.writeInt(snapshot.nextTableIndex());
-        out.writeInt(snapshot.nextChunkIndex());
+        out.writeInt(
+                snapshot.getChunkSplitterState().getNextChunkId() == null
+                        ? 0
+                        : snapshot.getChunkSplitterState().getNextChunkId());
         ChunkRangeStateSerializer.write(out, snapshot.nextChunkRange());
         writeTableIds(out, snapshot.getAlreadyProcessedTables());
         writeTableIds(out, snapshot.getRemainingTables());
-        out.writeInt(snapshot.getAssignerStatus().getStatusCode());
+        out.writeInt(snapshot.getSnapshotAssignerStatus().getStatusCode());
         out.writeBoolean(snapshot.isTableIdCaseSensitive());
         out.writeBoolean(snapshot.isRemainingTablesCheckpointed());
         out.writeBoolean(snapshot.isSnapshotMetaReleased());
     }
 
-    private HybridPendingSplitsState readHybrid(DataInputStream in, int splitVersion, int version) throws IOException {
+    private HybridPendingSplitsState readHybrid(DataInputStream in, int splitVersion) throws IOException {
         int phaseIndex = in.readUnsignedByte();
         if (phaseIndex >= HybridPendingSplitsState.Phase.values().length) {
             throw new IOException("Unknown MySQL hybrid phase");
@@ -207,58 +203,43 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
                 throw new IOException("Corrupt assigned MySQL snapshot split");
             }
         }
-        int finishedCount = boundedCount(in);
+        var finishedInfos = MySqlSplitSerializer.readFinishedSplits(in);
         Set<String> finished = new LinkedHashSet<>();
-        for (int i = 0; i < finishedCount; i++) {
-            if (!finished.add(in.readUTF())) {
+        for (var info : finishedInfos) {
+            if (!finished.add(info.splitId())) {
                 throw new IOException("Duplicate finished MySQL snapshot split");
             }
         }
-        var finishedInfos = MySqlSplitSerializer.readFinishedSplits(in);
         int nextTable = in.readInt();
         int nextChunk = in.readInt();
         ChunkRange typedCursor = ChunkRangeStateSerializer.read(in);
-        SnapshotPendingSplitsState snapshot;
-        if (version >= VERSION_WITHOUT_CHECKSUM) {
-            List<TableId> alreadyProcessedTables = readTableIds(in);
-            List<TableId> remainingTables = readTableIds(in);
-            AssignerStatus status;
-            try {
-                status = AssignerStatus.fromStatusCode(in.readInt());
-            } catch (IllegalStateException invalidStatus) {
-                throw new IOException("Unknown MySQL Snapshot Assigner status", invalidStatus);
-            }
-            boolean tableIdCaseSensitive = in.readBoolean();
-            boolean remainingTablesCheckpointed = in.readBoolean();
-            boolean snapshotMetaReleased = in.readBoolean();
-            snapshot = new SnapshotPendingSplitsState(
-                    planned,
-                    total,
-                    pendingSnapshots,
-                    assigned,
-                    finished,
-                    finishedInfos,
-                    nextTable,
-                    nextChunk,
-                    typedCursor,
-                    alreadyProcessedTables,
-                    remainingTables,
-                    status,
-                    tableIdCaseSensitive,
-                    remainingTablesCheckpointed,
-                    snapshotMetaReleased);
-        } else {
-            snapshot = new SnapshotPendingSplitsState(
-                    planned,
-                    total,
-                    pendingSnapshots,
-                    assigned,
-                    finished,
-                    finishedInfos,
-                    nextTable,
-                    nextChunk,
-                    typedCursor);
+        List<TableId> alreadyProcessedTables = readTableIds(in);
+        List<TableId> remainingTables = readTableIds(in);
+        AssignerStatus status;
+        try {
+            status = AssignerStatus.fromStatusCode(in.readInt());
+        } catch (IllegalStateException invalidStatus) {
+            throw new IOException("Unknown MySQL Snapshot Assigner status", invalidStatus);
         }
+        boolean tableIdCaseSensitive = in.readBoolean();
+        boolean remainingTablesCheckpointed = in.readBoolean();
+        boolean snapshotMetaReleased = in.readBoolean();
+        SnapshotPendingSplitsState snapshot = new SnapshotPendingSplitsState(
+                planned,
+                total,
+                pendingSnapshots,
+                assigned,
+                finished,
+                finishedInfos,
+                nextTable,
+                nextChunk,
+                typedCursor,
+                alreadyProcessedTables,
+                remainingTables,
+                status,
+                tableIdCaseSensitive,
+                remainingTablesCheckpointed,
+                snapshotMetaReleased);
         return new HybridPendingSplitsState(
                 snapshot, binlogAssigned, pending, HybridPendingSplitsState.Phase.values()[phaseIndex], low, high);
     }

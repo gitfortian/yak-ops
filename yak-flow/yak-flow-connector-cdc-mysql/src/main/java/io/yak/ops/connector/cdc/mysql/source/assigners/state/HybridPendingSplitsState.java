@@ -2,11 +2,10 @@ package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.AssignerStatus;
-import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import java.util.Objects;
 
-/** A checkpoint of hybrid source split assignment and Snapshot lifecycle. */
+/** A {@link PendingSplitsState} for pending hybrid (snapshot & binlog) splits. */
 public final class HybridPendingSplitsState extends PendingSplitsState {
 
     public enum Phase {
@@ -17,7 +16,7 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
     }
 
     private final SnapshotPendingSplitsState snapshotPendingSplits;
-    private final boolean binlogAssigned;
+    private final boolean isBinlogSplitAssigned;
     private final MySqlBinlogSplit pendingBinlog;
     private final Phase phase;
     private final DebeziumOffset lowWatermark;
@@ -32,7 +31,7 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
             DebeziumOffset highWatermark) {
         this.snapshotPendingSplits = Objects.requireNonNull(snapshotPendingSplits, "snapshotPendingSplits");
         this.phase = Objects.requireNonNull(phase, "phase");
-        this.binlogAssigned = binlogAssigned;
+        this.isBinlogSplitAssigned = binlogAssigned;
         this.pendingBinlog = pendingBinlog;
         this.lowWatermark = lowWatermark;
         this.highWatermark = highWatermark;
@@ -42,7 +41,7 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
             throw new IllegalArgumentException("Inconsistent hybrid binlog assignment state");
         }
         if (phase == Phase.HANDOFF || phase == Phase.STREAMING) {
-            AssignerStatus status = snapshotPendingSplits.getAssignerStatus();
+            AssignerStatus status = snapshotPendingSplits.getSnapshotAssignerStatus();
             boolean released = snapshotPendingSplits.isSnapshotMetaReleased();
             if (released) {
                 if (phase != Phase.STREAMING
@@ -60,12 +59,11 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
                     || status == AssignerStatus.NEWLY_ADDED_ASSIGNING_FINISHED) {
                 if (!snapshotPendingSplits.snapshotPlanned()
                         || snapshotPendingSplits.totalSnapshotSplits() == 0
-                        || snapshotPendingSplits.getFinishedSplits().size()
+                        || snapshotPendingSplits.getSplitFinishedOffsets().size()
                                 != snapshotPendingSplits.totalSnapshotSplits()) {
                     throw new IllegalArgumentException("Hybrid handoff requires all snapshot chunks");
                 }
-                DebeziumOffset maximum = snapshotPendingSplits.getFinishedSplitInfos().stream()
-                        .map(FinishedSnapshotSplitInfo::highWatermark)
+                DebeziumOffset maximum = snapshotPendingSplits.getSplitFinishedOffsets().values().stream()
                         .max(DebeziumOffset::compareTo)
                         .orElseThrow();
                 if (highWatermark.compareTo(maximum) != 0 || lowWatermark.compareTo(highWatermark) > 0) {
@@ -84,7 +82,7 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
     }
 
     public boolean isBinlogSplitAssigned() {
-        return binlogAssigned;
+        return isBinlogSplitAssigned;
     }
 
     public MySqlBinlogSplit pendingBinlog() {
@@ -107,7 +105,7 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
     public boolean equals(Object other) {
         if (this == other) return true;
         if (!(other instanceof HybridPendingSplitsState state)) return false;
-        return binlogAssigned == state.binlogAssigned
+        return isBinlogSplitAssigned == state.isBinlogSplitAssigned
                 && snapshotPendingSplits.equals(state.snapshotPendingSplits)
                 && Objects.equals(pendingBinlog, state.pendingBinlog)
                 && phase == state.phase
@@ -117,14 +115,14 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
 
     @Override
     public int hashCode() {
-        return Objects.hash(snapshotPendingSplits, binlogAssigned, pendingBinlog, phase, lowWatermark, highWatermark);
+        return Objects.hash(snapshotPendingSplits, isBinlogSplitAssigned, pendingBinlog, phase, lowWatermark, highWatermark);
     }
 
     @Override
     public String toString() {
         return "HybridPendingSplitsState{phase=" + phase
                 + ", chunks=" + snapshotPendingSplits.totalSnapshotSplits()
-                + ", assignerStatus=" + snapshotPendingSplits.getAssignerStatus()
+                + ", assignerStatus=" + snapshotPendingSplits.getSnapshotAssignerStatus()
                 + ", checkpoint=redacted}";
     }
 }
