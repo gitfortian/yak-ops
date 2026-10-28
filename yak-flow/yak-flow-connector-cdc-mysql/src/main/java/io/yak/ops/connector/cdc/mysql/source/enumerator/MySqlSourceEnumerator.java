@@ -280,10 +280,8 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                 requestBinlogSplitUpdateIfNeed(assigner.isNewlyAddedAssignmentFinished());
             }
             int latest = assigner.finishedSplits().size();
-            if (request.getRestoredFinishedSplitsNumber() > latest) {
-                throw new IllegalStateException(
-                        "Restored Binlog references Snapshot fences absent from the coordinator");
-            }
+            // The reader may have more old fences after captured tables were removed.
+            // The authoritative completed metadata is sent in the following group exchange.
             long updateGeneration = pendingBinlogUpdateGeneration >= 0
                     ? pendingBinlogUpdateGeneration
                     : assigner.getBinlogAssignmentGeneration();
