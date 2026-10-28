@@ -159,11 +159,15 @@ public final class MySqlBinlogSplit extends MySqlSplit implements StreamSplit {
             throw new IllegalArgumentException("No finished snapshot watermarks");
         }
         if (!finishedSnapshotSplitInfos.isEmpty()) {
-            if (!finishedSnapshotSplitInfos.equals(completed) || !Objects.equals(highWatermark, high)) {
-                throw new IllegalStateException("Suspended Binlog metadata conflicts with snapshot handoff");
-            }
+            // Newly added tables extend the fence metadata while the Binlog is paused. Keep
+            // the exact offset captured at suspension; restarting from the oldest new fence
+            // would replay already emitted changes and could violate the reader's checkpoint.
             return new MySqlBinlogSplit(
-                    offset, schemaHistory, Phase.STREAMING, highWatermark, finishedSnapshotSplitInfos);
+                    offset,
+                    schemaHistory,
+                    Phase.STREAMING,
+                    Objects.requireNonNull(high, "high"),
+                    completed);
         }
         DebeziumOffset start = RecordUtils.getStartingOffsetOfBinlogSplit(completed);
         return new MySqlBinlogSplit(
