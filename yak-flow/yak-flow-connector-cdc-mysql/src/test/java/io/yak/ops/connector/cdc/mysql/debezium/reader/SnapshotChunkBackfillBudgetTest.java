@@ -47,6 +47,39 @@ class SnapshotChunkBackfillBudgetTest {
     }
 
     @Test
+    void defaultBoundedBackfillAcceptsRowsBeyondOldFourMiBLimit() {
+        SnapshotChunkBackfill buffer = new SnapshotChunkBackfill(
+                new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, null, null),
+                SCHEMA,
+                100_000);
+        String payload = "x".repeat(20_000);
+        for (int index = 0; index < 180; index++) {
+            buffer.addSnapshot(new TableRecord(
+                    TABLE, RowKind.INSERT, GenericRowData.of((long) index, payload)));
+        }
+        // The same 180 wide rows exceed 4 MiB under the existing estimate.
+        // They now fit the existing 64 MiB per-chunk bound.
+        assertThat(buffer.finish()).hasSize(180);
+    }
+
+    @Test
+    void defaultBoundStillRejectsAnOversizedChunkWithoutPartialPublication() {
+        SnapshotChunkBackfill buffer = new SnapshotChunkBackfill(
+                new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, null, null),
+                SCHEMA,
+                100_000);
+        String payload = "x".repeat(20_000);
+        assertThatThrownBy(() -> {
+            for (int index = 0; index < 2_000; index++) {
+                buffer.addSnapshot(new TableRecord(
+                        TABLE, RowKind.INSERT, GenericRowData.of((long) index, payload)));
+            }
+        }).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Snapshot Backfill buffer limit exceeded");
+        assertThatThrownBy(buffer::finish).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void aSmallChunkPublishesOnlyFinalNormalizedImages() {
         SnapshotChunkBackfill buffer = new SnapshotChunkBackfill(
                 new ChunkRange(TABLE, "id", LogicalTypeRoot.BIGINT, null, null),
