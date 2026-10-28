@@ -45,7 +45,7 @@ public final class FileCheckpointStore implements CompletedCheckpointStore {
 
     private static final int MAGIC = 0x59414B43; // YAKC
     /** Initial Source-to-Sink snapshot layout. Pre-release formats are intentionally unsupported. */
-    private static final int FORMAT_VERSION = 1;
+    private static final int FORMAT_VERSION = 2;
 
     private static final int POINTER_VERSION = 1;
     private static final String CHECKPOINT_DIRECTORY = "checkpoints";

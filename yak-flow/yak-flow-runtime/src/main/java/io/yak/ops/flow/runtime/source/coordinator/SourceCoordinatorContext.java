@@ -161,7 +161,19 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
                 .toArray(CompletableFuture<?>[]::new));
     }
 
-    SplitAssignmentTracker<SplitT> assignmentTracker() {
+    /** Records split assignments in the checkpoint bucket, as Flink SourceCoordinatorContext does. */
+    void onCheckpoint(long checkpointId) throws Exception {
+        assertCoordinatorThread();
+        assignments.onCheckpoint(checkpointId);
+    }
+
+    /** Drops the assignment history covered by a completed checkpoint. */
+    void onCheckpointComplete(long checkpointId) {
+        assertCoordinatorThread();
+        assignments.onCheckpointComplete(checkpointId);
+    }
+
+    SplitAssignmentTracker<SplitT> getAssignmentTracker() {
         assertCoordinatorThread();
         return assignments;
     }
@@ -226,10 +238,20 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
         // A delivery failure afterwards fails the job and restores the last durable checkpoint.
         Set<String> splitIds = new LinkedHashSet<>();
         Set<String> outstandingIds = new HashSet<>(inFlight.keySet());
-        assignments
-                .outstandingAssignments()
-                .values()
-                .forEach(splits -> splits.forEach(split -> outstandingIds.add(split.splitId())));
+        for (LinkedHashSet<SplitT> splits :
+                assignments.uncheckpointedAssignments().values()) {
+            for (SplitT split : splits) {
+                outstandingIds.add(split.splitId());
+            }
+        }
+        for (Map<Integer, LinkedHashSet<SplitT>> checkpoint :
+                assignments.assignmentsByCheckpointId().values()) {
+            for (LinkedHashSet<SplitT> splits : checkpoint.values()) {
+                for (SplitT split : splits) {
+                    outstandingIds.add(split.splitId());
+                }
+            }
+        }
         Map<Integer, AddSplitEvent<SplitT>> events = new HashMap<>();
         for (Map.Entry<Integer, List<SplitT>> entry : requested.entrySet()) {
             int reader = Objects.requireNonNull(entry.getKey(), "reader");
@@ -263,8 +285,8 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
             List<String> ids = splits.stream().map(SourceSplit::splitId).toList();
             for (SplitT split : splits) {
                 inFlight.put(split.splitId(), reader);
-                assignments.recordAssignment(reader, split);
             }
+            assignments.recordSplitAssignment(new SplitsAssignment<>(Map.of(reader, List.copyOf(splits))));
             try {
                 CompletionStage<Void> delivered = Objects.requireNonNull(
                         readers.get(reader).sendEvent(events.get(reader)), "SubtaskGateway returned null");

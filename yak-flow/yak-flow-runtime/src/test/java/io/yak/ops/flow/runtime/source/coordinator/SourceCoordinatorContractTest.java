@@ -17,7 +17,6 @@ import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
 import io.yak.ops.core.api.connector.source.SplitsAssignment;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import io.yak.ops.flow.runtime.support.TestSplitSerializers;
-import io.yak.ops.flow.runtime.checkpoint.SourceCoordinatorCheckpoint;
 import io.yak.ops.flow.runtime.execution.RuntimeTaskInfo;
 import io.yak.ops.flow.runtime.operators.coordination.OperatorCoordinatorContext;
 import io.yak.ops.flow.runtime.operators.coordination.OperatorEvent;
@@ -128,20 +127,23 @@ class SourceCoordinatorContractTest {
             assertEquals(1, splitEvent.serializerVersion());
             assertEquals(1, splitEvent.splitCount());
             CompletionException pending = assertThrows(
-                    CompletionException.class, () -> coordinator.snapshotCoordinator(7).join());
+                    CompletionException.class, () -> requestCoordinatorSnapshot(coordinator, 7).join());
             assertInstanceOf(PendingCheckpointDeliveriesException.class, pending.getCause());
 
             splitAcknowledged.complete(null);
             noMoreDispatched.get(5, TimeUnit.SECONDS);
             assertEquals(2, delivered.size());
             assertInstanceOf(NoMoreSplitsEvent.class, delivered.get(1));
-            assertFailure(coordinator.snapshotCoordinator(7));
+            assertFailure(requestCoordinatorSnapshot(coordinator, 7));
 
             noMoreAcknowledged.complete(null);
-            SourceCoordinatorCheckpoint<TestSplit, Integer> checkpoint = awaitCoordinatorSnapshot(coordinator, 7);
-            assertEquals(7, checkpoint.checkpointId());
-            assertEquals(List.of(new TestSplit("split-0")),
-                    checkpoint.assignedSinceLastCompletedCheckpoint().get(0));
+            byte[] checkpoint = awaitCoordinatorSnapshot(coordinator, 7);
+            java.nio.ByteBuffer bytes = java.nio.ByteBuffer.wrap(checkpoint);
+            assertEquals(1, bytes.getInt()); // Flink Source Coordinator serde version
+            assertEquals(1, bytes.getInt()); // Enumerator serializer version
+            assertEquals(Integer.BYTES, bytes.getInt());
+            assertEquals(1, bytes.getInt());
+            assertEquals(1, SourceCoordinator.deserializeCheckpoint(checkpoint, source.getEnumeratorCheckpointSerializer()));
         }
     }
 
@@ -163,9 +165,8 @@ class SourceCoordinatorContractTest {
 
             AddSplitEvent<?> assigned = assertInstanceOf(AddSplitEvent.class, events.getFirst());
             assertEquals(2, assigned.splitCount());
-            SourceCoordinatorCheckpoint<TestSplit, Integer> state = awaitCoordinatorSnapshot(coordinator, 10);
-            assertEquals(List.of(new TestSplit("batch-0-a"), new TestSplit("batch-0-b")),
-                    state.assignedSinceLastCompletedCheckpoint().get(0));
+            byte[] state = awaitCoordinatorSnapshot(coordinator, 10);
+            assertEquals(1, SourceCoordinator.deserializeCheckpoint(state, source.getEnumeratorCheckpointSerializer()));
         }
     }
 
@@ -277,12 +278,11 @@ class SourceCoordinatorContractTest {
             assertTrue(failedSnapshot.getCause().getMessage().contains("enumerator snapshot failed"));
             coordinator.notifyCheckpointAborted(31).get(5, TimeUnit.SECONDS);
 
-            SourceCoordinatorCheckpoint<TestSplit, Integer> next = awaitCoordinatorSnapshot(coordinator, 32);
-            assertEquals(32, next.checkpointId());
-            assertEquals(List.of(new TestSplit("split-0")),
-                    next.assignedSinceLastCompletedCheckpoint().get(0));
+            byte[] next = awaitCoordinatorSnapshot(coordinator, 32);
+            assertEquals(1, SourceCoordinator.deserializeCheckpoint(next, source.getEnumeratorCheckpointSerializer()));
             coordinator.notifyCheckpointComplete(32).get(5, TimeUnit.SECONDS);
-            assertTrue(awaitCoordinatorSnapshot(coordinator, 33).assignedSinceLastCompletedCheckpoint().isEmpty());
+            assertEquals(1, SourceCoordinator.deserializeCheckpoint(
+                    awaitCoordinatorSnapshot(coordinator, 33), source.getEnumeratorCheckpointSerializer()));
             assertEquals(3, source.snapshots.get());
         }
         assertTrue(source.closed.get());
@@ -294,12 +294,19 @@ class SourceCoordinatorContractTest {
         assertThrows(CompletionException.class, future::join);
     }
 
-    private static SourceCoordinatorCheckpoint<TestSplit, Integer> awaitCoordinatorSnapshot(
+    private static CompletableFuture<byte[]> requestCoordinatorSnapshot(
+            SourceCoordinator<TestSplit, Integer> coordinator, long checkpointId) {
+        CompletableFuture<byte[]> result = new CompletableFuture<>();
+        coordinator.checkpointCoordinator(checkpointId, result);
+        return result;
+    }
+
+    private static byte[] awaitCoordinatorSnapshot(
             SourceCoordinator<TestSplit, Integer> coordinator, long checkpointId) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (true) {
             try {
-                return coordinator.snapshotCoordinator(checkpointId).join();
+                return requestCoordinatorSnapshot(coordinator, checkpointId).join();
             } catch (CompletionException failure) {
                 if (!(failure.getCause() instanceof PendingCheckpointDeliveriesException)
                         || System.nanoTime() >= deadline) {
@@ -420,7 +427,25 @@ class SourceCoordinatorContractTest {
 
         @Override
         public SimpleVersionedSerializer<Integer> getEnumeratorCheckpointSerializer() {
-            throw new AssertionError("Local coordination does not serialize Checkpoint");
+            return new SimpleVersionedSerializer<>() {
+                @Override
+                public int getVersion() {
+                    return 1;
+                }
+
+                @Override
+                public byte[] serialize(Integer state) {
+                    return java.nio.ByteBuffer.allocate(Integer.BYTES).putInt(state).array();
+                }
+
+                @Override
+                public Integer deserialize(int version, byte[] bytes) throws java.io.IOException {
+                    if (version != 1 || bytes.length != Integer.BYTES) {
+                        throw new java.io.IOException("Unexpected test Enumerator State version");
+                    }
+                    return java.nio.ByteBuffer.wrap(bytes).getInt();
+                }
+            };
         }
     }
 }

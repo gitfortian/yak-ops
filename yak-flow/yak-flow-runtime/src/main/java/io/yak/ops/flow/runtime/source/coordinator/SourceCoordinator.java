@@ -3,7 +3,7 @@ package io.yak.ops.flow.runtime.source.coordinator;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.api.connector.source.SourceSplit;
 import io.yak.ops.core.api.connector.source.SplitEnumerator;
-import io.yak.ops.flow.runtime.checkpoint.SourceCoordinatorCheckpoint;
+import io.yak.ops.core.api.io.SimpleVersionedSerializer;
 import io.yak.ops.flow.runtime.execution.RuntimeTaskInfo;
 import io.yak.ops.flow.runtime.operators.coordination.OperatorCoordinatorContext;
 import io.yak.ops.flow.runtime.operators.coordination.OperatorEvent;
@@ -11,8 +11,12 @@ import io.yak.ops.flow.runtime.operators.coordination.SubtaskGateway;
 import io.yak.ops.flow.runtime.source.event.ReaderRegistrationEvent;
 import io.yak.ops.flow.runtime.source.event.RequestSplitEvent;
 import io.yak.ops.flow.runtime.source.event.SourceEventWrapper;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.LinkedHashSet;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -308,34 +312,57 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
         });
     }
 
-    /** Captures enumerator-local state, not a complete job checkpoint. */
-    public CompletableFuture<EnumStateT> snapshotEnumerator(long checkpointId) {
+    /** Takes a checkpoint of the SplitEnumerator, after recording the assignment boundary. */
+    public void checkpointCoordinator(long checkpointId, CompletableFuture<byte[]> result) {
         validateCheckpointId(checkpointId);
-        return submit(() -> {
-            ensureStarted();
-            context.ensureDeliveriesCompleted();
-            return Objects.requireNonNull(
-                    enumerator.snapshotState(checkpointId), "Enumerator snapshot must not be null");
-        });
+        Objects.requireNonNull(result, "result");
+        submit(() -> {
+                    ensureStarted();
+                    context.ensureDeliveriesCompleted();
+                    context.onCheckpoint(checkpointId);
+                    result.complete(toBytes(checkpointId));
+                    return null;
+                })
+                .whenComplete((unused, failure) -> {
+                    if (failure != null) {
+                        result.completeExceptionally(failure);
+                    }
+                });
     }
 
-    /**
-     * Captures coordinator state and outstanding split assignments.
-     *
-     * <p>Readers, channels and Sinks must be aligned and the entire state persisted before
-     * a checkpoint can be announced as successfully completed.
-     */
-    public CompletableFuture<SourceCoordinatorCheckpoint<SplitT, EnumStateT>> snapshotCoordinator(long checkpointId) {
-        validateCheckpointId(checkpointId);
-        return submit(() -> {
-            ensureStarted();
-            context.ensureDeliveriesCompleted();
-            EnumStateT state = Objects.requireNonNull(
-                    enumerator.snapshotState(checkpointId), "Enumerator snapshot must not be null");
-            Map<Integer, java.util.List<SplitT>> assignments =
-                    context.assignmentTracker().snapshot(checkpointId);
-            return new SourceCoordinatorCheckpoint<>(checkpointId, state, assignments);
-        });
+    /** Serialize the coordinator state using the Flink versioned checkpoint envelope. */
+    private byte[] toBytes(long checkpointId) throws Exception {
+        return writeCheckpointBytes(enumerator.snapshotState(checkpointId), source.getEnumeratorCheckpointSerializer());
+    }
+
+    static <EnumChkT> byte[] writeCheckpointBytes(
+            EnumChkT enumeratorCheckpoint, SimpleVersionedSerializer<EnumChkT> serializer) throws IOException {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                DataOutputStream out = new DataOutputStream(baos)) {
+            SourceCoordinatorSerdeUtils.writeCoordinatorSerdeVersion(out);
+            out.writeInt(serializer.getVersion());
+            byte[] serialized = serializer.serialize(enumeratorCheckpoint);
+            out.writeInt(serialized.length);
+            out.write(serialized);
+            out.flush();
+            return baos.toByteArray();
+        }
+    }
+
+    /** Restore the Enumerator State serialized by {@link #writeCheckpointBytes}. */
+    public static <EnumChkT> EnumChkT deserializeCheckpoint(
+            byte[] bytes, SimpleVersionedSerializer<EnumChkT> serializer) throws IOException {
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
+                DataInputStream in = new DataInputStream(bais)) {
+            int serdeVersion = SourceCoordinatorSerdeUtils.readAndVerifyCoordinatorSerdeVersion(in);
+            int enumSerializerVersion = in.readInt();
+            int stateSize = in.readInt();
+            byte[] serialized = SourceCoordinatorSerdeUtils.readBytes(in, stateSize);
+            if (serdeVersion != SourceCoordinatorSerdeUtils.VERSION_0 && bais.available() > 0) {
+                throw new IOException("Unexpected trailing bytes in enumerator checkpoint data");
+            }
+            return serializer.deserialize(enumSerializerVersion, serialized);
+        }
     }
 
     /** Commits assignment history and awaits Reader events emitted by the completion callback. */
@@ -343,8 +370,8 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
         validateCheckpointId(checkpointId);
         return submit(() -> {
                     ensureStarted();
+                    context.onCheckpointComplete(checkpointId);
                     enumerator.notifyCheckpointComplete(checkpointId);
-                    context.assignmentTracker().notifyCheckpointComplete(checkpointId);
                     return context.awaitSourceEventDeliveries();
                 })
                 .thenCompose(deliveries -> deliveries);
@@ -359,8 +386,9 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
     public CompletableFuture<Void> notifyCheckpointAborted(long checkpointId) {
         validateCheckpointId(checkpointId);
         return submit(() -> {
+            // As in Flink, the tracker retains checkpoint buckets until a later
+            // successful checkpoint or subtask reset; abort only notifies the enumerator.
             enumerator.notifyCheckpointAborted(checkpointId);
-            context.assignmentTracker().notifyCheckpointAborted(checkpointId);
             return null;
         });
     }
