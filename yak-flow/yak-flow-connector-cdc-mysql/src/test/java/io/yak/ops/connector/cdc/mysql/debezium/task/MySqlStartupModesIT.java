@@ -60,8 +60,25 @@ class MySqlStartupModesIT {
                 assertThat(collectIds(reader, Set.of(1L), Duration.ofSeconds(90))).contains(1L);
             } catch (Exception failure) {
                 byte[] history = reader.snapshotHistory();
+                var splitField = MySqlSplitReader.class.getDeclaredField("binlogSplit");
+                splitField.setAccessible(true);
+                var runtimeSplit = (MySqlBinlogSplit) splitField.get(reader);
+                var selected = runtimeSplit.offset();
+                var stop = new io.debezium.relational.history.HistoryRecord(
+                        selected.partition(), selected.position(), null, null, null, null, null);
+                var comparator = new io.debezium.connector.mysql.history.MySqlHistoryRecordComparator(null, null);
+                var details = new java.util.ArrayList<String>();
+                for (String entry : new String(history, java.nio.charset.StandardCharsets.UTF_8).split("\\n")) {
+                    if (entry.isBlank()) continue;
+                    var record = new io.debezium.relational.history.HistoryRecord(
+                            io.debezium.document.DocumentReader.defaultReader().read(entry));
+                    details.add("eligible=" + comparator.isAtOrBefore(record, stop)
+                            + ", tableChanges=" + (record.document().getArray("tableChanges") != null
+                                    ? record.document().getArray("tableChanges").size() : 0));
+                }
                 throw new IllegalStateException(
-                        "Historical startup missing table schema; requested=" + options.binlogOffset
+                        "Historical startup missing table schema; selected=" + selected
+                                + ", comparisons=" + details
                                 + ", history=" + new String(history, java.nio.charset.StandardCharsets.UTF_8),
                         failure);
             }
