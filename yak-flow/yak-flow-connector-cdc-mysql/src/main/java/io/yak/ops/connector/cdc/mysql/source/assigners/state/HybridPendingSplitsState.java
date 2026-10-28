@@ -63,10 +63,7 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
                                 != snapshotPendingSplits.totalSnapshotSplits()) {
                     throw new IllegalArgumentException("Hybrid handoff requires all snapshot chunks");
                 }
-                DebeziumOffset maximum = snapshotPendingSplits
-                        .getSplitFinishedOffsets()
-                        .values()
-                        .stream()
+                DebeziumOffset maximum = snapshotPendingSplits.getSplitFinishedOffsets().values().stream()
                         .max(DebeziumOffset::compareTo)
                         .orElseThrow();
                 if (highWatermark.compareTo(maximum) != 0 || lowWatermark.compareTo(highWatermark) > 0) {
@@ -118,7 +115,8 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
 
     @Override
     public int hashCode() {
-        return Objects.hash(snapshotPendingSplits, isBinlogSplitAssigned, pendingBinlog, phase, lowWatermark, highWatermark);
+        return Objects.hash(
+                snapshotPendingSplits, isBinlogSplitAssigned, pendingBinlog, phase, lowWatermark, highWatermark);
     }
 
     @Override
