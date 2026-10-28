@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.yak.ops.connector.cdc.mysql.source.assigners;
 
 import io.yak.ops.core.data.TableId;
@@ -6,17 +23,22 @@ import java.math.BigDecimal;
 import java.util.Objects;
 
 /**
- * One typed snapshot range with database-ordered, half-open boundaries.
+ * An immutable, half-open chunk range.
  *
- * <p>Values are immutable JDBC scalars. They are not compared using Java string ordering:
- * MySQL collations define the ordering used by the snapshot predicate and the planner.
- * Typed boundaries are persisted in the checkpoint state; row-level Snapshot progress
- * is checkpointed only after the normalized backfill result is frozen.
+ * <p>Ported from Flink CDC ChunkRange. YakFlow stores typed table/column metadata with each
+ * boundary because its current JDBC snapshot and checkpoint format identify ranges directly;
+ * MySQL ordering rather than Java string comparison determines VARCHAR boundary order.
  */
-public record ChunkRange(TableId tableId, String column, LogicalTypeRoot type, Object start, Object end) {
-    public ChunkRange {
-        Objects.requireNonNull(tableId, "tableId");
-        Objects.requireNonNull(type, "type");
+public final class ChunkRange {
+    private final TableId tableId;
+    private final String column;
+    private final LogicalTypeRoot type;
+    private final Object start;
+    private final Object end;
+
+    public ChunkRange(TableId tableId, String column, LogicalTypeRoot type, Object start, Object end) {
+        this.tableId = Objects.requireNonNull(tableId, "tableId");
+        this.type = Objects.requireNonNull(type, "type");
         if (column == null || column.isBlank()) {
             throw new IllegalArgumentException("Snapshot chunk column must not be blank");
         }
@@ -41,6 +63,9 @@ public record ChunkRange(TableId tableId, String column, LogicalTypeRoot type, O
             }
             default -> throw new IllegalArgumentException("Unsupported MySQL snapshot chunk type: " + type);
         }
+        this.column = column;
+        this.start = start;
+        this.end = end;
     }
 
     private static void require(Object value, Class<?> type) {
@@ -49,8 +74,44 @@ public record ChunkRange(TableId tableId, String column, LogicalTypeRoot type, O
         }
     }
 
+    public TableId tableId() {
+        return tableId;
+    }
+
+    public String column() {
+        return column;
+    }
+
+    public LogicalTypeRoot type() {
+        return type;
+    }
+
+    public Object start() {
+        return start;
+    }
+
+    public Object end() {
+        return end;
+    }
+
     public boolean last() {
         return end == null;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) return true;
+        if (!(other instanceof ChunkRange that)) return false;
+        return Objects.equals(tableId, that.tableId)
+                && Objects.equals(column, that.column)
+                && type == that.type
+                && Objects.equals(start, that.start)
+                && Objects.equals(end, that.end);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(tableId, column, type, start, end);
     }
 
     @Override
