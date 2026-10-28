@@ -11,8 +11,10 @@ import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaAssembledEven
 import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaRequestEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsAckEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsRequestEvent;
 import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
@@ -65,6 +67,20 @@ class MySqlSourceReaderTest {
             reader.handleSourceEvents(new FinishedSnapshotSplitsAckEvent(List.of("missing")));
             assertThat(reader.snapshotState(2)).isEmpty();
             reader.notifyCheckpointComplete(2);
+        }
+    }
+
+    @Test
+    void checkpointRestoredPausedBinlogRereportsLowWatermarkToCoordinator() throws Exception {
+        var events = new ArrayList<SourceEvent>();
+        var requests = new AtomicInteger();
+        try (MySqlSourceReader reader = new MySqlSourceReader(
+                config(), context(requests, events), new TableMetrics(), true)) {
+            reader.addSplits(List.of(MySqlBinlogSplit.forPausedSnapshot(offset(120), new byte[] {1})));
+            assertThat(events).hasSize(1);
+            assertThat(events.getFirst()).isInstanceOf(MySqlLowWatermarkEvent.class);
+            assertThat(((MySqlLowWatermarkEvent) events.getFirst()).offset()).isEqualTo(offset(120));
+            assertThat(requests.get()).isEqualTo(1);
         }
     }
 
