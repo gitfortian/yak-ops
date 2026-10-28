@@ -383,9 +383,6 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
 
     private void sendResumeEvent(int reader) {
         context.sendEventToSourceReader(
-                reader,
-                reader == 0
-                        ? new MySqlResumeBinlogEvent(assigner.high())
-                        : new MySqlStopSnapshotEvent());
+                reader, reader == 0 ? new MySqlResumeBinlogEvent(assigner.high()) : new MySqlStopSnapshotEvent());
     }
 }
