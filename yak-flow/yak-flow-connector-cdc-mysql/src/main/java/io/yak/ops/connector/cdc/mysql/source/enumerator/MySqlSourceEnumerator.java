@@ -328,7 +328,9 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                 waitingReaders.remove(reader);
                 continue;
             }
-            MySqlSplit split = assigner.getNext().orElse(null);
+            // Snapshot readers may include subtask IDs other than zero. Keep the Binlog
+            // split reserved for reader zero even if that reader is temporarily unavailable.
+            MySqlSplit split = assigner.nextSnapshot();
             if (split == null) break;
             context.assignSplit(split, reader);
             waitingReaders.remove(reader);
