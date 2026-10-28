@@ -12,7 +12,6 @@ import io.yak.ops.flow.runtime.source.event.ReaderRegistrationEvent;
 import io.yak.ops.flow.runtime.source.event.RequestSplitEvent;
 import io.yak.ops.flow.runtime.source.event.SourceEventWrapper;
 import java.util.LinkedHashSet;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Callable;
