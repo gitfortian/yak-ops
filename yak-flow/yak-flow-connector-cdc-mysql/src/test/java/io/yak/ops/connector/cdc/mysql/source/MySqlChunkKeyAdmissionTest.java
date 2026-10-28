@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.yak.ops.configuration.Configuration;
-import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import io.yak.ops.connector.cdc.mysql.source.utils.ChunkUtils;
 import io.yak.ops.connector.cdc.mysql.table.MySqlCdcSourceFactory;
@@ -41,7 +40,7 @@ class MySqlChunkKeyAdmissionTest {
                 () -> factory.validateSchema(new Configuration().toReadonlyConfig(), WITHOUT_PK));
         var keyed = new TableSchema(WITHOUT_PK.columns(), List.of("bucket"));
         factory.validateSchema(new Configuration().toReadonlyConfig(), keyed);
-        assertEquals("bucket", MySqlChunkSplitter.splitKey(keyed));
+        assertEquals("bucket", ChunkUtils.requireSupportedSnapshot(keyed, null).name());
         assertThrows(IllegalArgumentException.class,
                 () -> factory.validateSchema(settings.set(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN, "name")
                         .toReadonlyConfig(), keyed));
