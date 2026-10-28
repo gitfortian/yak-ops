@@ -181,16 +181,22 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
     Map<Integer, List<SplitT>> checkpointedAssignments() {
         assertCoordinatorThread();
         Map<Integer, java.util.LinkedHashMap<String, SplitT>> all = new java.util.LinkedHashMap<>();
-        assignments.assignmentsByCheckpointId().values().forEach(checkpoint -> checkpoint.forEach((subtask, splits) -> {
+        for (Map<Integer, LinkedHashSet<SplitT>> checkpoint : assignments.assignmentsByCheckpointId().values()) {
+            for (Map.Entry<Integer, LinkedHashSet<SplitT>> entry : checkpoint.entrySet()) {
+                java.util.LinkedHashMap<String, SplitT> bucket =
+                        all.computeIfAbsent(entry.getKey(), ignored -> new java.util.LinkedHashMap<>());
+                for (SplitT split : entry.getValue()) {
+                    bucket.putIfAbsent(split.splitId(), split);
+                }
+            }
+        }
+        for (Map.Entry<Integer, LinkedHashSet<SplitT>> entry : assignments.uncheckpointedAssignments().entrySet()) {
             java.util.LinkedHashMap<String, SplitT> bucket =
-                    all.computeIfAbsent(subtask, ignored -> new java.util.LinkedHashMap<>());
-            splits.forEach(split -> bucket.putIfAbsent(split.splitId(), split));
-        }));
-        assignments.uncheckpointedAssignments().forEach((subtask, splits) -> {
-            java.util.LinkedHashMap<String, SplitT> bucket =
-                    all.computeIfAbsent(subtask, ignored -> new java.util.LinkedHashMap<>());
-            splits.forEach(split -> bucket.putIfAbsent(split.splitId(), split));
-        });
+                    all.computeIfAbsent(entry.getKey(), ignored -> new java.util.LinkedHashMap<>());
+            for (SplitT split : entry.getValue()) {
+                bucket.putIfAbsent(split.splitId(), split);
+            }
+        }
         Map<Integer, List<SplitT>> result = new java.util.LinkedHashMap<>();
         all.forEach((subtask, splits) -> result.put(subtask, List.copyOf(splits.values())));
         return Map.copyOf(result);
@@ -261,10 +267,18 @@ public final class SourceCoordinatorContext<SplitT extends SourceSplit> implemen
         // A delivery failure afterwards fails the job and restores the last durable checkpoint.
         Set<String> splitIds = new LinkedHashSet<>();
         Set<String> outstandingIds = new HashSet<>(inFlight.keySet());
-        assignments.uncheckpointedAssignments().values().forEach(splits ->
-                splits.forEach(split -> outstandingIds.add(split.splitId())));
-        assignments.assignmentsByCheckpointId().values().forEach(checkpoint ->
-                checkpoint.values().forEach(splits -> splits.forEach(split -> outstandingIds.add(split.splitId()))));
+        for (LinkedHashSet<SplitT> splits : assignments.uncheckpointedAssignments().values()) {
+            for (SplitT split : splits) {
+                outstandingIds.add(split.splitId());
+            }
+        }
+        for (Map<Integer, LinkedHashSet<SplitT>> checkpoint : assignments.assignmentsByCheckpointId().values()) {
+            for (LinkedHashSet<SplitT> splits : checkpoint.values()) {
+                for (SplitT split : splits) {
+                    outstandingIds.add(split.splitId());
+                }
+            }
+        }
         Map<Integer, AddSplitEvent<SplitT>> events = new HashMap<>();
         for (Map.Entry<Integer, List<SplitT>> entry : requested.entrySet()) {
             int reader = Objects.requireNonNull(entry.getKey(), "reader");
