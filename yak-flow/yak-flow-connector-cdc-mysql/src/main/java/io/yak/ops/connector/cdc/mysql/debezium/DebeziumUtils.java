@@ -74,7 +74,10 @@ public final class DebeziumUtils {
                 throw new SQLException("MySQL binary logging is disabled or returned an invalid position");
             }
             String gtids = status.getMetaData().getColumnCount() > 4 ? status.getString(5) : null;
-            return BinlogOffset.builder().setBinlogFilePosition(file, pos).setGtidSet(gtids).build();
+            return BinlogOffset.builder()
+                    .setBinlogFilePosition(file, pos)
+                    .setGtidSet(gtids)
+                    .build();
         }
     }
 
