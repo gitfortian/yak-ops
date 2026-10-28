@@ -7,6 +7,7 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlBinlogSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.BinlogPendingSplitsState;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.ChunkSplitterState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
@@ -288,8 +289,9 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         if ((chunkIndex == 0) != (cursor == null)) {
             throw new IllegalStateException("Typed chunk discovery cursor does not match its index");
         }
+        ChunkSplitterState splitterState = assigner.getChunkSplitterState();
         planning = true;
-        context.callAsync(() -> splitter.planNext(table, tableIndex, chunkIndex, cursor), (split, failure) -> {
+        context.callAsync(() -> splitter.planNext(table, tableIndex, splitterState), (split, failure) -> {
             planning = false;
             if (closed) return;
             if (failure != null) {
