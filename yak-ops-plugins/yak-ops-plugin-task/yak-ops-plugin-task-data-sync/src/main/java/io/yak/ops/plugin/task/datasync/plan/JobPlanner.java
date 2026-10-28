@@ -205,7 +205,9 @@ public final class JobPlanner {
             Map<String, Object> prepared =
                     new LinkedHashMap<>(JobOptions.connectorOptions(source).getSourceMap());
             if (instanceId != null && "MYSQL_CDC".equals(sourceFactory.factoryIdentifier())) {
-                prepared.put(MySqlSourceOptions.SERVER_ID.key(), Integer.toString(MySqlCdcReplicationIdentity.serverId(instanceId)));
+                prepared.put(
+                        MySqlSourceOptions.SERVER_ID.key(),
+                        Integer.toString(MySqlCdcReplicationIdentity.serverId(instanceId)));
                 prepared.put(
                         MySqlSourceOptions.TOPIC_PREFIX.key(), MySqlCdcReplicationIdentity.topicPrefix(instanceId));
                 if (tables.isEmpty()) claims.add(MySqlCdcReplicationIdentity.exclusiveResource(instanceId));

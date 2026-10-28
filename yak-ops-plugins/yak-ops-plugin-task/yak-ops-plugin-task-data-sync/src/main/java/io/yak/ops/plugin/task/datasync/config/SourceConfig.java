@@ -67,7 +67,8 @@ public record SourceConfig(ReadonlyConfig options, IncrementalConfig incremental
         }
         physical.put(JobOptions.DATASOURCE_ID.key(), datasourceId);
         physical.put(JobOptions.TYPE.key(), type.sourceIdentifier());
-        if (chunkKey != null) physical.put(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key(), chunkKey);
+        if (chunkKey != null)
+            physical.put(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key(), chunkKey);
         if (startupMode != null)
             physical.put(
                     MySqlSourceOptions.SCAN_STARTUP_MODE.key(),
