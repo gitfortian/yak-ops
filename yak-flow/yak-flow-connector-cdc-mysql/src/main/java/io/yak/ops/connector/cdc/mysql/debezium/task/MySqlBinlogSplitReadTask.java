@@ -229,24 +229,46 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
         }
     }
 
+    /**
+     * Stop the embedded Debezium 2.7 engine before releasing the offset-store session and
+     * temporary schema history. Cleanup is mandatory even if the engine fails to join.
+     *
+     * <p>This mirrors Flink CDC's fail-safe Reader lifecycle: an earlier close error must
+     * not leave a registered offset store in a subsequent Reader attempt.
+     */
     @Override
     public void close() throws Exception {
         requestStop();
-        if (worker != null) {
-            worker.join(5_000);
-            if (worker.isAlive()) {
-                worker.interrupt();
-                throw new IOException("Debezium MySQL engine failed to stop within timeout");
+        Exception failure = null;
+        try {
+            if (worker != null) {
+                worker.join(5_000);
+                if (worker.isAlive()) {
+                    worker.interrupt();
+                    throw new IOException("Debezium MySQL engine failed to stop within timeout");
+                }
+            }
+        } catch (Exception error) {
+            failure = error;
+            if (error instanceof InterruptedException) Thread.currentThread().interrupt();
+        } finally {
+            try {
+                if (sessionId != null) {
+                    CheckpointOffsetBackingStore.unregister(sessionId);
+                    sessionId = null;
+                }
+            } catch (Exception error) {
+                if (failure == null) failure = error;
+                else failure.addSuppressed(error);
+            }
+            try {
+                if (historyPath != null) Files.deleteIfExists(historyPath);
+                if (directory != null) Files.deleteIfExists(directory);
+            } catch (Exception error) {
+                if (failure == null) failure = error;
+                else failure.addSuppressed(error);
             }
         }
-        if (sessionId != null) {
-            CheckpointOffsetBackingStore.unregister(sessionId);
-        }
-        if (historyPath != null) {
-            Files.deleteIfExists(historyPath);
-        }
-        if (directory != null) {
-            Files.deleteIfExists(directory);
-        }
+        if (failure != null) throw failure;
     }
 }
