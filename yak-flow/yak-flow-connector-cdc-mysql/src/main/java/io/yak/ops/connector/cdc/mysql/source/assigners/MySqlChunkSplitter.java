@@ -123,7 +123,7 @@ public final class MySqlChunkSplitter {
                     String configuredKey = sourceConfig.chunkKeyColumns().get(table);
                     TableSchema tableSchema = sourceConfig.discoverTable(connection, table, configuredKey);
                     String selectedKey = configuredKey == null
-                            ? ChunkUtils.getChunkKeyColumn(tableSchema, null).name()
+                            ? ChunkUtils.requireSupportedSnapshot(tableSchema, null).name()
                             : configuredKey;
                     schemas.put(table, tableSchema);
                     chunkKeyColumns.put(table, selectedKey);
@@ -171,7 +171,7 @@ public final class MySqlChunkSplitter {
     public ChunkRange nextChunk(TableId table, Object lower) throws SQLException {
         if (cancelled) throw new SQLException("MySQL snapshot chunk discovery was cancelled");
         TableSchema schema = Objects.requireNonNull(schemas.get(table), "table schema");
-        Column column = ChunkUtils.getChunkKeyColumn(schema, chunkKeyColumns.get(table));
+        Column column = ChunkUtils.requireSupportedSnapshot(schema, chunkKeyColumns.get(table));
         LogicalTypeRoot type = column.dataType().getTypeRoot();
         // Validate scalar family and caller-supplied resume boundary before opening JDBC.
         new ChunkRange(table, column.name(), type, lower, null);
@@ -330,7 +330,7 @@ public final class MySqlChunkSplitter {
             throw new IllegalArgumentException("Restored Flink chunk splitter state differs from its table");
         }
         TableSchema schema = Objects.requireNonNull(schemas.get(table), "table schema");
-        Column column = ChunkUtils.getChunkKeyColumn(schema, chunkKeyColumns.get(table));
+        Column column = ChunkUtils.requireSupportedSnapshot(schema, chunkKeyColumns.get(table));
         Object nextStart = state.getNextChunkStart().getValue();
         ChunkRange cursor =
                 new ChunkRange(table, column.name(), column.dataType().getTypeRoot(), nextStart, null);
@@ -349,7 +349,7 @@ public final class MySqlChunkSplitter {
             throw new SQLException("MySQL typed chunk discovery is cancelled or exceeds its range limit");
         }
         TableSchema schema = Objects.requireNonNull(schemas.get(table), "table schema");
-        Column column = ChunkUtils.getChunkKeyColumn(schema, chunkKeyColumns.get(table));
+        Column column = ChunkUtils.requireSupportedSnapshot(schema, chunkKeyColumns.get(table));
         if (cursor != null
                 && (!cursor.tableId().equals(table)
                         || !cursor.column().equals(column.name())
