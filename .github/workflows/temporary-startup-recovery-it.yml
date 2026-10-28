@@ -1,4 +1,5 @@
 name: Temporary Specific Startup Recovery IT
+# Second pass: verify Debezium history comparator
 on:
   push:
     branches: [feat/mysql-cdc-chunk-startup-completion]
