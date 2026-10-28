@@ -94,6 +94,11 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         tables = List.copyOf(config.schemas().keySet());
         this.initial = startupOptions.startupMode() == StartupMode.INITIAL;
+        if (initial && config.isReleaseSnapshotMetadataEnabled()) {
+            throw new UnsupportedOperationException(
+                    "Snapshot metadata release requires a durable released-state checkpoint protocol; "
+                            + "keep scan.incremental.snapshot.metadata.release.enabled=false until that migration");
+        }
         splitMetaGroupSize = config.getSplitMetaGroupSize();
         if (splitMetaGroupSize <= 0) throw new IllegalArgumentException("Invalid Binlog split metadata group size");
         if (initial && restored != null && !(restored instanceof HybridPendingSplitsState)) {
