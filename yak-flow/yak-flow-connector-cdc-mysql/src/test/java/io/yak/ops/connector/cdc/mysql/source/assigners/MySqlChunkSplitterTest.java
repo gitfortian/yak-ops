@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.connector.cdc.mysql.debezium.reader.SnapshotSplitReader;
+import io.yak.ops.connector.cdc.mysql.source.assigners.state.ChunkSplitterState;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypeRoot;
@@ -240,6 +241,32 @@ class MySqlChunkSplitterTest {
         var ranges = splitter.splitChunks(CODES);
         assertEquals(1, ranges.size());
         assertEquals(List.of(1, 2, 3), scannedIds(url, ranges));
+    }
+
+    @Test
+    void rejectsCorruptedFlinkChunkSplitterCheckpointsBeforeOpeningJdbc() {
+        var schema = new TableSchema(
+                List.of(new Column("id", LogicalTypes.BIGINT.copy(false))), List.of("id"));
+        var splitter = splitter(
+                "jdbc:h2:mem:unused_" + UUID.randomUUID() + ";MODE=MySQL",
+                Map.of(CODES, schema),
+                Map.of(),
+                2);
+        assertThrows(IllegalArgumentException.class, () -> splitter.planNext(
+                CODES,
+                0,
+                new ChunkSplitterState(
+                        PRICES, ChunkSplitterState.ChunkBound.middleOf(10L), 1)));
+        assertThrows(IllegalArgumentException.class, () -> splitter.planNext(
+                CODES,
+                0,
+                new ChunkSplitterState(
+                        CODES, ChunkSplitterState.ChunkBound.END_BOUND, 1)));
+        assertThrows(IllegalArgumentException.class, () -> splitter.planNext(
+                CODES,
+                0,
+                new ChunkSplitterState(
+                        CODES, ChunkSplitterState.ChunkBound.middleOf(10L), null)));
     }
 
     @Test
