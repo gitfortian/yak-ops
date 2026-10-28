@@ -6,21 +6,30 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaAssembledEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaRequestEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsAckEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
+import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsRequestEvent;
+import io.yak.ops.core.api.connector.source.SourceEvent;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.Column;
 import io.yak.ops.core.types.LogicalTypes;
 import io.yak.ops.core.types.TableSchema;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 /**
  * SourceReader control-plane contract tests following Flink CDC's
- * MySqlSourceReaderTest. The Flink-only metadata-update events are not
- * transplanted: YakFlow uses the finished-split reporting/ACK protocol.
+ * MySqlSourceReaderTest. The reader handles Flink-style bounded Binlog metadata
+ * groups and finished Snapshot split reporting/ACK separately.
  */
 class MySqlSourceReaderTest {
 
@@ -59,6 +68,35 @@ class MySqlSourceReaderTest {
         }
     }
 
+    @Test
+    void assemblesSerializedMetadataGroupsBeforeResumingBinlog() throws Exception {
+        var events = new ArrayList<SourceEvent>();
+        var table = new TableId("shop", null, "orders");
+        var first = new FinishedSnapshotSplitInfo(table, "chunk-0", null, null, offset(100));
+        var second = new FinishedSnapshotSplitInfo(table, "chunk-1", null, null, offset(200));
+        try (MySqlSourceReader reader = new MySqlSourceReader(
+                config(), context(new AtomicInteger(), events), new TableMetrics(), true)) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                            () -> reader.handleSourceEvents(new MySqlResumeBinlogEvent(offset(200))))
+                    .isInstanceOf(IllegalStateException.class);
+            reader.handleSourceEvents(new BinlogSplitMetaEvent(
+                    0, 2, 2, 1, List.of(FinishedSnapshotSplitInfo.serialize(first))));
+            assertThat(events.getFirst()).isInstanceOf(BinlogSplitMetaRequestEvent.class);
+            assertThat(((BinlogSplitMetaRequestEvent) events.getFirst()).getGroupId()).isEqualTo(1);
+            reader.handleSourceEvents(new BinlogSplitMetaEvent(
+                    1, 2, 2, 1, List.of(FinishedSnapshotSplitInfo.serialize(second))));
+            assertThat(events.getLast()).isInstanceOf(BinlogSplitMetaAssembledEvent.class);
+            assertThat(((BinlogSplitMetaAssembledEvent) events.getLast()).getBinlogAssignmentGeneration())
+                    .isEqualTo(1);
+            reader.handleSourceEvents(new MySqlResumeBinlogEvent(offset(200)));
+            assertThat(reader.snapshotState(3)).isEmpty();
+        }
+    }
+
+    private static DebeziumOffset offset(long position) {
+        return new DebeziumOffset(Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", position));
+    }
+
     private static io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig config() {
         return MySqlSource.builder()
                 .hostname("localhost")
@@ -76,6 +114,10 @@ class MySqlSourceReaderTest {
     }
 
     private static SourceReaderContext context(AtomicInteger requests) {
+        return context(requests, new ArrayList<>());
+    }
+
+    private static SourceReaderContext context(AtomicInteger requests, List<SourceEvent> events) {
         return new SourceReaderContext() {
             @Override
             public Configuration getConfiguration() {
@@ -95,6 +137,10 @@ class MySqlSourceReaderTest {
             @Override
             public void sendSplitRequest() {
                 requests.incrementAndGet();
+            }
+            @Override
+            public void sendSourceEventToCoordinator(SourceEvent event) {
+                events.add(event);
             }
         };
     }
