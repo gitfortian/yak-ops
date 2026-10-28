@@ -63,7 +63,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     private boolean closed;
     private BinlogEvent bootstrapCandidate;
     private boolean streamOnlyBootstrap;
-    private boolean snapshotOnlyStop;
+    private volatile boolean snapshotOnlyStop;
 
     public MySqlSplitReader(MySqlSourceConfig config) {
         this(config, new TableMetrics(), 0);
@@ -255,6 +255,25 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
         if (streaming) {
             BinlogEvent event = filter == null ? binlog.poll() : filter.poll(binlog);
             if (event != null) {
+                // Flink CDC's TIMESTAMP mode starts scanning a containing Binlog file.
+                // Filter the earlier events within that file without converting a
+                // fetched offset into delivered progress ahead of the mailbox.
+                StartupOptions startup = config.getStartupOptions();
+                if (startup.startupMode() == StartupMode.TIMESTAMP
+                        && binlogSplit != null
+                        && binlogSplit.phase() == MySqlBinlogSplit.Phase.STANDALONE) {
+                    Object value = event.offset().position().get("ts_sec");
+                    if (!(value instanceof Number timestamp)) {
+                        if (!event.records().isEmpty()) {
+                            throw new IllegalStateException("Timestamp startup requires Debezium event timestamp");
+                        }
+                    } else if (timestamp.longValue() < startup.binlogOffset.getTimestampSec()) {
+                        return records(
+                                MySqlBinlogSplit.ID,
+                                MySqlFetchedRecord.binlog(new BinlogEvent(List.of(), event.offset())),
+                                false);
+                    }
+                }
                 return records(MySqlBinlogSplit.ID, MySqlFetchedRecord.binlog(event), false);
             }
         } else Thread.sleep(20);
