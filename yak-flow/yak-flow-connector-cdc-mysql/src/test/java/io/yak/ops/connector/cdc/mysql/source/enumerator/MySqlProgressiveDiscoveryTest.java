@@ -45,7 +45,8 @@ class MySqlProgressiveDiscoveryTest {
         restored.captureHigh(offset(250));
         restored.snapshotState(3);
         restored.snapshotState(4);
-        assertTrue(restored.notifyCheckpointComplete(3), "A later pending checkpoint must not hide an earlier covering completion");
+        restored.notifyCheckpointComplete(3);
+        assertEquals(HybridPendingSplitsState.Phase.STREAMING, restored.phase());
         assertEquals(HybridPendingSplitsState.Phase.STREAMING, restored.snapshotState(5).phase());
     }
 
@@ -75,7 +76,7 @@ class MySqlProgressiveDiscoveryTest {
 
     private static MySqlHybridSplitAssigner assigner() {
         var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
-        assigner.nextBinlog(0);
+        assigner.nextBinlog();
         assigner.captureLow(offset(100));
         return assigner;
     }
