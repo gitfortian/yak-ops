@@ -17,17 +17,18 @@
 
 package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 
-// Source: apache/flink-cdc@b806d26762862a76dc91ac81f16dbd7f6ec62821 (adapted YakFlow TableId and nullability
-// annotations).
-
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
+
 import io.yak.ops.core.data.TableId;
+
+
 import java.util.Objects;
 
 /** The state of the {@link MySqlChunkSplitter}. */
 public class ChunkSplitterState {
 
-    public static final ChunkSplitterState NO_SPLITTING_TABLE_STATE = new ChunkSplitterState(null, null, null);
+    public static final ChunkSplitterState NO_SPLITTING_TABLE_STATE =
+            new ChunkSplitterState(null, null, null);
 
     /** Record current splitting table id in the chunk splitter. */
     private final TableId currentSplittingTableId;
@@ -38,7 +39,10 @@ public class ChunkSplitterState {
     /** Record next chunk id. */
     private final Integer nextChunkId;
 
-    public ChunkSplitterState(TableId currentSplittingTableId, ChunkBound nextChunkStart, Integer nextChunkId) {
+    public ChunkSplitterState(
+            TableId currentSplittingTableId,
+            ChunkBound nextChunkStart,
+            Integer nextChunkId) {
         this.currentSplittingTableId = currentSplittingTableId;
         this.nextChunkStart = nextChunkStart;
         this.nextChunkId = nextChunkId;
@@ -105,7 +109,7 @@ public class ChunkSplitterState {
             return boundType;
         }
 
-        public Object getValue() {
+            public Object getValue() {
             return value;
         }
 

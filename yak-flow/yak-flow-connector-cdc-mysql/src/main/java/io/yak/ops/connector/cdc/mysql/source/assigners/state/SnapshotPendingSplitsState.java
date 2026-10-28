@@ -1,6 +1,7 @@
 package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.AssignerStatus;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -26,10 +27,10 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
     private final int totalSnapshotSplits;
     private final List<MySqlSnapshotSplit> remainingSplits;
     private final Map<String, MySqlSnapshotSplit> assignedSplits;
-    private final Set<String> finishedSplits;
+    private final Map<String, DebeziumOffset> splitFinishedOffsets;
     private final List<FinishedSnapshotSplitInfo> finishedSplitInfos;
     private final int nextTableIndex;
-    private final int nextChunkIndex;
+    private final ChunkSplitterState chunkSplitterState;
     private final ChunkRange nextChunkRange;
     private final List<TableId> alreadyProcessedTables;
     private final List<TableId> remainingTables;
@@ -38,7 +39,7 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
     private final boolean remainingTablesCheckpointed;
     private final boolean snapshotMetaReleased;
 
-    /** Legacy constructor retained for version-9 checkpoint migration. */
+    /** Creates the initial Snapshot State before table discovery metadata is available. */
     public SnapshotPendingSplitsState(
             boolean snapshotPlanned,
             int totalSnapshotSplits,
@@ -54,10 +55,10 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
                 totalSnapshotSplits,
                 remainingSplits,
                 assignedSplits,
-                finishedSplits,
+                splitFinishedOffsets,
                 finishedSplitInfos,
                 nextTableIndex,
-                nextChunkIndex,
+                chunkSplitterState,
                 nextChunkRange,
                 List.of(),
                 List.of(),
@@ -86,9 +87,14 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
         this.remainingSplits = List.copyOf(Objects.requireNonNull(remainingSplits, "remainingSplits"));
         this.assignedSplits = Collections.unmodifiableMap(
                 new LinkedHashMap<>(Objects.requireNonNull(assignedSplits, "assignedSplits")));
-        this.finishedSplits = Collections.unmodifiableSet(
-                new LinkedHashSet<>(Objects.requireNonNull(finishedSplits, "finishedSplits")));
         this.finishedSplitInfos = List.copyOf(Objects.requireNonNull(finishedSplitInfos, "finishedSplitInfos"));
+        Map<String, DebeziumOffset> finishedOffsets = new LinkedHashMap<>();
+        for (FinishedSnapshotSplitInfo info : this.finishedSplitInfos) {
+            if (finishedOffsets.putIfAbsent(info.splitId(), info.highWatermark()) != null) {
+                throw new IllegalArgumentException("Duplicate finished snapshot split metadata");
+            }
+        }
+        this.splitFinishedOffsets = Collections.unmodifiableMap(finishedOffsets);
         this.alreadyProcessedTables =
                 List.copyOf(Objects.requireNonNull(alreadyProcessedTables, "alreadyProcessedTables"));
         this.remainingTables = List.copyOf(Objects.requireNonNull(remainingTables, "remainingTables"));
@@ -101,19 +107,15 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
                         && (nextChunkIndex < 1 || nextChunkRange.start() == null || nextChunkRange.end() != null))) {
             throw new IllegalArgumentException("Invalid snapshot chunk discovery cursor");
         }
-        Set<String> ids = new HashSet<>();
-        for (FinishedSnapshotSplitInfo info : this.finishedSplitInfos) {
-            if (!ids.add(info.splitId()))
-                throw new IllegalArgumentException("Duplicate finished snapshot split metadata");
-        }
-        if (!snapshotMetaReleased && !ids.equals(this.finishedSplits)) {
+        Set<String> ids = new HashSet<>(this.splitFinishedOffsets.keySet());
+        if (!snapshotMetaReleased && !ids.equals(Objects.requireNonNull(finishedSplits, "finishedSplits"))) {
             throw new IllegalArgumentException("Finished split IDs have incomplete watermark metadata");
         }
         if (snapshotMetaReleased
                 && (!snapshotPlanned
                         || !this.remainingSplits.isEmpty()
                         || !this.assignedSplits.isEmpty()
-                        || !this.finishedSplits.isEmpty()
+                        || !this.splitFinishedOffsets.isEmpty()
                         || !this.finishedSplitInfos.isEmpty()
                         || !AssignerStatus.isAssigningFinished(assignerStatus))) {
             throw new IllegalArgumentException("Snapshot metadata may only be released after assignment is finished");
@@ -129,7 +131,7 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
         if (totalSnapshotSplits < 0
                 || totalSnapshotSplits > 10_000
                 || (!snapshotMetaReleased
-                        && this.remainingSplits.size() + this.assignedSplits.size() + this.finishedSplits.size()
+                        && this.remainingSplits.size() + this.assignedSplits.size() + this.splitFinishedOffsets.size()
                                 != totalSnapshotSplits)) {
             throw new IllegalArgumentException("Inconsistent snapshot split accounting");
         }
@@ -141,7 +143,12 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
         this.snapshotPlanned = snapshotPlanned;
         this.totalSnapshotSplits = totalSnapshotSplits;
         this.nextTableIndex = nextTableIndex;
-        this.nextChunkIndex = nextChunkIndex;
+        this.chunkSplitterState = nextChunkRange == null
+                ? ChunkSplitterState.NO_SPLITTING_TABLE_STATE
+                : new ChunkSplitterState(
+                        nextChunkRange.tableId(),
+                        ChunkSplitterState.ChunkBound.middleOf(nextChunkRange.start()),
+                        nextChunkIndex);
         this.nextChunkRange = nextChunkRange;
         this.tableIdCaseSensitive = tableIdCaseSensitive;
         this.remainingTablesCheckpointed = remainingTablesCheckpointed;
@@ -164,8 +171,13 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
         return assignedSplits;
     }
 
+    /** Snapshot completion is owned by one split-to-offset map, as in Flink CDC. */
+    public Map<String, DebeziumOffset> getSplitFinishedOffsets() {
+        return splitFinishedOffsets;
+    }
+
     public Set<String> getFinishedSplits() {
-        return finishedSplits;
+        return splitFinishedOffsets.keySet();
     }
 
     public List<FinishedSnapshotSplitInfo> getFinishedSplitInfos() {
@@ -177,7 +189,12 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
     }
 
     public int nextChunkIndex() {
-        return nextChunkIndex;
+        Integer nextChunkId = chunkSplitterState.getNextChunkId();
+        return nextChunkId == null ? 0 : nextChunkId;
+    }
+
+    public ChunkSplitterState getChunkSplitterState() {
+        return chunkSplitterState;
     }
 
     public ChunkRange nextChunkRange() {
@@ -215,7 +232,7 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
         return snapshotPlanned == state.snapshotPlanned
                 && totalSnapshotSplits == state.totalSnapshotSplits
                 && nextTableIndex == state.nextTableIndex
-                && nextChunkIndex == state.nextChunkIndex
+                && chunkSplitterState.equals(state.chunkSplitterState)
                 && tableIdCaseSensitive == state.tableIdCaseSensitive
                 && remainingTablesCheckpointed == state.remainingTablesCheckpointed
                 && snapshotMetaReleased == state.snapshotMetaReleased
@@ -224,7 +241,7 @@ public final class SnapshotPendingSplitsState extends PendingSplitsState {
                 && assignerStatus == state.assignerStatus
                 && remainingSplits.equals(state.remainingSplits)
                 && assignedSplits.equals(state.assignedSplits)
-                && finishedSplits.equals(state.finishedSplits)
+                && splitFinishedOffsets.equals(state.splitFinishedOffsets)
                 && finishedSplitInfos.equals(state.finishedSplitInfos)
                 && Objects.equals(nextChunkRange, state.nextChunkRange);
     }
