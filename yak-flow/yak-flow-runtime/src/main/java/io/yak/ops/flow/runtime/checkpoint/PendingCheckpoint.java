@@ -74,9 +74,10 @@ public final class PendingCheckpoint {
             return TaskAcknowledgeResult.DISCARDED;
         }
         if (!notYetAcknowledgedTasks.remove(task)) {
-            return acknowledgedTasks.contains(task)
-                    ? TaskAcknowledgeResult.DUPLICATE
-                    : TaskAcknowledgeResult.UNKNOWN;
+            if (acknowledgedTasks.contains(task)) {
+                return TaskAcknowledgeResult.DUPLICATE;
+            }
+            return TaskAcknowledgeResult.UNKNOWN;
         }
         acknowledgedTasks.add(task);
         return TaskAcknowledgeResult.SUCCESS;
