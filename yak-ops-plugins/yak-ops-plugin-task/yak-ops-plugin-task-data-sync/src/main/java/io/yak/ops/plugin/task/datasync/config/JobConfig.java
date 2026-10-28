@@ -38,7 +38,12 @@ public final class JobConfig {
             Options.key("skipRows").longType().noDefaultValue();
     private static final OptionRule STARTUP_RULE = OptionRule.builder()
             .required(MODE)
-            .optional(STARTUP_FILE, STARTUP_POSITION, STARTUP_GTID, STARTUP_TIMESTAMP, STARTUP_SKIP_EVENTS,
+            .optional(
+                    STARTUP_FILE,
+                    STARTUP_POSITION,
+                    STARTUP_GTID,
+                    STARTUP_TIMESTAMP,
+                    STARTUP_SKIP_EVENTS,
                     STARTUP_SKIP_ROWS)
             .build();
 
@@ -106,8 +111,7 @@ public final class JobConfig {
             dataSteps.add(step);
         }
         if (!type.supportsScheduling()
-                && !List.of(List.of(Step.FULL, Step.INCREMENTAL), List.of(Step.INCREMENTAL),
-                                List.of(Step.FULL))
+                && !List.of(List.of(Step.FULL, Step.INCREMENTAL), List.of(Step.INCREMENTAL), List.of(Step.FULL))
                         .contains(dataSteps)) {
             throw new IllegalArgumentException("Realtime requires FULL, INCREMENTAL or both");
         }

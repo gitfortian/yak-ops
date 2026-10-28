@@ -12,21 +12,21 @@ import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlSnapshotSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffsetUtils;
-import io.yak.ops.connector.cdc.mysql.table.StartupMode;
-import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
+import io.yak.ops.connector.cdc.mysql.table.StartupMode;
+import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.core.types.TableSchema;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayDeque;
-import java.util.LinkedHashMap;
 import java.util.Deque;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -336,8 +336,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
         BinlogOffset resolved = BinlogOffsetUtils.initializeEffectiveOffset(requested, config);
         String file = resolved.getFilename();
         long position = resolved.getPosition();
-        if (options.startupMode() == StartupMode.EARLIEST_OFFSET
-                || (file == null || file.isBlank())) {
+        if (options.startupMode() == StartupMode.EARLIEST_OFFSET || (file == null || file.isBlank())) {
             try (Connection connection = config.openSnapshotConnection();
                     Statement statement = connection.createStatement();
                     ResultSet rows = statement.executeQuery("SHOW BINARY LOGS")) {

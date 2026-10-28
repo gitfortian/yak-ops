@@ -63,9 +63,7 @@ public final class MySqlBinlogSplitState extends MySqlSplitState {
             }
             return binlog;
         }
-        if (binlog.phase() == MySqlBinlogSplit.Phase.STANDALONE
-                && emittedOffset == null
-                && binlog.offset() == null) {
+        if (binlog.phase() == MySqlBinlogSplit.Phase.STANDALONE && emittedOffset == null && binlog.offset() == null) {
             // No event has reached the mailbox yet; restore the unresolved startup and
             // repeat Debezium schema bootstrap instead of checkpointing Engine read-ahead.
             return binlog;

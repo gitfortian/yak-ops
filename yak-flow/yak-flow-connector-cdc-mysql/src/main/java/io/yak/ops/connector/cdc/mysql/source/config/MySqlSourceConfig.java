@@ -431,8 +431,8 @@ public final class MySqlSourceConfig {
                 new TableSchema(new ArrayList<>(columns.values()), new ArrayList<>(primaryKeys.values()));
         String selectedKey;
         try {
-            selectedKey =
-                    ChunkUtils.requireSupportedSnapshot(discovered, requestedChunkKey).name();
+            selectedKey = ChunkUtils.requireSupportedSnapshot(discovered, requestedChunkKey)
+                    .name();
         } catch (RuntimeException invalidKey) {
             throw new SQLException(
                     "Newly added table " + table + " needs a primary key or configured Snapshot chunk key", invalidKey);

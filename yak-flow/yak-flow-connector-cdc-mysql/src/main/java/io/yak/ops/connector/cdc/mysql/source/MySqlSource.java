@@ -56,9 +56,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
         Objects.requireNonNull(builder, "builder");
         Objects.requireNonNull(startupOptions, "startupOptions").requireSupported();
         builder.startupOptions(startupOptions);
-        return startupOptions.isStreamOnly()
-                ? builder.build(metrics)
-                : builder.buildHybrid(snapshotChunkSize, metrics);
+        return startupOptions.isStreamOnly() ? builder.build(metrics) : builder.buildHybrid(snapshotChunkSize, metrics);
     }
 
     public static MySqlSource latestOffset(MySqlSourceConfig config, TableMetrics metrics, StartupOptions options) {
@@ -107,9 +105,7 @@ public final class MySqlSource implements Source<TableRecord, MySqlSplit, Pendin
 
     @Override
     public Boundedness getBoundedness() {
-        return startupOptions.isSnapshotOnly()
-                ? Boundedness.BOUNDED
-                : Boundedness.CONTINUOUS_UNBOUNDED;
+        return startupOptions.isSnapshotOnly() ? Boundedness.BOUNDED : Boundedness.CONTINUOUS_UNBOUNDED;
     }
 
     @Override

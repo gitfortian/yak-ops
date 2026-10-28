@@ -162,9 +162,10 @@ public final class StartupOptions implements Serializable {
         boolean hasOffset = file != null || position != null || (gtidSet != null && !gtidSet.isBlank());
         boolean hasTimestamp = timestampMillis != null;
         boolean hasSkip = skipEvents != null || skipRows != null;
-        if (hasSkip && (!"specific-offset".equals(mode)
-                || (skipEvents != null && skipEvents < 0)
-                || (skipRows != null && skipRows < 0))) {
+        if (hasSkip
+                && (!"specific-offset".equals(mode)
+                        || (skipEvents != null && skipEvents < 0)
+                        || (skipRows != null && skipRows < 0))) {
             throw new IllegalArgumentException("Specific-offset skip counts must be nonnegative");
         }
         if (!"specific-offset".equals(mode) && hasOffset) {
@@ -237,12 +238,13 @@ public final class StartupOptions implements Serializable {
     public void requireSupported() {
         if (startupMode == StartupMode.SPECIFIC_OFFSETS
                 && (binlogOffset == null
-                        || ((binlogOffset.getFilename() == null || binlogOffset.getFilename().isBlank())
-                                && (binlogOffset.getGtidSet() == null || binlogOffset.getGtidSet().isBlank())))) {
+                        || ((binlogOffset.getFilename() == null
+                                        || binlogOffset.getFilename().isBlank())
+                                && (binlogOffset.getGtidSet() == null
+                                        || binlogOffset.getGtidSet().isBlank())))) {
             throw new IllegalArgumentException("Specific-offset startup requires a binlog file or GTID set");
         }
-        if (startupMode == StartupMode.TIMESTAMP
-                && (binlogOffset == null || binlogOffset.getTimestampSec() <= 0)) {
+        if (startupMode == StartupMode.TIMESTAMP && (binlogOffset == null || binlogOffset.getTimestampSec() <= 0)) {
             throw new IllegalArgumentException("Timestamp startup requires a positive epoch timestamp");
         }
     }

@@ -123,7 +123,8 @@ public final class MySqlChunkSplitter {
                     String configuredKey = sourceConfig.chunkKeyColumns().get(table);
                     TableSchema tableSchema = sourceConfig.discoverTable(connection, table, configuredKey);
                     String selectedKey = configuredKey == null
-                            ? ChunkUtils.requireSupportedSnapshot(tableSchema, null).name()
+                            ? ChunkUtils.requireSupportedSnapshot(tableSchema, null)
+                                    .name()
                             : configuredKey;
                     schemas.put(table, tableSchema);
                     chunkKeyColumns.put(table, selectedKey);

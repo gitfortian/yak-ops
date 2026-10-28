@@ -35,12 +35,14 @@ public record SourceConfig(ReadonlyConfig options, IncrementalConfig incremental
             OptionRule.builder().required(CHUNK_KEY).build();
 
     public static SourceConfig from(
-            ReadonlyConfig table, String datasourceId, SolutionType type, List<Step> steps, StartupOptions startupOptions) {
+            ReadonlyConfig table,
+            String datasourceId,
+            SolutionType type,
+            List<Step> steps,
+            StartupOptions startupOptions) {
         validate(table, TABLE_RULE, "source.tables");
         Map<String, Object> snapshot = table.get(SNAPSHOT);
-        if (snapshot != null
-                && (type != SolutionType.SINGLE_TABLE_REALTIME
-                        || !steps.contains(Step.FULL))) {
+        if (snapshot != null && (type != SolutionType.SINGLE_TABLE_REALTIME || !steps.contains(Step.FULL))) {
             throw new IllegalArgumentException("Snapshot Chunk Key requires realtime FULL and INCREMENTAL");
         }
         String chunkKey = null;
@@ -91,7 +93,8 @@ public record SourceConfig(ReadonlyConfig options, IncrementalConfig incremental
                             offset.getRestartSkipRows());
                 }
             } else if (startupOptions.startupMode() == StartupMode.TIMESTAMP) {
-                physical.put(MySqlSourceOptions.SCAN_STARTUP_TIMESTAMP_MILLIS.key(),
+                physical.put(
+                        MySqlSourceOptions.SCAN_STARTUP_TIMESTAMP_MILLIS.key(),
                         Math.multiplyExact(startupOptions.binlogOffset.getTimestampSec(), 1000L));
             }
         }

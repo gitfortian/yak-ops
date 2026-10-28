@@ -5,7 +5,6 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.state.BinlogPendingSplits
 import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
-import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
 import java.util.Collection;
 import java.util.Collections;
