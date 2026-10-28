@@ -1,6 +1,10 @@
 package io.yak.ops.connector.cdc.mysql.source.utils;
 
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.core.data.TableRecord;
+import io.yak.ops.core.types.TableSchema;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -40,6 +44,77 @@ public final class MySqlChangeEventIds {
                             .formatHex(MessageDigest.getInstance("SHA-256").digest(bytes.toByteArray()));
         } catch (IOException | NoSuchAlgorithmException exception) {
             throw new IllegalStateException("Cannot calculate MySQL change identity", exception);
+        }
+    }
+
+    /**
+     * An opaque, deterministic identity for a normalized snapshot image.
+     *
+     * <p>Flink CDC reconciles keyed rows using physical primary keys and keyless rows
+     * using their complete images. Snapshot row ordinals cannot identify a physical
+     * row after a failed attempt re-scans a changed chunk. Multiple identical
+     * keyless images receive distinct occurrence numbers at emission.
+     */
+    public static String fromSnapshot(TableRecord record, TableSchema schema) {
+        if (record.row().getArity() != schema.columnCount()) {
+            throw new IllegalArgumentException("Snapshot event image differs from source schema");
+        }
+        boolean keyed = !schema.primaryKeys().isEmpty();
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            try (DataOutputStream out = new DataOutputStream(bytes)) {
+                if (keyed) {
+                    out.writeInt(schema.primaryKeys().size());
+                    for (String key : schema.primaryKeys()) {
+                        int position = -1;
+                        for (int i = 0; i < schema.columnCount(); i++) {
+                            if (schema.column(i).name().equals(key)) {
+                                position = i;
+                                break;
+                            }
+                        }
+                        if (position < 0 || record.row().isNullAt(position)) {
+                            throw new IllegalArgumentException("Snapshot primary key is missing or null");
+                        }
+                        out.writeUTF(key);
+                        writeSnapshotValue(out, record.row().getField(position));
+                    }
+                } else {
+                    out.writeInt(schema.columnCount());
+                    for (int i = 0; i < schema.columnCount(); i++) {
+                        out.writeUTF(schema.column(i).name());
+                        writeSnapshotValue(out, record.row().getField(i));
+                    }
+                }
+            }
+            return (keyed ? "key:" : "row:")
+                    + HexFormat.of()
+                            .formatHex(MessageDigest.getInstance("SHA-256").digest(bytes.toByteArray()));
+        } catch (IOException | NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("Cannot calculate MySQL snapshot identity", exception);
+        }
+    }
+
+    private static void writeSnapshotValue(DataOutputStream out, Object value) throws IOException {
+        if (value == null) {
+            out.writeByte(0);
+        } else if (value instanceof byte[] bytes) {
+            out.writeByte(1);
+            out.writeInt(bytes.length);
+            out.write(bytes);
+        } else if (value instanceof Number number) {
+            out.writeByte(2);
+            String normalized = number instanceof BigDecimal decimal
+                    ? decimal.stripTrailingZeros().toPlainString()
+                    : number.toString();
+            byte[] bytes = normalized.getBytes(StandardCharsets.UTF_8);
+            out.writeInt(bytes.length);
+            out.write(bytes);
+        } else {
+            out.writeByte(3);
+            byte[] bytes = value.toString().getBytes(StandardCharsets.UTF_8);
+            out.writeInt(bytes.length);
+            out.write(bytes);
         }
     }
 
