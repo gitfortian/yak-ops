@@ -134,7 +134,7 @@ class MySqlSourceEnumeratorTest {
                 List.of());
         var planner = splitter(url, keyless, "bucket");
         var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
-        assigner.nextBinlog(0);
+        assigner.nextBinlog();
         assigner.captureLow(offset(100));
         MySqlSnapshotSplit first = planner.planNext(ORDERS, 0, 0, null);
         assertEquals(new BigDecimal("9223372036854775808.00000000"), first.chunkRange().end());
