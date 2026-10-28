@@ -9,7 +9,8 @@ import io.yak.ops.connector.cdc.mysql.debezium.reader.BinlogSplitReader;
 import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlBinlogSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.debezium.task.MySqlSnapshotSplitReadTask;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
-import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
@@ -38,7 +39,8 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     private final Deque<MySqlSnapshotSplit> pending = new ArrayDeque<>();
     private volatile MySqlBinlogSplitReadTask binlog;
     private volatile byte[] history = new byte[0];
-    private volatile MySqlResumeBinlogEvent resume;
+    private volatile DebeziumOffset resumeHigh;
+    private volatile List<FinishedSnapshotSplitInfo> resumeFinishedSplits;
     private volatile boolean cancelled;
     private MySqlBinlogSplit binlogSplit;
     private BinlogSplitReader filter;
@@ -160,8 +162,8 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             snapshots.close();
             snapshotsClosed = true;
         }
-        if (binlogSplit != null && resume != null && !streaming) {
-            startStreaming(binlogSplit.startStreaming(resume.highWatermark(), resume.finishedSplits()));
+        if (binlogSplit != null && resumeHigh != null && !streaming) {
+            startStreaming(binlogSplit.startStreaming(resumeHigh, resumeFinishedSplits));
         }
         if (streaming) {
             BinlogEvent event = filter == null ? binlog.poll() : filter.poll(binlog);
@@ -193,8 +195,10 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
         snapshotsFinished = true;
     }
 
-    public void resumeBinlog(MySqlResumeBinlogEvent event) {
-        resume = Objects.requireNonNull(event, "event");
+    public void resumeBinlog(DebeziumOffset high, List<FinishedSnapshotSplitInfo> finished) {
+        resumeHigh = Objects.requireNonNull(high, "high");
+        resumeFinishedSplits = List.copyOf(Objects.requireNonNull(finished, "finished"));
+        if (resumeFinishedSplits.isEmpty()) throw new IllegalArgumentException("Missing Binlog metadata");
         if (readerContext != null) readerContext.wakeupSuspendedBinlogSplitReader();
     }
 
