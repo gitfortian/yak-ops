@@ -19,7 +19,6 @@ limitations under the License.
 package io.yak.ops.flow.runtime.source.coordinator;
 
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -65,8 +64,7 @@ public class SourceCoordinatorSerdeUtils {
     }
 
     static <SplitT> byte[] serializeAssignments(
-            Map<Integer, LinkedHashSet<SplitT>> assignments,
-            SimpleVersionedSerializer<SplitT> splitSerializer)
+            Map<Integer, LinkedHashSet<SplitT>> assignments, SimpleVersionedSerializer<SplitT> splitSerializer)
             throws IOException {
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 DataOutputStream out = new DataOutputStream(baos)) {
@@ -92,8 +90,7 @@ public class SourceCoordinatorSerdeUtils {
     }
 
     static <SplitT> Map<Integer, LinkedHashSet<SplitT>> deserializeAssignments(
-            byte[] assignmentData, SimpleVersionedSerializer<SplitT> splitSerializer)
-            throws IOException {
+            byte[] assignmentData, SimpleVersionedSerializer<SplitT> splitSerializer) throws IOException {
 
         try (ByteArrayInputStream bais = new ByteArrayInputStream(assignmentData);
                 DataInputStream in = new DataInputStream(bais)) {
@@ -116,8 +113,7 @@ public class SourceCoordinatorSerdeUtils {
                 for (int k = 0; k < numAssignedSplits; k++) {
                     int serializedSplitSize = in.readInt();
                     byte[] serializedSplit = readBytes(in, serializedSplitSize);
-                    SplitT split =
-                            splitSerializer.deserialize(splitSerializerVersion, serializedSplit);
+                    SplitT split = splitSerializer.deserialize(splitSerializerVersion, serializedSplit);
                     if (!splits.add(split)) {
                         throw new IOException("Duplicate Source Coordinator split in checkpoint");
                     }
