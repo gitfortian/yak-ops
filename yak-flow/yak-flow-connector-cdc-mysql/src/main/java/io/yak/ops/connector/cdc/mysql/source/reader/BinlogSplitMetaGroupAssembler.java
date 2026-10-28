@@ -49,7 +49,8 @@ final class BinlogSplitMetaGroupAssembler {
         if (event.getMetaGroupId() != nextGroup) {
             throw new IllegalStateException("Out-of-order or duplicate Binlog metadata group");
         }
-        for (FinishedSnapshotSplitInfo info : event.getMetaGroup()) {
+        for (byte[] serialized : event.getMetaGroup()) {
+            FinishedSnapshotSplitInfo info = FinishedSnapshotSplitInfo.deserialize(serialized);
             if (!splitIds.add(info.splitId())) {
                 throw new IllegalStateException("Duplicate Snapshot split in Binlog metadata groups");
             }
