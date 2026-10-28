@@ -9,11 +9,14 @@ import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.connector.cdc.mysql.table.StartupMode;
 import io.yak.ops.connector.cdc.mysql.table.StartupOptions;
+import io.yak.ops.core.api.connector.source.SplitEnumeratorContext;
+import io.yak.ops.core.data.TableId;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 
 /**
  * Orchestrates the hybrid source's four stages without performing JDBC or Binlog I/O.
@@ -127,6 +130,22 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
             throw new IllegalStateException("Cannot discover snapshot chunks before Binlog anchor");
         }
         snapshots.appendPlan(split, tableCount);
+    }
+
+    /**
+     * Delegates asynchronous Chunk discovery to the Snapshot Assigner.
+     * Hybrid owns only bootstrap and Binlog handoff state.
+     */
+    public boolean discoverNextAsync(
+            List<TableId> tables,
+            MySqlChunkSplitter splitter,
+            SplitEnumeratorContext<MySqlSplit> context,
+            int maxPendingChunks,
+            BiConsumer<MySqlSnapshotSplit, Integer> onDiscovered,
+            BiConsumer<TableId, Throwable> onError) {
+        if (phase != HybridPendingSplitsState.Phase.SNAPSHOT) return false;
+        return snapshots.discoverNextAsync(
+                tables, splitter, context, maxPendingChunks, onDiscovered, onError);
     }
 
     public List<FinishedSnapshotSplitInfo> finishedSplits() {
