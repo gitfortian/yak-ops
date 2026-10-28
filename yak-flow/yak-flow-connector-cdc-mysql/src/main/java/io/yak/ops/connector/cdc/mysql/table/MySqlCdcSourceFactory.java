@@ -50,6 +50,13 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
                         MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN,
                         Conditions.notBlank(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN))
                 .optional(MySqlSourceOptions.SCAN_STARTUP_MODE)
+                .optional(
+                        MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_FILE,
+                        MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_POS,
+                        MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_GTID_SET,
+                        MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_SKIP_EVENTS,
+                        MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_SKIP_ROWS,
+                        MySqlSourceOptions.SCAN_STARTUP_TIMESTAMP_MILLIS)
                 .build();
     }
 
@@ -88,18 +95,18 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
 
     @Override
     public void validateSchema(ReadonlyConfig options, TableSchema schema) {
-        StartupOptions startup = StartupOptions.from(options.get(MySqlSourceOptions.SCAN_STARTUP_MODE));
+        StartupOptions startup = startupOptions(options);
         startup.requireSupported();
         String chunkKey = options.get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);
-        if (startup.startupMode() == StartupMode.INITIAL) {
+        if (!startup.isStreamOnly()) {
             ChunkUtils.requireSupportedSnapshot(schema, chunkKey);
             return;
         }
         if (chunkKey != null) {
-            throw new IllegalArgumentException("Snapshot Chunk Key is not supported for latest-offset startup");
+            throw new IllegalArgumentException("Snapshot Chunk Key is not supported for stream-only startup");
         }
         if (schema.primaryKeys().isEmpty()) {
-            throw new IllegalArgumentException("Latest-offset MySQL CDC requires a physical primary key");
+            throw new IllegalArgumentException("Stream-only MySQL CDC requires a physical primary key");
         }
         for (var column : schema.columns()) {
             if (!column.dataType().isResolved()) {
@@ -120,7 +127,7 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
         }
         var first = contexts.getFirst();
         ReadonlyConfig options = first.options();
-        StartupOptions startupOptions = StartupOptions.from(options.get(MySqlSourceOptions.SCAN_STARTUP_MODE));
+        StartupOptions startupOptions = startupOptions(options);
         startupOptions.requireSupported();
         if (options.get(JdbcConnectionOptions.SSH_ENABLED)) {
             throw new UnsupportedOperationException("MySQL CDC requires a direct MySQL connection");
@@ -164,6 +171,17 @@ public final class MySqlCdcSourceFactory implements TableSourceFactory {
                 startupOptions,
                 options.get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE),
                 first.metrics());
+    }
+
+    private static StartupOptions startupOptions(ReadonlyConfig options) {
+        return StartupOptions.from(
+                options.get(MySqlSourceOptions.SCAN_STARTUP_MODE),
+                options.get(MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_FILE),
+                options.get(MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_POS),
+                options.get(MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_GTID_SET),
+                options.get(MySqlSourceOptions.SCAN_STARTUP_TIMESTAMP_MILLIS),
+                options.get(MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_SKIP_EVENTS),
+                options.get(MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_SKIP_ROWS));
     }
 
     /**
