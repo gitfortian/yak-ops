@@ -1,8 +1,8 @@
 package io.yak.ops.connector.cdc.mysql.source.events;
 
-import io.yak.ops.connector.cdc.mysql.source.split.FinishedSnapshotSplitInfo;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.core.api.connector.source.SourceEvent;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -19,14 +19,14 @@ public final class BinlogSplitMetaEvent implements SourceEvent {
     private final int totalGroups;
     private final int totalFinishedSplitSize;
     private final long binlogAssignmentGeneration;
-    private final List<FinishedSnapshotSplitInfo> metaGroup;
+    private final List<byte[]> metaGroup;
 
     public BinlogSplitMetaEvent(
             int metaGroupId,
             int totalGroups,
             int totalFinishedSplitSize,
             long binlogAssignmentGeneration,
-            List<FinishedSnapshotSplitInfo> metaGroup) {
+            List<byte[]> metaGroup) {
         if (metaGroupId < 0
                 || totalGroups <= 0
                 || metaGroupId >= totalGroups
@@ -34,7 +34,16 @@ public final class BinlogSplitMetaEvent implements SourceEvent {
                 || binlogAssignmentGeneration < 0) {
             throw new IllegalArgumentException("Invalid Binlog metadata group header");
         }
-        this.metaGroup = List.copyOf(Objects.requireNonNull(metaGroup, "metaGroup"));
+        Objects.requireNonNull(metaGroup, "metaGroup");
+        List<byte[]> copies = new ArrayList<>(metaGroup.size());
+        for (byte[] entry : metaGroup) {
+            Objects.requireNonNull(entry, "metadata frame");
+            if (entry.length == 0 || entry.length > 8 * 1024 * 1024) {
+                throw new IllegalArgumentException("Invalid Binlog metadata frame length");
+            }
+            copies.add(entry.clone());
+        }
+        this.metaGroup = List.copyOf(copies);
         if (this.metaGroup.isEmpty() || this.metaGroup.size() > totalFinishedSplitSize) {
             throw new IllegalArgumentException("Invalid Binlog metadata group contents");
         }
@@ -64,7 +73,9 @@ public final class BinlogSplitMetaEvent implements SourceEvent {
         return binlogAssignmentGeneration;
     }
 
-    public List<FinishedSnapshotSplitInfo> getMetaGroup() {
-        return metaGroup;
+    public List<byte[]> getMetaGroup() {
+        List<byte[]> copies = new ArrayList<>(metaGroup.size());
+        metaGroup.forEach(entry -> copies.add(entry.clone()));
+        return List.copyOf(copies);
     }
 }
