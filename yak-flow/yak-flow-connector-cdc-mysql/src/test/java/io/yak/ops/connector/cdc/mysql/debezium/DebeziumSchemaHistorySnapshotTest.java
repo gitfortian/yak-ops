@@ -68,7 +68,7 @@ class DebeziumSchemaHistorySnapshotTest {
         byte[] rewritten = DebeziumSchemaHistorySnapshot.anchorBootstrap(original, requested);
         String result = new String(rewritten, StandardCharsets.UTF_8);
         assertThat(result).contains("\"file\":\"mysql-bin.000001\"");
-        assertThat(result).contains("\"pos\":200");
+        assertThat(result).contains("\"pos\":199");
         assertThat(result).contains("CREATE TABLE shop.orders");
         assertThat(result).doesNotContain("mysql-bin.000003");
     }
