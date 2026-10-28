@@ -177,7 +177,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             throw new IllegalStateException("Unregistered Hybrid reader");
         if (!initial) {
             if (reader != 0) throw new IllegalArgumentException("Binlog-only source requires reader zero");
-            MySqlBinlogSplit next = streamAssigner.getNext(0);
+            MySqlBinlogSplit next = (MySqlBinlogSplit) streamAssigner.getNext().orElse(null);
             if (next != null) context.assignSplit(next, 0);
             return;
         }
@@ -228,11 +228,16 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
         if (closed || reader < 0 || reader >= context.currentParallelism())
             throw new IllegalStateException("Invalid split return");
         if (initial) {
-            assigner.addSplitsBack(splits, reader);
+            for (MySqlSplit split : splits) {
+                if (split instanceof MySqlBinlogSplit && reader != 0) {
+                    throw new IllegalArgumentException("Binlog belongs to reader zero");
+                }
+            }
+            assigner.addSplits(splits);
             assignAvailable();
         } else {
-            streamAssigner.addSplitsBack(
-                    splits.stream().map(split -> (MySqlBinlogSplit) split).toList(), reader);
+            if (reader != 0) throw new IllegalArgumentException("Binlog belongs to reader zero");
+            streamAssigner.addSplits(splits);
         }
     }
 
@@ -244,7 +249,10 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
 
     @Override
     public void notifyCheckpointComplete(long checkpointId) {
-        boolean handoff = initial && assigner.notifyCheckpointComplete(checkpointId);
+        boolean waitingForHandoff = initial && assigner.phase() == HybridPendingSplitsState.Phase.HANDOFF;
+        if (initial) assigner.notifyCheckpointComplete(checkpointId);
+        else streamAssigner.notifyCheckpointComplete(checkpointId);
+        boolean handoff = waitingForHandoff && assigner.phase() == HybridPendingSplitsState.Phase.STREAMING;
         metrics.checkpointCompleted(generation, checkpointId, handoff);
         if (handoff) sendResumeEvents();
     }
@@ -253,6 +261,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     public void close() {
         closed = true;
         if (splitter != null) splitter.cancel();
+        if (assigner != null) assigner.close();
         if (streamAssigner != null) streamAssigner.close();
         metrics.sourceClosed(generation);
         waitingReaders.clear();
@@ -301,7 +310,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
 
     private void assignAvailable() {
         if (closed || !started) return;
-        MySqlBinlogSplit binlog = assigner.nextBinlog(0);
+        MySqlBinlogSplit binlog = assigner.nextBinlog();
         if (binlog != null) {
             if (context.registeredReaders().containsKey(0)) context.assignSplit(binlog, 0);
             else assigner.addBack(binlog);
@@ -313,7 +322,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                 waitingReaders.remove(reader);
                 continue;
             }
-            MySqlSplit split = assigner.getNext(reader);
+            MySqlSplit split = assigner.nextSnapshot();
             if (split == null) break;
             context.assignSplit(split, reader);
             waitingReaders.remove(reader);
