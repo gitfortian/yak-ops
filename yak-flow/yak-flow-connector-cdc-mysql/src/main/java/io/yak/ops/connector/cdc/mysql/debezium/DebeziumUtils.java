@@ -41,24 +41,40 @@ public final class DebeziumUtils {
 
     private DebeziumUtils() {}
 
-    /** Fetch current binlog offsets in MySQL Server. */
+    /** Fetch the current Binlog coordinate using Flink CDC's shared lookup algorithm. */
     public static BinlogOffset currentBinlogOffset(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            ResultSet rows;
+            return currentBinlogOffset(statement);
+        }
+    }
+
+    /**
+     * Reuse an existing JDBC statement so Snapshot Task retains timeout and cancellation
+     * ownership while the status SQL and GTID parsing remain centralized here.
+     */
+    public static BinlogOffset currentBinlogOffset(Statement statement) throws SQLException {
+        ResultSet rows;
+        try {
+            rows = statement.executeQuery("SHOW BINARY LOG STATUS");
+        } catch (SQLException unsupported) {
             try {
-                rows = statement.executeQuery("SHOW BINARY LOG STATUS");
-            } catch (SQLException unsupported) {
                 rows = statement.executeQuery("SHOW MASTER STATUS");
+            } catch (SQLException error) {
+                error.addSuppressed(unsupported);
+                throw error;
             }
-            try (ResultSet status = rows) {
-                if (!status.next()) {
-                    throw new SQLException("Cannot read current MySQL binlog position");
-                }
-                return BinlogOffset.builder()
-                        .setBinlogFilePosition(status.getString(1), status.getLong(2))
-                        .setGtidSet(status.getMetaData().getColumnCount() > 4 ? status.getString(5) : null)
-                        .build();
+        }
+        try (ResultSet status = rows) {
+            if (!status.next()) {
+                throw new SQLException("Cannot read current MySQL binlog position");
             }
+            String file = status.getString(1);
+            long pos = status.getLong(2);
+            if (file == null || file.isBlank() || pos < 1) {
+                throw new SQLException("MySQL binary logging is disabled or returned an invalid position");
+            }
+            String gtids = status.getMetaData().getColumnCount() > 4 ? status.getString(5) : null;
+            return BinlogOffset.builder().setBinlogFilePosition(file, pos).setGtidSet(gtids).build();
         }
     }
 
