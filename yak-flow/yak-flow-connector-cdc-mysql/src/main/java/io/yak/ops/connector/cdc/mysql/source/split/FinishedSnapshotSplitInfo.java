@@ -13,11 +13,6 @@ import java.util.Objects;
  * emission. It must survive Checkpoint and be included in the final Binlog split so events
  * already reflected in an initial chunk are not replayed into the JDBC Sink.
  *
- * @param tableId original MySQL source table
- * @param splitId stable source split identifier
- * @param lowerInclusive nullable lower key boundary
- * @param upperExclusive nullable upper key boundary
- * @param highWatermark event boundary included in the normalized snapshot
  */
 public final class FinishedSnapshotSplitInfo implements FinishedSnapshotSplit<DebeziumOffset> {
     private final TableId tableId;

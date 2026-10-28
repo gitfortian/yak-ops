@@ -143,7 +143,7 @@ public final class SnapshotChunkBackfill {
 
     /**
      * Primary-keyed records overwrite a single image; keyless records preserve full-row
-     * multiplicity, as in Flink CDC's Map<Struct, List<SourceRecord>> snapshot buffer.
+     * multiplicity, as in Flink CDC's snapshot buffer keyed by Struct records.
      * No synthetic primary key or independent keyless Source execution path is introduced.
      */
     private static final class SnapshotRecords {
