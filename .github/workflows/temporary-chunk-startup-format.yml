@@ -1,0 +1,36 @@
+name: Temporary Chunk Startup Spotless Apply
+on:
+  push:
+    branches:
+      - feat/mysql-cdc-chunk-startup-completion
+    paths:
+      - .github/workflows/temporary-chunk-startup-format.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.repository == 'weifuwan/yak-ops'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+          ref: feat/mysql-cdc-chunk-startup-completion
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Apply repository formatter
+        run: bash mvnw -B -ntp -pl yak-flow/yak-flow-connector-cdc-mysql,yak-ops-plugins/yak-ops-plugin-task/yak-ops-plugin-task-data-sync com.diffplug.spotless:spotless-maven-plugin:3.10.2:apply
+      - name: Commit formatter-only changes on this PR branch
+        run: |
+          set -euo pipefail
+          git add yak-flow/yak-flow-connector-cdc-mysql/src/main/java yak-ops-plugins/yak-ops-plugin-task/yak-ops-plugin-task-data-sync/src/main/java
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'style(cdc): apply Palantir Java Format to chunk/startup changes'
+            git push origin HEAD:refs/heads/feat/mysql-cdc-chunk-startup-completion
+          fi
