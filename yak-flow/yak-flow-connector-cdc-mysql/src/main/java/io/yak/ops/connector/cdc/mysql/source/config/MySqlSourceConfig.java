@@ -392,7 +392,7 @@ public final class MySqlSourceConfig {
         if (existing != null) {
             if (requestedChunkKey != null) {
                 try {
-                    String selected = ChunkUtils.getChunkKeyColumn(existing, requestedChunkKey)
+                    String selected = ChunkUtils.requireSupportedSnapshot(existing, requestedChunkKey)
                             .name();
                     if (!selected.equals(requestedChunkKey))
                         throw new SQLException("Configured Snapshot key differs from the requested key for " + table);
@@ -432,7 +432,7 @@ public final class MySqlSourceConfig {
         String selectedKey;
         try {
             selectedKey =
-                    ChunkUtils.getChunkKeyColumn(discovered, requestedChunkKey).name();
+                    ChunkUtils.requireSupportedSnapshot(discovered, requestedChunkKey).name();
         } catch (RuntimeException invalidKey) {
             throw new SQLException(
                     "Newly added table " + table + " needs a primary key or configured Snapshot chunk key", invalidKey);
