@@ -36,6 +36,8 @@ class MySqlHybridSplitAssignerTest {
         assigner.finishSnapshot(finished(split, 300));
         assertTrue(assigner.snapshotComplete());
         assigner.captureHigh(high);
+        // The reader must assemble the entire metadata set before a handoff checkpoint
+        // can make the resumed Binlog visible.
         assigner.notifyCheckpointComplete(11);
         assertEquals(HybridPendingSplitsState.Phase.HANDOFF, assigner.phase());
         HybridPendingSplitsState waiting = assigner.snapshotState(12);
@@ -46,14 +48,47 @@ class MySqlHybridSplitAssignerTest {
         var serializer = new PendingSplitsStateSerializer(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE);
         var checkpoint = (HybridPendingSplitsState) serializer.deserialize(serializer.getVersion(), serializer.serialize(waiting));
         var restored = new MySqlHybridSplitAssigner(StartupOptions.initial(), checkpoint);
+        assertThrows(IllegalStateException.class, restored::resumeRestoredHandoff);
+        assertTrue(restored.onBinlogSplitMetaAssembled(restored.getBinlogAssignmentGeneration()));
         restored.resumeRestoredHandoff();
         assertEquals(HybridPendingSplitsState.Phase.STREAMING, restored.phase());
+        assertTrue(assigner.onBinlogSplitMetaAssembled(assigner.getBinlogAssignmentGeneration()));
         assigner.snapshotState(13);
         assigner.notifyCheckpointComplete(12);
+        assertEquals(HybridPendingSplitsState.Phase.HANDOFF, assigner.phase());
+        assigner.notifyCheckpointComplete(13);
         assertEquals(HybridPendingSplitsState.Phase.STREAMING, assigner.phase());
         assertEquals(HybridPendingSplitsState.Phase.STREAMING, assigner.phase());
     }
 
+
+    @Test
+    void staleBinlogMetadataAcknowledgmentsCannotReleaseNewReaderAssignment() {
+        var assigner = new MySqlHybridSplitAssigner(StartupOptions.initial(), null);
+        var low = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 100L));
+        var high = new DebeziumOffset(Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 300L));
+        var binlog = assigner.nextBinlog();
+        assigner.captureLow(low);
+        var chunk = new MySqlSnapshotSplit("chunk-0", new TableId("shop", null, "orders"), null, null, null);
+        assigner.plan(List.of(chunk));
+        assigner.nextSnapshot();
+        assigner.finishSnapshot(finished(chunk, 300));
+        assigner.captureHigh(high);
+        long oldGeneration = assigner.getBinlogAssignmentGeneration();
+
+        assertFalse(assigner.onBinlogSplitMetaAssembled(oldGeneration + 1));
+        assigner.snapshotState(20);
+        assigner.notifyCheckpointComplete(20);
+        assertEquals(HybridPendingSplitsState.Phase.HANDOFF, assigner.phase());
+        assigner.addBack(binlog);
+        assertEquals(oldGeneration + 1, assigner.getBinlogAssignmentGeneration());
+        assertFalse(assigner.onBinlogSplitMetaAssembled(oldGeneration));
+        assertTrue(assigner.nextBinlog() != null);
+        assertTrue(assigner.onBinlogSplitMetaAssembled(assigner.getBinlogAssignmentGeneration()));
+        assigner.snapshotState(21);
+        assigner.notifyCheckpointComplete(21);
+        assertEquals(HybridPendingSplitsState.Phase.STREAMING, assigner.phase());
+    }
 
     @Test
     void reportsUpstreamAssignmentStatusWithoutTreatingAssignmentAsCompletion() {
