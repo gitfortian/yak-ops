@@ -57,6 +57,23 @@ class DebeziumSchemaHistorySnapshotTest {
     }
 
     @Test
+    void historicalStartupAnchorsSchemaOnlyHistoryAtChosenOffset() throws Exception {
+        var requested = new DebeziumOffset(
+                java.util.Map.of("server", "shop"),
+                java.util.Map.of("file", "mysql-bin.000001", "pos", 200L));
+        byte[] original = ("{\"source\":{\"server\":\"shop\"},"
+                        + "\"position\":{\"file\":\"mysql-bin.000003\",\"pos\":500},"
+                        + "\"ddl\":\"CREATE TABLE shop.orders (id BIGINT)\"}\n")
+                .getBytes(StandardCharsets.UTF_8);
+        byte[] rewritten = DebeziumSchemaHistorySnapshot.anchorBootstrap(original, requested);
+        String result = new String(rewritten, StandardCharsets.UTF_8);
+        assertThat(result).contains("\"file\":\"mysql-bin.000001\"");
+        assertThat(result).contains("\"pos\":200");
+        assertThat(result).contains("CREATE TABLE shop.orders");
+        assertThat(result).doesNotContain("mysql-bin.000003");
+    }
+
+    @Test
     void restoreSanitizationRetainsCompletePrefixOfOlderCheckpoint() {
         byte[] history = ("{\"ddl\":\"CREATE TABLE orders (id INT)\"}\n"
                         + "{\"ddl\":\"partial")
