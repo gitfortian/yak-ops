@@ -177,9 +177,8 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
             throw new IllegalStateException("Snapshot range differs from the durable discovery cursor");
         }
         boolean tableComplete = range.last();
-        ChunkRange following = tableComplete
-                ? null
-                : new ChunkRange(range.tableId(), range.column(), range.type(), range.end(), null);
+        ChunkRange following =
+                tableComplete ? null : new ChunkRange(range.tableId(), range.column(), range.type(), range.end(), null);
         append(List.of(split), tableComplete && nextTableIndex + 1 == tableCount);
         if (tableComplete) {
             nextTableIndex++;
