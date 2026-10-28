@@ -47,7 +47,9 @@ class MySqlSplitStateTest {
         assertTrue(state.isBinlogSplitState());
         assertFalse(state.isSnapshotSplitState());
         assertTrue(state.binlog());
-        assertThrows(IllegalStateException.class, () -> state.checkpoint(new byte[0]));
+        // An unresolved stream-only startup is a legitimate durable state: the
+        // Debezium schema bootstrap must replay from scratch on recovery.
+        assertEquals(split, state.checkpoint(new byte[0]));
 
         state.emitBinlog(offset(300));
         assertThrows(IllegalStateException.class, () -> state.checkpoint(new byte[0]));
