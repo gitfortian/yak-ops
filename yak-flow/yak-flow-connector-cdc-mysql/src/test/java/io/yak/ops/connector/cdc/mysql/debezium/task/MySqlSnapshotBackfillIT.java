@@ -132,12 +132,12 @@ class MySqlSnapshotBackfillIT {
 
     @Test
     void realMysqlWideChunkLargerThanFourMiBCompletesWithoutDroppingImages() throws Exception {
-        execute("ALTER TABLE snapshot_contract MODIFY name VARCHAR(20000) NOT NULL");
+        execute("ALTER TABLE snapshot_contract MODIFY name VARCHAR(16000) NOT NULL");
         String payload = "w".repeat(12_000);
         try (var connection = MYSQL.metadata().connect();
                 var statement = connection.prepareStatement(
                         "INSERT INTO snapshot_contract (id,name) VALUES (?,?)")) {
-            for (int index = 0; index < 300; index++) {
+            for (int index = 0; index < 400; index++) {
                 statement.setLong(1, index);
                 statement.setString(2, payload);
                 statement.addBatch();
@@ -147,11 +147,11 @@ class MySqlSnapshotBackfillIT {
         var wideSchema = new TableSchema(
                 List.of(
                         new Column("id", LogicalTypes.BIGINT.copy(false)),
-                        new Column("name", LogicalTypes.varchar(20_000).copy(false))),
+                        new Column("name", LogicalTypes.varchar(16_000).copy(false))),
                 List.of("id"));
         try (MySqlSnapshotSplitReadTask reader = new MySqlSnapshotSplitReadTask(config(wideSchema), 0)) {
             MySqlSnapshotSplit prepared = reader.read(split(null, null));
-            assertThat(prepared.output().rows()).hasSize(300);
+            assertThat(prepared.output().rows()).hasSize(400);
             assertThat(prepared.output().rows())
                     .allSatisfy(row -> assertThat(row.row().getString(1)).isEqualTo(payload));
         }
