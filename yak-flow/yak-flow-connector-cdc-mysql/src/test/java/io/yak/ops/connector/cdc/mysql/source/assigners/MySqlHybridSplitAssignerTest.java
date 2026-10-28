@@ -72,7 +72,7 @@ class MySqlHybridSplitAssignerTest {
         assertTrue(assigner.waitingForFinishedSplits());
 
         assigner.onFinishedSplits(Map.of("snap-1", new DebeziumOffset(
-                Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 200L)));
+                Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 200L))));
         assertFalse(assigner.waitingForFinishedSplits());
         assigner.captureHigh(new DebeziumOffset(
                 Map.of("server", "yak"), Map.of("file", "mysql-bin.000001", "pos", 200L)));
