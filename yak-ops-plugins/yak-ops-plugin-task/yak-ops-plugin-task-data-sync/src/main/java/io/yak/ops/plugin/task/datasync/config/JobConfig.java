@@ -24,8 +24,23 @@ public final class JobConfig {
     private static final Option<Map<String, Object>> STARTUP =
             Options.key("startup").mapObjectType().noDefaultValue();
     private static final Option<String> MODE = Options.key("mode").stringType().noDefaultValue();
-    private static final OptionRule STARTUP_RULE =
-            OptionRule.builder().required(MODE).build();
+    private static final Option<String> STARTUP_FILE =
+            Options.key("file").stringType().noDefaultValue();
+    private static final Option<Long> STARTUP_POSITION =
+            Options.key("pos").longType().noDefaultValue();
+    private static final Option<String> STARTUP_GTID =
+            Options.key("gtidSet").stringType().noDefaultValue();
+    private static final Option<Long> STARTUP_TIMESTAMP =
+            Options.key("timestampMillis").longType().noDefaultValue();
+    private static final Option<Long> STARTUP_SKIP_EVENTS =
+            Options.key("skipEvents").longType().noDefaultValue();
+    private static final Option<Long> STARTUP_SKIP_ROWS =
+            Options.key("skipRows").longType().noDefaultValue();
+    private static final OptionRule STARTUP_RULE = OptionRule.builder()
+            .required(MODE)
+            .optional(STARTUP_FILE, STARTUP_POSITION, STARTUP_GTID, STARTUP_TIMESTAMP, STARTUP_SKIP_EVENTS,
+                    STARTUP_SKIP_ROWS)
+            .build();
 
     private static final Option<List<Object>> TABLES =
             Options.key("tables").listType(Object.class).noDefaultValue();
@@ -91,9 +106,10 @@ public final class JobConfig {
             dataSteps.add(step);
         }
         if (!type.supportsScheduling()
-                && !List.of(List.of(Step.FULL, Step.INCREMENTAL), List.of(Step.INCREMENTAL))
+                && !List.of(List.of(Step.FULL, Step.INCREMENTAL), List.of(Step.INCREMENTAL),
+                                List.of(Step.FULL))
                         .contains(dataSteps)) {
-            throw new IllegalArgumentException("Realtime requires INCREMENTAL with optional FULL");
+            throw new IllegalArgumentException("Realtime requires FULL, INCREMENTAL or both");
         }
         if (type.supportsScheduling()
                 && !List.of(List.of(Step.FULL), List.of(Step.INCREMENTAL), List.of(Step.FULL, Step.INCREMENTAL))
@@ -110,7 +126,7 @@ public final class JobConfig {
         validate(from, SOURCE_RULE, "source");
         validate(to, SINK_RULE, "sink");
         Map<String, Object> startupSettings = from.get(STARTUP);
-        StartupMode startupMode = null;
+        StartupOptions startupOptions = null;
         if (type.supportsScheduling()) {
             if (startupSettings != null) {
                 throw new IllegalArgumentException("CDC startup settings require realtime synchronization");
@@ -119,14 +135,27 @@ public final class JobConfig {
             if (startupSettings != null) {
                 ReadonlyConfig startup = ReadonlyConfig.fromMap(startupSettings);
                 validate(startup, STARTUP_RULE, "source.startup");
-                StartupOptions selected = StartupOptions.from(startup.get(MODE));
-                selected.requireSupported();
-                startupMode = selected.startupMode();
+                startupOptions = StartupOptions.from(
+                        startup.get(MODE),
+                        startup.get(STARTUP_FILE),
+                        startup.get(STARTUP_POSITION),
+                        startup.get(STARTUP_GTID),
+                        startup.get(STARTUP_TIMESTAMP),
+                        startup.get(STARTUP_SKIP_EVENTS),
+                        startup.get(STARTUP_SKIP_ROWS));
+            } else if (dataSteps.contains(Step.FULL) && dataSteps.contains(Step.INCREMENTAL)) {
+                startupOptions = StartupOptions.initial();
+            } else if (dataSteps.equals(List.of(Step.FULL))) {
+                startupOptions = StartupOptions.snapshot();
             } else {
-                startupMode = StartupMode.INITIAL;
+                throw new IllegalArgumentException("Incremental-only CDC requires explicit startup mode");
             }
-            StartupMode expected = dataSteps.contains(Step.FULL) ? StartupMode.INITIAL : StartupMode.LATEST_OFFSET;
-            if (startupMode != expected || (startupSettings == null && expected != StartupMode.INITIAL)) {
+            StartupMode mode = startupOptions.startupMode();
+            boolean full = dataSteps.contains(Step.FULL);
+            boolean incremental = dataSteps.contains(Step.INCREMENTAL);
+            if ((full && incremental && mode != StartupMode.INITIAL)
+                    || (full && !incremental && mode != StartupMode.SNAPSHOT)
+                    || (!full && !startupOptions.isStreamOnly())) {
                 throw new IllegalArgumentException("CDC startup mode differs from realtime synchronization steps");
             }
         }
@@ -185,7 +214,7 @@ public final class JobConfig {
             }
             ReadonlyConfig target = targets.remove(id);
             if (target == null) throw new IllegalArgumentException("Sink input must reference a Source table");
-            SourceConfig input = SourceConfig.from(source, fromId, type, dataSteps, startupMode);
+            SourceConfig input = SourceConfig.from(source, fromId, type, dataSteps, startupOptions);
             SinkConfig output = SinkConfig.from(target, toId, type, dataSteps, evolve);
             if (!sourceTables.add(tableKey(source)) || !sinkTables.add(tableKey(target))) {
                 throw new IllegalArgumentException("Duplicate physical table route");
