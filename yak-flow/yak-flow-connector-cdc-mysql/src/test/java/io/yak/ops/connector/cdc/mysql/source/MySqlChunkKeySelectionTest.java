@@ -15,7 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.yak.ops.configuration.Configuration;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
 import io.yak.ops.connector.base.metrics.TableMetrics;
-import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
@@ -68,16 +67,14 @@ class MySqlChunkKeySelectionTest {
 
     @Test
     void hybridRuntimeAcceptsTypedNumericAndNonPrimarySplitKeys() {
-        assertEquals("id", MySqlChunkSplitter.splitKey(ORDERS_SCHEMA, null));
-        assertEquals("id", MySqlChunkSplitter.splitKey(ORDERS_SCHEMA, "id"));
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> MySqlChunkSplitter.splitKey(ORDERS_SCHEMA, "created_at"));
+        assertEquals("id", ChunkUtils.requireSupportedSnapshot(ORDERS_SCHEMA, null).name());
+        assertEquals("id", ChunkUtils.requireSupportedSnapshot(ORDERS_SCHEMA, "id").name());
+        assertEquals("created_at", ChunkUtils.requireSupportedSnapshot(ORDERS_SCHEMA, "created_at").name());
         new MySqlCdcSourceFactory().validateSchema(
                 options().set(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN, "created_at").toReadonlyConfig(),
                 ORDERS_SCHEMA);
         var keyless = new TableSchema(ORDERS_SCHEMA.columns(), List.of());
-        assertThrows(IllegalArgumentException.class, () -> MySqlChunkSplitter.splitKey(keyless, "created_at"));
+        assertEquals("created_at", ChunkUtils.requireSupportedSnapshot(keyless, "created_at").name());
     }
 
     @Test
