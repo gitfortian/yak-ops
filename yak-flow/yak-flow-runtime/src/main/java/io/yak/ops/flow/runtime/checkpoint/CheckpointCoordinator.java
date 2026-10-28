@@ -579,6 +579,7 @@ public final class CheckpointCoordinator implements AutoCloseable {
             PendingCheckpoint pending,
             CheckpointSnapshot snapshot,
             CompletableFuture<CheckpointSnapshot> published) throws Exception {
+        long checkpointId = pending.getCheckpointID();
         pending.finalizeCheckpoint(snapshot, storage);
         LOG.info("YakFlow checkpoint saved, jobId={}, checkpointId={}", jobGraph.jobID(), checkpointId);
         published.complete(snapshot);
