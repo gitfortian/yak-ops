@@ -22,8 +22,6 @@ package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 
 import io.yak.ops.core.data.TableId;
-
-
 import java.util.Objects;
 
 /** The state of the {@link MySqlChunkSplitter}. */
