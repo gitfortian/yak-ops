@@ -273,6 +273,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                 sendBinlogMetadataGroup(request.getGroupId(), request.getGeneration());
             }
         } else if (event instanceof BinlogSplitMetaAssembledEvent assembled) {
+            if (assigner.isSnapshotMetaReleased()) return;
             if (reader != 0) throw new IllegalArgumentException("Only the Binlog owner may ACK metadata");
             if (!assigner.onBinlogSplitMetaAssembled(assembled.getBinlogAssignmentGeneration())) return;
             if (assigner.phase() == HybridPendingSplitsState.Phase.STREAMING
