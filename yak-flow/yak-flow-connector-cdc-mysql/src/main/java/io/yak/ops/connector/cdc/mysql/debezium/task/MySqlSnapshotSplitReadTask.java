@@ -23,7 +23,6 @@ import java.util.concurrent.Callable;
 /** Fetcher-owned JDBC scan and bounded Binlog reconciliation for one chunk at a time. */
 public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
     private static final int MAX_ROWS = 100_000;
-    private static final long MAX_PAYLOAD_BYTES = 4L * 1024 * 1024;
     private static final long BINLOG_TIMEOUT_NANOS = Duration.ofSeconds(60).toNanos();
     private final MySqlSourceConfig config;
     private final SnapshotSplitReader snapshots;
@@ -82,8 +81,10 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
         }
         ensureBinlog();
         var schema = Objects.requireNonNull(config.schemas().get(split.tableId()), "chunk schema");
-        SnapshotChunkBackfill buffer =
-                new SnapshotChunkBackfill(split.chunkRange(), schema, MAX_ROWS, MAX_PAYLOAD_BYTES);
+        // Flink CDC retains the normalized split in memory until bounded backfill completes.
+        // Use the existing 64 MiB per-chunk budget instead of rejecting valid, wide chunks
+        // at the old hard-coded 4 MiB limit. Keep the fail-closed row/byte bound.
+        SnapshotChunkBackfill buffer = new SnapshotChunkBackfill(split.chunkRange(), schema, MAX_ROWS);
         try {
             DebeziumOffset low = openConsistentSnapshot(split);
             afterLow.call();

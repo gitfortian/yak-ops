@@ -16,6 +16,7 @@ import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplit;
 import io.yak.ops.core.data.TableId;
+import io.yak.ops.core.types.TableSchema;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
@@ -75,6 +76,10 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
         generation = metrics.generation();
         tables = Set.copyOf(config.schemas().keySet());
         snapshots = new MySqlSnapshotSplitReadTask(config, reader);
+    }
+
+    TableSchema snapshotSchema(TableId tableId) {
+        return Objects.requireNonNull(config.schemas().get(tableId), "snapshot table schema");
     }
 
     @Override

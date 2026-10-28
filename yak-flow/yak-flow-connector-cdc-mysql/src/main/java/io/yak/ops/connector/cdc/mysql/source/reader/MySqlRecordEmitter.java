@@ -11,6 +11,8 @@ import io.yak.ops.core.api.connector.source.ReaderOutput;
 import io.yak.ops.core.api.connector.source.SourceReaderContext;
 import io.yak.ops.core.data.ChangeEventId;
 import io.yak.ops.core.data.TableRecord;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -51,9 +53,18 @@ public final class MySqlRecordEmitter implements RecordEmitter<MySqlFetchedRecor
             // have been emitted together in this mailbox operation.
             var prepared = event.preparedSnapshot();
             var rows = prepared.output().rows();
-            for (int ordinal = 0; ordinal < rows.size(); ordinal++) {
-                TableRecord row = rows.get(ordinal);
-                ChangeEventId identity = ChangeEventId.snapshot(sourceId, state.snapshotSplitId(), ordinal);
+            // A split can be re-scanned after a failed mailbox attempt. Assigning
+            // identities by output position would reuse an ID for a different row
+            // when the reconstructed result contains inserted/deleted keys.
+            // Flink CDC's backfill uses physical keys for keyed images and full-row
+            // identity for keyless ones; use the same distinction here.
+            var schema = splits.snapshotSchema(prepared.tableId());
+            Map<String, Integer> occurrences = new HashMap<>();
+            for (TableRecord row : rows) {
+                String rowIdentity = MySqlChangeEventIds.fromSnapshot(row, schema);
+                int occurrence = occurrences.merge(rowIdentity, 1, Integer::sum) - 1;
+                ChangeEventId identity = new ChangeEventId(
+                        sourceId, "snapshot:" + state.snapshotSplitId() + ":" + rowIdentity + ":" + occurrence, 0, 1);
                 output.collect(row.withChangeEventId(identity));
                 metrics.read(generation, row.tableId(), false);
             }
