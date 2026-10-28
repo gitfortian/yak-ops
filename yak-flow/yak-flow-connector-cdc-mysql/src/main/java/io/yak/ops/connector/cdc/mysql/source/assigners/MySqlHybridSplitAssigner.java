@@ -325,10 +325,11 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
 
     @Override
     public AssignerStatus getAssignerStatus() {
-        return phase == HybridPendingSplitsState.Phase.BOOTSTRAP
-                        || phase == HybridPendingSplitsState.Phase.SNAPSHOT
-                ? AssignerStatus.INITIAL_ASSIGNING
-                : AssignerStatus.INITIAL_ASSIGNING_FINISHED;
+        if (phase == HybridPendingSplitsState.Phase.BOOTSTRAP
+                || phase == HybridPendingSplitsState.Phase.SNAPSHOT) {
+            return AssignerStatus.INITIAL_ASSIGNING;
+        }
+        return AssignerStatus.INITIAL_ASSIGNING_FINISHED;
     }
 
     @Override
