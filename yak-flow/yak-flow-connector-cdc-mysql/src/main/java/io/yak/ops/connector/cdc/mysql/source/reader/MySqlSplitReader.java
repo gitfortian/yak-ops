@@ -49,6 +49,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     private volatile boolean streaming;
     private volatile boolean snapshotsFinished;
     private boolean snapshotsClosed;
+    private boolean binlogPauseReported;
     private boolean closed;
     private BinlogEvent bootstrapCandidate;
 
@@ -80,10 +81,15 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             if (split instanceof MySqlSnapshotSplit snapshot) {
                 pending.addLast(snapshot);
             } else if (split instanceof MySqlBinlogSplit stream) {
-                if (binlogSplit != null) {
+                if (binlogSplit != null
+                        && !(binlogSplit.phase() == MySqlBinlogSplit.Phase.PAUSED
+                                && stream.phase() == MySqlBinlogSplit.Phase.STREAMING
+                                && !streaming
+                                && binlog == null)) {
                     throw new IllegalStateException("MySQL Reader already owns a Binlog split");
                 }
                 binlogSplit = stream;
+                binlogPauseReported = false;
                 if (readerContext != null) {
                     readerContext.setHasAssignedBinlogSplit(true);
                     if (stream.isSuspended() && stream.phase() == MySqlBinlogSplit.Phase.PAUSED) {
@@ -139,6 +145,28 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             bootstrapCandidate = null;
             return records(MySqlBinlogSplit.ID, MySqlFetchedRecord.lowWatermark(first.offset()), false);
         }
+        if (readerContext != null
+                && readerContext.isBinlogSplitReaderSuspended()
+                && binlogSplit != null
+                && !binlogPauseReported) {
+            if (streaming) {
+                MySqlBinlogSplitReadTask running = binlog;
+                try {
+                    if (running != null) {
+                        byte[] currentHistory = running.snapshotHistory();
+                        if (currentHistory.length > 0) history = currentHistory;
+                        running.requestStop();
+                        running.close();
+                    }
+                } finally {
+                    binlog = null;
+                    filter = null;
+                    streaming = false;
+                }
+            }
+            binlogPauseReported = true;
+            return new RecordsBySplits<>(Map.of(), Set.of(MySqlBinlogSplit.ID));
+        }
         if (active == null && !pending.isEmpty()) {
             active = pending.removeFirst();
             if (!active.prepared()) {
@@ -186,9 +214,29 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
         snapshots.close();
         binlogSplit = split;
         history = split.schemaHistory();
+        resumeHigh = null;
+        resumeFinishedSplits = null;
         startBinlog(split);
         streaming = true;
+        binlogPauseReported = false;
         if (readerContext != null) readerContext.wakeupSuspendedBinlogSplitReader();
+    }
+
+    /** Stores a paused Binlog split after the fetcher has stopped its live Debezium task. */
+    public void suspendBinlog(MySqlBinlogSplit split) {
+        Objects.requireNonNull(split, "split");
+        if (split.phase() != MySqlBinlogSplit.Phase.PAUSED) {
+            throw new IllegalArgumentException("A suspended Binlog split must be in PAUSED phase");
+        }
+        if (binlog != null || streaming) {
+            throw new IllegalStateException("Binlog fetcher must stop before its split is checkpointed as paused");
+        }
+        binlogSplit = split;
+        history = split.schemaHistory();
+        filter = null;
+        resumeHigh = null;
+        resumeFinishedSplits = null;
+        binlogPauseReported = true;
     }
 
     public void finishSnapshots() {
