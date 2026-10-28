@@ -17,10 +17,10 @@
 
 package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 
-// Source: apache/flink-cdc@b806d26762862a76dc91ac81f16dbd7f6ec62821 (adapted YakFlow TableId and nullability annotations).
+// Source: apache/flink-cdc@b806d26762862a76dc91ac81f16dbd7f6ec62821 (adapted YakFlow TableId and nullability
+// annotations).
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
-
 import io.yak.ops.core.data.TableId;
 import java.util.Objects;
 
