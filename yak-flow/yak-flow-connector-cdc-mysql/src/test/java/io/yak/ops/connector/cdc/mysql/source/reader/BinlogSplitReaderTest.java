@@ -3,11 +3,6 @@ package io.yak.ops.connector.cdc.mysql.source.reader;
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
 import io.yak.ops.connector.cdc.mysql.debezium.reader.BinlogSplitReader;
 
-import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.TABLE;
-import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.event;
-import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.offset;
-import static io.yak.ops.connector.cdc.mysql.source.reader.BinlogSplitFilterTestData.row;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -30,6 +25,8 @@ import org.junit.jupiter.api.Test;
 
 /** Verifies per-chunk filtering and atomic primary-key move handling. */
 class BinlogSplitReaderTest {
+
+    private static final TableId TABLE = new TableId("shop", null, "orders");
 
     private static final TableSchema SCHEMA = new TableSchema(
             List.of(
@@ -184,6 +181,19 @@ class BinlogSplitReaderTest {
                 List.of(row(RowKind.INSERT, 1L, "after rotation")),
                 new DebeziumOffset(Map.of("server", "shop"), Map.of("file", "mysql-bin.10", "pos", 4L)));
         assertEquals(1, filter.filter(later).records().size());
+    }
+
+    private static TableRecord row(RowKind kind, long key, String name) {
+        return new TableRecord(TABLE, kind, GenericRowData.of(key, name));
+    }
+
+    private static BinlogEvent event(long position, TableRecord... records) {
+        return new BinlogEvent(List.of(records), offset(position));
+    }
+
+    private static DebeziumOffset offset(long position) {
+        return new DebeziumOffset(
+                Map.of("server", "shop"), Map.of("file", "mysql-bin.000001", "pos", position));
     }
 
     private static BinlogSplitReader filter() {
