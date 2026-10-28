@@ -47,5 +47,4 @@ public final class MySqlSourceReaderContext {
     public void setHasAssignedBinlogSplit(boolean hasAssignedBinlogSplit) {
         this.hasAssignedBinlogSplit = hasAssignedBinlogSplit;
     }
-
 }
