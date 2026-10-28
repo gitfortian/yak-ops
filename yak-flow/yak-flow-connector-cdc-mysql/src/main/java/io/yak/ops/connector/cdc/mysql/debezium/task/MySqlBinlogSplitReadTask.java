@@ -7,6 +7,7 @@ import io.debezium.engine.format.ChangeEventFormat;
 import io.yak.ops.connector.cdc.mysql.debezium.BinlogEvent;
 import io.yak.ops.connector.cdc.mysql.debezium.CheckpointOffsetBackingStore;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
+import io.yak.ops.connector.cdc.mysql.debezium.DebeziumSchemaHistorySnapshot;
 import io.yak.ops.connector.cdc.mysql.debezium.task.context.StatefulTaskContext;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
@@ -42,7 +43,8 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
     private String sessionId;
     private volatile boolean stopped;
     private boolean started;
-    private DebeziumOffset lastQueuedOffset;
+    private volatile DebeziumOffset lastQueuedOffset;
+    private volatile DebeziumOffset lastEngineOffset;
     private boolean awaitingSchemaSnapshot;
     private final Set<TableId> bootstrapTables = new HashSet<>();
 
@@ -67,13 +69,18 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
         context.configure(split);
         started = true;
         lastQueuedOffset = context.restoredOffset();
+        lastEngineOffset = context.restoredOffset();
         awaitingSchemaSnapshot = lastQueuedOffset == null;
         try {
             directory = Files.createTempDirectory("yakflow-binlog-");
             historyPath = directory.resolve("schema-history.dat");
             byte[] history = context.restoredSchemaHistory();
             if (history.length != 0) {
-                Files.write(historyPath, history);
+                byte[] completeHistory = DebeziumSchemaHistorySnapshot.completePrefix(history);
+                if (completeHistory.length == 0) {
+                    throw new IOException("Restored MySQL CDC Schema History has no complete record");
+                }
+                Files.write(historyPath, completeHistory);
             }
             String connectorName = "yakflow-cdc-" + getSourceConfig().topicPrefix();
             sessionId = CheckpointOffsetBackingStore.register(connectorName, context.restoredOffset());
@@ -129,6 +136,10 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
             }
             try {
                 SourceRecord source = event.record();
+                DebeziumOffset engineOffset = sourceOffset(source);
+                if (!awaitingSchemaSnapshot) {
+                    requireNonRegressing(lastEngineOffset, engineOffset, "Debezium Engine");
+                }
                 if (awaitingSchemaSnapshot) {
                     // Debezium's no_data snapshot emits CREATE table metadata before it completes.
                     // The forced heartbeat is emitted only after postSnapshot(), with the
@@ -149,7 +160,6 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
                         BinlogEvent anchor =
                                 Objects.requireNonNull(context.converter().convert(source), "snapshot heartbeat");
                         enqueue(anchor);
-                        lastQueuedOffset = anchor.offset();
                         awaitingSchemaSnapshot = false;
                         LOG.info(
                                 "MySQL CDC initial schema snapshot completed, tables={}",
@@ -177,7 +187,6 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
                                     converted.schemaChange().tableId());
                         }
                         enqueue(converted);
-                        lastQueuedOffset = converted.offset();
                     }
                 }
             } catch (InterruptedException interrupted) {
@@ -189,17 +198,52 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
             // The engine may stage this offset, but the YakFlow checkpoint uses only
             // the last event delivered by the owning Source mailbox.
             committer.markProcessed(event);
+            // This is diagnostic Engine progress only. Checkpoint state is advanced by the
+            // mailbox emitter after output.collect, never by this callback.
+            if (!awaitingSchemaSnapshot && engineOffset != null) {
+                lastEngineOffset = engineOffset;
+            }
         }
         committer.markBatchFinished();
     }
 
     private void enqueue(BinlogEvent record) throws InterruptedException {
+        requireNonRegressing(lastQueuedOffset, record.offset(), "Debezium queue");
         while (!stopped && !context.offer(record)) {
             // Bounded handover: preserve strict schema-event / row order.
         }
         if (stopped) {
             throw new InterruptedException("MySQL Binlog reader was stopped");
         }
+        lastQueuedOffset = record.offset();
+    }
+
+    private static DebeziumOffset sourceOffset(SourceRecord source) {
+        java.util.Map<String, ?> partition = source.sourcePartition();
+        java.util.Map<String, ?> position = source.sourceOffset();
+        if (partition == null || partition.isEmpty() || position == null || position.isEmpty()) {
+            return null;
+        }
+        java.util.Map<String, Object> copiedPartition = new java.util.LinkedHashMap<>();
+        partition.forEach(copiedPartition::put);
+        java.util.Map<String, Object> copiedPosition = new java.util.LinkedHashMap<>();
+        position.forEach(copiedPosition::put);
+        return new DebeziumOffset(copiedPartition, copiedPosition);
+    }
+
+    private static void requireNonRegressing(DebeziumOffset previous, DebeziumOffset next, String progress) {
+        if (previous != null && next != null && next.compareTo(previous) < 0) {
+            throw new IllegalStateException("MySQL CDC " + progress + " offset moved backwards");
+        }
+    }
+
+    // Package-private observability for deterministic Engine-versus-mailbox recovery tests.
+    DebeziumOffset lastEngineOffset() {
+        return lastEngineOffset;
+    }
+
+    DebeziumOffset lastQueuedOffset() {
+        return lastQueuedOffset;
     }
 
     public BinlogEvent poll() throws InterruptedException {
@@ -216,11 +260,7 @@ public final class MySqlBinlogSplitReadTask implements AutoCloseable {
         if (historyPath == null || !Files.exists(historyPath)) {
             return new byte[0];
         }
-        byte[] history = Files.readAllBytes(historyPath);
-        if (history.length > 8 * 1024 * 1024) {
-            throw new IOException("MySQL CDC Schema History checkpoint exceeds size limit");
-        }
-        return history;
+        return DebeziumSchemaHistorySnapshot.readComplete(historyPath, 8 * 1024 * 1024);
     }
 
     public void requestStop() {
