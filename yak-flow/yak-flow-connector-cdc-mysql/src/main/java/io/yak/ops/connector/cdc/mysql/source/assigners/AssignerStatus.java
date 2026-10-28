@@ -19,10 +19,10 @@ package io.yak.ops.connector.cdc.mysql.source.assigners;
 
 // Source: apache/flink-cdc@b806d26762862a76dc91ac81f16dbd7f6ec62821 (adapted package only).
 
+import static java.lang.String.format;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static java.lang.String.format;
 
 /**
  * The state of split assigner finite state machine, tips: we use word status instead of word state
@@ -56,8 +56,7 @@ public enum AssignerStatus {
 
         @Override
         public AssignerStatus onFinish() {
-            LOG.info(
-                    "Assigner status changes from INITIAL_ASSIGNING to INITIAL_ASSIGNING_FINISHED");
+            LOG.info("Assigner status changes from INITIAL_ASSIGNING to INITIAL_ASSIGNING_FINISHED");
             return this.getNextStatus();
         }
     },
@@ -69,8 +68,7 @@ public enum AssignerStatus {
 
         @Override
         public AssignerStatus startAssignNewlyTables() {
-            LOG.info(
-                    "Assigner status changes from INITIAL_ASSIGNING_FINISHED to NEW_ADDED_ASSIGNING");
+            LOG.info("Assigner status changes from INITIAL_ASSIGNING_FINISHED to NEW_ADDED_ASSIGNING");
             return this.getNextStatus();
         }
     },
@@ -82,8 +80,7 @@ public enum AssignerStatus {
 
         @Override
         public AssignerStatus onFinish() {
-            LOG.info(
-                    "Assigner status changes from NEWLY_ADDED_ASSIGNING to NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED");
+            LOG.info("Assigner status changes from NEWLY_ADDED_ASSIGNING to NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED");
             return this.getNextStatus();
         }
     },
@@ -95,8 +92,7 @@ public enum AssignerStatus {
 
         @Override
         public AssignerStatus onBinlogSplitUpdated() {
-            LOG.info(
-                    "Assigner status changes from NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED to NEWLY_ADDED_ASSIGNING_FINISHED");
+            LOG.info("Assigner status changes from NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED to NEWLY_ADDED_ASSIGNING_FINISHED");
             return this.getNextStatus();
         }
     },
@@ -108,8 +104,7 @@ public enum AssignerStatus {
 
         @Override
         public AssignerStatus startAssignNewlyTables() {
-            LOG.info(
-                    "Assigner status changes from NEWLY_ADDED_ASSIGNING_FINISHED to NEWLY_ADDED_ASSIGNING");
+            LOG.info("Assigner status changes from NEWLY_ADDED_ASSIGNING_FINISHED to NEWLY_ADDED_ASSIGNING");
             return this.getNextStatus();
         }
     };
