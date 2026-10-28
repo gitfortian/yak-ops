@@ -214,6 +214,7 @@ public final class MySqlChunkSplitter {
         Object chunkEnd = StatementUtils.queryNextChunkMax(
                 connection, dialect, table, column, type, chunkSize, lower);
         if (chunkEnd == null) return null;
+        boolean advancedFromRepeatedKey = false;
         if (lower == null) {
             // The upstream algorithm allows an empty first split when the first
             // chunkSize rows all share MIN. YakFlow's half-open SQL requires
@@ -221,11 +222,17 @@ public final class MySqlChunkSplitter {
             Object minimum = StatementUtils.queryMinMax(connection, dialect, table, column, type)[0];
             if (Objects.equals(chunkEnd, minimum)) {
                 chunkEnd = StatementUtils.queryMin(connection, dialect, table, column, type, chunkEnd);
+                advancedFromRepeatedKey = true;
             }
         } else if (Objects.equals(lower, chunkEnd)) {
             chunkEnd = StatementUtils.queryMin(connection, dialect, table, column, type, chunkEnd);
+            advancedFromRepeatedKey = true;
         }
         if (chunkEnd == null) return null;
+        // If the first chunk's records all had the same key, the successor
+        // forms a real boundary even when it is MAX. Otherwise one oversized
+        // chunk would absorb both repeated groups (including keyless rows).
+        if (advancedFromRepeatedKey) return chunkEnd;
         // Do not create an extra final split merely to consume the maximum key.
         // queryMin performs this check in the source database's collation, not Java.
         Object next = StatementUtils.queryMin(connection, dialect, table, column, type, chunkEnd);
