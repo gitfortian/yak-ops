@@ -322,6 +322,7 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
     public boolean snapshotPlanned() {
         return snapshots.planned();
     }
+
     @Override
     public AssignerStatus getAssignerStatus() {
         return phase == HybridPendingSplitsState.Phase.STREAMING
@@ -346,5 +347,4 @@ public final class MySqlHybridSplitAssigner implements MySqlSplitAssigner {
 
     @Override
     public void close() {}
-
 }
