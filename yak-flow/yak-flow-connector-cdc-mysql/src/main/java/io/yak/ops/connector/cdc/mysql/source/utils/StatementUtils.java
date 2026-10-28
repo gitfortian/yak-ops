@@ -43,7 +43,8 @@ public final class StatementUtils {
             throws SQLException {
         String database = table.catalog() == null ? connection.getCatalog() : table.catalog();
         if (database != null && !database.isBlank()) {
-            String lookup = "SELECT TABLE_ROWS FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?";
+            String lookup =
+                    "SELECT TABLE_ROWS FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?";
             try (PreparedStatement estimate = connection.prepareStatement(lookup)) {
                 estimate.setString(1, database);
                 estimate.setString(2, table.table());
