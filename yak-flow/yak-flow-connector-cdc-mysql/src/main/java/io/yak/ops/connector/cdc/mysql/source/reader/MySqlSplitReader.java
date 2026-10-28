@@ -32,7 +32,8 @@ import java.util.Set;
 public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, MySqlSplit> {
     private final MySqlSourceConfig config;
     private final MySqlSourceReaderContext readerContext;
-    private final MySqlSnapshotSplitReadTask snapshots;
+    private MySqlSnapshotSplitReadTask snapshots;
+    private final int readerIndex;
     private final TableMetrics metrics;
     private final long generation;
     private final Set<TableId> tables;
@@ -69,6 +70,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
             MySqlSourceConfig config, TableMetrics metrics, int reader, MySqlSourceReaderContext readerContext) {
         this.config = Objects.requireNonNull(config, "config");
         this.readerContext = readerContext;
+        this.readerIndex = reader;
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         generation = metrics.generation();
         tables = Set.copyOf(config.schemas().keySet());
@@ -79,6 +81,13 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
     public void addSplits(List<MySqlSplit> splits) throws Exception {
         for (MySqlSplit split : splits) {
             if (split instanceof MySqlSnapshotSplit snapshot) {
+                if (snapshotsClosed) {
+                    // The initial handoff closes JDBC snapshot resources. A later table scan
+                    // must open a new task, including when Binlog and Snapshot share reader 0.
+                    snapshots = new MySqlSnapshotSplitReadTask(config, readerIndex);
+                    snapshotsClosed = false;
+                    snapshotsFinished = false;
+                }
                 pending.addLast(snapshot);
             } else if (split instanceof MySqlBinlogSplit stream) {
                 if (binlogSplit != null
@@ -212,6 +221,7 @@ public final class MySqlSplitReader implements SplitReader<MySqlFetchedRecord, M
         if (binlog != null) throw new IllegalStateException("Bootstrap Binlog was not closed before handoff");
         // Snapshot backfill connections are no longer needed once this Reader enters streaming.
         snapshots.close();
+        snapshotsClosed = true;
         binlogSplit = split;
         history = split.schemaHistory();
         resumeHigh = null;
