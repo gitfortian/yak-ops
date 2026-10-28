@@ -560,6 +560,9 @@ public class MySqlSourceConfigFactory implements Serializable {
     public MySqlSource buildHybrid(int chunkSize, TableMetrics metrics) {
         splitSize(chunkSize);
         if (!explicitStartupOptions) startupOptions(StartupOptions.initial());
+        if (startupOptions.isStreamOnly()) {
+            throw new IllegalArgumentException("Snapshot Source cannot run a Binlog-only startup mode");
+        }
         return MySqlSource.initial(createConfig(0), chunkSize, metrics, startupOptions);
     }
 
@@ -569,6 +572,9 @@ public class MySqlSourceConfigFactory implements Serializable {
 
     public MySqlSource build(TableMetrics metrics) {
         if (!explicitStartupOptions) startupOptions(StartupOptions.latest());
+        if (!startupOptions.isStreamOnly()) {
+            throw new IllegalArgumentException("Stream-only MySQL Source requires a Binlog startup mode");
+        }
         return MySqlSource.latestOffset(createConfig(0), metrics, startupOptions);
     }
 }
