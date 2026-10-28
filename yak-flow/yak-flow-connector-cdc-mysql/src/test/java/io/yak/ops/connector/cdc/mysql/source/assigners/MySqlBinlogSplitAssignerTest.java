@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 /** Verifies assignment and recovery using the same contract for both startup modes. */
-class MySqlSplitAssignerContractTest {
+class MySqlBinlogSplitAssignerTest {
 
     @Test
     void binlogOnlyReturnsOneSplitAndPersistsAssignedOwnership() throws Exception {

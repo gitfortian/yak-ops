@@ -1,4 +1,4 @@
-package io.yak.ops.connector.cdc.mysql.source.enumerator;
+package io.yak.ops.connector.cdc.mysql.source.assigners;
 
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 /** Proves Binlog handoff needs a completed snapshot checkpoint, not only an assignment ACK. */
-class MySqlHybridHandoffTest {
+class MySqlHybridSplitAssignerTest {
 
     @Test
     void gatesHandoffAndRestoresCompletedPendingTransition() throws Exception {

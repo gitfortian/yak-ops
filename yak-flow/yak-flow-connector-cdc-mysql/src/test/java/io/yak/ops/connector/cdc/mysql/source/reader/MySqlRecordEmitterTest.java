@@ -38,7 +38,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /** Stable Debezium coordinates and atomic UPDATE identity across Source emission. */
-class MySqlChangeEventIdsTest {
+class MySqlRecordEmitterTest {
     private static final TableId TABLE = new TableId("shop", null, "entries");
 
     @Test

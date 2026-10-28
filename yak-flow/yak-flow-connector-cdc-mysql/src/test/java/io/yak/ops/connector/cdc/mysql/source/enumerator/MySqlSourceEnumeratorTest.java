@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 /** Tests actual Enumerator async callbacks, durable cursors and reader assignments. */
-class MySqlTypedSnapshotAssignmentTest {
+class MySqlSourceEnumeratorTest {
     private static final TableId ORDERS = new TableId("shop", null, "orders");
     private static final PendingSplitsStateSerializer SERIALIZER =
             new PendingSplitsStateSerializer(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE);
