@@ -144,7 +144,7 @@ public final class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
         }
         TableId cursorTable = nextChunkRange == null ? null : nextChunkRange.tableId();
         int start = cursorTable == null ? Math.min(nextTableIndex, capturedTables.size()) : capturedTables.indexOf(cursorTable);
-        if (cursorTable != null && start < 0) throw new IllegalArgumentException("Restored Chunk cursor refers to a table outside the current source");
+        if (cursorTable != null && start < 0) start = Math.min(nextTableIndex, capturedTables.size());
         for (int i = start; i < capturedTables.size(); i++) {
             TableId table = capturedTables.get(i);
             if (Objects.equals(table, cursorTable) || !hasPlannedSplitsForTable(table)) {
