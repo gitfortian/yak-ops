@@ -3,6 +3,18 @@ package io.yak.ops.connector.cdc.mysql.debezium.task;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.yak.ops.configuration.Configuration;
+import io.yak.ops.connector.base.metrics.TableMetrics;
+import io.yak.ops.connector.cdc.mysql.source.reader.MySqlRecordEmitter;
+import io.yak.ops.connector.cdc.mysql.source.reader.MySqlSourceReaderContext;
+import io.yak.ops.connector.cdc.mysql.source.reader.MySqlSplitReader;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlFetchedRecord;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer;
+import io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitState;
+import io.yak.ops.core.api.connector.source.SourceReaderContext;
+import io.yak.ops.core.data.TableRecord;
+import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
 import io.yak.ops.connector.cdc.mysql.source.assigners.ChunkRange;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
@@ -116,6 +128,86 @@ class MySqlSnapshotBackfillIT {
             assertThat(values(restored.read(assigned))).containsExactlyInAnyOrderEntriesOf(
                     Map.of(1L, "before"));
         }
+    }
+
+    @Test
+    void failedMidChunkCollectionDoesNotCheckpointFinishedFenceAndCanReplay() throws Exception {
+        execute("INSERT INTO snapshot_contract VALUES (1,'first'),(2,'second')");
+        var config = config();
+        MySqlSnapshotSplit assigned = split(null, null);
+        MySqlSnapshotSplit prepared;
+        try (MySqlSnapshotSplitReadTask task = new MySqlSnapshotSplitReadTask(config, 0)) {
+            prepared = task.read(assigned);
+        }
+
+        try (MySqlSplitReader splitReader = new MySqlSplitReader(config)) {
+            var emitter = new MySqlRecordEmitter(
+                    new MySqlSourceReaderContext(context()),
+                    splitReader,
+                    new TableMetrics(),
+                    config.topicPrefix());
+            MySqlSplitState incomplete = MySqlSplitState.fromSplit(assigned);
+            List<TableRecord> delivered = new ArrayList<>();
+            AtomicInteger attempts = new AtomicInteger();
+
+            assertThatThrownBy(() -> emitter.emitRecord(
+                    MySqlFetchedRecord.prepared(prepared),
+                    row -> {
+                        if (attempts.incrementAndGet() == 2) {
+                            throw new IllegalStateException("injected collector failure");
+                        }
+                        delivered.add(row);
+                    },
+                    incomplete))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("injected collector failure");
+
+            var serializer = MySqlSplitSerializer.INSTANCE;
+            MySqlSnapshotSplit persisted = (MySqlSnapshotSplit) serializer.deserialize(
+                    serializer.getVersion(), serializer.serialize(incomplete.checkpoint(null)));
+            assertThat(persisted.finished()).isNull();
+            assertThat(persisted.output()).isNull();
+            assertThat(persisted.chunkRange()).isEqualTo(assigned.chunkRange());
+
+            // A failed collector did not persist any normalized row images. A restored
+            // reader must re-scan the original range, not resume at emitted ordinal 1.
+            MySqlSnapshotSplit retried;
+            try (MySqlSnapshotSplitReadTask restored = new MySqlSnapshotSplitReadTask(config, 0)) {
+                retried = restored.read(persisted);
+            }
+            MySqlSplitState recovered = MySqlSplitState.fromSplit(persisted);
+            List<TableRecord> replayed = new ArrayList<>();
+            emitter.emitRecord(MySqlFetchedRecord.prepared(retried), replayed::add, recovered);
+            assertThat(replayed).hasSize(2);
+            assertThat(replayed.getFirst().changeEventId()).isEqualTo(
+                    delivered.getFirst().changeEventId());
+            MySqlSnapshotSplit finished = (MySqlSnapshotSplit) serializer.deserialize(
+                    serializer.getVersion(), serializer.serialize(recovered.checkpoint(null)));
+            assertThat(finished.finished()).isNotNull();
+            assertThat(finished.output()).isNull();
+        }
+    }
+
+    private static SourceReaderContext context() {
+        return new SourceReaderContext() {
+            @Override
+            public Configuration getConfiguration() {
+                return new Configuration();
+            }
+
+            @Override
+            public int getIndexOfSubtask() {
+                return 0;
+            }
+
+            @Override
+            public int currentParallelism() {
+                return 1;
+            }
+
+            @Override
+            public void sendSplitRequest() {}
+        };
     }
 
     private static MySqlSnapshotSplit split(Long start, Long end) {
