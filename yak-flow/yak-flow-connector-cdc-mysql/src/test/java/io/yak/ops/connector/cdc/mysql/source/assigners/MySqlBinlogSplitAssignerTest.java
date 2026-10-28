@@ -24,45 +24,45 @@ class MySqlBinlogSplitAssignerTest {
 
     @Test
     void binlogOnlyReturnsOneSplitAndPersistsAssignedOwnership() throws Exception {
-        MySqlSplitAssigner<MySqlBinlogSplit, BinlogPendingSplitsState> assigner =
+        MySqlSplitAssigner assigner =
                 new MySqlBinlogSplitAssigner(StartupOptions.latest(), null);
-        assertNull(assigner.getNext(1));
-        MySqlBinlogSplit split = assigner.getNext(0);
+        assertEquals(AssignerStatus.INITIAL_ASSIGNING_FINISHED, assigner.getAssignerStatus());
+        MySqlBinlogSplit split = (MySqlBinlogSplit) assigner.getNext().orElseThrow();
         assertEquals(MySqlBinlogSplit.ID, split.splitId());
         assertInstanceOf(MySqlSplit.class, split);
-        assertNull(assigner.getNext(0));
-        assertFalse(assigner.notifyCheckpointComplete(1));
+        assertTrue(assigner.getNext().isEmpty());
+        assigner.notifyCheckpointComplete(1);
 
         BinlogPendingSplitsState assigned = assigner.snapshotState(2);
         assertInstanceOf(PendingSplitsState.class, assigned);
         assertTrue(assigned.splitAssigned());
         var serializer = new PendingSplitsStateSerializer(MySqlSplitSerializer.INSTANCE);
         var restored = new MySqlBinlogSplitAssigner(StartupOptions.latest(), (BinlogPendingSplitsState) serializer.deserialize(serializer.getVersion(), serializer.serialize(assigned)));
-        assertNull(restored.getNext(0));
+        assertTrue(restored.getNext().isEmpty());
 
-        assigner.addSplitsBack(List.of(split), 0);
+        assigner.addSplits(List.of(split));
         assertFalse(assigner.snapshotState(3).splitAssigned());
-        assertEquals(split, assigner.getNext(0));
-        assertThrows(IllegalStateException.class, () -> assigner.addSplitsBack(List.of(split), 1));
-        assertNull(new MySqlBinlogSplitAssigner(StartupOptions.latest(), assigned).getNext(0));
+        assertEquals(split, assigner.getNext().orElseThrow());
+        assertThrows(IllegalStateException.class, () -> assigner.addSplits(List.of()));
+        assertTrue(new MySqlBinlogSplitAssigner(StartupOptions.latest(), assigned).getNext().isEmpty());
     }
 
 
     @Test
     void returnedBinlogSplitKeepsItsOffsetAcrossEnumeratorCheckpoint() throws Exception {
         var assigner = new MySqlBinlogSplitAssigner(StartupOptions.latest(), null);
-        assigner.getNext(0);
+        assigner.getNext();
         var offset = new DebeziumOffset(
                 Map.of("server", "yak"),
                 Map.of("file", "mysql-bin.000001", "pos", 256L));
         var returned = new MySqlBinlogSplit(offset, new byte[] {1, 2, 3});
-        assigner.addSplitsBack(List.of(returned), 0);
+        assigner.addSplits(List.of(returned));
 
         var serializer = new PendingSplitsStateSerializer(MySqlSplitSerializer.INSTANCE);
         var state = (BinlogPendingSplitsState) serializer.deserialize(
                 serializer.getVersion(), serializer.serialize(assigner.snapshotState(4)));
         var restored = new MySqlBinlogSplitAssigner(StartupOptions.latest(), state);
-        MySqlBinlogSplit resumed = restored.getNext(0);
+        MySqlBinlogSplit resumed = (MySqlBinlogSplit) restored.getNext().orElseThrow();
         assertEquals(offset, resumed.offset());
         assertEquals(List.of((byte) 1, (byte) 2, (byte) 3),
                 java.util.stream.IntStream.range(0, resumed.schemaHistory().length)
@@ -76,7 +76,7 @@ class MySqlBinlogSplitAssignerTest {
         assertFalse(pending.splitAssigned());
         var serializer = new PendingSplitsStateSerializer(MySqlSplitSerializer.INSTANCE);
         var restored = new MySqlBinlogSplitAssigner(StartupOptions.latest(), (BinlogPendingSplitsState) serializer.deserialize(serializer.getVersion(), serializer.serialize(pending)));
-        var split = restored.getNext(0);
+        var split = (MySqlBinlogSplit) restored.getNext().orElseThrow();
         assertNull(split.offset());
         assertEquals(0, split.schemaHistory().length);
         assertThrows(IllegalArgumentException.class, () -> assigner.snapshotState(-1));
@@ -85,11 +85,11 @@ class MySqlBinlogSplitAssignerTest {
     @Test
     void testStartFromLatestOffset() {
         var assigner = new MySqlBinlogSplitAssigner(StartupOptions.latest(), null);
-        var split = assigner.getNext(0);
+        var split = assigner.getNext();
         assertInstanceOf(MySqlBinlogSplit.class, split);
         assertNull(split.getStartingOffset());
         assertEquals(MySqlBinlogSplit.Phase.STANDALONE, split.phase());
-        assertNull(assigner.getNext(0));
+        assertTrue(assigner.getNext().isEmpty());
         assertTrue(assigner.snapshotState(1).splitAssigned());
     }
 
