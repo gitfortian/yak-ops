@@ -317,16 +317,17 @@ public final class SourceCoordinator<SplitT extends SourceSplit, EnumStateT> imp
         validateCheckpointId(checkpointId);
         Objects.requireNonNull(result, "result");
         submit(() -> {
-            ensureStarted();
-            context.ensureDeliveriesCompleted();
-            context.onCheckpoint(checkpointId);
-            result.complete(toBytes(checkpointId));
-            return null;
-        }).whenComplete((unused, failure) -> {
-            if (failure != null) {
-                result.completeExceptionally(failure);
-            }
-        });
+                    ensureStarted();
+                    context.ensureDeliveriesCompleted();
+                    context.onCheckpoint(checkpointId);
+                    result.complete(toBytes(checkpointId));
+                    return null;
+                })
+                .whenComplete((unused, failure) -> {
+                    if (failure != null) {
+                        result.completeExceptionally(failure);
+                    }
+                });
     }
 
     /** Serialize the coordinator state using the Flink versioned checkpoint envelope. */
