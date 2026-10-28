@@ -171,10 +171,17 @@ public final class StartupOptions implements Serializable {
         };
     }
 
-    /** Runtime support remains restricted to the two checkpoint-validated source paths. */
+    /** Validates the complete Flink CDC startup contract before execution. */
     public void requireSupported() {
-        if (startupMode != StartupMode.INITIAL && startupMode != StartupMode.LATEST_OFFSET) {
-            throw new UnsupportedOperationException("MySQL CDC startup mode is not implemented: " + asModeString());
+        if (startupMode == StartupMode.SPECIFIC_OFFSETS
+                && (binlogOffset == null
+                        || ((binlogOffset.getFilename() == null || binlogOffset.getFilename().isBlank())
+                                && (binlogOffset.getGtidSet() == null || binlogOffset.getGtidSet().isBlank())))) {
+            throw new IllegalArgumentException("Specific-offset startup requires a binlog file or GTID set");
+        }
+        if (startupMode == StartupMode.TIMESTAMP
+                && (binlogOffset == null || binlogOffset.getTimestampSec() <= 0)) {
+            throw new IllegalArgumentException("Timestamp startup requires a positive epoch timestamp");
         }
     }
 }
