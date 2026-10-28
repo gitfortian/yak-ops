@@ -10,6 +10,7 @@ import io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotOutput;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlSnapshotSplit;
+import io.yak.ops.core.data.TableId;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -110,24 +111,20 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
             }
             if (low.compareTo(high) != 0) {
                 long deadline = System.nanoTime() + BINLOG_TIMEOUT_NANOS;
+                DebeziumOffset lastBackfillOffset = low;
                 while (true) {
                     checkDeadline(deadline);
                     BinlogEvent event = binlog.poll();
                     if (event == null) continue;
-                    int highOrder = event.offset().compareTo(high);
-                    if (event.offset().compareTo(low) > 0 && highOrder <= 0) {
-                        if (event.schemaChange() != null
-                                && split.tableId().equals(event.schemaChange().tableId())) {
-                            throw new UnsupportedOperationException(
-                                    "Typed snapshot cannot reconcile schema changes during Backfill");
-                        }
-                        if (!event.records().isEmpty()
-                                && split.tableId()
-                                        .equals(event.records().getFirst().tableId())) {
-                            buffer.apply(event);
-                        }
+                    // Upstream's bounded backfill consumes an ordered Debezium stream.
+                    // Reordering within (LOW, HIGH] would cause overwritten snapshot
+                    // images and cannot be repaired by a later checkpoint.
+                    if (event.offset().compareTo(lastBackfillOffset) < 0) {
+                        throw new IllegalStateException(
+                                "MySQL Snapshot Backfill events are out of Binlog order");
                     }
-                    if (highOrder >= 0) break;
+                    lastBackfillOffset = event.offset();
+                    if (backfillEvent(event, low, high, split.tableId(), buffer)) break;
                 }
             }
             MySqlSnapshotSplit prepared = split.withOutput(new MySqlSnapshotOutput(low, high, buffer.finish()));
@@ -135,6 +132,35 @@ public final class MySqlSnapshotSplitReadTask implements AutoCloseable {
         } finally {
             snapshots.close();
         }
+    }
+
+    /**
+     * Applies one event from the Flink CDC-style bounded LOW-to-HIGH backfill interval.
+     *
+     * <p>The HIGH position is inclusive, and an event after HIGH marks completion
+     * without applying its changes. Only events for this table can change the
+     * snapshot buffer; mixed-table groups must fail closed instead of being dropped.
+     * Returning true is equivalent to reaching the backfill BINLOG_END boundary.
+     */
+    static boolean backfillEvent(
+            BinlogEvent event,
+            DebeziumOffset low,
+            DebeziumOffset high,
+            TableId table,
+            SnapshotChunkBackfill buffer) {
+        Objects.requireNonNull(event, "event");
+        int highOrder = event.offset().compareTo(high);
+        if (event.offset().compareTo(low) > 0 && highOrder <= 0) {
+            if (event.schemaChange() != null
+                    && table.equals(event.schemaChange().tableId())) {
+                throw new UnsupportedOperationException(
+                        "Typed snapshot cannot reconcile schema changes during Backfill");
+            }
+            if (event.records().stream().anyMatch(record -> table.equals(record.tableId()))) {
+                buffer.apply(event);
+            }
+        }
+        return highOrder >= 0;
     }
 
     private void ensureBinlog() throws Exception {
