@@ -60,7 +60,12 @@ class BinlogSplitMetaGroupAssemblerTest {
 
     private static BinlogSplitMetaEvent group(
             int index, int groups, int total, long generation, FinishedSnapshotSplitInfo... infos) {
-        return new BinlogSplitMetaEvent(index, groups, total, generation, List.of(infos));
+        return new BinlogSplitMetaEvent(
+                index,
+                groups,
+                total,
+                generation,
+                List.of(infos).stream().map(FinishedSnapshotSplitInfo::serialize).toList());
     }
 
     private static FinishedSnapshotSplitInfo info(String split, long position) {
