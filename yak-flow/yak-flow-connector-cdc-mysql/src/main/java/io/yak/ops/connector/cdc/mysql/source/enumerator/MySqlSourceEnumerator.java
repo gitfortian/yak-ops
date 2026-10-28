@@ -124,7 +124,7 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             // A removed table is reconciled by the Snapshot Assigner below. For a still-captured
             // table, fail closed if the checkpointed typed cursor no longer matches its key.
             if (schema != null) {
-                var selected = ChunkUtils.getChunkKeyColumn(
+                var selected = ChunkUtils.requireSupportedSnapshot(
                         schema, config.chunkKeyColumns().get(cursor.tableId()));
                 if (!cursor.column().equals(selected.name())
                         || cursor.type() != selected.dataType().getTypeRoot()) {
