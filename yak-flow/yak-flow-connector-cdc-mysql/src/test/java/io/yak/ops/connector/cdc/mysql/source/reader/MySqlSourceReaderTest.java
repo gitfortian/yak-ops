@@ -10,6 +10,9 @@ import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaAssembledEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaRequestEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitUpdateRequestEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.LatestFinishedSplitsNumberEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.LatestFinishedSplitsNumberRequestEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsAckEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlLowWatermarkEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.MySqlResumeBinlogEvent;
@@ -106,6 +109,59 @@ class MySqlSourceReaderTest {
                     .isEqualTo(1);
             reader.handleSourceEvents(new MySqlResumeBinlogEvent(offset(200)));
             assertThat(reader.snapshotState(3)).isEmpty();
+        }
+    }
+
+    @Test
+    void restoredSuspendedBinlogRequestsLatestSnapshotCountWithoutActivatingDuplicateSplit() throws Exception {
+        var events = new ArrayList<SourceEvent>();
+        var requests = new AtomicInteger();
+        var table = new TableId("shop", null, "orders");
+        var completed = new FinishedSnapshotSplitInfo(table, "chunk-0", null, null, offset(100));
+        var running = MySqlBinlogSplit.forInitialSnapshot()
+                .withAnchor(offset(50), new byte[] {1})
+                .startStreaming(offset(100), List.of(completed))
+                .withEmittedOffset(offset(150), new byte[] {1});
+        var paused = MySqlBinlogSplit.toSuspendedBinlogSplit(running);
+
+        try (MySqlSourceReader reader = new MySqlSourceReader(
+                config(), context(requests, events), new TableMetrics(), true)) {
+            reader.addSplits(List.of(paused));
+            assertThat(reader.snapshotState(1)).containsExactly(paused);
+            assertThat(events).hasSize(1);
+            assertThat(events.getFirst()).isInstanceOf(LatestFinishedSplitsNumberRequestEvent.class);
+            assertThat(((LatestFinishedSplitsNumberRequestEvent) events.getFirst())
+                            .getRestoredFinishedSplitsNumber())
+                    .isEqualTo(1);
+            assertThat(requests.get()).isEqualTo(1);
+
+            reader.handleSourceEvents(new LatestFinishedSplitsNumberEvent(2, 17, false));
+            assertThat(events.getLast()).isInstanceOf(BinlogSplitMetaRequestEvent.class);
+            assertThat(((BinlogSplitMetaRequestEvent) events.getLast()).getGeneration()).isEqualTo(17);
+            assertThat(reader.snapshotState(2)).containsExactly(paused);
+
+            // The previous attempt's update request must never replace a newer generation.
+            int eventsBeforeStaleRequest = events.size();
+            reader.handleSourceEvents(new BinlogSplitUpdateRequestEvent(16));
+            assertThat(events).hasSize(eventsBeforeStaleRequest);
+        }
+    }
+
+    @Test
+    void restoredSuspendedBinlogFailsClosedWhenCoordinatorHasLostFinishedFences() throws Exception {
+        var table = new TableId("shop", null, "orders");
+        var completed = new FinishedSnapshotSplitInfo(table, "chunk-0", null, null, offset(100));
+        var paused = MySqlBinlogSplit.toSuspendedBinlogSplit(
+                MySqlBinlogSplit.forInitialSnapshot()
+                        .withAnchor(offset(50), new byte[] {1})
+                        .startStreaming(offset(100), List.of(completed)));
+        try (MySqlSourceReader reader = new MySqlSourceReader(
+                config(), context(new AtomicInteger()), new TableMetrics(), true)) {
+            reader.addSplits(List.of(paused));
+            assertThatThrownBy(
+                            () -> reader.handleSourceEvents(new LatestFinishedSplitsNumberEvent(0, 1, true)))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("more Snapshot fences");
         }
     }
 
