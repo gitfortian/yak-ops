@@ -288,6 +288,4 @@ public final class MySqlChunkSplitter {
                 }
             });
     }
-
-
 }
