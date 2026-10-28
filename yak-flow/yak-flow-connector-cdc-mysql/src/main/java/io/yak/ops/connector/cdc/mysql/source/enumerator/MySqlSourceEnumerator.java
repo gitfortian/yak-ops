@@ -185,7 +185,8 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
                     && (status == AssignerStatus.NEWLY_ADDED_ASSIGNING
                             || status == AssignerStatus.NEWLY_ADDED_ASSIGNING_SNAPSHOT_FINISHED
                             || status == AssignerStatus.NEWLY_ADDED_ASSIGNING_FINISHED)) {
-                requestBinlogSplitUpdateIfNeed(true);
+                requestBinlogSplitUpdateIfNeed(
+                        assigner.isNewlyAddedAssignmentFinished() && pendingBinlogUpdateGeneration < 0);
             } else if (assigner.isSnapshotMetaReleased()) {
                 context.registeredReaders().keySet().stream().filter(id -> id != 0).forEach(this::sendResumeEvent);
             } else {
@@ -474,6 +475,8 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
             }
             return;
         }
+        if (!force && pendingBinlogUpdateGeneration < 0
+                && assigner.isNewlyAddedAssignmentFinished()) return;
         assigner.onBinlogReaderReset();
         pendingBinlogUpdateGeneration = assigner.getBinlogAssignmentGeneration();
         binlogReaderSuspended = false;
