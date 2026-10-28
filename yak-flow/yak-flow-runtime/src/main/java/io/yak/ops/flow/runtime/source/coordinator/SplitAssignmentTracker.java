@@ -22,7 +22,6 @@ import io.yak.ops.core.api.connector.source.SourceSplit;
 import io.yak.ops.core.api.connector.source.SplitEnumerator;
 import io.yak.ops.core.api.connector.source.SplitsAssignment;
 import io.yak.ops.core.api.io.SimpleVersionedSerializer;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -64,10 +63,8 @@ public class SplitAssignmentTracker<SplitT extends SourceSplit> {
     }
 
     /** Take a snapshot of the split assignments. */
-    public byte[] snapshotState(SimpleVersionedSerializer<SplitT> splitSerializer)
-            throws Exception {
-        return SourceCoordinatorSerdeUtils.serializeAssignments(
-                uncheckpointedAssignments, splitSerializer);
+    public byte[] snapshotState(SimpleVersionedSerializer<SplitT> splitSerializer) throws Exception {
+        return SourceCoordinatorSerdeUtils.serializeAssignments(uncheckpointedAssignments, splitSerializer);
     }
 
     /**
@@ -77,11 +74,9 @@ public class SplitAssignmentTracker<SplitT extends SourceSplit> {
      * @param assignmentData The state of the SplitAssignmentTracker.
      * @throws Exception when the state deserialization fails.
      */
-    public void restoreState(
-            SimpleVersionedSerializer<SplitT> splitSerializer, byte[] assignmentData)
+    public void restoreState(SimpleVersionedSerializer<SplitT> splitSerializer, byte[] assignmentData)
             throws Exception {
-        uncheckpointedAssignments =
-                SourceCoordinatorSerdeUtils.deserializeAssignments(assignmentData, splitSerializer);
+        uncheckpointedAssignments = SourceCoordinatorSerdeUtils.deserializeAssignments(assignmentData, splitSerializer);
     }
 
     /**
@@ -114,12 +109,10 @@ public class SplitAssignmentTracker<SplitT extends SourceSplit> {
      * @param restoredCheckpointId the ID of the checkpoint that the reader was restored to.
      * @return A list of splits that needs to be added back to the {@link SplitEnumerator}.
      */
-    public List<SplitT> getAndRemoveUncheckpointedAssignment(
-            int subtaskId, long restoredCheckpointId) {
+    public List<SplitT> getAndRemoveUncheckpointedAssignment(int subtaskId, long restoredCheckpointId) {
         final ArrayList<SplitT> splits = new ArrayList<>();
 
-        for (final Map.Entry<Long, Map<Integer, LinkedHashSet<SplitT>>> entry :
-                assignmentsByCheckpointId.entrySet()) {
+        for (final Map.Entry<Long, Map<Integer, LinkedHashSet<SplitT>>> entry : assignmentsByCheckpointId.entrySet()) {
             if (entry.getKey() > restoredCheckpointId) {
                 removeFromAssignment(subtaskId, entry.getValue(), splits);
             }
@@ -146,9 +139,7 @@ public class SplitAssignmentTracker<SplitT extends SourceSplit> {
     // -------------- private helpers ---------------
 
     private void removeFromAssignment(
-            int subtaskId,
-            Map<Integer, LinkedHashSet<SplitT>> assignments,
-            List<SplitT> toPutBack) {
+            int subtaskId, Map<Integer, LinkedHashSet<SplitT>> assignments, List<SplitT> toPutBack) {
         Set<SplitT> splitForSubtask = assignments.remove(subtaskId);
         if (splitForSubtask != null) {
             toPutBack.addAll(splitForSubtask);
@@ -156,14 +147,9 @@ public class SplitAssignmentTracker<SplitT extends SourceSplit> {
     }
 
     private void addSplitAssignment(
-            SplitsAssignment<SplitT> additionalAssignment,
-            Map<Integer, LinkedHashSet<SplitT>> assignments) {
-        additionalAssignment
-                .assignment()
-                .forEach(
-                        (id, splits) ->
-                                assignments
-                                        .computeIfAbsent(id, ignored -> new LinkedHashSet<>())
-                                        .addAll(splits));
+            SplitsAssignment<SplitT> additionalAssignment, Map<Integer, LinkedHashSet<SplitT>> assignments) {
+        additionalAssignment.assignment().forEach((id, splits) -> assignments
+                .computeIfAbsent(id, ignored -> new LinkedHashSet<>())
+                .addAll(splits));
     }
 }
