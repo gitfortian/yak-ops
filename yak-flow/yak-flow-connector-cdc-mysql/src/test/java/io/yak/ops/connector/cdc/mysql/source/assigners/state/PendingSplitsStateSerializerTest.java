@@ -117,6 +117,22 @@ class PendingSplitsStateSerializerTest {
         assertThat(serializer.deserialize(11, serializer.serialize(restored))).isEqualTo(original);
     }
 
+    @Test
+    void versionNineLegacyCheckpointUsesOriginalFieldsWithoutV10Extension() throws Exception {
+        SnapshotPendingSplitsState snapshot = new SnapshotPendingSplitsState(
+                true, 0, List.of(), Map.of(), Set.of(), List.of(), 0, 0, null);
+        HybridPendingSplitsState original = new HybridPendingSplitsState(
+                snapshot, true, null, HybridPendingSplitsState.Phase.BOOTSTRAP, null, null);
+        byte[] modern = serializer.serialize(original);
+        // The v10 extension added two empty table-list counts, one assigner status and
+        // three state flags (15 bytes); v11 appends another 4 bytes of checksum.
+        byte[] legacyV9 = Arrays.copyOf(modern, modern.length - 4 - 15);
+        HybridPendingSplitsState restored =
+                (HybridPendingSplitsState) serializer.deserialize(9, legacyV9);
+        assertThat(restored).isEqualTo(original);
+        assertThat(serializer.deserialize(11, serializer.serialize(restored))).isEqualTo(original);
+    }
+
     private PendingSplitsState roundTrip(PendingSplitsState state) throws IOException {
         byte[] bytes = serializer.serialize(state);
         return serializer.deserialize(serializer.getVersion(), bytes);
