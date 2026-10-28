@@ -7,7 +7,6 @@ import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlBinlogSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlChunkSplitter;
 import io.yak.ops.connector.cdc.mysql.source.assigners.MySqlHybridSplitAssigner;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.BinlogPendingSplitsState;
-import io.yak.ops.connector.cdc.mysql.source.assigners.state.ChunkSplitterState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.HybridPendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.assigners.state.PendingSplitsState;
 import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
@@ -50,7 +49,6 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     private final boolean restoredHandoff;
     private boolean started;
     private boolean closed;
-    private boolean planning;
 
     public MySqlSourceEnumerator(
             StartupOptions startupOptions,
@@ -275,36 +273,22 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     }
 
     private void planSnapshotAsync() {
-        if (!started
-                || closed
-                || planning
-                || assigner.snapshotPlanned()
-                || assigner.phase() != HybridPendingSplitsState.Phase.SNAPSHOT
-                || assigner.pendingSnapshotCount() >= MAX_PENDING_CHUNKS) return;
-        int tableIndex = assigner.nextTableIndex();
-        int chunkIndex = assigner.nextChunkIndex();
-        if (tableIndex >= tables.size()) throw new IllegalStateException("Incomplete discovery terminal marker");
-        TableId table = tables.get(tableIndex);
-        ChunkRange cursor = assigner.nextChunkRange();
-        if ((chunkIndex == 0) != (cursor == null)) {
-            throw new IllegalStateException("Typed chunk discovery cursor does not match its index");
-        }
-        ChunkSplitterState splitterState = assigner.getChunkSplitterState();
-        planning = true;
-        context.callAsync(() -> splitter.planNext(table, tableIndex, splitterState), (split, failure) -> {
-            planning = false;
-            if (closed) return;
-            if (failure != null) {
-                metrics.readFailed(generation, table, false);
-                throw new IllegalStateException("MySQL snapshot chunk discovery failed", failure);
-            }
-            boolean tableComplete = split.chunkRange().last();
-            assigner.appendPlan(split, tables.size());
-            // A table's final split count is only known after the terminal range.
-            if (tableComplete) metrics.planned(generation, table, chunkIndex + 1);
-            assignAvailable();
-            planSnapshotAsync();
-        });
+        if (closed || !started || !initial || assigner.phase() != HybridPendingSplitsState.Phase.SNAPSHOT) return;
+        assigner.discoverNextAsync(
+                tables,
+                splitter,
+                context,
+                MAX_PENDING_CHUNKS,
+                (split, tableChunkCount) -> {
+                    if (closed) return;
+                    if (split.chunkRange().last()) metrics.planned(generation, split.tableId(), tableChunkCount);
+                    assignAvailable();
+                    planSnapshotAsync();
+                },
+                (table, failure) -> {
+                    metrics.readFailed(generation, table, false);
+                    throw new IllegalStateException("MySQL snapshot chunk discovery failed", failure);
+                });
     }
 
     private void enterHandoff() {
