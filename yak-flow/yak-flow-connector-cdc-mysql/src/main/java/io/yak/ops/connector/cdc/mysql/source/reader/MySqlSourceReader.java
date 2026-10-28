@@ -8,6 +8,8 @@ import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceConfig;
 import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaAssembledEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitMetaRequestEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitUpdateAckEvent;
+import io.yak.ops.connector.cdc.mysql.source.events.BinlogSplitUpdateRequestEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsAckEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsReportEvent;
 import io.yak.ops.connector.cdc.mysql.source.events.FinishedSnapshotSplitsRequestEvent;
@@ -43,12 +45,15 @@ public final class MySqlSourceReader
         extends SingleThreadMultiplexSourceReaderBase<MySqlFetchedRecord, TableRecord, MySqlSplit, MySqlSplitState> {
 
     private final MySqlSplitReader splits;
+    private final MySqlSourceReaderContext readerContext;
     private final SchemaChangeHandler schemaChanges;
     private final TableMetrics metrics;
     private final long generation;
     private final boolean initial;
     private final Map<String, MySqlSnapshotSplit> finishedUnacked = new LinkedHashMap<>();
     private MySqlResumeBinlogEvent resumeEvent;
+    private MySqlBinlogSplit suspendedBinlogSplit;
+    private long pendingBinlogUpdateGeneration = -1;
     private final BinlogSplitMetaGroupAssembler binlogMetadata = new BinlogSplitMetaGroupAssembler();
     private final java.util.Set<String> acknowledged = new java.util.HashSet<>();
     private final Map<String, Long> finishedCheckpoint = new LinkedHashMap<>();
@@ -79,6 +84,7 @@ public final class MySqlSourceReader
                 () -> splits,
                 new MySqlRecordEmitter(readerContext, splits, metrics, sourceId),
                 readerContext.getSourceReaderContext());
+        this.readerContext = readerContext;
         this.schemaChanges = readerContext.schemaChanges();
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         this.generation = metrics.generation();
@@ -153,21 +159,35 @@ public final class MySqlSourceReader
     @Override
     protected void onSplitFinished(Map<String, MySqlSplitState> finished) {
         Map<String, DebeziumOffset> finishedOffsets = new LinkedHashMap<>();
+        boolean requestNextSplit = false;
         for (var entry : finished.entrySet()) {
+            if (entry.getValue().binlog()) {
+                if (pendingBinlogUpdateGeneration < 0 || !readerContext.isBinlogSplitReaderSuspended()) {
+                    throw new IllegalStateException("A continuous Binlog split can finish only for a requested metadata update");
+                }
+                MySqlBinlogSplit checkpointed =
+                        (MySqlBinlogSplit) entry.getValue().checkpoint(splits.snapshotHistory());
+                suspendedBinlogSplit = MySqlBinlogSplit.toSuspendedBinlogSplit(checkpointed);
+                splits.suspendBinlog(suspendedBinlogSplit);
+                context.sendSourceEventToCoordinator(
+                        new BinlogSplitMetaRequestEvent(0, pendingBinlogUpdateGeneration));
+                requestNextSplit = true;
+                continue;
+            }
             MySqlSplit split = entry.getValue().checkpoint(null);
             if (!(split instanceof MySqlSnapshotSplit snapshot)) {
-                throw new IllegalStateException("Continuous MySQL Binlog split cannot finish");
+                throw new IllegalStateException("Unknown completed MySQL split type");
             }
             finishedUnacked.put(snapshot.splitId(), snapshot);
             finishedOffsets.put(
                     snapshot.splitId(),
-                    Objects.requireNonNull(snapshot.finished(), "Finished chunk has no watermark")
-                            .highWatermark());
+                    Objects.requireNonNull(snapshot.finished(), "Finished chunk has no watermark").highWatermark());
+            requestNextSplit = true;
         }
         if (!finishedOffsets.isEmpty()) {
             context.sendSourceEventToCoordinator(new FinishedSnapshotSplitsReportEvent(finishedOffsets));
-            context.sendSplitRequest();
         }
+        if (requestNextSplit) context.sendSplitRequest();
     }
 
     private void reportFinishedSplits() {
@@ -188,6 +208,10 @@ public final class MySqlSourceReader
         forEachActiveSplitState(state -> state.snapshotCheckpoint(checkpointId));
         acknowledged.forEach(id -> finishedCheckpoint.putIfAbsent(id, checkpointId));
         active.addAll(finishedUnacked.values());
+        if (suspendedBinlogSplit != null
+                && active.stream().noneMatch(split -> MySqlBinlogSplit.ID.equals(split.splitId()))) {
+            active.add(suspendedBinlogSplit);
+        }
         return List.copyOf(active);
     }
 
@@ -208,7 +232,16 @@ public final class MySqlSourceReader
     @Override
     public void handleSourceEvents(SourceEvent event) {
         if (!initial) throw new IllegalArgumentException("Binlog-only reader does not accept hybrid events");
-        if (event instanceof FinishedSnapshotSplitsAckEvent ack) {
+        if (event instanceof BinlogSplitUpdateRequestEvent update) {
+            if (update.getGeneration() < pendingBinlogUpdateGeneration) return;
+            pendingBinlogUpdateGeneration = update.getGeneration();
+            readerContext.suspendBinlogSplitReader();
+            if (suspendedBinlogSplit != null) {
+                context.sendSourceEventToCoordinator(
+                        new BinlogSplitMetaRequestEvent(0, pendingBinlogUpdateGeneration));
+                context.sendSplitRequest();
+            }
+        } else if (event instanceof FinishedSnapshotSplitsAckEvent ack) {
             ack.getFinishedSplits().forEach(id -> {
                 if (finishedUnacked.containsKey(id)) acknowledged.add(id);
             });
@@ -226,14 +259,28 @@ public final class MySqlSourceReader
             }
         } else if (event instanceof MySqlResumeBinlogEvent resume) {
             List<FinishedSnapshotSplitInfo> finished = binlogMetadata.finishedSplits(resume.highWatermark());
-            resumeEvent = resume;
-            forEachActiveSplitState(state -> {
-                if (state.binlog()) {
-                    state.resume(resume.highWatermark(), finished);
+            if (pendingBinlogUpdateGeneration >= 0 && suspendedBinlogSplit != null) {
+                long updateGeneration = pendingBinlogUpdateGeneration;
+                MySqlBinlogSplit resumed = suspendedBinlogSplit.startStreaming(resume.highWatermark(), finished);
+                resumeEvent = resume;
+                readerContext.wakeupSuspendedBinlogSplitReader();
+                try {
+                    super.addSplits(List.of(resumed));
+                } catch (Exception failure) {
+                    throw new IllegalStateException("Cannot resume Binlog after Snapshot metadata update", failure);
                 }
-            });
-            metrics.streaming(generation);
-            splits.resumeBinlog(resume.highWatermark(), finished);
+                suspendedBinlogSplit = null;
+                pendingBinlogUpdateGeneration = -1;
+                metrics.streaming(generation);
+                context.sendSourceEventToCoordinator(new BinlogSplitUpdateAckEvent(updateGeneration));
+            } else {
+                resumeEvent = resume;
+                forEachActiveSplitState(state -> {
+                    if (state.binlog()) state.resume(resume.highWatermark(), finished);
+                });
+                metrics.streaming(generation);
+                splits.resumeBinlog(resume.highWatermark(), finished);
+            }
         } else if (event instanceof io.yak.ops.connector.cdc.mysql.source.events.MySqlStopSnapshotEvent) {
             splits.finishSnapshots();
         } else {
