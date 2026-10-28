@@ -162,6 +162,8 @@ public final class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, 
     public void start() {
         if (started || closed) throw new IllegalStateException("MySQL Hybrid enumerator cannot start twice");
         started = true;
+        if (initial) assigner.open();
+        else streamAssigner.open();
         if (!initial) return;
         if (restoredHandoff) {
             assigner.resumeRestoredHandoff();
