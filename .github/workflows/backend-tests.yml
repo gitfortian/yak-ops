@@ -20,6 +20,7 @@ on:
           - jdbc-oracle
           - pipeline
           - business
+          - cdc
           - backend-e2e
           - recovery-e2e
 
