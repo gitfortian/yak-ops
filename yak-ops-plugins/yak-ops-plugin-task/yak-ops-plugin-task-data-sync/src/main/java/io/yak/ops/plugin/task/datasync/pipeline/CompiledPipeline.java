@@ -11,5 +11,4 @@ public record CompiledPipeline(StreamGraph graph, Configuration configuration, T
         Objects.requireNonNull(graph, "graph");
         Objects.requireNonNull(configuration, "configuration");
     }
-
 }
