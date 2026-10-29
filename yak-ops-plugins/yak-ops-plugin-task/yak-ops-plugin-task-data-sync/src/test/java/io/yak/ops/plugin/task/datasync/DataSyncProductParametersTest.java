@@ -120,6 +120,24 @@ class DataSyncProductParametersTest {
     }
 
     @Test
+    void snapshotOnlyMatchesCatalogAndRejectsStreamingOnlySinkFeatures() {
+        String snapshot = json(true)
+                .replace("[\"FULL\",\"INCREMENTAL\"]", "[\"FULL\"]")
+                .replace("\"datasourceId\":\"source\"",
+                        "\"datasourceId\":\"source\",\"startup\":{\"mode\":\"snapshot\"}");
+        var parsed = plugin.parse(snapshot);
+        assertEquals(List.of(Step.FULL), JobConfig.from(parsed).steps());
+        assertTrue(plugin.solutions("MYSQL", "POSTGRE_SQL").get(1).allowedCombinations().stream()
+                .anyMatch(choice -> choice.steps().equals(List.of(Step.FULL))
+                        && choice.writeModes().equals(List.of("UPSERT"))));
+        assertThrows(TaskPluginException.class, () -> plugin.parse(snapshot.replace(
+                "\"enabled\":false", "\"enabled\":true")));
+        assertThrows(TaskPluginException.class, () -> plugin.parse(snapshot.replace(
+                "\"write\":{\"mode\":\"UPSERT\"}",
+                "\"write\":{\"mode\":\"RETRACT\",\"transaction\":{\"mode\":\"CHECKPOINT_XA\"}}")));
+    }
+
+    @Test
     void rejectsOldSchemaVersionsAndLegacyPipelineInsteadOfConvertingThem() {
         assertThrows(TaskPluginException.class, () -> plugin.parse(2, json(false)));
         assertThrows(TaskPluginException.class, () -> plugin.parse(3, json(false)));
