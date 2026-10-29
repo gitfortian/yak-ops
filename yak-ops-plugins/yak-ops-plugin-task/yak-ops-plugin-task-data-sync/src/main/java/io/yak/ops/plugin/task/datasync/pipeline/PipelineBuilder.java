@@ -165,10 +165,10 @@ public final class PipelineBuilder {
         TableExecutionProgress observations = progress;
         if (observations == null) {
             boolean continuous = source.getBoundedness() != Boundedness.BOUNDED;
-            String dataStep =
-                    source instanceof MySqlSource mysql && mysql.startupOptions().isStreamOnly()
-                            ? "INCREMENTAL"
-                            : "FULL";
+            String dataStep = source instanceof MySqlSource mysql
+                            && mysql.startupOptions().isStreamOnly()
+                    ? "INCREMENTAL"
+                    : "FULL";
             observations = new TableExecutionProgress(plan.tables(), metrics, continuous, dataStep);
         }
         return new CompiledPipeline(graph, configuration, observations);
