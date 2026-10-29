@@ -32,7 +32,7 @@ Project rules for humans and coding agents. Follow [Apache Flink's contribution]
 - Do not add reverse dependencies from Core to Runtime or from business modules to Boot. Connectors must not depend on Controllers/DAO or product Task identity for runtime creation.
 - Preserve Workspace authorization and isolation, immutable task versions, task-definition identity, credential separation, and safety checks. Accepted task configuration is JSON; plugin validation must not read credentials or silently rewrite user parameters.
 - Keep Reader/Writer mutable execution state separate from immutable checkpoint snapshots. Preserve checkpoint, serializer, handoff, offset, and recovery guarantees; do not claim exactly-once or distributed behavior without executable evidence.
-- Logging and diagnostics must not expose credentials, sensitive row data, dispatch tokens, or state bytes, including via `toString()`. Preserve exception types and causes. Technical logs and JavaDoc use English; user-visible errors are localized at their owning boundary.
+- Logging and diagnostics must not expose credentials, sensitive row data, dispatch tokens, or state bytes, including via `toString()`. Preserve exception types and causes; never derive execution decisions from exception message text or expose raw internal diagnostics to users. Technical logs and JavaDoc use English; user-visible errors are localized at their owning boundary.
 
 ## Minimal Implementation and Compatibility
 
@@ -46,6 +46,7 @@ Project rules for humans and coding agents. Follow [Apache Flink's contribution]
 - Organize packages by ownership (`source`, `reader`, `state`, `execution`, `repository`), not mechanical categories. Use `domain` for business concepts and `model` only for a cohesive owned model set; avoid one-type packages and synonym DTO chains.
 - Interfaces express an independent caller/implementation contract; abstract classes share actual behavior/state. Contexts carry one stage's inputs/capabilities, not cross-layer service locators. Resource wrappers must represent real ownership.
 - **Do not introduce production Java `record` declarations.** Existing records are grandfathered; preserve equality, hashing, ownership, serializer formats, and sensitive-data protection when changing them.
+- Defensively copy mutable arrays and collections at ownership boundaries, especially when creating checkpoint snapshots.
 - **Do not introduce `Codec` in project-owned Java type, method, or package names.** Use precise terms such as `Parser`, `Serializer`, `Mapper`, and `Converter` when applicable; do not rename third-party identifiers.
 - `normalize` means canonicalization, not parsing, validation, resolution, planning, or applying state. Reserve `*Gate` types for Runtime network I/O boundaries (`InputGate`); do not use `Manager`, `Handler`, `Compiler`, or `Policy` as vague substitutes for an actual responsibility.
 - Avoid redundant package-local prefixes (for example, `Sync*` under `io.yak.ops.plugin.task.datasync`). Preserve meaningful `Jdbc` and `MySqlCdc` qualifiers where they disambiguate public APIs.
