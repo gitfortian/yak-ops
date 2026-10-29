@@ -4,7 +4,6 @@ import static io.yak.ops.plugin.task.datasync.execution.DataSyncExecutionReport.
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.core.api.common.JobStatus;
-import io.yak.ops.plugin.task.datasync.execution.DataSyncExecutionReport.StageResult;
 import io.yak.ops.plugin.task.datasync.plan.TablePlan;
 import java.util.ArrayList;
 import java.util.List;
