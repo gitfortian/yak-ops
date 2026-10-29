@@ -6,6 +6,8 @@ import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.base.factory.TableSinkFactoryContext;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
 import io.yak.ops.connector.base.metrics.TableMetrics;
+import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
+import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import io.yak.ops.core.api.connector.sink.MetadataApplier;
 import io.yak.ops.core.api.connector.sink.Sink;
 import io.yak.ops.core.api.connector.source.Source;
@@ -108,16 +110,16 @@ public final class PipelineBuilder {
             boolean debug,
             boolean schemaChangesEnabled,
             boolean allowDropColumns) {
-        var sourceFactory =
-                factories.source(plan.tables().getFirst().sourceParameters().get(JobOptions.TYPE));
+        var first = plan.tables().getFirst();
+        var sourceFactory = factories.source(first.sourceParameters().get(JobOptions.TYPE));
+        boolean continuous = sourceFactory.boundedness()
+                        != io.yak.ops.core.api.connector.source.Boundedness.BOUNDED
+                && !"snapshot".equals(first.sourceOptions().get(MySqlSourceOptions.SCAN_STARTUP_MODE));
         return build(
                 plan,
                 identity,
                 debug,
-                new TableExecutionProgress(
-                        plan.tables(),
-                        new TableMetrics(),
-                        sourceFactory.boundedness() != io.yak.ops.core.api.connector.source.Boundedness.BOUNDED),
+                new TableExecutionProgress(plan.tables(), new TableMetrics(), continuous),
                 schemaChangesEnabled,
                 allowDropColumns);
     }
@@ -166,8 +168,6 @@ public final class PipelineBuilder {
             throw new UnsupportedOperationException(
                     "DATA_SYNC changelog requires a single Sink writer until keyed routing is configured");
         }
-        Configuration configuration = configurationFactory.create(
-                identity, sourceFactory.boundedness(), debug, schemaChangesEnabled, allowDropColumns);
         String sourceId = first.sourceParameters().get(JobOptions.DATASOURCE_ID);
         String sinkId = first.sinkParameters().get(JobOptions.DATASOURCE_ID);
         ReadonlyConfig sourceConnection = resources.connectionOptions(
@@ -197,9 +197,13 @@ public final class PipelineBuilder {
                     metrics));
         }
         Source<TableRecord, ?, ?> source = sourceFactory.createSource(sourceContexts);
-        if (source.getBoundedness() != sourceFactory.boundedness()) {
-            throw new IllegalStateException("DATA_SYNC Source boundedness differs from its Factory contract");
+        if (source instanceof MySqlSource mysql
+                && mysql.startupOptions().isStreamOnly()
+                && sourceParallelism != 1) {
+            throw new UnsupportedOperationException("Stream-only MySQL CDC requires Source parallelism 1");
         }
+        Configuration configuration = configurationFactory.create(
+                identity, source.getBoundedness(), debug, schemaChangesEnabled, allowDropColumns);
         Sink<TableRecord> sink = sinkFactory.createSink(sinkContexts);
         SourceTransformation<TableRecord> input =
                 new SourceTransformation<>("data-sync-source", source, TableRecord.class, sourceParallelism);
