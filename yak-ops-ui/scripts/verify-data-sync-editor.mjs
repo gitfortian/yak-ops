@@ -170,7 +170,7 @@ assert.equal(offlinePayload.incremental.column, "updated_at");
 assert.equal(offlinePayload.incremental.lookbackSeconds, 5);
 const offlineParameters = transport.createDefinitionRequest(offlinePayload).parameters;
 assert.equal(offlineParameters.solutionType, "SINGLE_TABLE_OFFLINE");
-assert.deepEqual(offlineParameters.steps, ["FULL", "INCREMENTAL"]);
+assert.deepEqual(Array.from(offlineParameters.steps), ["FULL", "INCREMENTAL"]);
 assert.equal(offlineParameters.source.tables.length, 1);
 assert.deepEqual(
   JSON.parse(JSON.stringify(offlineParameters.source.tables[0].incremental)),
