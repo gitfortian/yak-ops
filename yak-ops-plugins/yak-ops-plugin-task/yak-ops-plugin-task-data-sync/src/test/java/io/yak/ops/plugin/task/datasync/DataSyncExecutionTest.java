@@ -75,6 +75,8 @@ class DataSyncExecutionTest {
 
         var handle =
                 plugin.start(parameters, plan, CONTEXT, false).toCompletableFuture().join();
+        handle.start();
+        handle.completion().toCompletableFuture().join();
         assertEquals(1, submissions.get());
         assertEquals("YAKFLOW", handle.runtimeReference().orElseThrow().engine());
         assertEquals(
@@ -90,9 +92,9 @@ class DataSyncExecutionTest {
         JobPlanner planner = new JobPlanner(resources, new FactoryUtil());
         ReadonlyConfig parameters = parameters(true);
         JobPlan prepared = planner.plan(parameters, CONTEXT);
-        assertEquals(JobConfig.from(parameters).source(), prepared.sourceParameters());
-        assertEquals(JobConfig.from(parameters).sink(), prepared.sinkParameters());
-        assertEquals("orders", prepared.source().table().table());
+        assertEquals(JobConfig.from(parameters).source(), prepared.tables().getFirst().sourceParameters());
+        assertEquals(JobConfig.from(parameters).sink(), prepared.tables().getFirst().sinkParameters());
+        assertEquals("orders", prepared.tables().getFirst().source().table().table());
         assertEquals("ods_orders", prepared.tables().getFirst().targetTable().table());
         assertEquals(planner.admissionPlan(parameters, CONTEXT), prepared.admissionPlan());
         assertEquals(0, resources.connections.get());
@@ -151,6 +153,8 @@ class DataSyncExecutionTest {
         assertTrue(plan.resourceRevision().length() <= 128);
         var handle =
                 plugin.start(parameters, plan, CONTEXT, false).toCompletableFuture().join();
+        handle.start();
+        handle.completion().toCompletableFuture().join();
         assertEquals("YAKFLOW", handle.runtimeReference().orElseThrow().engine());
         assertEquals(1, submissions.get());
         assertEquals(0, resources.openedConnections.get());
@@ -169,9 +173,11 @@ class DataSyncExecutionTest {
         };
         DataSyncTaskPlugin plugin = plugin(resources, capture);
         ReadonlyConfig jdbc = parameters(false);
-        plugin.start(jdbc, plugin.plan(jdbc, CONTEXT), CONTEXT, false)
+        var jdbcHandle = plugin.start(jdbc, plugin.plan(jdbc, CONTEXT), CONTEXT, false)
                 .toCompletableFuture()
                 .join();
+        jdbcHandle.start();
+        jdbcHandle.completion().toCompletableFuture().join();
         StreamGraph bounded = lastGraph.get();
         assertTrue(bounded.isBounded());
         assertInstanceOf(
@@ -186,9 +192,11 @@ class DataSyncExecutionTest {
                 "data-sync-sink-definition", bounded.getSinkNodes().getFirst().getUid());
         assertEquals(java.time.Duration.ZERO, lastConfiguration.get().get(CheckpointingOptions.CHECKPOINTING_INTERVAL));
         ReadonlyConfig cdc = parameters(true);
-        plugin.start(cdc, plugin.plan(cdc, CONTEXT), CONTEXT, false)
+        var cdcHandle = plugin.start(cdc, plugin.plan(cdc, CONTEXT), CONTEXT, false)
                 .toCompletableFuture()
                 .join();
+        cdcHandle.start();
+        cdcHandle.completion().toCompletableFuture().join();
         StreamGraph continuous = lastGraph.get();
         assertTrue(!continuous.isBounded());
         assertInstanceOf(
@@ -469,7 +477,13 @@ class DataSyncExecutionTest {
         FactoryUtil factories = new FactoryUtil();
         JobPlanner planner = new JobPlanner(resources, factories);
         PipelineBuilder builder = new PipelineBuilder(resources, factories, Path.of("target/data-sync"));
-        return new DataSyncTaskPlugin(planner, new DataSyncTaskExecutor(planner, builder, executor), factories);
+        return new DataSyncTaskPlugin(planner, new DataSyncTaskExecutor(
+                        planner,
+                        builder,
+                        executor,
+                        new io.yak.ops.plugin.task.datasync.execution.IncrementalBatchPreparation(
+                                resources, (identity, proposed) -> proposed)),
+                factories);
     }
 
     private static ReadonlyConfig cdcParameters(String steps, String startupMode) {
