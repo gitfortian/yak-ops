@@ -8,9 +8,7 @@ import io.yak.ops.plugin.task.datasync.pipeline.PipelineBuilder;
 import io.yak.ops.plugin.task.datasync.plan.JobPlan;
 import io.yak.ops.plugin.task.datasync.plan.JobPlanner;
 import io.yak.ops.plugin.task.datasync.plan.TablePlan;
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 
@@ -32,12 +30,11 @@ public final class SchemaPreparation {
      * @param plan complete admitted table set
      * @param identity trusted Task identity
      * @param progress Task-owned table observations
-     * @return the same logical plan with verified physical targets
+     * <p>The execution owner re-plans after DDL to verify the complete admission binding.
      * @throws Exception if any operation, readback, or resource close fails
      */
-    public JobPlan prepare(JobPlan plan, TaskExecutionIdentity identity, TableExecutionProgress progress)
+    public void prepare(JobPlan plan, TaskExecutionIdentity identity, TableExecutionProgress progress)
             throws Exception {
-        List<TablePlan> prepared = new ArrayList<>();
         for (int index = 0; index < plan.tables().size(); index++) {
             TablePlan table = plan.tables().get(index);
             checkCanceled();
@@ -66,9 +63,8 @@ public final class SchemaPreparation {
                     }
                 }
                 checkCanceled();
-                TablePlan physical = planner.preparedTarget(table, identity);
+                planner.preparedTarget(table, identity);
                 checkCanceled();
-                prepared.add(physical);
                 progress.schemaFinished(index, changes.isEmpty() ? "VERIFIED" : "PREPARED");
             } catch (Exception failure) {
                 if (failure instanceof SchemaEvolveException schema && schema.isOutcomeUnknown()) {
@@ -78,7 +74,6 @@ public final class SchemaPreparation {
                 throw failure;
             }
         }
-        return new JobPlan(prepared, plan.admissionPlan());
     }
 
     /** Records cancellation synchronously before an asynchronous driver request is dispatched. */
