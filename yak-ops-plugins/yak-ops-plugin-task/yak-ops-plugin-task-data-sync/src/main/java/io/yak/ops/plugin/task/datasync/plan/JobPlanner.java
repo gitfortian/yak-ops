@@ -20,6 +20,7 @@ import io.yak.ops.plugin.task.datasync.config.JobOptions;
 import io.yak.ops.plugin.task.datasync.solution.SolutionValidator;
 import io.yak.ops.plugin.task.datasync.solution.Step;
 import io.yak.ops.plugin.task.datasync.validation.JobConfigValidator;
+import io.yak.ops.plugin.task.datasync.validation.SchemaPlanner;
 import io.yak.ops.plugin.task.datasync.validation.SchemaValidator;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -173,9 +174,9 @@ public final class JobPlanner {
                     job.schemaChangesEnabled());
             TableSchema writeSource = SchemaValidator.writeSchema(from, mapping.targetPrimaryKeys());
             CreateTableEvent event = prepareSchema
-                    ? SchemaValidator.createEvent(from, targetInfo, targetTable, mapping.targetPrimaryKeys())
+                    ? SchemaPlanner.createEvent(from, targetInfo, targetTable, mapping.targetPrimaryKeys())
                     : null;
-            SchemaChangePlan schema = event == null ? null : SchemaValidator.plan(event, targetInfo.type(), actual);
+            SchemaChangePlan schema = event == null ? null : SchemaPlanner.plan(event, targetInfo.type(), actual);
             if (schema != null) SchemaValidator.requireCompatible(schema);
             TableSchema expected = event == null ? actual.schema() : event.getSchema();
             sinkFactory.validateSchema(sink, writeSource, expected, sourceFactory.producesChangelog());
