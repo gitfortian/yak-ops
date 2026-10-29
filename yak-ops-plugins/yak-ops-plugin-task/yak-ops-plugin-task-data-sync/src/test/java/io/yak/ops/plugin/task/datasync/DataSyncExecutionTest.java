@@ -226,7 +226,8 @@ class DataSyncExecutionTest {
         FactoryUtil factories = new FactoryUtil();
         JobPlanner planner = new JobPlanner(resources, factories);
         PipelineBuilder builder = new PipelineBuilder(resources, factories, Path.of("target/data-sync"));
-        var compiled = builder.build(planner.plan(cdcParameters("[\"INCREMENTAL\"]", "latest-offset"), CONTEXT), CONTEXT, false);
+        var compiled = builder.build(
+                planner.plan(cdcParameters("[\"INCREMENTAL\"]", "latest-offset"), CONTEXT), CONTEXT, false);
         assertTrue(!compiled.graph().isBounded());
         var source = assertInstanceOf(
                 MySqlSource.class, compiled.graph().getSourceNodes().getFirst().getSource().orElseThrow());
