@@ -144,7 +144,7 @@ export function validateSyncParameters(value: DataSyncParameters): void {
     new Set(steps).size !== steps.length ||
     steps.some((step) => step !== "FULL" && step !== "INCREMENTAL") ||
     (realtime &&
-      ![["FULL", "INCREMENTAL"], ["INCREMENTAL"]].some(
+      ![["FULL", "INCREMENTAL"], ["FULL"], ["INCREMENTAL"]].some(
         (candidate) => JSON.stringify(candidate) === JSON.stringify(steps),
       )) ||
     (!realtime &&
@@ -159,7 +159,8 @@ export function validateSyncParameters(value: DataSyncParameters): void {
     (realtime &&
       (steps.includes("FULL")
         ? startup !== undefined &&
-          (startup?.mode !== "initial" || Object.keys(startup).some((key) => key !== "mode"))
+          (startup?.mode !== (steps.includes("INCREMENTAL") ? "initial" : "snapshot") ||
+            Object.keys(startup).some((key) => key !== "mode"))
         : startup?.mode !== "latest-offset" ||
           Object.keys(startup).some((key) => key !== "mode"))) ||
     (!realtime && startup !== undefined)
@@ -175,7 +176,8 @@ export function validateSyncParameters(value: DataSyncParameters): void {
     Object.keys(policy.evolution).some((key) => !["enabled", "allowDropColumns"].includes(key)) ||
     (policy.evolution.allowDropColumns && !policy.evolution.enabled) ||
     (!realtime && policy.evolution.enabled) ||
-    (policy.initial === "CREATE_OR_ALTER" && !steps.includes("FULL"))
+    (policy.initial === "CREATE_OR_ALTER" && !steps.includes("FULL")) ||
+    (realtime && steps.length === 1 && steps[0] === "FULL" && policy.evolution.enabled)
   )
     throw new Error("不支持的目标结构策略");
 
@@ -236,7 +238,8 @@ export function validateSyncParameters(value: DataSyncParameters): void {
       (write.transaction !== undefined && !retract) ||
       ((realtime || offlineIncremental(value.solutionType, steps)) &&
         write.mode !== "UPSERT" &&
-        !retract)
+        !retract) ||
+      (realtime && steps.length === 1 && steps[0] === "FULL" && write.mode !== "UPSERT")
     ) {
       throw new Error("不支持的目标写入协议");
     }
