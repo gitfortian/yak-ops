@@ -2,6 +2,7 @@ package io.yak.ops.plugin.task.datasync.validation;
 
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.connector.base.factory.FactoryUtil;
+import io.yak.ops.connector.jdbc.sink.JdbcSinkOptions;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
 import io.yak.ops.plugin.task.api.TaskPluginException;
@@ -56,22 +57,20 @@ public final class JobConfigValidator {
             String sinkId = job.targetDataSourceId();
             DataSourceInfo from = context.dataSource(sourceId);
             DataSourceInfo to = context.dataSource(sinkId);
-            SolutionValidator.validate(job.solutionType(), from.type(), to.type());
-            SolutionValidator.validateSchemaChanges(
-                    job.solutionType(), from.type(), to.type(), job.schemaChangesEnabled());
-            SolutionValidator.validateSteps(from.type(), to.type(), job.steps());
-            if (job.solutionType().supportsScheduling()
-                    && job.steps().contains(io.yak.ops.plugin.task.datasync.solution.Step.INCREMENTAL)
-                    && (!java.util.Set.of("MYSQL", "POSTGRE_SQL").contains(from.type())
-                            || !java.util.Set.of("MYSQL", "POSTGRE_SQL").contains(to.type()))) {
-                throw new IllegalArgumentException("Offline incremental supports MySQL and PostgreSQL only");
-            }
             boolean prepareSchema = job.steps().contains(io.yak.ops.plugin.task.datasync.solution.Step.SCHEMA);
             Set<TableId> sources = new HashSet<>();
             Set<TableId> targets = new HashSet<>();
             for (var table : job.tables()) {
                 var sourceFactory = factories.source(table.source().get(JobOptions.TYPE));
                 var sinkFactory = factories.sink(table.sink().get(JobOptions.TYPE));
+                SolutionValidator.validateSelection(
+                        factories,
+                        job.solutionType(),
+                        from.type(),
+                        to.type(),
+                        job.steps(),
+                        job.schemaChangesEnabled(),
+                        table.sink().get(JdbcSinkOptions.WRITE_MODE).name());
                 sourceFactory.validateDatasource(from.type());
                 TableId source = tablePath(from, table.source());
                 TableId target = tablePath(to, table.sink());
