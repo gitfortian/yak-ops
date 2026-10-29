@@ -29,8 +29,7 @@ public final class SolutionValidator {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Unsupported synchronization solution"));
         if (selected.allowedCombinations().stream()
-                .noneMatch(choice ->
-                        choice.steps().equals(steps) && choice.writeModes().contains(writeMode))) {
+                .noneMatch(choice -> choice.steps().equals(steps) && choice.writeModes().contains(writeMode))) {
             throw new IllegalArgumentException("Unsupported synchronization steps or target write mode");
         }
     }
