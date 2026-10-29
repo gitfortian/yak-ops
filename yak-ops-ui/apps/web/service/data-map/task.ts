@@ -13,10 +13,7 @@ import type {
 
 const API = "/api/v1/data-map";
 
-export const listTasks = (
-  query: { pageNo: number; pageSize: number },
-  signal?: AbortSignal,
-) => {
+export const listTasks = (query: { pageNo: number; pageSize: number }, signal?: AbortSignal) => {
   const search = new URLSearchParams({
     pageNo: String(query.pageNo),
     pageSize: String(query.pageSize),
@@ -65,11 +62,9 @@ export const deleteTask = (taskId: string) =>
 
 export const runTask = (taskId: string) =>
   dataMapRequest(
-    HttpUtils.postData<Crawl>(
-      `${API}/tasks/${encodeURIComponent(taskId)}/run`,
-      undefined,
-      { skipErrorHandler: true },
-    ),
+    HttpUtils.postData<Crawl>(`${API}/tasks/${encodeURIComponent(taskId)}/run`, undefined, {
+      skipErrorHandler: true,
+    }),
   );
 
 export const retryTaskRun = (taskId: string, crawlId: string) =>
