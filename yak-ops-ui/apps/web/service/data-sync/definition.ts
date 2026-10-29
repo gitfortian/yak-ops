@@ -42,16 +42,22 @@ export function buildSyncParameters(task: DataSyncTaskSavePayload): DataSyncPara
       ];
   if (!mappings.length) throw new Error("请选择同步表");
   const realtime = solutionSyncType(task.solutionType) === "REALTIME";
-  const evolution = realtime && (task.schemaChangesEnabled ?? true);
+  const continuous = realtime && task.steps.includes("INCREMENTAL");
+  const evolution = continuous && (task.schemaChangesEnabled ?? true);
+  const dataSteps = (["FULL", "INCREMENTAL"] as const).filter((step) => task.steps.includes(step));
   return {
     solutionType: task.solutionType,
-    steps: task.steps.filter((step) => step !== "SCHEMA") as Array<"FULL" | "INCREMENTAL">,
+    steps: dataSteps,
     source: {
       datasourceId: task.sourceDataSourceId,
       ...(realtime
         ? {
             startup: {
-              mode: task.steps.includes("FULL") ? ("initial" as const) : ("latest-offset" as const),
+              mode: task.steps.includes("FULL")
+                ? task.steps.includes("INCREMENTAL")
+                  ? ("initial" as const)
+                  : ("snapshot" as const)
+                : ("latest-offset" as const),
             },
           }
         : {}),
