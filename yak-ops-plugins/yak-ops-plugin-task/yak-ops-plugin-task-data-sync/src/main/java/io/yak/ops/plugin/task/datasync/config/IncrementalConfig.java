@@ -3,12 +3,27 @@ package io.yak.ops.plugin.task.datasync.config;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.yak.ops.configuration.Option;
+import io.yak.ops.configuration.Options;
+import io.yak.ops.configuration.ReadonlyConfig;
+import io.yak.ops.configuration.rule.ConfigValidator;
+import io.yak.ops.configuration.rule.OptionRule;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 /** Non-secret, per-table JDBC incremental selection. Cursor progress is never stored in task parameters. */
 public final class IncrementalConfig {
+    private static final Option<Mode> MODE = Options.key("mode").enumType(Mode.class).noDefaultValue();
+    private static final Option<String> COLUMN = Options.key("column").stringType().noDefaultValue();
+    private static final Option<String> INITIAL_VALUE = Options.key("initialValue").stringType().noDefaultValue();
+    private static final Option<Long> DELAY_SECONDS = Options.key("delaySeconds").longType().noDefaultValue();
+    private static final Option<Long> LOOKBACK_SECONDS = Options.key("lookbackSeconds").longType().noDefaultValue();
+
+    public static final OptionRule RULE = OptionRule.builder()
+            .required(MODE, COLUMN)
+            .optional(INITIAL_VALUE, DELAY_SECONDS, LOOKBACK_SECONDS)
+            .build();
+
     private final Mode mode;
     private final String column;
     private final String initialValue;
@@ -89,27 +104,30 @@ public final class IncrementalConfig {
 
     
 
-    /** Strictly parses a mapping's explicit incremental settings without arbitrary SQL. */
+    /** Parses public incremental options using the component-owned rule. */
     public static IncrementalConfig from(Map<?, ?> values) {
-        if (!Set.of("mode", "column", "initialValue", "delaySeconds", "lookbackSeconds")
-                .containsAll(values.keySet())) {
-            throw new IllegalArgumentException("Unknown incremental setting");
+        for (Object key : values.keySet()) {
+            if (!(key instanceof String)) {
+                throw new IllegalArgumentException("Incremental configuration keys must be strings");
+            }
         }
-        Object mode = values.get("mode");
-        Object column = values.get("column");
-        if (!(mode instanceof String kind) || !(column instanceof String name)) {
-            throw new IllegalArgumentException("Incremental mode and column are required");
-        }
-        Object initial = values.get("initialValue");
-        if (initial != null && !(initial instanceof String)) {
-            throw new IllegalArgumentException("Incremental initial value must be text");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> fields = (Map<String, Object>) values;
+        ReadonlyConfig options = ReadonlyConfig.fromMap(fields);
+        ConfigValidator.of(options).validate(RULE);
+        ConfigValidator.validateUnknownKeys(options, RULE, "source.tables.incremental");
+        // Do not widen the V4 JSON string contract via Jackson's scalar coercion.
+        if (!(fields.get(COLUMN.key()) instanceof String)
+                || (fields.containsKey(INITIAL_VALUE.key())
+                        && !(fields.get(INITIAL_VALUE.key()) instanceof String))) {
+            throw new IllegalArgumentException("Incremental column and initial value must be text");
         }
         return new IncrementalConfig(
-                Mode.valueOf(kind),
-                name,
-                (String) initial,
-                seconds(values.get("delaySeconds")),
-                seconds(values.get("lookbackSeconds")));
+                options.get(MODE),
+                options.get(COLUMN),
+                options.get(INITIAL_VALUE),
+                seconds(fields.get(DELAY_SECONDS.key())),
+                seconds(fields.get(LOOKBACK_SECONDS.key())));
     }
 
     private static long seconds(Object value) {

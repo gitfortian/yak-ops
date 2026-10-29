@@ -33,6 +33,11 @@ METHOD = re.compile(
 )
 CODEC = re.compile(r"Codec|(?<![A-Za-z])codec")
 RECORD_DECLARATION = re.compile(r"\brecord\s+([A-Za-z_$][\w$]*)\s*\(")
+VAR_DECLARATION = re.compile(r"\\bvar\\s+[A-Za-z_$][\\w$]*\\s*(?:=|:)")
+DATA_SYNC_JAVA = (
+    "yak-ops-plugins/yak-ops-plugin-task/"
+    "yak-ops-plugin-task-data-sync/src/main/java/"
+)
 
 
 def code_only(source: str) -> str:
@@ -143,6 +148,12 @@ def verify_repository(root: Path = ROOT) -> tuple[int, list[str]]:
         source = path.read_text(encoding="utf-8")
         for line, reason in verify_source(relative, source):
             errors.append(f"{relative}:{line}: {reason}")
+        if relative.startswith(DATA_SYNC_JAVA):
+            for match in VAR_DECLARATION.finditer(code_only(source)):
+                errors.append(
+                    f"{relative}:{line_number(source, match.start())}: "
+                    "Java var is prohibited in DATA_SYNC; declare an explicit type"
+                )
         if enforce_records and RECORD_DECLARATION.search(code_only(source)):
             for line, reason in new_record_violations(relative, source, baseline_record_source(relative)):
                 errors.append(f"{relative}:{line}: {reason}")
