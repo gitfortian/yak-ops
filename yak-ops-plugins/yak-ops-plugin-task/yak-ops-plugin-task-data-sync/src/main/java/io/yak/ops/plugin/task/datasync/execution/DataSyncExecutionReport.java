@@ -363,5 +363,4 @@ final class DataSyncExecutionReport {
                 completed,
                 value.failureCode());
     }
-
 }
