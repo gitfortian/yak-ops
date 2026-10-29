@@ -146,7 +146,11 @@ class SchemaExecutionTest {
         values.put("sink", sink);
         ReadonlyConfig parameters = ReadonlyConfig.fromMap(values);
         var admission = f.planner.admissionPlan(parameters, ID);
-        TaskHandle handle = new DataSyncTaskExecutor(f.planner, f.builder, f.engine)
+        TaskHandle handle = new DataSyncTaskExecutor(
+                        f.planner,
+                        f.builder,
+                        f.engine,
+                        new IncrementalBatchPreparation(f, (identity, proposed) -> proposed))
                 .start(parameters, admission, ID, false)
                 .toCompletableFuture()
                 .join();
@@ -384,7 +388,11 @@ class SchemaExecutionTest {
         TaskHandle handle(int count, boolean realtime) {
             var parameters = options(count, realtime);
             var admission = planner.admissionPlan(parameters, ID);
-            return new DataSyncTaskExecutor(planner, builder, engine)
+            return new DataSyncTaskExecutor(
+                            planner,
+                            builder,
+                            engine,
+                            new IncrementalBatchPreparation(this, (identity, proposed) -> proposed))
                     .start(parameters, admission, ID, false).toCompletableFuture().join();
         }
 
