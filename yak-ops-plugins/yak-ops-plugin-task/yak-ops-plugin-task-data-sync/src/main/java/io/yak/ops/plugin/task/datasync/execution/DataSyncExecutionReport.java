@@ -5,6 +5,13 @@ import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.core.api.common.JobStatus;
 import io.yak.ops.core.data.TableId;
 import io.yak.ops.plugin.task.datasync.plan.TablePlan;
+import io.yak.ops.plugin.task.datasync.execution.TableExecutionProgress.Checkpoints;
+import io.yak.ops.plugin.task.datasync.execution.TableExecutionProgress.Report;
+import io.yak.ops.plugin.task.datasync.execution.TableExecutionProgress.RealtimeReport;
+import io.yak.ops.plugin.task.datasync.execution.TableExecutionProgress.RealtimeSummary;
+import io.yak.ops.plugin.task.datasync.execution.TableExecutionProgress.StageResult;
+import io.yak.ops.plugin.task.datasync.execution.TableExecutionProgress.TableResult;
+import io.yak.ops.plugin.task.datasync.execution.TableExecutionProgress.TableStages;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -357,107 +364,4 @@ final class DataSyncExecutionReport {
                 value.failureCode());
     }
 
-    /** Two completed-checkpoint observations; unavailable restored identifiers remain null. */
-    public record Checkpoints(Long handoffId, Long completedId) {}
-
-    /** Public phase measurements. Incremental percent is always null; counters count input records. */
-    public record StageResult(
-            String step,
-            String status,
-            Integer progressPercent,
-            String progressUnit,
-            Long readRows,
-            Long committedRows,
-            Integer plannedSplits,
-            Long completedSplits,
-            String failureCode,
-            Integer plannedTables,
-            Integer completedTables,
-            String action) {
-        /** Creates a row-stage observation without schema-preparation counters. */
-        public StageResult(
-                String step,
-                String status,
-                Integer progressPercent,
-                String progressUnit,
-                Long readRows,
-                Long committedRows,
-                Integer plannedSplits,
-                Long completedSplits,
-                String failureCode) {
-            this(
-                    step,
-                    status,
-                    progressPercent,
-                    progressUnit,
-                    readRows,
-                    committedRows,
-                    plannedSplits,
-                    completedSplits,
-                    failureCode,
-                    null,
-                    null,
-                    null);
-        }
-    }
-
-    /** Table identity is resolved only from the Instance's immutable mapping version. */
-    public record TableStages(int mappingIndex, List<StageResult> stages) {
-        public TableStages {
-            stages = List.copyOf(stages);
-        }
-    }
-
-    /** Compact observation for list and batch Instance queries without fetching each table report. */
-    public record RealtimeSummary(
-            int version,
-            String observedAt,
-            long generation,
-            boolean restored,
-            String counterScope,
-            String phase,
-            Checkpoints checkpoints,
-            List<StageResult> stages) {
-        public RealtimeSummary {
-            stages = List.copyOf(stages);
-        }
-    }
-
-    /** Full report and its bounded summary are persisted together with the terminal Task outcome. */
-    public record RealtimeReport(
-            int version,
-            String observedAt,
-            long generation,
-            boolean restored,
-            String counterScope,
-            String phase,
-            Checkpoints checkpoints,
-            List<StageResult> stages,
-            List<TableStages> tables,
-            RealtimeSummary summary) {
-        public RealtimeReport {
-            stages = List.copyOf(stages);
-            tables = List.copyOf(tables);
-        }
-    }
-
-    /** Report fields contain observations only; the matching table identities come from the pinned definition. */
-    public record Report(int version, String observedAt, List<TableResult> tables) {
-        public Report {
-            tables = List.copyOf(tables);
-        }
-    }
-
-    /** One mapping-indexed FULL-stage observation. Rows mean emitted and acknowledged input records, not affected rows. */
-    public record TableResult(
-            int mappingIndex,
-            String step,
-            String status,
-            Integer progressPercent,
-            String progressUnit,
-            long readRows,
-            long committedRows,
-            Integer plannedSplits,
-            long completedSplits,
-            String failureCode) {}
 }
