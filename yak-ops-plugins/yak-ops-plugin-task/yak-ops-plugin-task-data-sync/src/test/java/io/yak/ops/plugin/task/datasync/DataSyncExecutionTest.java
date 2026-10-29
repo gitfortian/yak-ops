@@ -285,12 +285,13 @@ class DataSyncExecutionTest {
         ReadonlyConfig parameters = parameters(false);
         TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
         resources.sourceConnectionRevision = 2;
-        CompletionException failure = assertThrows(
-                CompletionException.class,
-                () -> plugin.start(parameters, plan, CONTEXT, false)
-                        .toCompletableFuture()
-                        .join());
-        assertInstanceOf(TaskStartRejectedException.class, failure.getCause());
+        var handle = plugin.start(parameters, plan, CONTEXT, false)
+                .toCompletableFuture()
+                .join();
+        assertEquals(0, submissions.get());
+        handle.start();
+        assertEquals(TaskOutcome.FAILED, handle.completion().toCompletableFuture().join());
+        assertTrue(handle.runtimeReference().isEmpty());
         assertEquals(0, submissions.get());
         assertEquals(0, resources.openedConnections.get());
     }
@@ -303,12 +304,13 @@ class DataSyncExecutionTest {
         DataSyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
         ReadonlyConfig parameters = parameters(true);
         TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
-        CompletionException failure = assertThrows(
-                CompletionException.class,
-                () -> plugin.start(parameters, plan, CONTEXT, false)
-                        .toCompletableFuture()
-                        .join());
-        assertInstanceOf(TaskStartRejectedException.class, failure.getCause());
+        var handle = plugin.start(parameters, plan, CONTEXT, false)
+                .toCompletableFuture()
+                .join();
+        assertEquals(0, submissions.get());
+        handle.start();
+        assertEquals(TaskOutcome.FAILED, handle.completion().toCompletableFuture().join());
+        assertTrue(handle.runtimeReference().isEmpty());
         assertEquals(0, submissions.get());
         assertEquals(0, resources.openedConnections.get());
     }
