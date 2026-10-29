@@ -23,6 +23,11 @@ public class DataMapGovernanceQueryImpl implements DataMapGovernanceQuery {
     }
 
     @Override
+    public long countActiveTables(String workspaceId) {
+        return mapper.countActiveTables(workspaceId);
+    }
+
+    @Override
     public List<GovernanceTableSnapshot> activeTables(String workspaceId, String afterId, int limit) {
         String cursor = afterId == null ? "" : afterId;
         return mapper.listActiveTables(workspaceId, cursor, limit).stream()

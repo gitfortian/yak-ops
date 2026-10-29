@@ -40,6 +40,15 @@ public interface GovernanceScanRunMapper {
             + "WHERE workspace_id=#{workspaceId} ORDER BY create_time DESC, id DESC LIMIT #{limit}")
     List<GovernanceScanRunEntity> listRecent(@Param("workspaceId") String workspaceId, @Param("limit") int limit);
 
+    @Select("SELECT " + COLUMNS + " FROM yak_ops_governance_scan_run "
+            + "WHERE workspace_id=#{workspaceId} ORDER BY create_time DESC, id DESC "
+            + "LIMIT #{limit} OFFSET #{offset}")
+    List<GovernanceScanRunEntity> page(
+            @Param("workspaceId") String workspaceId, @Param("offset") int offset, @Param("limit") int limit);
+
+    @Select("SELECT COUNT(1) FROM yak_ops_governance_scan_run WHERE workspace_id=#{workspaceId}")
+    long countAll(@Param("workspaceId") String workspaceId);
+
     /** Claims a pending run; the conditional predicate makes two workers race on one row at most once. */
     @Update("UPDATE yak_ops_governance_scan_run SET status='RUNNING', start_time=#{startTime} "
             + "WHERE workspace_id=#{workspaceId} AND id=#{id} AND status='PENDING' AND active_scope=1")
@@ -73,4 +82,14 @@ public interface GovernanceScanRunMapper {
             @Param("workspaceId") String workspaceId,
             @Param("reasonCode") String reasonCode,
             @Param("finishTime") LocalDateTime finishTime);
+
+    /**
+     * Fails every live run of the database.
+     *
+     * <p>Startup recovery only: the product is single-node, so no other process can still be
+     * executing them. A clustered deployment must revisit this sweep instead of calling it twice.
+     */
+    @Update("UPDATE yak_ops_governance_scan_run SET status='FAILED', active_scope=NULL, "
+            + "reason_code=#{reasonCode}, finish_time=#{finishTime} WHERE active_scope=1")
+    int failAllLive(@Param("reasonCode") String reasonCode, @Param("finishTime") LocalDateTime finishTime);
 }

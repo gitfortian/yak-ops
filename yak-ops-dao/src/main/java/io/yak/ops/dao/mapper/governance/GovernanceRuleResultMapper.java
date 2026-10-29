@@ -49,4 +49,9 @@ public interface GovernanceRuleResultMapper {
             @Param("workspaceId") String workspaceId,
             @Param("reasonCode") String reasonCode,
             @Param("finishTime") LocalDateTime finishTime);
+
+    /** Fails every rule result left RUNNING by a previous process; startup recovery only. */
+    @Update("UPDATE yak_ops_governance_rule_result SET status='FAILED', reason_code=#{reasonCode}, "
+            + "finish_time=#{finishTime} WHERE status='RUNNING'")
+    int markAllRunningFailed(@Param("reasonCode") String reasonCode, @Param("finishTime") LocalDateTime finishTime);
 }

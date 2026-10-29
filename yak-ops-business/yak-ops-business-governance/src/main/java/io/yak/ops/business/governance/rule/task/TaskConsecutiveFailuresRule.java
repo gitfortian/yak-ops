@@ -8,6 +8,7 @@ import io.yak.ops.common.enums.governance.GovernanceDimension;
 import io.yak.ops.common.enums.governance.IssueSeverity;
 import io.yak.ops.common.enums.governance.IssueTargetType;
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Component;
 
@@ -49,6 +50,13 @@ public class TaskConsecutiveFailuresRule implements GovernanceRule {
     @Override
     public IssueTargetType targetType() {
         return IssueTargetType.TASK_DEFINITION;
+    }
+
+    @Override
+    public Map<String, BigDecimal> thresholds() {
+        return Map.of(
+                "minimumConsecutiveFailures", BigDecimal.valueOf(MINIMUM_CONSECUTIVE),
+                "windowDays", BigDecimal.valueOf(WINDOW_DAYS));
     }
 
     @Override

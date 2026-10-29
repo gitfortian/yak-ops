@@ -8,6 +8,7 @@ import io.yak.ops.common.enums.governance.GovernanceDimension;
 import io.yak.ops.common.enums.governance.IssueSeverity;
 import io.yak.ops.common.enums.governance.IssueTargetType;
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Component;
 
@@ -50,6 +51,14 @@ public class TaskSlowRunsRule implements GovernanceRule {
     @Override
     public IssueTargetType targetType() {
         return IssueTargetType.TASK_DEFINITION;
+    }
+
+    @Override
+    public Map<String, BigDecimal> thresholds() {
+        return Map.of(
+                "minimumFinishedRuns", BigDecimal.valueOf(MINIMUM_RUNS),
+                "thresholdSeconds", BigDecimal.valueOf(THRESHOLD_SECONDS),
+                "windowDays", BigDecimal.valueOf(WINDOW_DAYS));
     }
 
     @Override

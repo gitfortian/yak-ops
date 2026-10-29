@@ -3,6 +3,8 @@ package io.yak.ops.business.governance.rule;
 import io.yak.ops.common.enums.governance.GovernanceDimension;
 import io.yak.ops.common.enums.governance.IssueSeverity;
 import io.yak.ops.common.enums.governance.IssueTargetType;
+import java.math.BigDecimal;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -31,6 +33,16 @@ public interface GovernanceRule {
 
     /** Kind of object the rule accuses. */
     IssueTargetType targetType();
+
+    /**
+     * Fixed numeric thresholds the rule compares against, keyed by a stable name.
+     *
+     * <p>Returned as numbers rather than a sentence: the caller owns the wording, and an operator
+     * reads the same value the scan used.
+     */
+    default Map<String, BigDecimal> thresholds() {
+        return Map.of();
+    }
 
     /** Emits one candidate per accused target; an empty enumeration is a valid, complete result. */
     void evaluate(GovernanceRuleContext context, Consumer<IssueCandidate> sink);

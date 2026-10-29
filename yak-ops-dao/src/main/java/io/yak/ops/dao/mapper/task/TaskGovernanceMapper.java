@@ -76,4 +76,24 @@ public interface TaskGovernanceMapper {
             @Param("since") LocalDateTime since,
             @Param("minimumRuns") int minimumRuns,
             @Param("thresholdSeconds") long thresholdSeconds);
+
+    /**
+     * Eligible base of the COMPUTE dimension.
+     *
+     * <p>A published definition counts when at least one terminal scheduled instance of its current
+     * version was scheduled inside the window; a definition that never ran is not scored as healthy.
+     */
+    @Select("""
+            SELECT COUNT(DISTINCT i.definition_id)
+            FROM yak_ops_task_instance i
+            JOIN yak_ops_task_definition d ON d.id = i.definition_id
+            WHERE i.workspace_id = #{workspaceId}
+              AND i.trigger_type = 'SCHEDULE'
+              AND i.definition_version = d.current_version
+              AND i.status IN ('FINISHED', 'FAILED', 'CANCELED')
+              AND i.scheduled_time >= #{since}
+              AND d.status = 1
+              AND d.deleted_at IS NULL
+            """)
+    long countEvaluatedDefinitions(@Param("workspaceId") String workspaceId, @Param("since") LocalDateTime since);
 }

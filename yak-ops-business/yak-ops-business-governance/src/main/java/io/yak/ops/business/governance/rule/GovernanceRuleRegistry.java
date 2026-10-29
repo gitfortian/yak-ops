@@ -35,6 +35,11 @@ public class GovernanceRuleRegistry {
         return List.copyOf(rules.values());
     }
 
+    /** Soft lookup for a read path that must survive a rule removed while its Issues remain. */
+    public java.util.Optional<GovernanceRule> find(String code) {
+        return java.util.Optional.ofNullable(rules.get(code));
+    }
+
     public GovernanceRule require(String code) {
         GovernanceRule rule = rules.get(code);
         if (rule == null) {

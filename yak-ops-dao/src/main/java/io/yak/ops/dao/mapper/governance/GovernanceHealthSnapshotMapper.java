@@ -38,4 +38,8 @@ public interface GovernanceHealthSnapshotMapper {
             + "WHERE workspace_id=#{workspaceId} AND snapshot_date=#{snapshotDate}")
     List<GovernanceHealthSnapshotEntity> listByDay(
             @Param("workspaceId") String workspaceId, @Param("snapshotDate") LocalDate snapshotDate);
+
+    /** Latest day the Workspace has a snapshot for; null before the first complete scan. */
+    @Select("SELECT MAX(snapshot_date) FROM yak_ops_governance_health_snapshot " + "WHERE workspace_id=#{workspaceId}")
+    LocalDate latestDate(@Param("workspaceId") String workspaceId);
 }

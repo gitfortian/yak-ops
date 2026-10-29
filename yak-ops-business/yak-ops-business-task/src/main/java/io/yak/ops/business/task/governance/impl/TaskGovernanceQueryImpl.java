@@ -31,6 +31,11 @@ public class TaskGovernanceQueryImpl implements TaskGovernanceQuery {
     }
 
     @Override
+    public long countEvaluatedDefinitions(String workspaceId, LocalDateTime since) {
+        return mapper.countEvaluatedDefinitions(workspaceId, since);
+    }
+
+    @Override
     public List<TaskSlowCandidate> slowRunCandidates(
             String workspaceId, LocalDateTime since, int minimumRuns, long thresholdSeconds) {
         return mapper.listSlowRunCandidates(workspaceId, since, minimumRuns, thresholdSeconds).stream()

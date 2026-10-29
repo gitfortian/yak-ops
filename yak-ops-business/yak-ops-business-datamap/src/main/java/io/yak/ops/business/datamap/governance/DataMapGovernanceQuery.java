@@ -20,4 +20,7 @@ public interface DataMapGovernanceQuery {
      * @param limit page size
      */
     List<GovernanceTableSnapshot> activeTables(String workspaceId, String afterId, int limit);
+
+    /** Eligible base of the DEV dimension: every ACTIVE catalog table of the Workspace. */
+    long countActiveTables(String workspaceId);
 }

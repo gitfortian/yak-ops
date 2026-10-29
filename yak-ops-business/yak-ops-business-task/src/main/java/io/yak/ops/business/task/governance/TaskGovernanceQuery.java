@@ -17,4 +17,7 @@ public interface TaskGovernanceQuery {
     /** Definitions whose finished scheduled runs average above {@code thresholdSeconds}. */
     List<TaskSlowCandidate> slowRunCandidates(
             String workspaceId, LocalDateTime since, int minimumRuns, long thresholdSeconds);
+
+    /** Eligible base of the COMPUTE dimension: published definitions with a scheduled run in the window. */
+    long countEvaluatedDefinitions(String workspaceId, LocalDateTime since);
 }
