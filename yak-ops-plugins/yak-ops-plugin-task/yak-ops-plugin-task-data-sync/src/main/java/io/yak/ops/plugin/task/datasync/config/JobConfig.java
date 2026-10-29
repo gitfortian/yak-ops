@@ -274,16 +274,6 @@ public final class JobConfig {
         return tables.getFirst().sink().get(JobOptions.DATASOURCE_ID);
     }
 
-    public ReadonlyConfig source() {
-        if (tables.size() != 1) throw new IllegalStateException("Multiple Source routes");
-        return tables.getFirst().source();
-    }
-
-    public ReadonlyConfig sink() {
-        if (tables.size() != 1) throw new IllegalStateException("Multiple Sink routes");
-        return tables.getFirst().sink();
-    }
-
     /** SCHEMA is a derived execution stage, never a second persisted user setting. */
     public List<Step> steps() {
         return steps;
