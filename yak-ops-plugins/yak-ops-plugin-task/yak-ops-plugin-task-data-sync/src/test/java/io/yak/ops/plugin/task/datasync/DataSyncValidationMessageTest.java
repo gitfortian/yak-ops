@@ -12,7 +12,7 @@ import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceTable;
 import io.yak.ops.plugin.task.api.TaskValidationException;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
-import io.yak.ops.plugin.task.datasync.validation.JobConfigValidator;
+import io.yak.ops.plugin.task.datasync.validation.SchemaValidationMessages;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -66,11 +66,11 @@ class DataSyncValidationMessageTest {
     void unknownDriverErrorsNeverReachClient() {
         assertEquals(
                 "目标表结构不兼容，请检查字段类型和默认值等属性",
-                JobConfigValidator.safeSchemaMessage(
+                SchemaValidationMessages.safeSchemaMessage(
                         new IllegalArgumentException("jdbc:mysql://user:password@secret/?token=private")));
         assertEquals(
                 "目标表结构不兼容，请检查字段类型和默认值等属性",
-                JobConfigValidator.safeSchemaMessage(
+                SchemaValidationMessages.safeSchemaMessage(
                         new IllegalArgumentException("Target primary key cannot be nullable: password=secret")));
     }
 
