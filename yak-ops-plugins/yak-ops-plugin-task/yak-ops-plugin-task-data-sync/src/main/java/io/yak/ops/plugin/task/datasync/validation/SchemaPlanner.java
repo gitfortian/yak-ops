@@ -184,5 +184,4 @@ public final class SchemaPlanner {
                 };
         return JdbcFactoryLoader.loadDialect(prefix);
     }
-
 }
