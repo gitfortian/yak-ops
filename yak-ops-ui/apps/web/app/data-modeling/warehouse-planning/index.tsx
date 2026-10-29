@@ -1,5 +1,5 @@
-import { Alert, Button, PageHeader, Spinner } from "@yak-ops/yak-ui";
-import { Layers } from "lucide-react";
+import { Button, Empty, PageHeader, Spinner, Tabs, TabsList, TabsTab } from "@yak-ops/yak-ui";
+import { Folder, FolderPlus, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import type {
   EditorDraft,
@@ -11,13 +11,15 @@ import LayerPanel from "./layer-panel";
 import NodeDialog from "./node-dialog";
 import PlanningDetails from "./planning-details";
 import PlanningTree from "./planning-tree";
-import { findParent, nodeKey, usePlanning } from "./state";
+import { findParent, nodeKey, pathToNode, usePlanning } from "./state";
+
+type View = "plan" | "layer";
 
 export default function WarehousePlanningPage() {
   const planning = usePlanning();
   const [draft, setDraft] = useState<EditorDraft | null>(null);
   const [deleting, setDeleting] = useState<PlanningNode | null>(null);
-  const [view, setView] = useState<"plan" | "layer">("plan");
+  const [view, setView] = useState<View>("plan");
   const selected = planning.selected;
   const disabled = planning.loading || planning.failed;
 
@@ -36,6 +38,7 @@ export default function WarehousePlanningPage() {
         return;
     }
   };
+  const createDatamart = () => setDraft({ mode: "create", kind: "DATASET", parent: null });
   const saved = (node: SavedNode) => {
     setDraft(null);
     planning.refresh(draft?.mode === "edit" ? undefined : nodeKey(node));
@@ -53,11 +56,7 @@ export default function WarehousePlanningPage() {
               <Button size="small" disabled={planning.loading} onClick={() => planning.refresh()}>
                 刷新
               </Button>
-              <Button
-                size="small"
-                disabled={disabled}
-                onClick={() => setDraft({ mode: "create", kind: "DATASET", parent: null })}
-              >
+              <Button size="small" disabled={disabled} onClick={createDatamart}>
                 新建数据集市
               </Button>
               <Button
@@ -72,41 +71,45 @@ export default function WarehousePlanningPage() {
           ) : null
         }
       />
-      {view === "plan" && planning.failed && (
-        <Alert>
-          数仓规划加载失败
-          <Button size="small" onClick={() => planning.refresh()}>
-            重试
-          </Button>
-        </Alert>
-      )}
       <div
         aria-busy={planning.loading}
-        className="grid min-h-0 flex-1 grid-cols-1 gap-4 px-6 pb-4 pt-5 max-md:px-4 md:grid-cols-[250px_minmax(0,1fr)]"
+        className="grid min-h-0 flex-1 grid-cols-1 gap-5 px-6 pb-6 pt-6 max-md:px-4 md:grid-cols-[250px_minmax(0,1fr)]"
       >
-        <aside className="min-h-0 overflow-auto border-r border-[var(--yak-components-panel-border)] pr-3">
-          <nav aria-label="数仓规划导航" className="mb-3">
-            <Button
-              size="small"
-              variant={view === "layer" ? "secondary" : "ghost"}
-              className="w-full justify-start"
-              aria-current={view === "layer" ? true : undefined}
-              onClick={() => setView("layer")}
-            >
-              <Layers size={14} />
-              <span className="truncate">数仓分层</span>
-            </Button>
-          </nav>
-          <PlanningTree
-            tree={planning.tree}
-            selectedKey={view === "plan" ? planning.selectedKey : null}
-            disabled={disabled}
-            onSelect={(key) => {
-              setView("plan");
-              planning.select(key);
-            }}
-            onCreateChild={createChild}
-          />
+        <aside className="flex min-h-0 flex-col">
+          <Tabs value={view} onValueChange={(value) => setView(value as View)}>
+            <TabsList>
+              <TabsTab value="plan">规划</TabsTab>
+              <TabsTab value="layer">分层</TabsTab>
+            </TabsList>
+          </Tabs>
+          {planning.failed ? (
+            <div className="mt-4 flex flex-col items-start gap-1.5 rounded-lg border border-dashed border-[var(--yak-components-input-border)] p-3 text-sm text-[var(--yak-color-text-secondary)]">
+              <span>无法加载数仓规划</span>
+              <Button
+                size="small"
+                variant="ghost"
+                className="h-auto px-0 text-[13px] font-normal"
+                style={{ color: "var(--yak-color-primary)" }}
+                onClick={() => planning.refresh()}
+              >
+                重试
+              </Button>
+            </div>
+          ) : (
+            <PlanningTree
+              tree={planning.tree}
+              selectedKey={view === "plan" ? planning.selectedKey : null}
+              disabled={disabled || view === "layer"}
+              filterable={view === "plan"}
+              muted={view === "layer"}
+              onSelect={(key) => {
+                setView("plan");
+                planning.select(key);
+              }}
+              onCreateChild={createChild}
+              onCreateDatamart={createDatamart}
+            />
+          )}
         </aside>
         <section
           aria-label={view === "layer" ? "数仓分层" : "规划详情"}
@@ -116,10 +119,21 @@ export default function WarehousePlanningPage() {
             <LayerPanel />
           ) : planning.loading ? (
             <Spinner />
-          ) : planning.failed ? null : selected ? (
+          ) : planning.failed ? (
+            <Empty
+              icon={<TriangleAlert size={26} strokeWidth={1.5} />}
+              title="数仓规划加载失败"
+              description="请检查网络连接后重试。"
+              action={
+                <Button size="small" variant="primary" onClick={() => planning.refresh()}>
+                  重试
+                </Button>
+              }
+            />
+          ) : selected ? (
             <PlanningDetails
               node={selected}
-              parent={findParent(planning.tree, selected)}
+              ancestors={pathToNode(planning.tree, planning.selectedKey)}
               onSelect={(node) => planning.select(nodeKey(node))}
               onCreateChild={createChild}
               onDelete={setDeleting}
@@ -132,7 +146,26 @@ export default function WarehousePlanningPage() {
               }
             />
           ) : (
-            <p className="p-4 text-sm">暂无业务分类</p>
+            <Empty
+              icon={<Folder size={26} strokeWidth={1.5} />}
+              title="还没有业务分类"
+              description="业务分类是公共层的起点，其下依次是数据域与业务过程。"
+              action={
+                <div className="flex gap-2">
+                  <Button
+                    size="small"
+                    variant="primary"
+                    onClick={() => setDraft({ mode: "create", kind: "CATEGORY", parent: null })}
+                  >
+                    新建业务分类
+                  </Button>
+                  <Button size="small" onClick={createDatamart}>
+                    <FolderPlus size={14} />
+                    新建数据集市
+                  </Button>
+                </div>
+              }
+            />
           )}
         </section>
       </div>

@@ -39,7 +39,14 @@ export default function ProcessAssets({ processId }: { processId: string }) {
   }, [processId, pageNo, pageSize, version]);
   return (
     <section className="space-y-3">
-      <h3>关联逻辑模型</h3>
+      <h3 className="flex h-8 items-center gap-2 text-sm font-semibold">
+        关联逻辑模型
+        {data?.availability === "AVAILABLE" && data.page.pagination.total > 0 && (
+          <span className="text-xs font-normal text-[var(--yak-components-muted-text)]">
+            {data.page.pagination.total} 个
+          </span>
+        )}
+      </h3>
       {loading ? (
         <Spinner />
       ) : failed ? (
