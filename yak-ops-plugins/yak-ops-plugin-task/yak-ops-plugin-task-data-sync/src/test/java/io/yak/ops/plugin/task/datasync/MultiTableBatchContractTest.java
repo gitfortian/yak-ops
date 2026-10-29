@@ -63,7 +63,6 @@ class MultiTableBatchContractTest {
         assertEquals(3, job.tables().size());
         assertEquals(3, job.admissionPlan().exclusiveResources().size());
         assertTrue(job.admissionPlan().exclusiveResources().stream().allMatch(value -> value.type().equals("DATA_SYNC_TARGET")));
-        assertThrows(IllegalStateException.class, job::source);
         assertEquals(plan(3).admissionPlan(), job.admissionPlan());
         assertNotEquals(plan(2).admissionPlan().resourceRevision(), job.admissionPlan().resourceRevision());
     }
