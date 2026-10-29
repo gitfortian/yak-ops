@@ -76,7 +76,7 @@ class SchemaExecutionTest {
                     assertFalse(choice.defaultSteps().contains(io.yak.ops.plugin.task.datasync.solution.Step.SCHEMA));
                 }
                 if (!supported) assertThrows(IllegalArgumentException.class,
-                        () -> io.yak.ops.plugin.task.datasync.solution.SolutionCatalog.validateSteps(source, target,
+                        () -> io.yak.ops.plugin.task.datasync.solution.SolutionValidator.validateSteps(source, target,
                                 List.of(io.yak.ops.plugin.task.datasync.solution.Step.SCHEMA,
                                         io.yak.ops.plugin.task.datasync.solution.Step.FULL)));
             }
