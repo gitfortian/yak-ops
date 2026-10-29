@@ -20,7 +20,7 @@ public final class DataSyncTaskExecutor {
     private final JobPlanner planner;
     private final PipelineBuilder builder;
     private final PipelineExecutor executor;
-    private final io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner incrementalPlanner;
+    private final io.yak.ops.plugin.task.datasync.execution.IncrementalBatchPreparation incrementalPlanner;
 
     public DataSyncTaskExecutor(JobPlanner planner, PipelineBuilder builder, PipelineExecutor executor) {
         this(planner, builder, executor, null);
@@ -31,7 +31,7 @@ public final class DataSyncTaskExecutor {
             JobPlanner planner,
             PipelineBuilder builder,
             PipelineExecutor executor,
-            io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner incrementalPlanner) {
+            io.yak.ops.plugin.task.datasync.execution.IncrementalBatchPreparation incrementalPlanner) {
         this.incrementalPlanner = incrementalPlanner;
         this.planner = Objects.requireNonNull(planner, "planner");
         this.builder = Objects.requireNonNull(builder, "builder");
