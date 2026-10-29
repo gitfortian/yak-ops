@@ -1,8 +1,5 @@
 package io.yak.ops.plugin.task.datasync.execution;
 
-import io.yak.ops.plugin.task.datasync.plan.JobPlan;
-import io.yak.ops.plugin.task.datasync.plan.TablePlan;
-
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
 import io.yak.ops.connector.jdbc.JdbcSourceOptions;
@@ -16,6 +13,8 @@ import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.datasync.config.IncrementalConfig;
 import io.yak.ops.plugin.task.datasync.config.JobConfig;
 import io.yak.ops.plugin.task.datasync.config.JobOptions;
+import io.yak.ops.plugin.task.datasync.plan.JobPlan;
+import io.yak.ops.plugin.task.datasync.plan.TablePlan;
 import io.yak.ops.plugin.task.datasync.solution.Step;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
