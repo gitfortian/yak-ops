@@ -141,6 +141,13 @@ const realtimeOnlyDefinition = transport.createDefinitionRequest(realtimeOnlyPay
 assert.equal(realtimeOnlyDefinition.source.startup.mode, "latest-offset");
 assert.deepEqual(Array.from(realtimeOnlyDefinition.steps), ["INCREMENTAL"]);
 
+const snapshotDraft = { ...draft, steps: ["FULL"] };
+const snapshotPayload = params.buildEditorPayload(form, snapshotDraft, false, [], true);
+const snapshotDefinition = transport.createDefinitionRequest(snapshotPayload).parameters;
+assert.equal(snapshotDefinition.source.startup.mode, "snapshot");
+assert.equal(snapshotDefinition.sink.schemaPolicy.evolution.enabled, false);
+assert.deepEqual(Array.from(snapshotDefinition.steps), ["FULL"]);
+
 const incremental = {
   mode: "TIMESTAMP",
   column: "updated_at",
