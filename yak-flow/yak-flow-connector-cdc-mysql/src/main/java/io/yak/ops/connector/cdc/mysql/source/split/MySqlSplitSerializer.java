@@ -26,8 +26,9 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
 
     public static final MySqlSplitSerializer INSTANCE = new MySqlSplitSerializer();
 
-    // An incompatible layout: old nested hybrid/binlog frames must not be silently restored.
-    private static final int VERSION = 10;
+    // Flink CDC's split layout uses the same two kind flags, but the payload uses YakFlow's
+    // Debezium 2.7 history and typed Chunk representation. Do not claim Flink v4 wire compatibility.
+    private static final int VERSION = 1;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final int SNAPSHOT_SPLIT_FLAG = 1;
     private static final int BINLOG_SPLIT_FLAG = 2;
@@ -40,6 +41,11 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
     @Override
     public byte[] serialize(MySqlSplit split) throws IOException {
         Objects.requireNonNull(split, "split");
+        // Flink CDC caches immutable split bytes. Defensively copy the cached buffer to prevent
+        // callers from modifying a later checkpoint or mutating serialized schema history.
+        if (split.serializedFormCache != null) {
+            return split.serializedFormCache.clone();
+        }
         try (var buffer = new ByteArrayOutputStream();
                 var out = new DataOutputStream(buffer)) {
             if (split.isSnapshotSplit()) {
@@ -55,13 +61,23 @@ public final class MySqlSplitSerializer implements SimpleVersionedSerializer<MyS
             if (buffer.size() > MAX_BYTES) {
                 throw new IOException("MySQL split checkpoint exceeds size limit");
             }
-            return buffer.toByteArray();
+            byte[] result = buffer.toByteArray();
+            split.serializedFormCache = result;
+            return result.clone();
         }
     }
 
     @Override
     public MySqlSplit deserialize(int version, byte[] serialized) throws IOException {
-        if (version != VERSION || serialized == null || serialized.length > MAX_BYTES) {
+        return deserializeSplit(version, serialized);
+    }
+
+    /** Flink CDC's named split-deserialization entry point. */
+    public MySqlSplit deserializeSplit(int version, byte[] serialized) throws IOException {
+        if (version != VERSION
+                || serialized == null
+                || serialized.length < Integer.BYTES
+                || serialized.length > MAX_BYTES) {
             throw new IOException("Unsupported MySQL split checkpoint version or size: " + version);
         }
         try (var in = new DataInputStream(new ByteArrayInputStream(serialized))) {

@@ -115,7 +115,8 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
 
     @Override
     public int hashCode() {
-        return Objects.hash(snapshotPendingSplits, isBinlogSplitAssigned, pendingBinlog, phase, lowWatermark, highWatermark);
+        return Objects.hash(
+                snapshotPendingSplits, isBinlogSplitAssigned, pendingBinlog, phase, lowWatermark, highWatermark);
     }
 
     @Override

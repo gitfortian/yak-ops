@@ -34,16 +34,17 @@ import java.util.zip.CRC32C;
  * assigned-binlog state. A binlog split returned to the enumerator remains checkpointed
  * while pending, so an interrupted latest-offset reader cannot accidentally seek to NOW.
  *
- * <p>Version 1 starts a clean YakFlow CDC state layout. Pre-release checkpoint
- * versions are intentionally unsupported. Flink CDC 3.7's numeric versions
- * (5/6 for pending state, 4 for splits) are not byte-compatible with the
- * Debezium 2.7 offset representation and typed Chunk cursor used here.
+ * <p>Version 2 aligns Flink CDC's snapshot-first hybrid state layout and state flags.
+ * The trailing early-Binlog handoff fields and Debezium 2.7/typed Chunk payload are
+ * YakFlow-specific, so this is not Flink checkpoint binary compatibility.
+ * Earlier pre-release versions are intentionally unsupported.
  */
 public final class PendingSplitsStateSerializer implements SimpleVersionedSerializer<PendingSplitsState> {
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
     private static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final int MAX_SPLITS = 10_000;
-    // Match Flink CDC's state discriminators. Snapshot-only is reserved for future use.
+    // Retain Flink CDC 3.7's discriminator values for all three pending-state kinds.
+    private static final int SNAPSHOT_PENDING_SPLITS_STATE_FLAG = 1;
     private static final int BINLOG_PENDING_SPLITS_STATE_FLAG = 2;
     private static final int HYBRID_PENDING_SPLITS_STATE_FLAG = 3;
 
@@ -71,12 +72,15 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         try (var buffer = new ByteArrayOutputStream();
                 var out = new DataOutputStream(buffer)) {
             out.writeInt(splitSerializer.getVersion());
-            if (state instanceof BinlogPendingSplitsState binlog) {
+            if (state instanceof SnapshotPendingSplitsState snapshot) {
+                out.writeInt(SNAPSHOT_PENDING_SPLITS_STATE_FLAG);
+                serializeSnapshotPendingSplitsState(snapshot, out);
+            } else if (state instanceof BinlogPendingSplitsState binlog) {
                 out.writeInt(BINLOG_PENDING_SPLITS_STATE_FLAG);
-                writeBinlog(out, binlog);
+                serializeBinlogPendingSplitsState(binlog, out);
             } else if (state instanceof HybridPendingSplitsState hybrid) {
                 out.writeInt(HYBRID_PENDING_SPLITS_STATE_FLAG);
-                writeHybrid(out, hybrid);
+                serializeHybridPendingSplitsState(hybrid, out);
             } else {
                 throw new IOException(
                         "Unsupported pending splits state: " + state.getClass().getName());
@@ -122,8 +126,10 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
             int kind = in.readInt();
             PendingSplitsState state =
                     switch (kind) {
-                        case BINLOG_PENDING_SPLITS_STATE_FLAG -> readBinlog(in, splitVersion);
-                        case HYBRID_PENDING_SPLITS_STATE_FLAG -> readHybrid(in, splitVersion);
+                        case SNAPSHOT_PENDING_SPLITS_STATE_FLAG ->
+                            deserializeSnapshotPendingSplitsState(in, splitVersion);
+                        case BINLOG_PENDING_SPLITS_STATE_FLAG -> deserializeBinlogPendingSplitsState(in, splitVersion);
+                        case HYBRID_PENDING_SPLITS_STATE_FLAG -> deserializeHybridPendingSplitsState(in, splitVersion);
                         default -> throw new IOException("Unknown MySQL pending splits state kind: " + kind);
                     };
             if (in.available() != 0) {
@@ -135,135 +141,171 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         }
     }
 
-    private void writeBinlog(DataOutputStream out, BinlogPendingSplitsState state) throws IOException {
-        out.writeBoolean(state.splitAssigned());
-        if (!state.splitAssigned()) {
-            writeSplit(out, state.pendingSplit());
-        }
+    // ------------------------------------------------------------------------------------------
+    // Serialize
+    // ------------------------------------------------------------------------------------------
+
+    private void serializeSnapshotPendingSplitsState(SnapshotPendingSplitsState state, DataOutputStream out)
+            throws IOException {
+        // Flink CDC places the Snapshot state before the Hybrid Binlog assignment flag.
+        writeTableIds(out, state.getAlreadyProcessedTables());
+        writeRemainingSplits(out, state.getRemainingSplits());
+        writeAssignedSnapshotSplits(out, state.getAssignedSplits());
+        // YakFlow's completed fence preserves typed chunk boundaries and Debezium 2.7 offsets.
+        MySqlSplitSerializer.writeFinishedSplits(out, state.getFinishedSplitInfos());
+        out.writeInt(state.getSnapshotAssignerStatus().getStatusCode());
+        writeTableIds(out, state.getRemainingTables());
+        out.writeBoolean(state.isTableIdCaseSensitive());
+        out.writeBoolean(state.isRemainingTablesCheckpointed());
+        out.writeBoolean(state.isSnapshotMetaReleased());
+        ChunkRangeStateSerializer.write(out, state.nextChunkRange());
+        out.writeInt(state.nextChunkIndex());
+        out.writeInt(state.nextTableIndex());
+        out.writeBoolean(state.snapshotPlanned());
+        out.writeInt(state.totalSnapshotSplits());
     }
 
-    private BinlogPendingSplitsState readBinlog(DataInputStream in, int splitVersion) throws IOException {
-        boolean assigned = in.readBoolean();
-        MySqlBinlogSplit pending = assigned ? null : (MySqlBinlogSplit) readSplit(in, splitVersion);
-        return new BinlogPendingSplitsState(assigned, pending);
-    }
-
-    private void writeHybrid(DataOutputStream out, HybridPendingSplitsState state) throws IOException {
-        out.writeByte(state.phase().ordinal());
+    private void serializeHybridPendingSplitsState(HybridPendingSplitsState state, DataOutputStream out)
+            throws IOException {
+        serializeSnapshotPendingSplitsState(state.getSnapshotPendingSplits(), out);
         out.writeBoolean(state.isBinlogSplitAssigned());
-        if (state.pendingBinlog() != null) {
-            writeSplit(out, state.pendingBinlog());
+        // YakFlow starts Binlog ahead of Snapshot, unlike Flink's deferred handoff.
+        // Keep the durable early-Binlog anchor and phase as a trailing extension.
+        out.writeByte(state.phase().ordinal());
+        if (!state.isBinlogSplitAssigned()) {
+            writeMySqlSplit(state.pendingBinlog(), out);
         }
         writeOffset(out, state.lowWatermark());
         writeOffset(out, state.highWatermark());
-        SnapshotPendingSplitsState snapshot = state.getSnapshotPendingSplits();
-        out.writeBoolean(snapshot.snapshotPlanned());
-        out.writeInt(snapshot.totalSnapshotSplits());
-        writeSplits(out, snapshot.getRemainingSplits());
-        out.writeInt(snapshot.getAssignedSplits().size());
-        for (var entry : snapshot.getAssignedSplits().entrySet()) {
-            out.writeUTF(entry.getKey());
-            writeSplit(out, entry.getValue());
-        }
-        // FinishedSnapshotSplitInfo already contains the split ID and high watermark.
-        // Do not checkpoint a second, independently mutable finished-ID set.
-        MySqlSplitSerializer.writeFinishedSplits(out, snapshot.getFinishedSplitInfos());
-        out.writeInt(snapshot.nextTableIndex());
-        out.writeInt(
-                snapshot.getChunkSplitterState().getNextChunkId() == null
-                        ? 0
-                        : snapshot.getChunkSplitterState().getNextChunkId());
-        ChunkRangeStateSerializer.write(out, snapshot.nextChunkRange());
-        writeTableIds(out, snapshot.getAlreadyProcessedTables());
-        writeTableIds(out, snapshot.getRemainingTables());
-        out.writeInt(snapshot.getSnapshotAssignerStatus().getStatusCode());
-        out.writeBoolean(snapshot.isTableIdCaseSensitive());
-        out.writeBoolean(snapshot.isRemainingTablesCheckpointed());
-        out.writeBoolean(snapshot.isSnapshotMetaReleased());
     }
 
-    private HybridPendingSplitsState readHybrid(DataInputStream in, int splitVersion) throws IOException {
-        int phaseIndex = in.readUnsignedByte();
-        if (phaseIndex >= HybridPendingSplitsState.Phase.values().length) {
-            throw new IOException("Unknown MySQL hybrid phase");
+    private void serializeBinlogPendingSplitsState(BinlogPendingSplitsState state, DataOutputStream out)
+            throws IOException {
+        out.writeBoolean(state.splitAssigned());
+        if (!state.splitAssigned()) {
+            writeMySqlSplit(state.pendingSplit(), out);
         }
-        boolean binlogAssigned = in.readBoolean();
-        MySqlBinlogSplit pending = binlogAssigned ? null : (MySqlBinlogSplit) readSplit(in, splitVersion);
-        DebeziumOffset low = readOffset(in);
-        DebeziumOffset high = readOffset(in);
-        boolean planned = in.readBoolean();
-        int total = in.readInt();
-        List<MySqlSnapshotSplit> pendingSnapshots = readSplits(in, splitVersion);
-        int assignedCount = boundedCount(in);
-        Map<String, MySqlSnapshotSplit> assigned = new LinkedHashMap<>();
-        for (int i = 0; i < assignedCount; i++) {
-            String id = in.readUTF();
-            MySqlSnapshotSplit split = (MySqlSnapshotSplit) readSplit(in, splitVersion);
-            if (!id.equals(split.splitId()) || assigned.putIfAbsent(id, split) != null) {
-                throw new IOException("Corrupt assigned MySQL snapshot split");
-            }
+    }
+
+    private void writeAssignedSnapshotSplits(DataOutputStream out, Map<String, MySqlSnapshotSplit> assignedSplits)
+            throws IOException {
+        if (assignedSplits.size() > MAX_SPLITS) {
+            throw new IOException("Too many assigned MySQL snapshot splits");
         }
+        out.writeInt(assignedSplits.size());
+        for (Map.Entry<String, MySqlSnapshotSplit> entry : assignedSplits.entrySet()) {
+            out.writeUTF(entry.getKey());
+            writeMySqlSplit(entry.getValue(), out);
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Deserialize
+    // ------------------------------------------------------------------------------------------
+
+    private SnapshotPendingSplitsState deserializeSnapshotPendingSplitsState(DataInputStream in, int splitVersion)
+            throws IOException {
+        List<TableId> alreadyProcessedTables = readTableIds(in);
+        List<MySqlSnapshotSplit> remainingSplits = readMySqlSnapshotSplits(in, splitVersion);
+        Map<String, MySqlSnapshotSplit> assignedSplits = readAssignedSnapshotSplits(in, splitVersion);
         var finishedInfos = MySqlSplitSerializer.readFinishedSplits(in);
-        Set<String> finished = new LinkedHashSet<>();
+        Set<String> finishedIds = new LinkedHashSet<>();
         for (var info : finishedInfos) {
-            if (!finished.add(info.splitId())) {
+            if (!finishedIds.add(info.splitId())) {
                 throw new IOException("Duplicate finished MySQL snapshot split");
             }
         }
-        int nextTable = in.readInt();
-        int nextChunk = in.readInt();
-        ChunkRange typedCursor = ChunkRangeStateSerializer.read(in);
-        List<TableId> alreadyProcessedTables = readTableIds(in);
-        List<TableId> remainingTables = readTableIds(in);
         AssignerStatus status;
         try {
             status = AssignerStatus.fromStatusCode(in.readInt());
         } catch (IllegalStateException invalidStatus) {
             throw new IOException("Unknown MySQL Snapshot Assigner status", invalidStatus);
         }
+        List<TableId> remainingTables = readTableIds(in);
         boolean tableIdCaseSensitive = in.readBoolean();
         boolean remainingTablesCheckpointed = in.readBoolean();
         boolean snapshotMetaReleased = in.readBoolean();
-        SnapshotPendingSplitsState snapshot = new SnapshotPendingSplitsState(
-                planned,
-                total,
-                pendingSnapshots,
-                assigned,
-                finished,
+        ChunkRange nextChunkRange = ChunkRangeStateSerializer.read(in);
+        int nextChunkIndex = in.readInt();
+        int nextTableIndex = in.readInt();
+        boolean snapshotPlanned = in.readBoolean();
+        int totalSnapshotSplits = in.readInt();
+        return new SnapshotPendingSplitsState(
+                snapshotPlanned,
+                totalSnapshotSplits,
+                remainingSplits,
+                assignedSplits,
+                finishedIds,
                 finishedInfos,
-                nextTable,
-                nextChunk,
-                typedCursor,
+                nextTableIndex,
+                nextChunkIndex,
+                nextChunkRange,
                 alreadyProcessedTables,
                 remainingTables,
                 status,
                 tableIdCaseSensitive,
                 remainingTablesCheckpointed,
                 snapshotMetaReleased);
+    }
+
+    private HybridPendingSplitsState deserializeHybridPendingSplitsState(DataInputStream in, int splitVersion)
+            throws IOException {
+        SnapshotPendingSplitsState snapshot = deserializeSnapshotPendingSplitsState(in, splitVersion);
+        boolean binlogAssigned = in.readBoolean();
+        int phaseIndex = in.readUnsignedByte();
+        if (phaseIndex >= HybridPendingSplitsState.Phase.values().length) {
+            throw new IOException("Unknown MySQL hybrid phase");
+        }
+        MySqlBinlogSplit pending =
+                binlogAssigned ? null : readMySqlSplit(in, splitVersion).asBinlogSplit();
+        DebeziumOffset low = readOffset(in);
+        DebeziumOffset high = readOffset(in);
         return new HybridPendingSplitsState(
                 snapshot, binlogAssigned, pending, HybridPendingSplitsState.Phase.values()[phaseIndex], low, high);
     }
 
-    private void writeSplits(DataOutputStream out, List<MySqlSnapshotSplit> splits) throws IOException {
+    private BinlogPendingSplitsState deserializeBinlogPendingSplitsState(DataInputStream in, int splitVersion)
+            throws IOException {
+        boolean assigned = in.readBoolean();
+        MySqlBinlogSplit pending =
+                assigned ? null : readMySqlSplit(in, splitVersion).asBinlogSplit();
+        return new BinlogPendingSplitsState(assigned, pending);
+    }
+
+    private LinkedHashMap<String, MySqlSnapshotSplit> readAssignedSnapshotSplits(DataInputStream in, int splitVersion)
+            throws IOException {
+        int count = boundedCount(in);
+        LinkedHashMap<String, MySqlSnapshotSplit> assigned = new LinkedHashMap<>();
+        for (int i = 0; i < count; i++) {
+            String id = in.readUTF();
+            MySqlSnapshotSplit split = readMySqlSplit(in, splitVersion).asSnapshotSplit();
+            if (!id.equals(split.splitId()) || assigned.putIfAbsent(id, split) != null) {
+                throw new IOException("Corrupt assigned MySQL snapshot split");
+            }
+        }
+        return assigned;
+    }
+
+    private void writeRemainingSplits(DataOutputStream out, List<MySqlSnapshotSplit> splits) throws IOException {
         if (splits.size() > MAX_SPLITS) {
             throw new IOException("Too many MySQL snapshot splits");
         }
         out.writeInt(splits.size());
         for (MySqlSnapshotSplit split : splits) {
-            writeSplit(out, split);
+            writeMySqlSplit(split, out);
         }
     }
 
-    private List<MySqlSnapshotSplit> readSplits(DataInputStream in, int splitVersion) throws IOException {
+    private List<MySqlSnapshotSplit> readMySqlSnapshotSplits(DataInputStream in, int splitVersion) throws IOException {
         int count = boundedCount(in);
         List<MySqlSnapshotSplit> result = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            result.add((MySqlSnapshotSplit) readSplit(in, splitVersion));
+            result.add(readMySqlSplit(in, splitVersion).asSnapshotSplit());
         }
         return result;
     }
 
-    private void writeSplit(DataOutputStream out, MySqlSplit split) throws IOException {
+    private void writeMySqlSplit(MySqlSplit split, DataOutputStream out) throws IOException {
         byte[] bytes = splitSerializer.serialize(split);
         if (bytes.length == 0 || bytes.length > MAX_BYTES) {
             throw new IOException("Invalid nested MySQL split size");
@@ -272,7 +314,7 @@ public final class PendingSplitsStateSerializer implements SimpleVersionedSerial
         out.write(bytes);
     }
 
-    private MySqlSplit readSplit(DataInputStream in, int splitVersion) throws IOException {
+    private MySqlSplit readMySqlSplit(DataInputStream in, int splitVersion) throws IOException {
         int length = in.readInt();
         if (length <= 0 || length > MAX_BYTES || length > in.available()) {
             throw new IOException("Invalid nested MySQL split length");

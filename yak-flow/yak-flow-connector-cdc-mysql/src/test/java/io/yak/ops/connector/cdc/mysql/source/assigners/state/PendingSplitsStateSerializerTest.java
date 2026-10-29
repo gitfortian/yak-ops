@@ -82,16 +82,16 @@ class PendingSplitsStateSerializerTest {
         HybridPendingSplitsState original = new HybridPendingSplitsState(
                 snapshot, true, null, HybridPendingSplitsState.Phase.BOOTSTRAP, null, null);
         byte[] protectedState = serializer.serialize(original);
-        assertThat(serializer.getVersion()).isEqualTo(1);
-        assertThat(serializer.deserialize(1, protectedState)).isEqualTo(original);
+        assertThat(serializer.getVersion()).isEqualTo(2);
+        assertThat(serializer.deserialize(2, protectedState)).isEqualTo(original);
 
         byte[] changed = protectedState.clone();
         changed[16] ^= 0x01;
-        assertThatThrownBy(() -> serializer.deserialize(1, changed))
+        assertThatThrownBy(() -> serializer.deserialize(2, changed))
                 .isInstanceOf(IOException.class).hasMessageContaining("checksum");
         byte[] damagedTail = protectedState.clone();
         damagedTail[damagedTail.length - 1] ^= 0x01;
-        assertThatThrownBy(() -> serializer.deserialize(1, damagedTail))
+        assertThatThrownBy(() -> serializer.deserialize(2, damagedTail))
                 .isInstanceOf(IOException.class).hasMessageContaining("checksum");
         assertThatThrownBy(() -> serializer.deserialize(0, protectedState))
                 .isInstanceOf(IOException.class);
@@ -108,6 +108,48 @@ class PendingSplitsStateSerializerTest {
         assertThat(snapshot.getFinishedSplits()).containsExactly("orders-0");
         assertThatThrownBy(() -> snapshot.getSplitFinishedOffsets().clear())
                 .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void testSnapshotPendingSplitsStateHasFlinkStateFlagAndRoundTrips() throws Exception {
+        TableId table = new TableId("shop", null, "orders");
+        MySqlSnapshotSplit split = new MySqlSnapshotSplit("orders-0", table, 10L, 20L, null);
+        SnapshotPendingSplitsState snapshot = new SnapshotPendingSplitsState(
+                true, 1, List.of(split), Map.of(), Set.of(), List.of(), 0, 0, null);
+        byte[] bytes = serializer.serialize(snapshot);
+        assertThat(java.nio.ByteBuffer.wrap(bytes).getInt(0))
+                .isEqualTo(io.yak.ops.connector.cdc.mysql.source.split.MySqlSplitSerializer.INSTANCE.getVersion());
+        assertThat(java.nio.ByteBuffer.wrap(bytes).getInt(Integer.BYTES)).isEqualTo(1);
+        assertThat(roundTrip(snapshot)).isEqualTo(snapshot);
+    }
+
+    @Test
+    void testHybridSnapshotStatePrecedesBinlogHandoffFields() throws Exception {
+        TableId table = new TableId("shop", null, "orders");
+        MySqlSnapshotSplit split = new MySqlSnapshotSplit("orders-0", table, null, null, null);
+        SnapshotPendingSplitsState snapshot = new SnapshotPendingSplitsState(
+                false, 1, List.of(split), Map.of(), Set.of(), List.of(), 0, 0, null,
+                List.of(table), List.of(), 
+                io.yak.ops.connector.cdc.mysql.source.assigners.AssignerStatus.INITIAL_ASSIGNING,
+                true, true, false);
+        HybridPendingSplitsState hybrid = new HybridPendingSplitsState(
+                snapshot, true, null, HybridPendingSplitsState.Phase.BOOTSTRAP, null, null);
+        byte[] bytes = serializer.serialize(hybrid);
+        assertThat(java.nio.ByteBuffer.wrap(bytes).getInt(Integer.BYTES)).isEqualTo(3);
+        // Immediately after the state flag is Flink CDC's already-processed table count.
+        assertThat(java.nio.ByteBuffer.wrap(bytes).getInt(Integer.BYTES * 2)).isEqualTo(1);
+        assertThat(roundTrip(hybrid)).isEqualTo(hybrid);
+    }
+
+    @Test
+    void testPendingStateSerializedFormCacheIsDefensive() throws Exception {
+        PendingSplitsState state = new BinlogPendingSplitsState(true, null);
+        byte[] baseline = serializer.serialize(state);
+        byte[] mutated = serializer.serialize(state);
+        mutated[0] ^= 0x01;
+        assertThat(serializer.serialize(state)).containsExactly(baseline);
+        assertThat(roundTrip(state)).isEqualTo(state);
+        assertThatThrownBy(() -> serializer.deserialize(1, baseline)).isInstanceOf(IOException.class);
     }
 
     private PendingSplitsState roundTrip(PendingSplitsState state) throws IOException {
