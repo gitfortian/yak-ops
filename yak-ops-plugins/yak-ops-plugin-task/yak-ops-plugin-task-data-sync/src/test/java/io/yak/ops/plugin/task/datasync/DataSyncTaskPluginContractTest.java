@@ -74,8 +74,8 @@ class DataSyncTaskPluginContractTest {
     void parsesJDBCAndMySqlCdcWithoutPersistingPhysicalConnectorState() {
         ReadonlyConfig jdbc = registry.get("DATA_SYNC").parse(4, offlineJson());
         ReadonlyConfig cdc = registry.get("DATA_SYNC").parse(4, realtimeJson());
-        assertEquals("JDBC", JobConfig.from(jdbc).source().get(JobOptions.TYPE));
-        assertEquals("MYSQL_CDC", JobConfig.from(cdc).source().get(JobOptions.TYPE));
+        assertEquals("JDBC", JobConfig.from(jdbc).tables().getFirst().source().get(JobOptions.TYPE));
+        assertEquals("MYSQL_CDC", JobConfig.from(cdc).tables().getFirst().source().get(JobOptions.TYPE));
         var document = JSONUtils.readTree(ConfigParser.toJson(jdbc));
         assertEquals(6, document.size());
         assertEquals("orders", document.path("source").path("tables").get(0).path("table").asText());
@@ -141,21 +141,21 @@ class DataSyncTaskPluginContractTest {
             }
         };
         plugin.validateReferences(parameters, context);
-        assertEquals(null, JobConfig.from(parameters).source().get(JobOptions.DATABASE));
-        assertEquals(null, JobConfig.from(parameters).sink().get(JobOptions.SCHEMA));
+        assertEquals(null, JobConfig.from(parameters).tables().getFirst().source().get(JobOptions.DATABASE));
+        assertEquals(null, JobConfig.from(parameters).tables().getFirst().sink().get(JobOptions.SCHEMA));
     }
 
     @Test
     void validatesAuthorizedMetadataWithoutRewritingExplicitTablePaths() {
         Metadata context = new Metadata();
         ReadonlyConfig parameters = parseAndValidate(realtimeJson(), context);
-        assertEquals("MYSQL_CDC", JobConfig.from(parameters).source().get(JobOptions.TYPE));
-        assertEquals(null, JobConfig.from(parameters).source().get(JobOptions.DATABASE));
-        assertEquals(null, JobConfig.from(parameters).sink().get(JobOptions.SCHEMA));
+        assertEquals("MYSQL_CDC", JobConfig.from(parameters).tables().getFirst().source().get(JobOptions.TYPE));
+        assertEquals(null, JobConfig.from(parameters).tables().getFirst().source().get(JobOptions.DATABASE));
+        assertEquals(null, JobConfig.from(parameters).tables().getFirst().sink().get(JobOptions.SCHEMA));
         assertEquals("app", context.lastSourceTable.catalog());
         assertEquals("ods", context.lastTargetTable.schema());
         ReadonlyConfig bounded = parseAndValidate(offlineJson(), context);
-        assertEquals("JDBC", JobConfig.from(bounded).source().get(JobOptions.TYPE));
+        assertEquals("JDBC", JobConfig.from(bounded).tables().getFirst().source().get(JobOptions.TYPE));
     }
 
     @Test
