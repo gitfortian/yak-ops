@@ -31,9 +31,9 @@ class DataSyncProductParametersTest {
         var parameters = plugin.parse(json(false));
         var config = JobConfig.from(parameters);
         assertEquals(SolutionType.SINGLE_TABLE_OFFLINE, config.solutionType());
-        assertEquals("JDBC", config.source().get(JobOptions.TYPE));
-        assertEquals("orders", config.source().get(JobOptions.TABLE));
-        assertEquals("copy", config.sink().get(JobOptions.TABLE));
+        assertEquals("JDBC", config.tables().getFirst().source().get(JobOptions.TYPE));
+        assertEquals("orders", config.tables().getFirst().source().get(JobOptions.TABLE));
+        assertEquals("copy", config.tables().getFirst().sink().get(JobOptions.TABLE));
         String stored = ConfigParser.toJson(parameters);
         assertTrue(stored.contains("\"tables\""));
         assertFalse(stored.contains("tableMappings"));
@@ -66,7 +66,7 @@ class DataSyncProductParametersTest {
         var parsed = plugin.parse(4, latest);
         var job = JobConfig.from(parsed);
         assertEquals(List.of(Step.INCREMENTAL), job.steps());
-        assertEquals("latest-offset", job.source().get(MySqlSourceOptions.SCAN_STARTUP_MODE));
+        assertEquals("latest-offset", job.tables().getFirst().source().get(MySqlSourceOptions.SCAN_STARTUP_MODE));
         assertFalse(plugin.supportsScheduling(parsed));
         assertEquals(parsed, plugin.parse(4, ConfigParser.toJson(parsed)));
         plugin.validateReferences(parsed, new DataSyncTaskPluginContractTest.Metadata());
@@ -95,28 +95,28 @@ class DataSyncProductParametersTest {
             var parsed = plugin.parse(incremental.replace(
                     "\"source\":{\"datasourceId\":\"source\"",
                     "\"source\":{\"datasourceId\":\"source\",\"startup\":{\"mode\":\"" + mode + "\"}"));
-            assertEquals(mode, JobConfig.from(parsed).source().get(MySqlSourceOptions.SCAN_STARTUP_MODE));
+            assertEquals(mode, JobConfig.from(parsed).tables().getFirst().source().get(MySqlSourceOptions.SCAN_STARTUP_MODE));
         }
         var specific = plugin.parse(incremental.replace(
                 "\"source\":{\"datasourceId\":\"source\"",
                 "\"source\":{\"datasourceId\":\"source\",\"startup\":{\"mode\":\"specific-offset\","
                         + "\"file\":\"mysql-bin.000001\",\"pos\":4}"));
-        assertEquals("mysql-bin.000001", JobConfig.from(specific).source().get(
+        assertEquals("mysql-bin.000001", JobConfig.from(specific).tables().getFirst().source().get(
                 MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_FILE));
-        assertEquals(4L, JobConfig.from(specific).source().get(
+        assertEquals(4L, JobConfig.from(specific).tables().getFirst().source().get(
                 MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_POS));
         var timestamp = plugin.parse(incremental.replace(
                 "\"source\":{\"datasourceId\":\"source\"",
                 "\"source\":{\"datasourceId\":\"source\",\"startup\":{\"mode\":\"timestamp\","
                         + "\"timestampMillis\":1700000000000}"));
-        assertEquals(1700000000000L, JobConfig.from(timestamp).source().get(
+        assertEquals(1700000000000L, JobConfig.from(timestamp).tables().getFirst().source().get(
                 MySqlSourceOptions.SCAN_STARTUP_TIMESTAMP_MILLIS));
 
         var snapshot = plugin.parse(realtime.replace(
                 "[\"FULL\",\"INCREMENTAL\"]", "[\"FULL\"]")
                 .replace("\"source\":{\"datasourceId\":\"source\"",
                         "\"source\":{\"datasourceId\":\"source\",\"startup\":{\"mode\":\"snapshot\"}"));
-        assertEquals("snapshot", JobConfig.from(snapshot).source().get(MySqlSourceOptions.SCAN_STARTUP_MODE));
+        assertEquals("snapshot", JobConfig.from(snapshot).tables().getFirst().source().get(MySqlSourceOptions.SCAN_STARTUP_MODE));
     }
 
     @Test
@@ -205,10 +205,10 @@ class DataSyncProductParametersTest {
     void keylessXaIsSinkOwnedAndSnapshotKeyIsSourceOwned() {
         String keyless = keyless("RETRACT", "\"transaction\":{\"mode\":\"CHECKPOINT_XA\"}");
         var config = JobConfig.from(plugin.parse(keyless));
-        assertFalse(config.source().getSourceMap().containsKey("keyless"));
-        assertEquals("bucket", config.source().get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN));
-        assertTrue(config.sink().get(JdbcSinkOptions.XA_ENABLED));
-        assertFalse(config.source().getSourceMap().containsKey("xa"));
+        assertFalse(config.tables().getFirst().source().getSourceMap().containsKey("keyless"));
+        assertEquals("bucket", config.tables().getFirst().source().get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN));
+        assertTrue(config.tables().getFirst().sink().get(JdbcSinkOptions.XA_ENABLED));
+        assertFalse(config.tables().getFirst().source().getSourceMap().containsKey("xa"));
         assertThrows(TaskPluginException.class, () -> plugin.parse(keyless.replace(
                 ",\"transaction\":{\"mode\":\"CHECKPOINT_XA\"}", "")));
         assertThrows(TaskPluginException.class, () -> plugin.parse(keyless.replace("CHECKPOINT_XA", "NONE")));
@@ -245,7 +245,7 @@ class DataSyncProductParametersTest {
         var job = JobConfig.from(plugin.parse(config));
         assertEquals(List.of("bucket"), job.tables().getFirst().targetPrimaryKeys());
         assertEquals(List.of(Step.SCHEMA, Step.FULL, Step.INCREMENTAL), job.steps());
-        assertFalse(job.sink().get(JdbcSinkOptions.XA_ENABLED));
+        assertFalse(job.tables().getFirst().sink().get(JdbcSinkOptions.XA_ENABLED));
         assertThrows(TaskPluginException.class,
                 () -> plugin.parse(config.replace("\"primaryKeys\":[\"bucket\"]",
                         "\"primaryKeys\":[\"bucket\",\"bucket\"]")));
