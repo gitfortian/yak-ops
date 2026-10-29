@@ -36,6 +36,7 @@ FYOIP-4; shared ancestry with upstream is recorded per document.
 | FYOIP-13 | [Data Modeling — Complete Data Standards](FYOIP-13-data-modeling-complete-data-standards.md) | Accepted |
 | FYOIP-14 | [Data Modeling — Metrics](FYOIP-14-data-modeling-metrics.md) | Accepted |
 | FYOIP-15 | [Data Map — Metadata Catalog](FYOIP-15-data-map-metadata-catalog.md) | Accepted |
+| FYOIP-16 | [Data Asset Governance — Workspace Scans and Issue Lifecycle](FYOIP-16-data-asset-governance.md) | Discussion |
 
 New fork proposals use the next unused `FYOIP-N` number; add the document and update
 this index in the same PR.
