@@ -9,7 +9,7 @@ import io.yak.ops.plugin.task.api.TaskValidationException;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
 import io.yak.ops.plugin.task.datasync.config.JobConfig;
 import io.yak.ops.plugin.task.datasync.config.JobOptions;
-import io.yak.ops.plugin.task.datasync.solution.SolutionCatalog;
+import io.yak.ops.plugin.task.datasync.solution.SolutionValidator;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -56,10 +56,10 @@ public final class JobConfigValidator {
             String sinkId = job.targetDataSourceId();
             DataSourceInfo from = context.dataSource(sourceId);
             DataSourceInfo to = context.dataSource(sinkId);
-            SolutionCatalog.validate(job.solutionType(), from.type(), to.type());
-            SolutionCatalog.validateSchemaChanges(
+            SolutionValidator.validate(job.solutionType(), from.type(), to.type());
+            SolutionValidator.validateSchemaChanges(
                     job.solutionType(), from.type(), to.type(), job.schemaChangesEnabled());
-            SolutionCatalog.validateSteps(from.type(), to.type(), job.steps());
+            SolutionValidator.validateSteps(from.type(), to.type(), job.steps());
             if (job.solutionType().supportsScheduling()
                     && job.steps().contains(io.yak.ops.plugin.task.datasync.solution.Step.INCREMENTAL)
                     && (!java.util.Set.of("MYSQL", "POSTGRE_SQL").contains(from.type())
