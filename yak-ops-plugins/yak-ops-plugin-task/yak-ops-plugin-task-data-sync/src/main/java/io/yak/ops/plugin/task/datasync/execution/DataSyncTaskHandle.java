@@ -35,7 +35,7 @@ final class DataSyncTaskHandle implements TaskHandle {
     private final PipelineBuilder builder;
     private final PipelineExecutor executor;
     private final SchemaPreparation preparation;
-    private final io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner incrementalPlanner;
+    private final io.yak.ops.plugin.task.datasync.execution.IncrementalBatchPreparation incrementalPlanner;
     private final CompletableFuture<TaskOutcome> result = new CompletableFuture<>();
     private final CompletableFuture<Optional<TaskRuntimeReference>> reference = new CompletableFuture<>();
     private volatile TableExecutionProgress progress;
@@ -65,7 +65,7 @@ final class DataSyncTaskHandle implements TaskHandle {
             JobPlanner planner,
             PipelineBuilder builder,
             PipelineExecutor executor,
-            io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner incrementalPlanner) {
+            io.yak.ops.plugin.task.datasync.execution.IncrementalBatchPreparation incrementalPlanner) {
         this.incrementalPlanner = incrementalPlanner;
         this.parameters = parameters;
         this.admission = admission;
