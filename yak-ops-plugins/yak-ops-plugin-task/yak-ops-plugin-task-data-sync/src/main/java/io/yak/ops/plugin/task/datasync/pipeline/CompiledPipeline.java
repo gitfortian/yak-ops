@@ -12,7 +12,4 @@ public record CompiledPipeline(StreamGraph graph, Configuration configuration, T
         Objects.requireNonNull(configuration, "configuration");
     }
 
-    public CompiledPipeline(StreamGraph graph, Configuration configuration) {
-        this(graph, configuration, null);
-    }
 }
