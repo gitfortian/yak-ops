@@ -221,6 +221,21 @@ class DataSyncExecutionTest {
     }
 
     @Test
+    void streamOnlyCompilesToContinuousPipelineWithCheckpoint() {
+        Resources resources = new Resources();
+        FactoryUtil factories = new FactoryUtil();
+        JobPlanner planner = new JobPlanner(resources, factories);
+        PipelineBuilder builder = new PipelineBuilder(resources, factories, Path.of("target/data-sync"));
+        var compiled = builder.build(planner.plan(cdcParameters("[\"INCREMENTAL\"]", "latest-offset"), CONTEXT), CONTEXT, false);
+        assertTrue(!compiled.graph().isBounded());
+        var source = assertInstanceOf(
+                MySqlSource.class, compiled.graph().getSourceNodes().getFirst().getSource().orElseThrow());
+        assertTrue(source.startupOptions().isStreamOnly());
+        assertEquals(Duration.ofSeconds(10), compiled.configuration().get(CheckpointingOptions.CHECKPOINTING_INTERVAL));
+        assertEquals(0, resources.openedConnections.get());
+    }
+
+    @Test
     void streamOnlyRejectsUnsupportedSourceParallelismBeforeSubmission() {
         Resources resources = new Resources();
         FactoryUtil factories = new FactoryUtil();
