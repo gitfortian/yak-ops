@@ -136,23 +136,14 @@ public final class JobPlanner {
             }
             sourceFactory.validateDatasource(from.datasourceType());
             sourceFactory.validateSchema(JobOptions.connectorOptions(source), from.schema());
-            SolutionValidator.validate(job.solutionType(), from.datasourceType(), targetInfo.type());
-            SolutionValidator.validateSchemaChanges(
-                    job.solutionType(), from.datasourceType(), targetInfo.type(), job.schemaChangesEnabled());
-            SolutionValidator.validateSteps(from.datasourceType(), targetInfo.type(), job.steps());
-            SolutionValidator.validateCombination(
+            SolutionValidator.validateSelection(
                     factories,
                     job.solutionType(),
                     from.datasourceType(),
                     targetInfo.type(),
                     job.steps(),
+                    job.schemaChangesEnabled(),
                     sink.get(JdbcSinkOptions.WRITE_MODE).name());
-            if (job.solutionType().supportsScheduling()
-                    && job.steps().contains(Step.INCREMENTAL)
-                    && (!java.util.Set.of("MYSQL", "POSTGRE_SQL").contains(from.datasourceType())
-                            || !java.util.Set.of("MYSQL", "POSTGRE_SQL").contains(targetInfo.type()))) {
-                throw new IllegalArgumentException("Offline incremental is limited to MySQL and PostgreSQL");
-            }
             if (!sources.add(from.table()) || !targets.add(targetTable)) {
                 throw new IllegalArgumentException("Duplicate resolved source or destination table");
             }
