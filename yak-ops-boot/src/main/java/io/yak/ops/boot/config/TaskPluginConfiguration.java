@@ -100,9 +100,9 @@ public class TaskPluginConfiguration {
     }
 
     @Bean
-    io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner incrementalBatchPlanner(
+    io.yak.ops.plugin.task.datasync.execution.IncrementalBatchPreparation incrementalBatchPlanner(
             DataSourceLookupService resources, io.yak.ops.plugin.task.api.execution.TaskCursorStore cursors) {
-        return new io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner(resources, cursors);
+        return new io.yak.ops.plugin.task.datasync.execution.IncrementalBatchPreparation(resources, cursors);
     }
 
     @Bean
@@ -110,7 +110,7 @@ public class TaskPluginConfiguration {
             JobPlanner planner,
             PipelineBuilder builder,
             PipelineExecutor executor,
-            io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner incrementalPlanner) {
+            io.yak.ops.plugin.task.datasync.execution.IncrementalBatchPreparation incrementalPlanner) {
         return new DataSyncTaskExecutor(planner, builder, executor, incrementalPlanner);
     }
 
