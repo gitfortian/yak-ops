@@ -18,11 +18,11 @@ class ComponentConfigurationOwnershipTest {
         var saved = ConfigParser.parseJson(keyless("RETRACT", "\"transaction\":{\"mode\":\"CHECKPOINT_XA\"}"));
         var job = JobConfig.from(saved);
         assertEquals(saved, job.parameters());
-        assertFalse(job.source().getSourceMap().containsKey("keyless"));
-        assertEquals("bucket", job.source().get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN));
-        assertFalse(job.source().getSourceMap().containsKey("xa"));
-        assertFalse(job.source().getSourceMap().containsKey("snapshot"));
-        assertTrue(job.sink().get(JdbcSinkOptions.XA_ENABLED));
+        assertFalse(job.tables().getFirst().source().getSourceMap().containsKey("keyless"));
+        assertEquals("bucket", job.tables().getFirst().source().get(MySqlSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN));
+        assertFalse(job.tables().getFirst().source().getSourceMap().containsKey("xa"));
+        assertFalse(job.tables().getFirst().source().getSourceMap().containsKey("snapshot"));
+        assertTrue(job.tables().getFirst().sink().get(JdbcSinkOptions.XA_ENABLED));
         assertFalse(saved.getSourceMap().containsKey(JdbcSinkOptions.XA_ENABLED.key()));
     }
 
@@ -30,11 +30,11 @@ class ComponentConfigurationOwnershipTest {
     void keepsVerifiedTargetKeysOutOfConnectorOptionMaps() {
         var job = JobConfig.from(ConfigParser.parseJson(keyless("UPSERT", "\"primaryKeys\":[\"bucket\"]")));
         assertEquals(List.of("bucket"), job.tables().getFirst().targetPrimaryKeys());
-        assertFalse(job.sink().get(JdbcSinkOptions.XA_ENABLED));
-        assertFalse(job.sink().getSourceMap().containsKey("primaryKeys"));
-        assertFalse(job.source().getSourceMap().containsKey("keyless"));
-        assertEquals("MYSQL_CDC", job.source().get(JobOptions.TYPE));
-        assertEquals("JDBC", job.sink().get(JobOptions.TYPE));
+        assertFalse(job.tables().getFirst().sink().get(JdbcSinkOptions.XA_ENABLED));
+        assertFalse(job.tables().getFirst().sink().getSourceMap().containsKey("primaryKeys"));
+        assertFalse(job.tables().getFirst().source().getSourceMap().containsKey("keyless"));
+        assertEquals("MYSQL_CDC", job.tables().getFirst().source().get(JobOptions.TYPE));
+        assertEquals("JDBC", job.tables().getFirst().sink().get(JobOptions.TYPE));
     }
 
     @Test
@@ -52,8 +52,8 @@ class ComponentConfigurationOwnershipTest {
                 """;
         var job = JobConfig.from(ConfigParser.parseJson(json));
         assertEquals("updated_at", job.tables().getFirst().incremental().column());
-        assertFalse(job.source().getSourceMap().containsKey("incremental"));
-        assertEquals("UPSERT", job.sink().getSourceMap().get("writeMode"));
+        assertFalse(job.tables().getFirst().source().getSourceMap().containsKey("incremental"));
+        assertEquals("UPSERT", job.tables().getFirst().sink().getSourceMap().get("writeMode"));
         assertThrows(IllegalArgumentException.class, () -> JobConfig.from(ConfigParser.parseJson(
                 json.replace("\"mode\":\"UPSERT\"", "\"mode\":\"APPEND\""))));
     }
