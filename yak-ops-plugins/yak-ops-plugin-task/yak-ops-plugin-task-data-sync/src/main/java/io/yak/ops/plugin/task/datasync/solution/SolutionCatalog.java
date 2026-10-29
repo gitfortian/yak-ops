@@ -46,7 +46,8 @@ public final class SolutionCatalog {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Unsupported synchronization solution"));
         if (selected.allowedCombinations().stream()
-                .noneMatch(choice -> choice.steps().equals(steps) && choice.writeModes().contains(writeMode))) {
+                .noneMatch(choice ->
+                        choice.steps().equals(steps) && choice.writeModes().contains(writeMode))) {
             throw new IllegalArgumentException("Unsupported synchronization steps or target write mode");
         }
     }
@@ -127,11 +128,10 @@ public final class SolutionCatalog {
         }
         if (SCHEMA_TYPES.contains(sourceType) && SCHEMA_TYPES.contains(targetType)) {
             applicable.addFirst(Step.SCHEMA);
-            combinations.add(
-                    new Solution.Combination(
-                            List.of(Step.SCHEMA, Step.FULL),
-                            type.supportsScheduling(),
-                            type.supportsScheduling() ? writes : List.of("UPSERT")));
+            combinations.add(new Solution.Combination(
+                    List.of(Step.SCHEMA, Step.FULL),
+                    type.supportsScheduling(),
+                    type.supportsScheduling() ? writes : List.of("UPSERT")));
             if (supportedIncremental) {
                 combinations.add(new Solution.Combination(
                         List.of(Step.SCHEMA, Step.FULL, Step.INCREMENTAL), true, List.of("UPSERT")));
