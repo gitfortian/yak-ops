@@ -16,6 +16,29 @@ public final class SolutionValidator {
 
     private SolutionValidator() {}
 
+    /**
+     * Single business rule entry for publication and physical admission.
+     * Connector factories still own their own option and schema constraints.
+     */
+    public static void validateSelection(
+            FactoryUtil factories,
+            SolutionType type,
+            String sourceType,
+            String targetType,
+            List<Step> steps,
+            boolean schemaChangesEnabled,
+            String writeMode) {
+        validate(type, sourceType, targetType);
+        validateSchemaChanges(type, sourceType, targetType, schemaChangesEnabled);
+        validateSteps(sourceType, targetType, steps);
+        if (type.supportsScheduling()
+                && steps.contains(Step.INCREMENTAL)
+                && (!SCHEMA_TYPES.contains(sourceType) || !SCHEMA_TYPES.contains(targetType))) {
+            throw new IllegalArgumentException("Offline incremental is limited to MySQL and PostgreSQL");
+        }
+        validateCombination(factories, type, sourceType, targetType, steps, writeMode);
+    }
+
     /** Validates one selected step/write combination against the catalog's advertised choices. */
     public static void validateCombination(
             FactoryUtil factories,
