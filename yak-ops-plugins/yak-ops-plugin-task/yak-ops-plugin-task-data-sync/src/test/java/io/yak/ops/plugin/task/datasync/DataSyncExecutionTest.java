@@ -92,8 +92,8 @@ class DataSyncExecutionTest {
         JobPlanner planner = new JobPlanner(resources, new FactoryUtil());
         ReadonlyConfig parameters = parameters(true);
         JobPlan prepared = planner.plan(parameters, CONTEXT);
-        assertEquals(JobConfig.from(parameters).source(), prepared.tables().getFirst().sourceParameters());
-        assertEquals(JobConfig.from(parameters).sink(), prepared.tables().getFirst().sinkParameters());
+        assertEquals(JobConfig.from(parameters).tables().getFirst().source(), prepared.tables().getFirst().sourceParameters());
+        assertEquals(JobConfig.from(parameters).tables().getFirst().sink(), prepared.tables().getFirst().sinkParameters());
         assertEquals("orders", prepared.tables().getFirst().source().table().table());
         assertEquals("ods_orders", prepared.tables().getFirst().targetTable().table());
         assertEquals(planner.admissionPlan(parameters, CONTEXT), prepared.admissionPlan());
