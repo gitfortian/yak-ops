@@ -362,8 +362,8 @@ class DataSyncExecutionTest {
         var sourceConfig = mysql.config();
         assertEquals(64, sourceConfig.queueCapacity());
         JobPlan prepared = planner.plan(parameters, CONTEXT);
-        assertEquals(prepared.sourceOptions().get(MySqlSourceOptions.SERVER_ID), Integer.toString(sourceConfig.serverId()));
-        assertEquals(prepared.sourceOptions().get(MySqlSourceOptions.TOPIC_PREFIX), sourceConfig.topicPrefix());
+        assertEquals(prepared.tables().getFirst().sourceOptions().get(MySqlSourceOptions.SERVER_ID), Integer.toString(sourceConfig.serverId()));
+        assertEquals(prepared.tables().getFirst().sourceOptions().get(MySqlSourceOptions.TOPIC_PREFIX), sourceConfig.topicPrefix());
         assertEquals(false, compiled.configuration().get(CheckpointingOptions.RESTORE_LATEST));
         assertEquals(2, resources.connections.get());
         assertEquals(0, resources.openedConnections.get());
@@ -446,7 +446,7 @@ class DataSyncExecutionTest {
         assertEquals("secret", sinkConnection.password());
         assertEquals("not-the-datasource-password", sourceSettings.get(JdbcConnectionOptions.PASSWORD));
         assertTrue(!compiled.configuration().contains(JdbcConnectionOptions.PASSWORD));
-        assertTrue(!plan.sourceOptions().contains(JdbcConnectionOptions.PASSWORD));
+        assertTrue(!plan.tables().getFirst().sourceOptions().contains(JdbcConnectionOptions.PASSWORD));
         assertEquals(0, resources.openedConnections.get());
     }
 
