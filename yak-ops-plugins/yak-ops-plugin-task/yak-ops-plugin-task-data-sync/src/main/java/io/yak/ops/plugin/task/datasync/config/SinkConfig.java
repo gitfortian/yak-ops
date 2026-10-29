@@ -1,5 +1,7 @@
 package io.yak.ops.plugin.task.datasync.config;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.yak.ops.configuration.Option;
 import io.yak.ops.configuration.Options;
 import io.yak.ops.configuration.ReadonlyConfig;
@@ -16,7 +18,42 @@ import java.util.List;
 import java.util.Map;
 
 /** Validates one target route's write identity and transactional intent. */
-public record SinkConfig(ReadonlyConfig options, List<String> targetPrimaryKeys) {
+public final class SinkConfig {
+    private final ReadonlyConfig options;
+    private final List<String> targetPrimaryKeys;
+
+    @JsonCreator
+    public SinkConfig(
+            @JsonProperty("options") ReadonlyConfig options,
+            @JsonProperty("targetPrimaryKeys") List<String> targetPrimaryKeys) {
+        if (targetPrimaryKeys != null) targetPrimaryKeys = List.copyOf(targetPrimaryKeys);
+        this.options = options;
+        this.targetPrimaryKeys = targetPrimaryKeys;
+    }
+
+    @JsonProperty("options")
+    public ReadonlyConfig options() {
+        return options;
+    }
+
+    @JsonProperty("targetPrimaryKeys")
+    public List<String> targetPrimaryKeys() {
+        return targetPrimaryKeys;
+    }
+
+    @Override
+    public boolean equals(Object value) {
+        if (this == value) return true;
+        if (!(value instanceof SinkConfig other)) return false;
+        return java.util.Objects.equals(options, other.options)
+                && java.util.Objects.equals(targetPrimaryKeys, other.targetPrimaryKeys);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(options, targetPrimaryKeys);
+    }
+
     public static final Option<String> INPUT = Options.key("input").stringType().noDefaultValue();
     private static final Option<Map<String, Object>> WRITE =
             Options.key("write").mapObjectType().noDefaultValue();
@@ -92,10 +129,6 @@ public record SinkConfig(ReadonlyConfig options, List<String> targetPrimaryKeys)
         physical.put(JdbcSinkOptions.WRITE_MODE.key(), mode.name());
         if (xa) physical.put(JdbcSinkOptions.XA_ENABLED.key(), true);
         return new SinkConfig(ReadonlyConfig.fromMap(physical), keys);
-    }
-
-    public SinkConfig {
-        if (targetPrimaryKeys != null) targetPrimaryKeys = List.copyOf(targetPrimaryKeys);
     }
 
     private static void validate(ReadonlyConfig settings, OptionRule rule, String component) {

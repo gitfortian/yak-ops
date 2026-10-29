@@ -1,5 +1,7 @@
 package io.yak.ops.plugin.task.datasync.config;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.yak.ops.configuration.Option;
 import io.yak.ops.configuration.Options;
 import io.yak.ops.configuration.ReadonlyConfig;
@@ -16,7 +18,41 @@ import java.util.List;
 import java.util.Map;
 
 /** Validates one Source table's read intent and constructs its Connector-scoped inputs. */
-public record SourceConfig(ReadonlyConfig options, IncrementalConfig incremental) {
+public final class SourceConfig {
+    private final ReadonlyConfig options;
+    private final IncrementalConfig incremental;
+
+    @JsonCreator
+    public SourceConfig(
+            @JsonProperty("options") ReadonlyConfig options,
+            @JsonProperty("incremental") IncrementalConfig incremental) {
+        this.options = options;
+        this.incremental = incremental;
+    }
+
+    @JsonProperty("options")
+    public ReadonlyConfig options() {
+        return options;
+    }
+
+    @JsonProperty("incremental")
+    public IncrementalConfig incremental() {
+        return incremental;
+    }
+
+    @Override
+    public boolean equals(Object value) {
+        if (this == value) return true;
+        if (!(value instanceof SourceConfig other)) return false;
+        return java.util.Objects.equals(options, other.options)
+                && java.util.Objects.equals(incremental, other.incremental);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(options, incremental);
+    }
+
     public static final Option<String> ID = Options.key("id").stringType().noDefaultValue();
     private static final Option<Map<String, Object>> SNAPSHOT =
             Options.key("snapshot").mapObjectType().noDefaultValue();
@@ -74,7 +110,7 @@ public record SourceConfig(ReadonlyConfig options, IncrementalConfig incremental
         if (startupOptions != null) {
             physical.put(MySqlSourceOptions.SCAN_STARTUP_MODE.key(), startupOptions.asModeString());
             if (startupOptions.startupMode() == StartupMode.SPECIFIC_OFFSETS) {
-                var offset = startupOptions.binlogOffset;
+                io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset offset = startupOptions.binlogOffset;
                 if (offset.getFilename() != null && !offset.getFilename().isBlank()) {
                     physical.put(MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_FILE.key(), offset.getFilename());
                     physical.put(MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_POS.key(), offset.getPosition());

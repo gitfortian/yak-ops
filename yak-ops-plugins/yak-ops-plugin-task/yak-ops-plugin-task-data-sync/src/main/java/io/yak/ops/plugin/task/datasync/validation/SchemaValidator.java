@@ -156,7 +156,7 @@ public final class SchemaValidator {
                 throw new IllegalArgumentException("Target physical identity or column features are incompatible");
             }
             JdbcMetadataApplier.validateSchema(event, actual.schema());
-            for (var column : actual.schema().columns()) {
+            for (Column column : actual.schema().columns()) {
                 ColumnProperties properties = actual.columnProperties().get(column.name());
                 if (properties == null) {
                     throw new IllegalArgumentException("Target column properties unavailable: " + column.name());

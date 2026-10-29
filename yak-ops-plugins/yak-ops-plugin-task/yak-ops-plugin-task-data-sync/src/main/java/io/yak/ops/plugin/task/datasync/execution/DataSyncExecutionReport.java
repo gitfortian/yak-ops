@@ -57,8 +57,8 @@ final class DataSyncExecutionReport {
         Map<TableId, TableMetrics.Snapshot> snapshot = metrics.snapshot();
         long total = 0;
         long completed = 0;
-        for (var plan : plans) {
-            var value = snapshot.get(plan.source().table());
+        for (TablePlan plan : plans) {
+            TableMetrics.Snapshot value = snapshot.get(plan.source().table());
             if (value == null || value.plannedSplits() == null) return OptionalInt.empty();
             total += value.plannedSplits();
             completed += Math.min(value.completedSplits(), value.plannedSplits());
@@ -78,8 +78,8 @@ final class DataSyncExecutionReport {
         Map<TableId, TableMetrics.Snapshot> snapshot = metrics.snapshot();
         List<TableResult> tables = new ArrayList<>();
         for (int index = 0; index < plans.size(); index++) {
-            var plan = plans.get(index);
-            var value = snapshot.get(plan.source().table());
+            TablePlan plan = plans.get(index);
+            TableMetrics.Snapshot value = snapshot.get(plan.source().table());
             if (value == null) value = new TableMetrics.Snapshot(null, 0, 0, 0, null);
             String state = "WAITING";
             boolean sourceComplete = value.plannedSplits() != null && value.completedSplits() >= value.plannedSplits();
@@ -117,7 +117,7 @@ final class DataSyncExecutionReport {
     }
 
     private RealtimeReport preparedReport(JobStatus status) {
-        var observation = metrics.continuousSnapshot();
+        TableMetrics.ContinuousSnapshot observation = metrics.continuousSnapshot();
         RealtimeReport data = continuous ? realtimeReport(status) : null;
         Report batch = continuous ? null : batchReport(status);
         List<TableStages> tables = new ArrayList<>();
@@ -152,7 +152,7 @@ final class DataSyncExecutionReport {
         } else if (continuous) {
             stages.addAll(data.stages());
         } else {
-            var totals = aggregate(metrics.snapshot());
+            TableMetrics.Snapshot totals = aggregate(metrics.snapshot());
             boolean complete = batch.tables().stream().allMatch(table -> "FINISHED".equals(table.status()));
             String state = complete
                     ? "FINISHED"
@@ -174,7 +174,7 @@ final class DataSyncExecutionReport {
         String observedAt =
                 dataSubmitted && continuous ? data.observedAt() : Instant.now().toString();
         String phase = !dataSubmitted ? "SCHEMA" : continuous ? data.phase() : dataStep;
-        var summary = new RealtimeSummary(
+        RealtimeSummary summary = new RealtimeSummary(
                 3,
                 observedAt,
                 continuous ? observation.generation() : 0,
@@ -245,12 +245,12 @@ final class DataSyncExecutionReport {
     }
 
     private RealtimeReport realtimeReport(JobStatus status) {
-        var observation = metrics.continuousSnapshot();
+        TableMetrics.ContinuousSnapshot observation = metrics.continuousSnapshot();
         List<TableStages> tables = new ArrayList<>();
         for (int index = 0; index < plans.size(); index++) {
-            var id = plans.get(index).source().table();
-            var full = observation.snapshotTables().get(id);
-            var incremental = observation.incrementalTables().get(id);
+            TableId id = plans.get(index).source().table();
+            TableMetrics.Snapshot full = observation.snapshotTables().get(id);
+            TableMetrics.Snapshot incremental = observation.incrementalTables().get(id);
             tables.add(new TableStages(
                     index,
                     "FULL".equals(dataStep)
@@ -259,7 +259,7 @@ final class DataSyncExecutionReport {
                                     stage("INCREMENTAL", incremental, observation, status))
                             : List.of(stage("INCREMENTAL", incremental, observation, status))));
         }
-        var summary = realtimeSummary(status, observation);
+        RealtimeSummary summary = realtimeSummary(status, observation);
         return new RealtimeReport(
                 2,
                 summary.observedAt(),
@@ -296,8 +296,8 @@ final class DataSyncExecutionReport {
         long read = 0;
         long committed = 0;
         String failure = null;
-        for (var plan : plans) {
-            var value = values.get(plan.source().table());
+        for (TablePlan plan : plans) {
+            TableMetrics.Snapshot value = values.get(plan.source().table());
             if (value == null) {
                 planned = null;
                 continue;

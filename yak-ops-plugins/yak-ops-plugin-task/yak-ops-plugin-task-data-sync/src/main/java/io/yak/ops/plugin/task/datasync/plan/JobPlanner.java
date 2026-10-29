@@ -92,13 +92,14 @@ public final class JobPlanner {
         java.util.Set<TableId> sources = new java.util.HashSet<>();
         java.util.Set<TableId> targets = new java.util.HashSet<>();
         StringBuilder bindings = new StringBuilder();
-        for (var mapping : job.tables()) {
+        for (io.yak.ops.plugin.task.datasync.config.TableConfig mapping : job.tables()) {
             ReadonlyConfig source = mapping.source();
             ReadonlyConfig sink = mapping.sink();
             String sourceId = source.get(JobOptions.DATASOURCE_ID);
             String sinkId = sink.get(JobOptions.DATASOURCE_ID);
-            var sourceFactory = factories.source(source.get(JobOptions.TYPE));
-            var sinkFactory = factories.sink(sink.get(JobOptions.TYPE));
+            io.yak.ops.connector.base.factory.TableSourceFactory sourceFactory =
+                    factories.source(source.get(JobOptions.TYPE));
+            io.yak.ops.connector.base.factory.TableSinkFactory sinkFactory = factories.sink(sink.get(JobOptions.TYPE));
             java.util.function.Supplier<DataSourceTable> sourceLookup = () -> resources.table(
                     workspaceId,
                     sourceId,
@@ -196,7 +197,8 @@ public final class JobPlanner {
             if (event != null) {
                 binding += encodePart("SCHEMA") + encodePart(event.getTableComment());
                 binding += encodeProperties(event.getColumnProperties());
-                for (var comment : new java.util.TreeMap<>(event.getColumnComments()).entrySet()) {
+                for (Map.Entry<String, String> comment :
+                        new java.util.TreeMap<>(event.getColumnComments()).entrySet()) {
                     binding += encodePart(comment.getKey()) + encodePart(comment.getValue());
                 }
             }
@@ -243,8 +245,9 @@ public final class JobPlanner {
     /** Physical metadata changes invalidate previously admitted schema plans. */
     private static String encodeProperties(java.util.Map<String, io.yak.ops.core.event.ColumnProperties> properties) {
         StringBuilder value = new StringBuilder();
-        for (var entry : new java.util.TreeMap<>(properties).entrySet()) {
-            var attribute = entry.getValue();
+        for (Map.Entry<String, io.yak.ops.core.event.ColumnProperties> entry :
+                new java.util.TreeMap<>(properties).entrySet()) {
+            io.yak.ops.core.event.ColumnProperties attribute = entry.getValue();
             value.append(encodePart(entry.getKey()))
                     .append(encodePart(attribute.defaultExpression()))
                     .append(encodePart(attribute.onUpdateExpression()))

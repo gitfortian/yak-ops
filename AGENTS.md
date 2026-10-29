@@ -46,12 +46,13 @@ Project rules for humans and coding agents. Follow [Apache Flink's contribution]
 - Organize packages by ownership (`source`, `reader`, `state`, `execution`, `repository`), not mechanical categories. Use `domain` for business concepts and `model` only for a cohesive owned model set; avoid one-type packages and synonym DTO chains.
 - Interfaces express an independent caller/implementation contract; abstract classes share actual behavior/state. Contexts carry one stage's inputs/capabilities, not cross-layer service locators. Resource wrappers must represent real ownership.
 - **Do not introduce production Java `record` declarations.** Existing records are grandfathered; preserve equality, hashing, ownership, serializer formats, and sensitive-data protection when changing them.
+- **Do not use Java `var` in new or modified Yak Ops production code.** Declare explicit local-variable and enhanced-for element types. Existing unrelated uses can be removed gradually; DATA_SYNC production has no `var` declarations.
 - Defensively copy mutable arrays and collections at ownership boundaries, especially when creating checkpoint snapshots.
 - **Do not introduce `Codec` in project-owned Java type, method, or package names.** Use precise terms such as `Parser`, `Serializer`, `Mapper`, and `Converter` when applicable; do not rename third-party identifiers.
 - `normalize` means canonicalization, not parsing, validation, resolution, planning, or applying state. Reserve `*Gate` types for Runtime network I/O boundaries (`InputGate`); do not use `Manager`, `Handler`, `Compiler`, or `Policy` as vague substitutes for an actual responsibility.
 - Avoid redundant package-local prefixes (for example, `Sync*` under `io.yak.ops.plugin.task.datasync`). Preserve meaningful `Jdbc` and `MySqlCdc` qualifiers where they disambiguate public APIs.
 - Keep shared helpers with the module owning their invariant. Naming-only changes must not alter published identifiers, JSON fields, configuration keys, or checkpoint formats; do not add aliases merely to preserve internal names.
-- `python3 scripts/ci/check_backend_naming.py` enforces new Java records, `Codec` symbols, and invalid `*Gate` types. Semantic ownership still requires review.
+- `python3 scripts/ci/check_backend_naming.py` enforces new Java records, `Codec` symbols, invalid `*Gate` types and `var` declarations in DATA_SYNC. Semantic ownership still requires review.
 
 ## Code Quality and Review
 
