@@ -254,7 +254,12 @@ class DataSyncTaskPluginContractTest {
         FactoryUtil factories = new FactoryUtil();
         JobPlanner planner = new JobPlanner(unsupported, factories);
         PipelineBuilder builder = new PipelineBuilder(unsupported, factories, Path.of("test-state"));
-        return new DataSyncTaskPlugin(planner, new DataSyncTaskExecutor(planner, builder, executor), factories);
+        return new DataSyncTaskPlugin(planner, new DataSyncTaskExecutor(
+                        planner,
+                        builder,
+                        executor,
+                        new io.yak.ops.plugin.task.datasync.execution.IncrementalBatchPreparation(
+                                unsupported, (identity, proposed) -> proposed)), factories);
     }
 
     private ReadonlyConfig parseAndValidate(String json, TaskValidationContext context) {
