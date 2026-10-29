@@ -163,9 +163,10 @@ export function CreateSyncTaskDialog({ onClose }: { onClose: () => void }) {
               <FieldLabel required>同步步骤</FieldLabel>
               <div className="flex flex-wrap gap-4">
                 {selected.steps.map((step) => {
-                  const nextSteps = steps.includes(step)
+                  const selectedSteps = steps.includes(step)
                     ? steps.filter((value) => value !== step)
                     : [...steps, step];
+                  const nextSteps = selected.steps.filter((value) => selectedSteps.includes(value));
                   return (
                     <label
                       key={step}
