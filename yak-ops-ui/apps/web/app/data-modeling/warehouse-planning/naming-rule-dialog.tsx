@@ -1,5 +1,6 @@
 import {
   Alert,
+  Badge,
   Button,
   Checkbox,
   Dialog,
@@ -97,7 +98,7 @@ export default function NamingRuleDialog(props: {
         <DialogTitle className="text-sm font-medium">
           命名规则 · {props.layer.cnName}（{props.layer.enCode}）
         </DialogTitle>
-        <DialogDescription className="mt-2 text-xs leading-5 text-[#667085]">
+        <DialogDescription className="mt-2 text-xs leading-5 text-[var(--yak-color-text-secondary)]">
           启用后，该分层下新建或修改的明细表与汇总表，表名后缀必须是
           “词根_业务过程编码”，可再跟一个“_限定词”；词根取自命名词典，总长度不超过 41 个字符。
           维度表、应用表与集市模型不受此规则约束。
@@ -130,19 +131,21 @@ export default function NamingRuleDialog(props: {
             <div>
               <p className="text-xs font-medium">当前不符合规则的模型（{violations.length}）</p>
               {violations.length === 0 ? (
-                <p className="mt-1 text-xs text-[#667085]">没有不符合规则的模型。</p>
+                <p className="mt-1 text-xs text-[var(--yak-color-text-secondary)]">
+                  没有不符合规则的模型。
+                </p>
               ) : (
-                <ul className="mt-2 max-h-48 space-y-1 overflow-auto text-xs text-[#475467]">
+                <ul className="mt-2 max-h-48 space-y-1 overflow-auto text-xs text-[var(--yak-components-field-label)]">
                   {violations.map((row) => (
                     <li key={row.modelId} className="flex min-w-0 items-center gap-2">
-                      <span className="shrink-0 rounded bg-[#f2f4f7] px-1 text-[10px] leading-4 text-[#667085]">
-                        {row.type}
-                      </span>
+                      <Badge className="shrink-0">{row.type}</Badge>
                       <span className="truncate" title={row.name}>
                         {row.name} · {row.cnName}
                       </span>
                       {row.processCode && (
-                        <span className="shrink-0 text-[#98a2b3]">过程 {row.processCode}</span>
+                        <span className="shrink-0 text-[var(--yak-components-muted-text)]">
+                          过程 {row.processCode}
+                        </span>
                       )}
                     </li>
                   ))}
@@ -150,7 +153,7 @@ export default function NamingRuleDialog(props: {
               )}
             </div>
             {enabled && violations.length > 0 && (
-              <label className="flex items-start gap-2 text-xs text-[#475467]">
+              <label className="flex items-start gap-2 text-xs text-[var(--yak-components-field-label)]">
                 <Checkbox
                   checked={acknowledged}
                   disabled={saving}

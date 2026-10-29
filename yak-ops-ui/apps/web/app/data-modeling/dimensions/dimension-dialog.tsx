@@ -131,7 +131,11 @@ export default function DimensionDialog({ existing, tree, initial, onClose, onSa
             </FieldLabel>
             <div>
               <DimensionScopeRadio value={scope} disabled={saving} onChange={changeScope} />
-              {errors.scopeId && <p className="mt-1 text-xs text-[#b42318]">{errors.scopeId}</p>}
+              {errors.scopeId && (
+                <p className="mt-1 text-xs text-[var(--yak-components-badge-danger-text)]">
+                  {errors.scopeId}
+                </p>
+              )}
             </div>
           </Field>
           <SelectField

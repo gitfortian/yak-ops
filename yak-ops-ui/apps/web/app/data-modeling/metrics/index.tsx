@@ -19,7 +19,7 @@ export default function MetricsPage() {
       <PageHeader
         title="数据指标"
         bordered
-        className="bg-white px-6 max-md:px-4"
+        className="bg-[var(--yak-color-background)] px-6 max-md:px-4"
         extra={
           <Button size="small" onClick={changed}>
             刷新
@@ -42,7 +42,7 @@ export default function MetricsPage() {
                 "relative -mb-px border-b-2 px-3 py-2 text-sm transition-colors " +
                 (kind === item
                   ? "border-[var(--yak-color-primary)] font-medium [color:var(--yak-color-primary)]"
-                  : "border-transparent text-[#667085] hover:text-[#344054]")
+                  : "border-transparent text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-field-label)]")
               }
               onClick={() => setKind(item)}
             >

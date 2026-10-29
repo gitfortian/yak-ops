@@ -236,11 +236,13 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
               </Select>
               <FieldError match={Boolean(errors.dataSourceId)}>{errors.dataSourceId}</FieldError>
               {selectedUnavailable ? (
-                <p className="mt-1 text-xs text-[#b54708]">
+                <p className="mt-1 text-xs text-[var(--yak-components-badge-warning-text)]">
                   该数据源连接不可用，启用后发布将无法执行，请先到数据源页测试连接。
                 </p>
               ) : (
-                <p className="mt-1 text-xs text-[#667085]">启用前必须绑定；停用状态可暂不绑定。</p>
+                <p className="mt-1 text-xs text-[var(--yak-color-text-secondary)]">
+                  启用前必须绑定；停用状态可暂不绑定。
+                </p>
               )}
             </div>
           </Field>
@@ -272,11 +274,13 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
                 disabled={saving}
                 onCheckedChange={(checked) => change("enabled", checked)}
               />
-              <span className="text-xs text-[#667085]">{input.enabled ? "启用" : "禁用"}</span>
+              <span className="text-xs text-[var(--yak-color-text-secondary)]">
+                {input.enabled ? "启用" : "禁用"}
+              </span>
             </div>
           </Field>
           {builtin && (
-            <p className="pl-[116px] text-xs text-[#667085]">
+            <p className="pl-[116px] text-xs text-[var(--yak-color-text-secondary)]">
               默认分层只能调整绑定的物理数据源和启用状态。
             </p>
           )}

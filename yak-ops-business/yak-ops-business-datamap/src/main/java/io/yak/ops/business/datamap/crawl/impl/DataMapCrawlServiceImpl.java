@@ -2,6 +2,7 @@ package io.yak.ops.business.datamap.crawl.impl;
 
 import io.yak.ops.business.datamap.crawl.DataMapCrawlRecovery;
 import io.yak.ops.business.datamap.crawl.DataMapCrawlService;
+import io.yak.ops.business.datamap.crawl.DataMapCrawlTaskSpec;
 import io.yak.ops.business.datamap.crawl.DataMapCrawlWorker;
 import io.yak.ops.business.datamap.support.DataMapScope;
 import io.yak.ops.common.bean.dto.datamap.DataMapCrawlSubmitDTO;
@@ -18,6 +19,7 @@ import io.yak.ops.common.page.PageData;
 import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.common.util.IdUtils;
+import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.dao.entity.datamap.DataMapCrawlEntity;
 import io.yak.ops.dao.entity.datamap.DataMapCrawlFailureEntity;
@@ -69,12 +71,16 @@ public class DataMapCrawlServiceImpl implements DataMapCrawlService, DataMapCraw
     private final CountDownLatch recoveryComplete = new CountDownLatch(1);
 
     @Override
-    public PagingData<DataMapCrawlVO> list(String workspaceId, String datasourceId, int pageNo, int pageSize) {
-        String filter = StringUtils.trimToNull(datasourceId);
-        long total = crawlMapper.count(workspaceId, filter);
+    public PagingData<DataMapCrawlVO> list(
+            String workspaceId, String datasourceId, String taskId, int pageNo, int pageSize) {
+        String datasourceFilter = StringUtils.trimToNull(datasourceId);
+        String taskFilter = StringUtils.trimToNull(taskId);
+        long total = crawlMapper.count(workspaceId, datasourceFilter, taskFilter);
         List<DataMapCrawlVO> rows = total == 0
                 ? List.of()
-                : crawlMapper.listPage(workspaceId, filter, pageSize, (pageNo - 1) * pageSize).stream()
+                : crawlMapper
+                        .listPage(workspaceId, datasourceFilter, taskFilter, pageSize, (pageNo - 1) * pageSize)
+                        .stream()
                         .map(DataMapCrawlServiceImpl::toVO)
                         .toList();
         return PagingData.from(PageData.of(rows, total, pageNo, pageSize));
@@ -84,27 +90,14 @@ public class DataMapCrawlServiceImpl implements DataMapCrawlService, DataMapCraw
     public DataMapCrawlVO submit(String workspaceId, String actor, DataMapCrawlSubmitDTO input) {
         awaitRecovery();
         String datasourceId = StringUtils.trimToNull(input.getDatasourceId());
-        DataSourceInfo datasource;
-        try {
-            datasource = dataSourceLookup.dataSource(workspaceId, datasourceId);
-        } catch (RuntimeException failure) {
-            throw new BusinessException(DataMapErrorCode.CRAWL_SCOPE_INVALID);
-        }
+        DataSourceInfo datasource = resolveDatasource(workspaceId, datasourceId);
         // A database is mandatory: inheriting the datasource binding would crawl every visible
         // catalog and store them under one empty identity, so the catalog could never filter by
         // database and same-named tables would overwrite each other.
         String database = StringUtils.trimToNull(input.getDatabase());
         if (database == null) throw new BusinessException(DataMapErrorCode.CRAWL_DATABASE_REQUIRED);
         DataMapScope scope = DataMapScope.resolve(database, input.getSchema(), datasource);
-
-        String excludePattern = StringUtils.trimToNull(input.getExcludePattern());
-        if (excludePattern != null) {
-            try {
-                Pattern.compile(excludePattern);
-            } catch (RuntimeException failure) {
-                throw new BusinessException(DataMapErrorCode.CRAWL_PATTERN_INVALID);
-            }
-        }
+        String excludePattern = validatePattern(input.getExcludePattern());
 
         // A retry re-enumerates exactly the names the source run failed on, in the same namespace;
         // anything else makes the retry either a full run or a no-op wearing a retry badge.
@@ -120,11 +113,105 @@ public class DataMapCrawlServiceImpl implements DataMapCrawlService, DataMapCraw
                 throw new BusinessException(DataMapErrorCode.CRAWL_RETRY_INVALID);
             }
         }
+        return createRun(
+                workspaceId,
+                actor,
+                datasourceId,
+                datasource,
+                scope,
+                excludePattern,
+                null,
+                retryOf,
+                null,
+                DataMapCrawlTriggerType.MANUAL);
+    }
 
+    @Override
+    public DataMapCrawlVO submitTaskRun(
+            String workspaceId,
+            String actor,
+            DataMapCrawlTaskSpec task,
+            DataMapCrawlTriggerType triggerType,
+            String retryOf) {
+        awaitRecovery();
+        String datasourceId = StringUtils.trimToNull(task.datasourceId());
+        DataSourceInfo datasource = resolveDatasource(workspaceId, datasourceId);
+        String database = StringUtils.trimToNull(task.database());
+        if (database == null) throw new BusinessException(DataMapErrorCode.CRAWL_DATABASE_REQUIRED);
+        DataMapScope scope = DataMapScope.resolve(database, task.schema(), datasource);
+        String sourceRunId = validateRetry(workspaceId, task.taskId(), datasourceId, scope, retryOf);
+        String excludePattern = validatePattern(task.excludePattern());
+        String excludeTables =
+                task.excludeTables() == null || task.excludeTables().isEmpty()
+                        ? null
+                        : JSONUtils.toJson(task.excludeTables());
+        return createRun(
+                workspaceId,
+                actor,
+                datasourceId,
+                datasource,
+                scope,
+                excludePattern,
+                excludeTables,
+                sourceRunId,
+                task.taskId(),
+                triggerType);
+    }
+
+    /**
+     * Resolves a retry source that belongs to the same task and namespace and actually failed.
+     * Anything else would make the retry a full run or an empty run wearing a retry badge.
+     */
+    private String validateRetry(
+            String workspaceId, String taskId, String datasourceId, DataMapScope scope, String retryOf) {
+        String sourceRunId = StringUtils.trimToNull(retryOf);
+        if (sourceRunId == null) return null;
+        DataMapCrawlEntity source = crawlMapper.findByIdForWorkspace(workspaceId, sourceRunId);
+        if (source == null
+                || !taskId.equals(source.getTaskId())
+                || !source.getDatasourceId().equals(datasourceId)
+                || !source.getDatabaseName().equals(scope.databaseName())
+                || crawlMapper.listFailures(sourceRunId, 1).isEmpty()) {
+            throw new BusinessException(DataMapErrorCode.CRAWL_RETRY_INVALID);
+        }
+        return sourceRunId;
+    }
+
+    private DataSourceInfo resolveDatasource(String workspaceId, String datasourceId) {
+        try {
+            return dataSourceLookup.dataSource(workspaceId, datasourceId);
+        } catch (RuntimeException failure) {
+            throw new BusinessException(DataMapErrorCode.CRAWL_SCOPE_INVALID);
+        }
+    }
+
+    private static String validatePattern(String excludePattern) {
+        String pattern = StringUtils.trimToNull(excludePattern);
+        if (pattern == null) return null;
+        try {
+            Pattern.compile(pattern);
+        } catch (RuntimeException failure) {
+            throw new BusinessException(DataMapErrorCode.CRAWL_PATTERN_INVALID);
+        }
+        return pattern;
+    }
+
+    private DataMapCrawlVO createRun(
+            String workspaceId,
+            String actor,
+            String datasourceId,
+            DataSourceInfo datasource,
+            DataMapScope scope,
+            String excludePattern,
+            String excludeTables,
+            String retryOf,
+            String taskId,
+            DataMapCrawlTriggerType triggerType) {
         LocalDateTime now = DateUtils.now();
         DataMapCrawlEntity row = new DataMapCrawlEntity();
         row.setId(IdUtils.nextId());
         row.setWorkspaceId(workspaceId);
+        row.setTaskId(taskId);
         row.setDatasourceId(datasourceId);
         row.setDatasourceRevision(datasource.revision());
         row.setDatabaseName(scope.databaseName());
@@ -138,8 +225,9 @@ public class DataMapCrawlServiceImpl implements DataMapCrawlService, DataMapCraw
         row.setRemovedCount(0);
         row.setFailedCount(0);
         row.setFilteredCount(0);
-        row.setTriggerType(DataMapCrawlTriggerType.MANUAL.name());
+        row.setTriggerType(triggerType.name());
         row.setExcludePattern(excludePattern);
+        row.setExcludeTables(excludeTables);
         row.setRetryOf(retryOf);
         row.setCreatedTime(now);
         row.setCreateBy(StringUtils.trimToNull(actor) == null ? CommonConstants.SYSTEM_USER : actor);
@@ -201,6 +289,8 @@ public class DataMapCrawlServiceImpl implements DataMapCrawlService, DataMapCraw
                 : Duration.between(row.getStartedTime(), finished).getSeconds();
         DataMapCrawlVO vo = new DataMapCrawlVO();
         vo.setId(row.getId());
+        vo.setTaskId(row.getTaskId());
+        vo.setTaskName(row.getTaskName());
         vo.setDatasourceId(row.getDatasourceId());
         vo.setDatabase(row.getDatabaseName());
         vo.setSchema(row.getSchemaName());

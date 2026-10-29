@@ -24,3 +24,7 @@ export function isPreviewBusy(error: unknown) {
 export function isSearchTooFrequent(error: unknown) {
   return error instanceof BizError && error.code === 19710;
 }
+
+export function isCronExpressionInvalid(error: unknown) {
+  return error instanceof BizError && error.code === 19718;
+}

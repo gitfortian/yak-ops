@@ -32,7 +32,7 @@ export default function PreviewTab({ tableId }: { tableId: string }) {
     title: (
       <span className="flex flex-col">
         <span className="truncate text-xs font-medium">{column.name}</span>
-        <span className="truncate text-[11px] font-normal text-[var(--yak-components-muted-text)]">
+        <span className="truncate text-xs font-normal text-[var(--yak-components-muted-text)]">
           {column.typeName}
         </span>
       </span>

@@ -12,6 +12,7 @@ import io.yak.ops.common.enums.datamap.DataMapTableChangeType;
 import io.yak.ops.common.enums.datamap.DataMapTableStatus;
 import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.common.util.IdUtils;
+import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.dao.entity.datamap.DataMapColumnEntity;
 import io.yak.ops.dao.entity.datamap.DataMapCrawlEntity;
 import io.yak.ops.dao.entity.datamap.DataMapCrawlFailureEntity;
@@ -112,6 +113,7 @@ public class DataMapCrawlWorker {
     private void execute(DataMapCrawlEntity run) {
         DataMapScope scope = new DataMapScope(run.getDatabaseName(), run.getSchemaName());
         Pattern excluded = compileOrNull(run.getExcludePattern());
+        Set<String> excludedNames = excludedNames(run.getExcludeTables());
         Set<String> retryNames = retryNames(run);
         List<DataSourceCatalogTableVO> tables;
         try {
@@ -158,7 +160,8 @@ public class DataMapCrawlWorker {
             if (!retryNames.isEmpty() && !retryNames.contains(table.getName())) continue;
             // A deliberately excluded table is confirmed present: keep it ACTIVE and refresh its
             // sighting without reading columns, so the missing sweep can never retire it either.
-            if (excluded != null && excluded.matcher(table.getName()).find()) {
+            if (excludedNames.contains(table.getName())
+                    || (excluded != null && excluded.matcher(table.getName()).find())) {
                 keepAlive(run, scope, table);
                 filtered++;
                 continue;
@@ -191,6 +194,19 @@ public class DataMapCrawlWorker {
             LOG.warn("data-map crawl stored an uncompilable exclude pattern; filtering nothing");
             return null;
         }
+    }
+
+    /**
+     * Reads the exact excluded names snapshot of the run.
+     *
+     * <p>An unreadable snapshot fails the run instead of silently crawling excluded tables.
+     *
+     * @param excludeTables JSON array written at submission, or null
+     * @return excluded table names
+     */
+    private static Set<String> excludedNames(String excludeTables) {
+        if (excludeTables == null || excludeTables.isBlank()) return Set.of();
+        return Set.copyOf(JSONUtils.parseList(excludeTables, String.class));
     }
 
     /**

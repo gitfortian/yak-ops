@@ -46,7 +46,7 @@ function EmptyCatalogIllustration() {
         cx="90"
         cy="66"
         r="16"
-        fill="var(--yak-components-table-bg, #fff)"
+        fill="var(--yak-components-table-bg)"
         stroke="currentColor"
         strokeOpacity="0.55"
         strokeWidth="2.5"

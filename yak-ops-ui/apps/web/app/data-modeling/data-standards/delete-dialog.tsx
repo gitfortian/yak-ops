@@ -1,5 +1,6 @@
 import {
   Alert,
+  Badge,
   Button,
   Dialog,
   DialogContent,
@@ -22,12 +23,10 @@ function nameOf(target: DeleteTarget) {
 
 function ReferenceList(props: { items: readonly ReferenceItem[] }) {
   return (
-    <ul className="mt-2 max-h-40 space-y-1 overflow-auto text-xs text-[#475467]">
+    <ul className="mt-2 max-h-40 space-y-1 overflow-auto text-xs text-[var(--yak-components-field-label)]">
       {props.items.map((item) => (
         <li key={item.kind + item.id + item.path} className="flex min-w-0 gap-2">
-          <span className="shrink-0 rounded bg-[#f2f4f7] px-1 text-[10px] leading-4 text-[#667085]">
-            {REFERENCE_KIND_LABEL[item.kind]}
-          </span>
+          <Badge className="shrink-0">{REFERENCE_KIND_LABEL[item.kind]}</Badge>
           <span className="truncate" title={item.path}>
             {item.name}
             {item.path ? " · " + item.path : ""}

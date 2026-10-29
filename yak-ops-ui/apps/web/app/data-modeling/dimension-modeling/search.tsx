@@ -1,5 +1,6 @@
 import {
   Button,
+  Card,
   Input,
   Select,
   SelectContent,
@@ -108,7 +109,7 @@ export default function ModelSearchBar(props: Props) {
   );
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-3 py-2">
+    <Card className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] items-center gap-2 p-3">
       <Input
         size="small"
         variant="outlined"
@@ -177,12 +178,19 @@ export default function ModelSearchBar(props: Props) {
           onChange={(value) => update({ datamartId: value === ALL ? "" : value })}
         />
       )}
-      <Button size="small" onClick={reset} disabled={!isModelSearching(filters) && !keyword.trim()}>
+      <Button
+        size="small"
+        className="justify-self-start"
+        onClick={reset}
+        disabled={!isModelSearching(filters) && !keyword.trim()}
+      >
         清空
       </Button>
       {props.optionsFailed && (
-        <span className="text-[11px] text-[#b54708]">分层或负责人加载失败，其余筛选条件仍可用</span>
+        <span className="text-xs text-[var(--yak-components-badge-warning-text)]">
+          分层或负责人加载失败，其余筛选条件仍可用
+        </span>
       )}
-    </div>
+    </Card>
   );
 }

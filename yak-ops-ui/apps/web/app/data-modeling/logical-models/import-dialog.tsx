@@ -228,7 +228,7 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
     >
       <DialogContent className="w-[1000px] rounded-xl p-5 shadow-none">
         <DialogTitle className="text-sm font-medium">从表/视图导入字段</DialogTitle>
-        <p className="mt-2 text-xs leading-5 text-[#667475]">
+        <p className="mt-2 text-xs leading-5 text-[var(--yak-color-text-secondary)]">
           只读取当前工作空间内的数据源。系统只自动映射语义明确的物理类型；标红的行会保留在字段列表里，
           保存前必须为它选定类型或删除。
         </p>
@@ -306,7 +306,7 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
           )}
         </div>
         {nonProduction && (
-          <div className="mt-3 flex items-start gap-2 rounded-lg border border-[#fecdca] bg-[#fffbfa] px-3 py-2 text-xs text-[#93370d]">
+          <Alert className="mt-3">
             <Checkbox
               aria-label="确认非生产环境"
               checked={envConfirmed}
@@ -317,7 +317,7 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
               {ENV_LABEL[picker.datasource?.environment ?? ""] ?? picker.datasource?.environment}
               」环境读取字段， 请确认连接的是目标库；环境只作提示，不做拦截。
             </span>
-          </div>
+          </Alert>
         )}
         {failureMessages.length > 0 && (
           <div className="mt-3">
@@ -425,7 +425,7 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
           </section>
         </div>
         <div className="mt-4 flex items-center justify-between">
-          <span className="text-xs text-[#667475]">
+          <span className="text-xs text-[var(--yak-color-text-secondary)]">
             已选 {selected.length} 个字段
             {grouped > 0 && `，其中 ${grouped} 个需要选定类型`}
           </span>

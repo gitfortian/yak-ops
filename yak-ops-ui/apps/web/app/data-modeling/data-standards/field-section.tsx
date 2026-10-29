@@ -68,7 +68,9 @@ export default function FieldSection(props: Props) {
         createDisabled={!props.selectedId || props.kindBlocked}
         hint={
           props.kindBlocked ? (
-            <span className="text-xs text-[#667085]">当前标准集存放标准代码</span>
+            <span className="text-xs text-[var(--yak-color-text-secondary)]">
+              当前标准集存放标准代码
+            </span>
           ) : null
         }
         onCreate={() => {

@@ -31,11 +31,11 @@ const columns: TableColumns<TableColumn> = [
     minWidth: 220,
     render: (_value, record) => (
       <span className="flex min-w-0 items-center gap-2">
-        <span className="truncate text-[13px] font-medium text-[var(--yak-components-panel-text)]">
+        <span className="truncate text-sm font-medium text-[var(--yak-components-panel-text)]">
           {record.name}
         </span>
         {record.primaryKey === true && (
-          <span className="shrink-0 rounded-[3px] bg-[var(--yak-datamap-type-numeric-bg)] px-1 text-[10px] font-semibold leading-4 text-[var(--yak-datamap-type-numeric-text)] ring-1 ring-[var(--yak-datamap-type-numeric-text)] ring-inset">
+          <span className="shrink-0 rounded-[3px] bg-[var(--yak-datamap-type-numeric-bg)] px-1 text-xs font-semibold leading-4 text-[var(--yak-datamap-type-numeric-text)] ring-1 ring-[var(--yak-datamap-type-numeric-text)] ring-inset">
             PK
           </span>
         )}
@@ -48,7 +48,7 @@ const columns: TableColumns<TableColumn> = [
     width: 190,
     render: (_value, record) => (
       <span
-        className={`inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[11px] font-medium ${TYPE_CHIP[columnTypeFamily(record.typeName)]}`}
+        className={`inline-flex items-center rounded px-1.5 py-0.5 font-mono text-xs font-medium ${TYPE_CHIP[columnTypeFamily(record.typeName)]}`}
       >
         {formatColumnType(record)}
       </span>
@@ -81,7 +81,7 @@ const columns: TableColumns<TableColumn> = [
     ellipsis: true,
     render: (_value, record) => (
       <span
-        className="block truncate text-[13px] text-[var(--yak-components-muted-text)]"
+        className="block truncate text-sm text-[var(--yak-components-muted-text)]"
         title={record.remarks ?? undefined}
       >
         {record.remarks || "-"}

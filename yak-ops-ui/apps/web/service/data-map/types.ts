@@ -7,6 +7,8 @@ export interface Paging<T> {
 export type TableStatus = "ACTIVE" | "MISSING";
 export type CrawlStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "INTERRUPTED";
 export type CrawlTrigger = "MANUAL" | "SCHEDULED";
+export type CrawlTaskStatus = "DRAFT" | "RUNNING" | "OFFLINE";
+export type CrawlScheduleType = "MANUAL" | "CRON";
 export type PreviewTruncation = "ROWS" | "SIZE";
 
 export interface Tag {
@@ -108,6 +110,8 @@ export interface Preview {
 
 export interface Crawl {
   id: string;
+  taskId: string | null;
+  taskName: string | null;
   datasourceId: string;
   database: string;
   schema: string;
@@ -141,13 +145,46 @@ export interface CrawlDetail {
   failures: CrawlFailure[];
 }
 
-export interface CrawlSubmission {
+export interface CrawlTask {
+  id: string;
+  name: string;
   datasourceId: string;
-  /** Required: a run always targets exactly one database. */
+  database: string;
+  schema: string;
+  ownerId: string;
+  status: CrawlTaskStatus;
+  scheduleType: CrawlScheduleType;
+  cronExpression: string | null;
+  nextFireTime: string | null;
+  excludePattern: string | null;
+  excludeTables: string[];
+  lastRunStatus: CrawlStatus | null;
+  lastRunTime: string | null;
+  createdTime: string;
+  updatedTime: string;
+  createBy: string;
+  updateBy: string;
+}
+
+export interface CrawlTaskSave {
+  name: string;
+  datasourceId: string;
   database: string;
   schema?: string;
-  /** Java regex of table names to keep alive without re-crawling. */
+  ownerId: string;
+  scheduleType: CrawlScheduleType;
+  cronExpression?: string;
   excludePattern?: string;
-  /** Crawl whose failed tables this run re-attempts. */
-  retryOf?: string;
+  excludeTables?: string[];
+  status: CrawlTaskStatus;
+}
+
+export interface CrawlExcludePreview {
+  matchedCount: number;
+  tables: string[];
+  truncated: boolean;
+}
+
+export interface CrawlSchedulePreview {
+  nextFireTimes: string[];
 }
