@@ -24,12 +24,14 @@ public final class SolutionValidator {
             String targetType,
             List<Step> steps,
             String writeMode) {
-        Solution selected = new SolutionCatalog(factories).list(sourceType, targetType).stream()
-                .filter(choice -> choice.solutionType() == type)
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Unsupported synchronization solution"));
+        Solution selected = new SolutionCatalog(factories)
+                .list(sourceType, targetType).stream()
+                        .filter(choice -> choice.solutionType() == type)
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalArgumentException("Unsupported synchronization solution"));
         if (selected.allowedCombinations().stream()
-                .noneMatch(choice -> choice.steps().equals(steps) && choice.writeModes().contains(writeMode))) {
+                .noneMatch(choice ->
+                        choice.steps().equals(steps) && choice.writeModes().contains(writeMode))) {
             throw new IllegalArgumentException("Unsupported synchronization steps or target write mode");
         }
     }
