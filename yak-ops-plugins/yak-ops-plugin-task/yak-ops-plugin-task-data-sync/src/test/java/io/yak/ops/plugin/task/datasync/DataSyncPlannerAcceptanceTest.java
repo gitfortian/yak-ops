@@ -51,7 +51,7 @@ class DataSyncPlannerAcceptanceTest {
 
         var resources = new Metadata();
         var planned = new JobPlanner(resources, new FactoryUtil()).plan(parsed, IDENTITY);
-        assertEquals("orders", planned.source().table().table());
+        assertEquals("orders", planned.tables().getFirst().source().table().table());
         assertEquals("ods_orders", planned.tables().getFirst().targetTable().table());
         assertEquals(1, planned.admissionPlan().exclusiveResources().size());
         assertEquals(0, resources.connectionReads);
