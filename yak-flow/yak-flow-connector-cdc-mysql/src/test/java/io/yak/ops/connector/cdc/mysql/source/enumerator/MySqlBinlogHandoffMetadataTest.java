@@ -45,7 +45,7 @@ class MySqlBinlogHandoffMetadataTest {
     private static final TableId TABLE = new TableId("shop", null, "orders");
 
     @Test
-    void restoredHandoffAssemblesBoundedGroupsBeforeResume() {
+    void restoredHandoffCreatesBinlogOnlyAfterSnapshotCheckpoint() {
         var context = new Context();
         var source = MySqlSource.builder()
                 .hostname("localhost")
@@ -63,33 +63,34 @@ class MySqlBinlogHandoffMetadataTest {
         var enumerator = new MySqlSourceEnumerator(
                 StartupOptions.initial(), context, source.config(), 2, handoffState(), new TableMetrics());
         enumerator.start();
-
-        assertThat(context.toReader0).hasSize(1);
-        var first = (BinlogSplitMetaEvent) context.toReader0.getFirst();
-        assertThat(first.getMetaGroupId()).isZero();
-        assertThat(first.getTotalGroups()).isEqualTo(2);
-        assertThat(first.getTotalFinishedSplitSize()).isEqualTo(3);
-        assertThat(first.getMetaGroup()).hasSize(2);
-        assertThat(first.getBinlogAssignmentGeneration()).isZero();
-
-        assertThatThrownBy(() -> enumerator.handleSourceEvent(
-                        1, new BinlogSplitMetaAssembledEvent(0)))
-                .isInstanceOf(IllegalArgumentException.class);
-        enumerator.handleSourceEvent(0, new BinlogSplitMetaAssembledEvent(1));
-        assertThat(((HybridPendingSplitsState) enumerator.snapshotState(12)).phase())
-                .isEqualTo(HybridPendingSplitsState.Phase.HANDOFF);
+        // The restored state came from an already durable checkpoint and the
+        // Snapshot Assigner can complete its initial transition immediately.
+        assertThat(context.assignedToBinlogReader).hasSize(1);
         assertThat(context.toReader0).noneMatch(MySqlResumeBinlogEvent.class::isInstance);
 
+        enumerator.snapshotState(12);
+        enumerator.notifyCheckpointComplete(11);
+        enumerator.notifyCheckpointComplete(12);
+        assertThat(context.assignedToBinlogReader).hasSize(1);
+        var assigned = (io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit)
+                context.assignedToBinlogReader.getFirst();
+        assertThat(assigned.offset()).isEqualTo(offset(100));
+        assertThat(assigned.finishedSplits()).isEmpty();
+        assertThat(assigned.getTotalFinishedSplitSize()).isEqualTo(3);
+        assertThat(assigned.isCompletedSplit()).isFalse();
+        assertThat(assigned.schemaHistory()).containsExactly(1, 2, 3);
+        // The Reader fetches the same bounded groups as Flink CDC 3.7.
+        enumerator.handleSourceEvent(0, new BinlogSplitMetaRequestEvent(0, 0));
+        BinlogSplitMetaEvent first = (BinlogSplitMetaEvent) context.toReader0.getLast();
+        assertThat(first.getMetaGroupId()).isZero();
+        assertThat(first.getTotalGroups()).isEqualTo(2);
+        assertThat(first.getMetaGroup()).hasSize(2);
         enumerator.handleSourceEvent(0, new BinlogSplitMetaRequestEvent(1, 0));
-        var last = (BinlogSplitMetaEvent) context.toReader0.getLast();
-        assertThat(last.getMetaGroupId()).isEqualTo(1);
-        assertThat(last.getMetaGroup()).hasSize(1);
-
+        BinlogSplitMetaEvent second = (BinlogSplitMetaEvent) context.toReader0.getLast();
+        assertThat(second.getMetaGroupId()).isEqualTo(1);
+        assertThat(second.getMetaGroup()).hasSize(1);
         enumerator.handleSourceEvent(0, new BinlogSplitMetaAssembledEvent(0));
-        assertThat(((HybridPendingSplitsState) enumerator.snapshotState(13)).phase())
-                .isEqualTo(HybridPendingSplitsState.Phase.STREAMING);
-        assertThat(context.toReader0).anyMatch(MySqlResumeBinlogEvent.class::isInstance);
-        assertThat(context.toReader1).anyMatch(MySqlStopSnapshotEvent.class::isInstance);
+        assertThat(context.toReader0).noneMatch(MySqlResumeBinlogEvent.class::isInstance);
         enumerator.close();
     }
 
@@ -198,7 +199,8 @@ class MySqlBinlogHandoffMetadataTest {
         var snapshots = new SnapshotPendingSplitsState(
                 true, 3, List.of(), Map.of(), Set.of("chunk-0", "chunk-1", "chunk-2"), infos, 1, 0, null);
         return new HybridPendingSplitsState(
-                snapshots, true, null, HybridPendingSplitsState.Phase.HANDOFF, offset(50), offset(300));
+                snapshots, false, null, HybridPendingSplitsState.Phase.HANDOFF, null, offset(300),
+                offset(100), new byte[] {1, 2, 3});
     }
 
     private static FinishedSnapshotSplitInfo info(String id, long position) {
@@ -213,6 +215,7 @@ class MySqlBinlogHandoffMetadataTest {
     private static final class Context implements SplitEnumeratorContext<MySqlSplit> {
         private final List<SourceEvent> toReader0 = new ArrayList<>();
         private final List<SourceEvent> toReader1 = new ArrayList<>();
+        private final List<MySqlSplit> assignedToBinlogReader = new ArrayList<>();
 
         @Override
         public int currentParallelism() {
@@ -241,7 +244,9 @@ class MySqlBinlogHandoffMetadataTest {
         }
 
         @Override
-        public void assignSplit(MySqlSplit split, int reader) {}
+        public void assignSplit(MySqlSplit split, int reader) {
+            if (reader == 0) assignedToBinlogReader.add(split);
+        }
 
         @Override
         public void signalNoMoreSplits(int reader) {}

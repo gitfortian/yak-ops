@@ -3,6 +3,7 @@ package io.yak.ops.connector.cdc.mysql.source.assigners.state;
 import io.yak.ops.connector.cdc.mysql.debezium.DebeziumOffset;
 import io.yak.ops.connector.cdc.mysql.source.assigners.AssignerStatus;
 import io.yak.ops.connector.cdc.mysql.source.split.MySqlBinlogSplit;
+import java.util.Arrays;
 import java.util.Objects;
 
 /** A {@link PendingSplitsState} for pending hybrid (snapshot & binlog) splits. */
@@ -21,6 +22,8 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
     private final Phase phase;
     private final DebeziumOffset lowWatermark;
     private final DebeziumOffset highWatermark;
+    private final DebeziumOffset schemaHistoryWatermark;
+    private final byte[] schemaHistory;
 
     public HybridPendingSplitsState(
             SnapshotPendingSplitsState snapshotPendingSplits,
@@ -29,14 +32,39 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
             Phase phase,
             DebeziumOffset lowWatermark,
             DebeziumOffset highWatermark) {
+        this(
+                snapshotPendingSplits,
+                binlogAssigned,
+                pendingBinlog,
+                phase,
+                lowWatermark,
+                highWatermark,
+                null,
+                new byte[0]);
+    }
+
+    public HybridPendingSplitsState(
+            SnapshotPendingSplitsState snapshotPendingSplits,
+            boolean binlogAssigned,
+            MySqlBinlogSplit pendingBinlog,
+            Phase phase,
+            DebeziumOffset lowWatermark,
+            DebeziumOffset highWatermark,
+            DebeziumOffset schemaHistoryWatermark,
+            byte[] schemaHistory) {
+        this.schemaHistoryWatermark = schemaHistoryWatermark;
+        this.schemaHistory =
+                Objects.requireNonNull(schemaHistory, "schemaHistory").clone();
+        if ((schemaHistoryWatermark == null) != (this.schemaHistory.length == 0)) {
+            throw new IllegalArgumentException("Snapshot schema history requires its originating HIGH watermark");
+        }
         this.snapshotPendingSplits = Objects.requireNonNull(snapshotPendingSplits, "snapshotPendingSplits");
         this.phase = Objects.requireNonNull(phase, "phase");
         this.isBinlogSplitAssigned = binlogAssigned;
         this.pendingBinlog = pendingBinlog;
         this.lowWatermark = lowWatermark;
         this.highWatermark = highWatermark;
-        if (binlogAssigned == (pendingBinlog != null)
-                || (phase != Phase.BOOTSTRAP && lowWatermark == null)
+        if ((binlogAssigned && pendingBinlog != null)
                 || ((phase == Phase.HANDOFF || phase == Phase.STREAMING) && highWatermark == null)) {
             throw new IllegalArgumentException("Inconsistent hybrid binlog assignment state");
         }
@@ -66,10 +94,11 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
                 DebeziumOffset maximum = snapshotPendingSplits.getSplitFinishedOffsets().values().stream()
                         .max(DebeziumOffset::compareTo)
                         .orElseThrow();
-                if (highWatermark.compareTo(maximum) != 0 || lowWatermark.compareTo(highWatermark) > 0) {
+                if (highWatermark.compareTo(maximum) != 0
+                        || (lowWatermark != null && lowWatermark.compareTo(highWatermark) > 0)) {
                     throw new IllegalArgumentException("Hybrid checkpoint watermarks are inconsistent");
                 }
-            } else if (lowWatermark.compareTo(highWatermark) > 0) {
+            } else if (lowWatermark != null && lowWatermark.compareTo(highWatermark) > 0) {
                 // During a newly-added-table scan the existing Binlog High watermark remains
                 // authoritative until the new table Snapshot is checkpointed and handed off.
                 throw new IllegalArgumentException("Hybrid checkpoint watermarks are inconsistent");
@@ -101,6 +130,14 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
         return highWatermark;
     }
 
+    public DebeziumOffset schemaHistoryWatermark() {
+        return schemaHistoryWatermark;
+    }
+
+    public byte[] schemaHistory() {
+        return schemaHistory.clone();
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) return true;
@@ -110,13 +147,22 @@ public final class HybridPendingSplitsState extends PendingSplitsState {
                 && Objects.equals(pendingBinlog, state.pendingBinlog)
                 && phase == state.phase
                 && Objects.equals(lowWatermark, state.lowWatermark)
-                && Objects.equals(highWatermark, state.highWatermark);
+                && Objects.equals(highWatermark, state.highWatermark)
+                && Objects.equals(schemaHistoryWatermark, state.schemaHistoryWatermark)
+                && Arrays.equals(schemaHistory, state.schemaHistory);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(
-                snapshotPendingSplits, isBinlogSplitAssigned, pendingBinlog, phase, lowWatermark, highWatermark);
+                snapshotPendingSplits,
+                isBinlogSplitAssigned,
+                pendingBinlog,
+                phase,
+                lowWatermark,
+                highWatermark,
+                schemaHistoryWatermark,
+                Arrays.hashCode(schemaHistory));
     }
 
     @Override
