@@ -5,11 +5,8 @@ import io.yak.ops.core.execution.PipelineExecutor;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskHandle;
-import io.yak.ops.plugin.task.api.execution.TaskStartRejectedException;
-import io.yak.ops.plugin.task.datasync.config.JobConfig;
 import io.yak.ops.plugin.task.datasync.pipeline.PipelineBuilder;
 import io.yak.ops.plugin.task.datasync.plan.JobPlanner;
-import io.yak.ops.plugin.task.datasync.solution.Step;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -47,20 +44,6 @@ public final class DataSyncTaskExecutor {
      */
     public CompletionStage<TaskHandle> start(
             ReadonlyConfig parameters, TaskAdmissionPlan plan, TaskExecutionIdentity identity, boolean debug) {
-        JobConfig config;
-        try {
-            config = JobConfig.from(parameters);
-        } catch (RuntimeException failure) {
-            return CompletableFuture.failedFuture(
-                    new TaskStartRejectedException("Invalid DATA_SYNC configuration", failure));
-        }
-        if (config.solutionType().supportsScheduling()
-                && config.steps().contains(Step.INCREMENTAL)
-                && incrementalPreparation == null) {
-            return CompletableFuture.failedFuture(new TaskStartRejectedException(
-                    "Offline incremental cursor store is unavailable",
-                    new IllegalStateException("No Task cursor store")));
-        }
         return CompletableFuture.completedFuture(new DataSyncTaskHandle(
                 parameters, plan, identity, debug, planner, builder, executor, incrementalPreparation));
     }
