@@ -1,8 +1,8 @@
-# FYOIP-16: Data Map — Model-Published Asset Registration and Crawl Scope Governance
+# FYOIP-18: Data Map — Model-Published Asset Registration and Crawl Scope Governance
 
 Status: Discussion
 
-Discussion: Pending — record the `[DISCUSS][FYOIP-16]` proposal PR URL here before review.
+Discussion: Pending — record the `[DISCUSS][FYOIP-18]` proposal PR URL here before review.
 
 Decision: Pending maintainer review of the registration boundary, the model-owned exclusion protection and the scope-confirmation flow.
 
@@ -145,7 +145,7 @@ Two statements change shape rather than content, and both are where the guarante
 
 **Behavior changes to expect.** 资产目录 grows: published models' tables appear without a crawl, on the normal path within the publish response itself, and stay current even when an exclusion rule matches them. `protected_count` and the `origin` facet are new output. Nothing that was visible becomes invisible, and no endpoint is removed; response payloads gain fields only. The first consumer of `GET /api/v1/data-map/tables` is the bundled UI, which gains the badges and the scope confirmation in the same release.
 
-**Sequencing.** This proposal releases first, and FYOIP-17 may not open its Phase 0 until this one has run in production for at least two weeks with no open P0 or P1 defect attributable to the registration path; starting the registry on release day was refused by the maintainer decision of 2026-10-28. The reason is not the migration count — one forward migration is cheap — it is that a registry is the platform's identity foundation and the column-key change moves a constraint every data-map query depends on; doing both while the registration path is still finding its bugs stacks an unproven write path on top of an unstabilized schema. FYOIP-16 therefore writes its provenance and registration columns onto `yak_ops_data_map_table` and lets FYOIP-17 move them onto the envelope later, which is the accepted cost of ordering rather than a design accident. Estimated 14–20 person-days including the fast path, the sweep, scope confirmation, protection, orphan reconciliation, tests and the UI work.
+**Sequencing.** This proposal releases first, and FYOIP-17 may not open its Phase 0 until this one has run in production for at least two weeks with no open P0 or P1 defect attributable to the registration path; starting the registry on release day was refused by the maintainer decision of 2026-10-28. The reason is not the migration count — one forward migration is cheap — it is that a registry is the platform's identity foundation and the column-key change moves a constraint every data-map query depends on; doing both while the registration path is still finding its bugs stacks an unproven write path on top of an unstabilized schema. FYOIP-18 therefore writes its provenance and registration columns onto `yak_ops_data_map_table` and lets FYOIP-17 move them onto the envelope later, which is the accepted cost of ordering rather than a design accident. Estimated 14–20 person-days including the fast path, the sweep, scope confirmation, protection, orphan reconciliation, tests and the UI work.
 
 Existing checks and constraints stay intact: the identity key, the `NOT NULL DEFAULT ''` namespace columns, `uk_data_map_crawl_active`, the Flyway immutability rule and the ban on `flyway repair` to mask incompatible history. Rollback is forward-only; V10 is not reverted by dropping columns.
 

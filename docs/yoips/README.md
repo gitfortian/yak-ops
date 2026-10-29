@@ -36,8 +36,8 @@ FYOIP-4; shared ancestry with upstream is recorded per document.
 | FYOIP-13 | [Data Modeling — Complete Data Standards](FYOIP-13-data-modeling-complete-data-standards.md) | Accepted |
 | FYOIP-14 | [Data Modeling — Metrics](FYOIP-14-data-modeling-metrics.md) | Accepted |
 | FYOIP-15 | [Data Map — Metadata Catalog](FYOIP-15-data-map-metadata-catalog.md) | Accepted |
-| FYOIP-16 | [Data Map — Model-Published Asset Registration and Crawl Scope Governance](FYOIP-16-model-published-asset-registration.md) | Discussion (proposal PR not yet opened) |
-| FYOIP-17 | [Asset Entity Registry — Unified Identity, Relations and Cross-Type Search](FYOIP-17-asset-entity-registry.md) | Discussion (proposal PR not yet opened; depends on FYOIP-16) |
+| FYOIP-17 | [Asset Entity Registry — Unified Identity, Relations and Cross-Type Search](FYOIP-17-asset-entity-registry.md) | Discussion (proposal PR not yet opened; depends on FYOIP-18) |
+| FYOIP-18 | [Data Map — Model-Published Asset Registration and Crawl Scope Governance](FYOIP-18-model-published-asset-registration.md) | Discussion (proposal PR not yet opened) |
 
 New fork proposals use the next unused `FYOIP-N` number; add the document and update
 this index in the same PR.
