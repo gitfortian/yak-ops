@@ -142,7 +142,24 @@ public final class IncrementalBatchPreparation {
         }
     }
 
-    public record IncrementalRun(JobPlan plan, boolean initialLoad) {
+    /** One frozen incremental batch and its actual initial-load decision. */
+    public static final class IncrementalRun {
+        private final JobPlan plan;
+        private final boolean initialLoad;
+
+        public IncrementalRun(JobPlan plan, boolean initialLoad) {
+            this.plan = Objects.requireNonNull(plan, "plan");
+            this.initialLoad = initialLoad;
+        }
+
+        public JobPlan plan() {
+            return plan;
+        }
+
+        public boolean initialLoad() {
+            return initialLoad;
+        }
+
         /** Rebinds frozen source scan ranges after target DDL readback while preserving admission. */
         public JobPlan apply(JobPlan resolved) {
             if (resolved.tables().size() != plan.tables().size())
