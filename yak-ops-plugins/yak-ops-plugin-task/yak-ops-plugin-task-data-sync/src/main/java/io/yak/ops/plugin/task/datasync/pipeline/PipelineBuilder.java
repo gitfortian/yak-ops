@@ -7,9 +7,9 @@ import io.yak.ops.connector.base.factory.TableSinkFactoryContext;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
-import io.yak.ops.connector.cdc.mysql.source.config.MySqlSourceOptions;
 import io.yak.ops.core.api.connector.sink.MetadataApplier;
 import io.yak.ops.core.api.connector.sink.Sink;
+import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.flow.runtime.graph.StreamGraph;
@@ -110,17 +110,7 @@ public final class PipelineBuilder {
             boolean debug,
             boolean schemaChangesEnabled,
             boolean allowDropColumns) {
-        var first = plan.tables().getFirst();
-        var sourceFactory = factories.source(first.sourceParameters().get(JobOptions.TYPE));
-        boolean continuous = sourceFactory.boundedness() != io.yak.ops.core.api.connector.source.Boundedness.BOUNDED
-                && !"snapshot".equals(first.sourceOptions().get(MySqlSourceOptions.SCAN_STARTUP_MODE));
-        return build(
-                plan,
-                identity,
-                debug,
-                new TableExecutionProgress(plan.tables(), new TableMetrics(), continuous),
-                schemaChangesEnabled,
-                allowDropColumns);
+        return build(plan, identity, debug, null, schemaChangesEnabled, allowDropColumns);
     }
 
     /**
@@ -173,7 +163,7 @@ public final class PipelineBuilder {
                 identity.workspaceId(), sourceId, first.source().revision());
         ReadonlyConfig targetConnection = resources.connectionOptions(
                 identity.workspaceId(), sinkId, first.targetDatasource().revision());
-        TableMetrics metrics = progress.metrics();
+        TableMetrics metrics = progress == null ? new TableMetrics() : progress.metrics();
         List<TableSourceFactoryContext> sourceContexts = new ArrayList<>();
         List<TableSinkFactoryContext> sinkContexts = new ArrayList<>();
         for (var table : plan.tables()) {
@@ -209,7 +199,15 @@ public final class PipelineBuilder {
         input.setUid("data-sync-source-" + identity.definitionId());
         output.setUid("data-sync-sink-" + identity.definitionId());
         StreamGraph graph = new StreamGraphGenerator(output, configuration).generate();
-        return new CompiledPipeline(graph, configuration, progress);
+        TableExecutionProgress observations = progress;
+        if (observations == null) {
+            boolean continuous = source.getBoundedness() != Boundedness.BOUNDED;
+            String dataStep = source instanceof MySqlSource mysql && mysql.startupOptions().isStreamOnly()
+                    ? "INCREMENTAL"
+                    : "FULL";
+            observations = new TableExecutionProgress(plan.tables(), metrics, continuous, dataStep);
+        }
+        return new CompiledPipeline(graph, configuration, observations);
     }
 
     /**
