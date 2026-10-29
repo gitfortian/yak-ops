@@ -1,5 +1,8 @@
 package io.yak.ops.plugin.task.datasync.execution;
 
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import static io.yak.ops.plugin.task.datasync.execution.DataSyncExecutionReport.schemaStage;
 
 import io.yak.ops.connector.base.metrics.TableMetrics;
@@ -115,22 +118,142 @@ public final class TableExecutionProgress {
                 plans, metrics, continuous, dataStep, List.copyOf(schemaStages), dataSubmitted, preparationStopped);
     }
     /** Two completed-checkpoint observations; unavailable restored identifiers remain null. */
-    public record Checkpoints(Long handoffId, Long completedId) {}
+    public static final class Checkpoints {
+    private final Long handoffId;
+    private final Long completedId;
+
+    @JsonCreator
+    public Checkpoints(@JsonProperty("handoffId") Long handoffId, @JsonProperty("completedId") Long completedId) {
+        this.handoffId = handoffId;
+        this.completedId = completedId;
+    }
+
+    @JsonProperty("handoffId")
+    public Long handoffId() {
+        return handoffId;
+    }
+
+    @JsonProperty("completedId")
+    public Long completedId() {
+        return completedId;
+    }
+
+    @Override
+    public boolean equals(Object value) {
+        if (this == value) return true;
+        if (!(value instanceof Checkpoints other)) return false;
+        return java.util.Objects.equals(handoffId, other.handoffId) && java.util.Objects.equals(completedId, other.completedId);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(handoffId, completedId);
+    }
+}
 
     /** Public phase measurements. Incremental percent is always null; counters count input records. */
-    public record StageResult(
-            String step,
-            String status,
-            Integer progressPercent,
-            String progressUnit,
-            Long readRows,
-            Long committedRows,
-            Integer plannedSplits,
-            Long completedSplits,
-            String failureCode,
-            Integer plannedTables,
-            Integer completedTables,
-            String action) {
+    public static final class StageResult {
+    private final String step;
+    private final String status;
+    private final Integer progressPercent;
+    private final String progressUnit;
+    private final Long readRows;
+    private final Long committedRows;
+    private final Integer plannedSplits;
+    private final Long completedSplits;
+    private final String failureCode;
+    private final Integer plannedTables;
+    private final Integer completedTables;
+    private final String action;
+
+    @JsonCreator
+    public StageResult(@JsonProperty("step") String step, @JsonProperty("status") String status, @JsonProperty("progressPercent") Integer progressPercent, @JsonProperty("progressUnit") String progressUnit, @JsonProperty("readRows") Long readRows, @JsonProperty("committedRows") Long committedRows, @JsonProperty("plannedSplits") Integer plannedSplits, @JsonProperty("completedSplits") Long completedSplits, @JsonProperty("failureCode") String failureCode, @JsonProperty("plannedTables") Integer plannedTables, @JsonProperty("completedTables") Integer completedTables, @JsonProperty("action") String action) {
+        this.step = step;
+        this.status = status;
+        this.progressPercent = progressPercent;
+        this.progressUnit = progressUnit;
+        this.readRows = readRows;
+        this.committedRows = committedRows;
+        this.plannedSplits = plannedSplits;
+        this.completedSplits = completedSplits;
+        this.failureCode = failureCode;
+        this.plannedTables = plannedTables;
+        this.completedTables = completedTables;
+        this.action = action;
+    }
+
+    @JsonProperty("step")
+    public String step() {
+        return step;
+    }
+
+    @JsonProperty("status")
+    public String status() {
+        return status;
+    }
+
+    @JsonProperty("progressPercent")
+    public Integer progressPercent() {
+        return progressPercent;
+    }
+
+    @JsonProperty("progressUnit")
+    public String progressUnit() {
+        return progressUnit;
+    }
+
+    @JsonProperty("readRows")
+    public Long readRows() {
+        return readRows;
+    }
+
+    @JsonProperty("committedRows")
+    public Long committedRows() {
+        return committedRows;
+    }
+
+    @JsonProperty("plannedSplits")
+    public Integer plannedSplits() {
+        return plannedSplits;
+    }
+
+    @JsonProperty("completedSplits")
+    public Long completedSplits() {
+        return completedSplits;
+    }
+
+    @JsonProperty("failureCode")
+    public String failureCode() {
+        return failureCode;
+    }
+
+    @JsonProperty("plannedTables")
+    public Integer plannedTables() {
+        return plannedTables;
+    }
+
+    @JsonProperty("completedTables")
+    public Integer completedTables() {
+        return completedTables;
+    }
+
+    @JsonProperty("action")
+    public String action() {
+        return action;
+    }
+
+    @Override
+    public boolean equals(Object value) {
+        if (this == value) return true;
+        if (!(value instanceof StageResult other)) return false;
+        return java.util.Objects.equals(step, other.step) && java.util.Objects.equals(status, other.status) && java.util.Objects.equals(progressPercent, other.progressPercent) && java.util.Objects.equals(progressUnit, other.progressUnit) && java.util.Objects.equals(readRows, other.readRows) && java.util.Objects.equals(committedRows, other.committedRows) && java.util.Objects.equals(plannedSplits, other.plannedSplits) && java.util.Objects.equals(completedSplits, other.completedSplits) && java.util.Objects.equals(failureCode, other.failureCode) && java.util.Objects.equals(plannedTables, other.plannedTables) && java.util.Objects.equals(completedTables, other.completedTables) && java.util.Objects.equals(action, other.action);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(step, status, progressPercent, progressUnit, readRows, committedRows, plannedSplits, completedSplits, failureCode, plannedTables, completedTables, action);
+    }
+
         /** Creates a row-stage observation without schema-preparation counters. */
         public StageResult(
                 String step,
@@ -159,62 +282,346 @@ public final class TableExecutionProgress {
     }
 
     /** Table identity is resolved only from the Instance's immutable mapping version. */
-    public record TableStages(int mappingIndex, List<StageResult> stages) {
-        public TableStages {
-            stages = List.copyOf(stages);
-        }
+    public static final class TableStages {
+    private final int mappingIndex;
+    private final List<StageResult> stages;
+
+    @JsonCreator
+    public TableStages(@JsonProperty("mappingIndex") int mappingIndex, @JsonProperty("stages") List<StageResult> stages) {
+        stages = List.copyOf(stages);
+        this.mappingIndex = mappingIndex;
+        this.stages = stages;
+    }
+
+    @JsonProperty("mappingIndex")
+    public int mappingIndex() {
+        return mappingIndex;
+    }
+
+    @JsonProperty("stages")
+    public List<StageResult> stages() {
+        return stages;
+    }
+
+    @Override
+    public boolean equals(Object value) {
+        if (this == value) return true;
+        if (!(value instanceof TableStages other)) return false;
+        return java.util.Objects.equals(mappingIndex, other.mappingIndex) && java.util.Objects.equals(stages, other.stages);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(mappingIndex, stages);
+    }
+
+        
     }
 
     /** Compact observation for list and batch Instance queries without fetching each table report. */
-    public record RealtimeSummary(
-            int version,
-            String observedAt,
-            long generation,
-            boolean restored,
-            String counterScope,
-            String phase,
-            Checkpoints checkpoints,
-            List<StageResult> stages) {
-        public RealtimeSummary {
-            stages = List.copyOf(stages);
-        }
+    public static final class RealtimeSummary {
+    private final int version;
+    private final String observedAt;
+    private final long generation;
+    private final boolean restored;
+    private final String counterScope;
+    private final String phase;
+    private final Checkpoints checkpoints;
+    private final List<StageResult> stages;
+
+    @JsonCreator
+    public RealtimeSummary(@JsonProperty("version") int version, @JsonProperty("observedAt") String observedAt, @JsonProperty("generation") long generation, @JsonProperty("restored") boolean restored, @JsonProperty("counterScope") String counterScope, @JsonProperty("phase") String phase, @JsonProperty("checkpoints") Checkpoints checkpoints, @JsonProperty("stages") List<StageResult> stages) {
+        stages = List.copyOf(stages);
+        this.version = version;
+        this.observedAt = observedAt;
+        this.generation = generation;
+        this.restored = restored;
+        this.counterScope = counterScope;
+        this.phase = phase;
+        this.checkpoints = checkpoints;
+        this.stages = stages;
+    }
+
+    @JsonProperty("version")
+    public int version() {
+        return version;
+    }
+
+    @JsonProperty("observedAt")
+    public String observedAt() {
+        return observedAt;
+    }
+
+    @JsonProperty("generation")
+    public long generation() {
+        return generation;
+    }
+
+    @JsonProperty("restored")
+    public boolean restored() {
+        return restored;
+    }
+
+    @JsonProperty("counterScope")
+    public String counterScope() {
+        return counterScope;
+    }
+
+    @JsonProperty("phase")
+    public String phase() {
+        return phase;
+    }
+
+    @JsonProperty("checkpoints")
+    public Checkpoints checkpoints() {
+        return checkpoints;
+    }
+
+    @JsonProperty("stages")
+    public List<StageResult> stages() {
+        return stages;
+    }
+
+    @Override
+    public boolean equals(Object value) {
+        if (this == value) return true;
+        if (!(value instanceof RealtimeSummary other)) return false;
+        return java.util.Objects.equals(version, other.version) && java.util.Objects.equals(observedAt, other.observedAt) && java.util.Objects.equals(generation, other.generation) && java.util.Objects.equals(restored, other.restored) && java.util.Objects.equals(counterScope, other.counterScope) && java.util.Objects.equals(phase, other.phase) && java.util.Objects.equals(checkpoints, other.checkpoints) && java.util.Objects.equals(stages, other.stages);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(version, observedAt, generation, restored, counterScope, phase, checkpoints, stages);
+    }
+
+        
     }
 
     /** Full report and its bounded summary are persisted together with the terminal Task outcome. */
-    public record RealtimeReport(
-            int version,
-            String observedAt,
-            long generation,
-            boolean restored,
-            String counterScope,
-            String phase,
-            Checkpoints checkpoints,
-            List<StageResult> stages,
-            List<TableStages> tables,
-            RealtimeSummary summary) {
-        public RealtimeReport {
-            stages = List.copyOf(stages);
-            tables = List.copyOf(tables);
-        }
+    public static final class RealtimeReport {
+    private final int version;
+    private final String observedAt;
+    private final long generation;
+    private final boolean restored;
+    private final String counterScope;
+    private final String phase;
+    private final Checkpoints checkpoints;
+    private final List<StageResult> stages;
+    private final List<TableStages> tables;
+    private final RealtimeSummary summary;
+
+    @JsonCreator
+    public RealtimeReport(@JsonProperty("version") int version, @JsonProperty("observedAt") String observedAt, @JsonProperty("generation") long generation, @JsonProperty("restored") boolean restored, @JsonProperty("counterScope") String counterScope, @JsonProperty("phase") String phase, @JsonProperty("checkpoints") Checkpoints checkpoints, @JsonProperty("stages") List<StageResult> stages, @JsonProperty("tables") List<TableStages> tables, @JsonProperty("summary") RealtimeSummary summary) {
+        stages = List.copyOf(stages);
+        tables = List.copyOf(tables);
+        this.version = version;
+        this.observedAt = observedAt;
+        this.generation = generation;
+        this.restored = restored;
+        this.counterScope = counterScope;
+        this.phase = phase;
+        this.checkpoints = checkpoints;
+        this.stages = stages;
+        this.tables = tables;
+        this.summary = summary;
+    }
+
+    @JsonProperty("version")
+    public int version() {
+        return version;
+    }
+
+    @JsonProperty("observedAt")
+    public String observedAt() {
+        return observedAt;
+    }
+
+    @JsonProperty("generation")
+    public long generation() {
+        return generation;
+    }
+
+    @JsonProperty("restored")
+    public boolean restored() {
+        return restored;
+    }
+
+    @JsonProperty("counterScope")
+    public String counterScope() {
+        return counterScope;
+    }
+
+    @JsonProperty("phase")
+    public String phase() {
+        return phase;
+    }
+
+    @JsonProperty("checkpoints")
+    public Checkpoints checkpoints() {
+        return checkpoints;
+    }
+
+    @JsonProperty("stages")
+    public List<StageResult> stages() {
+        return stages;
+    }
+
+    @JsonProperty("tables")
+    public List<TableStages> tables() {
+        return tables;
+    }
+
+    @JsonProperty("summary")
+    public RealtimeSummary summary() {
+        return summary;
+    }
+
+    @Override
+    public boolean equals(Object value) {
+        if (this == value) return true;
+        if (!(value instanceof RealtimeReport other)) return false;
+        return java.util.Objects.equals(version, other.version) && java.util.Objects.equals(observedAt, other.observedAt) && java.util.Objects.equals(generation, other.generation) && java.util.Objects.equals(restored, other.restored) && java.util.Objects.equals(counterScope, other.counterScope) && java.util.Objects.equals(phase, other.phase) && java.util.Objects.equals(checkpoints, other.checkpoints) && java.util.Objects.equals(stages, other.stages) && java.util.Objects.equals(tables, other.tables) && java.util.Objects.equals(summary, other.summary);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(version, observedAt, generation, restored, counterScope, phase, checkpoints, stages, tables, summary);
+    }
+
+        
     }
 
     /** Report fields contain observations only; the matching table identities come from the pinned definition. */
-    public record Report(int version, String observedAt, List<TableResult> tables) {
-        public Report {
-            tables = List.copyOf(tables);
-        }
+    public static final class Report {
+    private final int version;
+    private final String observedAt;
+    private final List<TableResult> tables;
+
+    @JsonCreator
+    public Report(@JsonProperty("version") int version, @JsonProperty("observedAt") String observedAt, @JsonProperty("tables") List<TableResult> tables) {
+        tables = List.copyOf(tables);
+        this.version = version;
+        this.observedAt = observedAt;
+        this.tables = tables;
+    }
+
+    @JsonProperty("version")
+    public int version() {
+        return version;
+    }
+
+    @JsonProperty("observedAt")
+    public String observedAt() {
+        return observedAt;
+    }
+
+    @JsonProperty("tables")
+    public List<TableResult> tables() {
+        return tables;
+    }
+
+    @Override
+    public boolean equals(Object value) {
+        if (this == value) return true;
+        if (!(value instanceof Report other)) return false;
+        return java.util.Objects.equals(version, other.version) && java.util.Objects.equals(observedAt, other.observedAt) && java.util.Objects.equals(tables, other.tables);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(version, observedAt, tables);
+    }
+
+        
     }
 
     /** One mapping-indexed FULL-stage observation. Rows mean emitted and acknowledged input records, not affected rows. */
-    public record TableResult(
-            int mappingIndex,
-            String step,
-            String status,
-            Integer progressPercent,
-            String progressUnit,
-            long readRows,
-            long committedRows,
-            Integer plannedSplits,
-            long completedSplits,
-            String failureCode) {}
+    public static final class TableResult {
+    private final int mappingIndex;
+    private final String step;
+    private final String status;
+    private final Integer progressPercent;
+    private final String progressUnit;
+    private final long readRows;
+    private final long committedRows;
+    private final Integer plannedSplits;
+    private final long completedSplits;
+    private final String failureCode;
+
+    @JsonCreator
+    public TableResult(@JsonProperty("mappingIndex") int mappingIndex, @JsonProperty("step") String step, @JsonProperty("status") String status, @JsonProperty("progressPercent") Integer progressPercent, @JsonProperty("progressUnit") String progressUnit, @JsonProperty("readRows") long readRows, @JsonProperty("committedRows") long committedRows, @JsonProperty("plannedSplits") Integer plannedSplits, @JsonProperty("completedSplits") long completedSplits, @JsonProperty("failureCode") String failureCode) {
+        this.mappingIndex = mappingIndex;
+        this.step = step;
+        this.status = status;
+        this.progressPercent = progressPercent;
+        this.progressUnit = progressUnit;
+        this.readRows = readRows;
+        this.committedRows = committedRows;
+        this.plannedSplits = plannedSplits;
+        this.completedSplits = completedSplits;
+        this.failureCode = failureCode;
+    }
+
+    @JsonProperty("mappingIndex")
+    public int mappingIndex() {
+        return mappingIndex;
+    }
+
+    @JsonProperty("step")
+    public String step() {
+        return step;
+    }
+
+    @JsonProperty("status")
+    public String status() {
+        return status;
+    }
+
+    @JsonProperty("progressPercent")
+    public Integer progressPercent() {
+        return progressPercent;
+    }
+
+    @JsonProperty("progressUnit")
+    public String progressUnit() {
+        return progressUnit;
+    }
+
+    @JsonProperty("readRows")
+    public long readRows() {
+        return readRows;
+    }
+
+    @JsonProperty("committedRows")
+    public long committedRows() {
+        return committedRows;
+    }
+
+    @JsonProperty("plannedSplits")
+    public Integer plannedSplits() {
+        return plannedSplits;
+    }
+
+    @JsonProperty("completedSplits")
+    public long completedSplits() {
+        return completedSplits;
+    }
+
+    @JsonProperty("failureCode")
+    public String failureCode() {
+        return failureCode;
+    }
+
+    @Override
+    public boolean equals(Object value) {
+        if (this == value) return true;
+        if (!(value instanceof TableResult other)) return false;
+        return java.util.Objects.equals(mappingIndex, other.mappingIndex) && java.util.Objects.equals(step, other.step) && java.util.Objects.equals(status, other.status) && java.util.Objects.equals(progressPercent, other.progressPercent) && java.util.Objects.equals(progressUnit, other.progressUnit) && java.util.Objects.equals(readRows, other.readRows) && java.util.Objects.equals(committedRows, other.committedRows) && java.util.Objects.equals(plannedSplits, other.plannedSplits) && java.util.Objects.equals(completedSplits, other.completedSplits) && java.util.Objects.equals(failureCode, other.failureCode);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(mappingIndex, step, status, progressPercent, progressUnit, readRows, committedRows, plannedSplits, completedSplits, failureCode);
+    }
+}
 }
