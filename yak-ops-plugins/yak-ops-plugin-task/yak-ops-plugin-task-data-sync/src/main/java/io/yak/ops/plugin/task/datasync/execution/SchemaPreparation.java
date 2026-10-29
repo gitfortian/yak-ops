@@ -27,10 +27,11 @@ public final class SchemaPreparation {
     /**
      * Creates or verifies all admitted targets before any data pipeline is submitted.
      *
+     * <p>The execution owner re-plans after DDL to verify the complete admission binding.
+     *
      * @param plan complete admitted table set
      * @param identity trusted Task identity
      * @param progress Task-owned table observations
-     * <p>The execution owner re-plans after DDL to verify the complete admission binding.
      * @throws Exception if any operation, readback, or resource close fails
      */
     public void prepare(JobPlan plan, TaskExecutionIdentity identity, TableExecutionProgress progress)
