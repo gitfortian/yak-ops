@@ -82,7 +82,7 @@ class DataSyncExecutionTest {
         assertEquals(
                 TaskOutcome.FINISHED, handle.completion().toCompletableFuture().join());
         assertEquals(0, resources.openedConnections.get());
-        assertEquals(4, resources.tables.get());
+        assertEquals(6, resources.tables.get());
         assertEquals(2, resources.connections.get());
     }
 
