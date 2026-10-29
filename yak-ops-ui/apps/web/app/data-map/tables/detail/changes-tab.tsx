@@ -88,7 +88,7 @@ export default function ChangesTab({ tableId }: { tableId: string }) {
                   {change.createdTime}
                 </span>
               </div>
-              <p className="mt-1 text-[13px] leading-5 text-[var(--yak-components-panel-text)]">
+              <p className="mt-1 text-sm leading-5 text-[var(--yak-components-panel-text)]">
                 {change.detail || "-"}
               </p>
             </div>

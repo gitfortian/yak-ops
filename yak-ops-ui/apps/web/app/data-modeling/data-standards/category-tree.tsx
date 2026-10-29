@@ -1,4 +1,5 @@
 import {
+  Badge,
   Button,
   DropdownMenu,
   DropdownMenuContent,
@@ -74,9 +75,9 @@ export default function CategoryTree(props: Props) {
                 <Folder size={14} />
                 <span className="truncate">{node.name}</span>
                 {node.nodeType === "STANDARD_SET" && (
-                  <span className="ml-1 shrink-0 rounded border border-[var(--yak-components-panel-border)] px-1 text-[10px] leading-4 text-[#667085]">
+                  <Badge className="ml-1 shrink-0">
                     {node.standardKind ? STANDARD_KIND_LABEL[node.standardKind] : "标准集"}
-                  </span>
+                  </Badge>
                 )}
               </Button>
               <div className="flex opacity-100 md:opacity-0 md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">

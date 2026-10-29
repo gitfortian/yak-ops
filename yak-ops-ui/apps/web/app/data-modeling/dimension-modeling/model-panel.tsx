@@ -100,7 +100,7 @@ export default function ModelPanel(props: Props) {
             {PUBLICATION_STATUS_LABEL[row.latestPublicationStatus]}
           </Badge>
         ) : (
-          <span className="text-xs text-[#98a2b3]">未发布</span>
+          <span className="text-xs text-[var(--yak-components-muted-text)]">未发布</span>
         ),
     },
     {
@@ -130,7 +130,7 @@ export default function ModelPanel(props: Props) {
           <Button
             size="small"
             variant="ghost"
-            className="px-0.5 font-normal text-[#667085] hover:text-[#d92d20]"
+            className="px-0.5 font-normal text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-danger-text)]"
             onClick={() => props.onDelete(row)}
           >
             删除
@@ -154,7 +154,9 @@ export default function ModelPanel(props: Props) {
             <p
               title={description || undefined}
               className={`line-clamp-2 min-w-0 text-xs ${
-                description ? "text-[#667475]" : "text-[#98a2b3]"
+                description
+                  ? "text-[var(--yak-color-text-secondary)]"
+                  : "text-[var(--yak-components-muted-text)]"
               }`}
             >
               {description || "暂无描述"}
@@ -164,7 +166,7 @@ export default function ModelPanel(props: Props) {
         {props.actions && <div className="flex flex-wrap items-center gap-2">{props.actions}</div>}
       </header>
       {props.truncated && (
-        <p className="text-xs text-[#b54708]">
+        <p className="text-xs text-[var(--yak-components-badge-warning-text)]">
           模型数量超过单次加载上限，树中只显示最近 1000 个；右侧列表同样基于这批数据。
         </p>
       )}

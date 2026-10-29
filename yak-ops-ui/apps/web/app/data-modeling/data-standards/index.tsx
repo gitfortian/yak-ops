@@ -73,7 +73,7 @@ export default function DataStandardsPage() {
       <PageHeader
         title="数据标准"
         bordered
-        className="bg-white px-6 max-md:px-4"
+        className="bg-[var(--yak-color-background)] px-6 max-md:px-4"
         extra={
           <Button size="small" disabled={catalog.loading} onClick={changed}>
             刷新
@@ -123,7 +123,7 @@ export default function DataStandardsPage() {
             onDelete={(node) => setDeleting({ kind: "category", node })}
           />
           {!catalog.loading && !catalog.failed && catalog.roots.length === 0 && (
-            <p className="p-3 text-sm text-[#667085]">暂无分类</p>
+            <p className="p-3 text-sm text-[var(--yak-color-text-secondary)]">暂无分类</p>
           )}
         </aside>
         <section className="flex min-h-0 min-w-0 flex-col gap-3">
@@ -142,7 +142,7 @@ export default function DataStandardsPage() {
                   "relative -mb-px border-b-2 px-3 py-2 text-sm transition-colors " +
                   (tab === item.key
                     ? "border-[var(--yak-color-primary)] font-medium [color:var(--yak-color-primary)]"
-                    : "border-transparent text-[#667085] hover:text-[#344054]")
+                    : "border-transparent text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-field-label)]")
                 }
                 onClick={() => setTab(item.key)}
               >

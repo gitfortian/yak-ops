@@ -126,7 +126,11 @@ export default function PublicationHistory({ modelId, refreshKey }: Props) {
       ellipsis: true,
       render: (_, row) => (
         <span
-          className={row.error ? "text-[#b42318]" : "text-[#667475]"}
+          className={
+            row.error
+              ? "text-[var(--yak-components-badge-danger-text)]"
+              : "text-[var(--yak-color-text-secondary)]"
+          }
           title={row.error ?? PUBLICATION_STATUS_HINT[row.status ?? "PENDING"]}
         >
           {row.error ?? PUBLICATION_STATUS_HINT[row.status ?? "PENDING"]}
@@ -166,7 +170,7 @@ export default function PublicationHistory({ modelId, refreshKey }: Props) {
             重新采集
           </Button>
         ) : (
-          <span className="text-xs text-[#98a2b3]">-</span>
+          <span className="text-xs text-[var(--yak-components-muted-text)]">-</span>
         ),
     },
   ];

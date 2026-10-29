@@ -1,6 +1,8 @@
 import {
+  Alert,
   Button,
   Checkbox,
+  FieldRequiredMark,
   Input,
   Select,
   SelectContent,
@@ -41,7 +43,7 @@ interface Props {
 
 type Picker = { mode: "single"; index: number } | { mode: "multiple" };
 
-const cell = "border-b border-[#eaecf0] px-2 py-1.5 align-middle";
+const cell = "border-b border-[var(--yak-components-panel-border)] px-2 py-1.5 align-middle";
 
 export default function FieldEditor({
   rows,
@@ -187,13 +189,15 @@ export default function FieldEditor({
             </Button>
           </>
         )}
-        <span className="text-xs text-[#667475]">
+        <span className="text-xs text-[var(--yak-color-text-secondary)]">
           共 {rows.length} 个字段，主键 {keyCount} 个，分区 {partitionCount} 个
           {allowAggregate && `，度量 ${measureCount} 个`}
         </span>
         {(lookups.status === "error" || units.status === "error") && (
           <>
-            <span className="text-xs text-[#b42318]">标准代码或单位加载失败</span>
+            <span className="text-xs text-[var(--yak-components-badge-danger-text)]">
+              标准代码或单位加载失败
+            </span>
             <Button size="small" onClick={() => setOptionVersion((value) => value + 1)}>
               重试
             </Button>
@@ -201,59 +205,68 @@ export default function FieldEditor({
         )}
       </div>
       {issues.length > 0 && (
-        <ul className="space-y-1 rounded-lg border border-[#fecdca] bg-[#fef3f2] px-3 py-2 text-xs text-[#b42318]">
-          {issues.slice(0, 6).map((issue) => (
-            <li key={`${issue.index}-${issue.field}-${issue.message}`}>
-              第 {issue.index + 1} 行：{issue.message}
-            </li>
-          ))}
-          {issues.length > 6 && <li>另有 {issues.length - 6} 个问题未列出</li>}
-        </ul>
+        <Alert>
+          <ul className="space-y-1">
+            {issues.slice(0, 6).map((issue) => (
+              <li key={`${issue.index}-${issue.field}-${issue.message}`}>
+                第 {issue.index + 1} 行：{issue.message}
+              </li>
+            ))}
+            {issues.length > 6 && <li>另有 {issues.length - 6} 个问题未列出</li>}
+          </ul>
+        </Alert>
       )}
       <div className="min-w-0 overflow-auto rounded-lg border border-[var(--yak-components-panel-border)]">
         <table
           className={`w-full ${allowAggregate ? "min-w-[1850px]" : "min-w-[1740px]"} border-collapse text-xs`}
         >
-          <thead className="sticky top-0 z-10 bg-[#fafafa] text-left text-[#475467]">
+          <thead className="sticky top-0 z-10 bg-[var(--yak-components-table-header-bg)] text-left text-[var(--yak-components-field-label)]">
             <tr>
-              <th className="w-[52px] border-b border-[#eaecf0] px-2 py-2 font-medium">序号</th>
-              <th className="w-[180px] border-b border-[#eaecf0] px-2 py-2 font-medium">
-                中文名<span className="text-[#d92d20]">*</span>
+              <th className="w-[52px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 font-medium">
+                序号
               </th>
-              <th className="w-[200px] border-b border-[#eaecf0] px-2 py-2 font-medium">
-                英文编码<span className="text-[#d92d20]">*</span>
+              <th className="w-[180px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 font-medium">
+                中文名
+                <FieldRequiredMark />
               </th>
-              <th className="w-[128px] border-b border-[#eaecf0] px-2 py-2 font-medium">
-                数据类型<span className="text-[#d92d20]">*</span>
+              <th className="w-[200px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 font-medium">
+                英文编码
+                <FieldRequiredMark />
               </th>
-              <th className="w-[112px] border-b border-[#eaecf0] px-2 py-2 font-medium">
+              <th className="w-[128px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 font-medium">
+                数据类型
+                <FieldRequiredMark />
+              </th>
+              <th className="w-[112px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 font-medium">
                 长度/精度
               </th>
-              <th className="w-[56px] border-b border-[#eaecf0] px-2 py-2 text-center font-medium">
+              <th className="w-[56px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 text-center font-medium">
                 主键
               </th>
-              <th className="w-[56px] border-b border-[#eaecf0] px-2 py-2 text-center font-medium">
+              <th className="w-[56px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 text-center font-medium">
                 非空
               </th>
-              <th className="w-[56px] border-b border-[#eaecf0] px-2 py-2 text-center font-medium">
+              <th className="w-[56px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 text-center font-medium">
                 分区
               </th>
               {allowAggregate && (
-                <th className="w-[128px] border-b border-[#eaecf0] px-2 py-2 font-medium">聚合</th>
+                <th className="w-[128px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 font-medium">
+                  聚合
+                </th>
               )}
-              <th className="w-[176px] border-b border-[#eaecf0] px-2 py-2 font-medium">
+              <th className="w-[176px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 font-medium">
                 数据标准
               </th>
-              <th className="w-[168px] border-b border-[#eaecf0] px-2 py-2 font-medium">
+              <th className="w-[168px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 font-medium">
                 引用标准代码
               </th>
-              <th className="w-[152px] border-b border-[#eaecf0] px-2 py-2 font-medium">
+              <th className="w-[152px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 font-medium">
                 引用单位
               </th>
-              <th className="w-[240px] border-b border-[#eaecf0] px-2 py-2 font-medium">
+              <th className="w-[240px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 font-medium">
                 字段描述
               </th>
-              <th className="w-[124px] border-b border-[#eaecf0] px-2 py-2 text-center font-medium">
+              <th className="w-[124px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 text-center font-medium">
                 操作
               </th>
             </tr>
@@ -265,8 +278,8 @@ export default function FieldEditor({
               // dropped by deleting its row nor by clearing its aggregate.
               const lastMeasure = requireMeasure && row.aggregateType != null && measureCount === 1;
               return (
-                <tr key={row.key} className="hover:bg-[#fcfcfd]">
-                  <td className={`${cell} text-[#667475]`}>{index + 1}</td>
+                <tr key={row.key} className="hover:bg-[var(--yak-color-hover)]">
+                  <td className={`${cell} text-[var(--yak-color-text-secondary)]`}>{index + 1}</td>
                   <td className={cell}>
                     <Input
                       size="small"
@@ -321,7 +334,9 @@ export default function FieldEditor({
                       </SelectContent>
                     </Select>
                     {row.importNote && (
-                      <p className="mt-1 text-[10px] leading-3 text-[#b42318]">{row.importNote}</p>
+                      <p className="mt-1 text-xs leading-4 text-[var(--yak-components-badge-danger-text)]">
+                        {row.importNote}
+                      </p>
                     )}
                   </td>
                   <td className={cell}>
@@ -398,12 +413,12 @@ export default function FieldEditor({
                   <td className={cell}>
                     {bound ? (
                       <div className="flex items-center gap-1">
-                        <span className="truncate font-mono text-[11px]">{row.standardEnCode}</span>
+                        <span className="truncate font-mono text-xs">{row.standardEnCode}</span>
                         <Button
                           size="small"
                           variant="ghost"
                           disabled={disabled}
-                          className="shrink-0 px-0.5 font-normal text-[#667085]"
+                          className="shrink-0 px-0.5 font-normal text-[var(--yak-color-text-secondary)]"
                           onClick={() => patch(index, { standardId: null, standardEnCode: null })}
                         >
                           解绑
@@ -497,7 +512,7 @@ export default function FieldEditor({
                         size="small"
                         variant="ghost"
                         disabled={disabled || index === 0}
-                        className="px-0.5 font-normal text-[#667085]"
+                        className="px-0.5 font-normal text-[var(--yak-color-text-secondary)]"
                         aria-label={`上移第 ${index + 1} 行`}
                         onClick={() => move(index, -1)}
                       >
@@ -507,7 +522,7 @@ export default function FieldEditor({
                         size="small"
                         variant="ghost"
                         disabled={disabled || index === rows.length - 1}
-                        className="px-0.5 font-normal text-[#667085]"
+                        className="px-0.5 font-normal text-[var(--yak-color-text-secondary)]"
                         aria-label={`下移第 ${index + 1} 行`}
                         onClick={() => move(index, 1)}
                       >
@@ -517,7 +532,7 @@ export default function FieldEditor({
                         size="small"
                         variant="ghost"
                         disabled={disabled || lastMeasure}
-                        className="px-0.5 font-normal text-[#667085] hover:text-[#d92d20]"
+                        className="px-0.5 font-normal text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-danger-text)]"
                         aria-label={`删除第 ${index + 1} 行`}
                         title={lastMeasure ? "汇总表至少需要一个度量字段" : undefined}
                         onClick={() => onChange(rows.filter((_, position) => position !== index))}
@@ -533,7 +548,7 @@ export default function FieldEditor({
               <tr>
                 <td
                   colSpan={allowAggregate ? 14 : 13}
-                  className="px-3 py-8 text-center text-[#667475]"
+                  className="px-3 py-8 text-center text-[var(--yak-color-text-secondary)]"
                 >
                   暂无字段，
                   {hideImportActions ? "先添加一行" : "先添加一行、批量录入或从数据标准导入"}

@@ -179,6 +179,28 @@ class DataMapCrawlWorkerTest {
     }
 
     @Test
+    void anExactlyExcludedTableStaysAliveWithoutItsColumns() {
+        ArgumentCaptor<LocalDateTime> claimed = ArgumentCaptor.forClass(LocalDateTime.class);
+        when(crawlMapper.claim(eq("c1"), claimed.capture())).thenReturn(1);
+        DataMapCrawlEntity excludedRun = run();
+        excludedRun.setExcludeTables("[\"tmp_debug\"]");
+        when(crawlMapper.findById("c1")).thenReturn(excludedRun);
+        when(catalogService.listAllTables("ds", "demo", null))
+                .thenReturn(List.of(catalogTable("orders"), catalogTable("tmp_debug")));
+        when(catalogService.listColumns(eq("ds"), any()))
+                .thenReturn(List.of(catalogColumn("id", "INT", null)));
+        when(tableMapper.findByIdentity("ws", "ds", "demo", "", "tmp_debug")).thenReturn(existing());
+
+        worker.run("c1");
+
+        verify(tableMapper)
+                .updateObserved(eq("ws"), eq("t1"), eq("TABLE"), isNull(), eq("ACTIVE"), eq(claimed.getValue()), any());
+        verify(catalogService, never())
+                .listColumns(eq("ds"), argThat(path -> "tmp_debug".equals(path.getTable())));
+        verify(crawlMapper).finishSucceeded(eq("c1"), eq(2), eq(1), eq(1), eq(0), eq(0), eq(0), eq(1), any());
+    }
+
+    @Test
     void aRetryEnumeratesOnlyTheSourceFailuresAndNeverSweeps() {
         when(crawlMapper.claim(eq("c1"), any())).thenReturn(1);
         DataMapCrawlEntity retryRun = run();

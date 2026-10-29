@@ -127,7 +127,7 @@ export default function StandardPicker({ mode, takenCodes, onClose, onPick }: Pr
         <DialogTitle className="text-sm font-medium">
           {mode === "single" ? "绑定数据标准" : "从数据标准导入字段"}
         </DialogTitle>
-        <p className="mt-2 text-xs text-[#667475]">
+        <p className="mt-2 text-xs text-[var(--yak-color-text-secondary)]">
           绑定后字段的编码、类型与长度精度由标准决定，不再手工维护。
         </p>
         <form
@@ -193,7 +193,7 @@ export default function StandardPicker({ mode, takenCodes, onClose, onPick }: Pr
           />
         </div>
         <div className="mt-4 flex items-center justify-between">
-          <span className="text-xs text-[#667475]">
+          <span className="text-xs text-[var(--yak-color-text-secondary)]">
             {mode === "multiple" ? `已选 ${selected.length} 项` : "点击「选择」绑定到当前字段"}
           </span>
           <div className="flex gap-2">

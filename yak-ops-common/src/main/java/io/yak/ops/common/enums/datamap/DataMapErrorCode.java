@@ -40,7 +40,23 @@ public enum DataMapErrorCode implements ErrorCode {
     /** The exclude pattern is not a compilable regular expression. */
     CRAWL_PATTERN_INVALID(19713, "忽略表的正则表达式无法编译，请检查语法"),
     /** The retry source does not exist, belongs to another Workspace or has no failures. */
-    CRAWL_RETRY_INVALID(19714, "重试来源无效或该任务没有失败表");
+    CRAWL_RETRY_INVALID(19714, "重试来源无效或该任务没有失败表"),
+    /** The requested lifecycle transition is not allowed from the current status. */
+    CRAWL_TASK_STATUS_INVALID(19715, "当前任务状态不允许该操作"),
+    /** A running task cannot be deleted or removed mid-run. */
+    CRAWL_TASK_RUNNING(19716, "运行中的任务不能执行该操作，请先下线并等待本次采集结束"),
+    /** Only a draft or offline task can be deleted. */
+    CRAWL_TASK_DELETE_FORBIDDEN(19717, "只有草稿或已下线的任务可以删除"),
+    /** The scheduling expression is missing or cannot be parsed. */
+    CRAWL_TASK_CRON_INVALID(19718, "调度表达式无效，请检查执行周期"),
+    /** Only an online task can be started manually. */
+    CRAWL_TASK_NOT_RUNNABLE(19719, "任务尚未上线，无法执行"),
+    /** The datasource type has no supported regular-expression metadata query. */
+    CRAWL_PREVIEW_UNSUPPORTED(19720, "当前数据源类型不支持正则预览"),
+    /** The datasource could not evaluate the preview expression. */
+    CRAWL_PREVIEW_FAILED(19721, "正则预览查询失败，请稍后重试"),
+    /** The exclusion list exceeds the accepted size. */
+    CRAWL_EXCLUDE_TOO_MANY(19722, "排除表数量不能超过 500 张");
 
     private final Integer code;
     private final String message;

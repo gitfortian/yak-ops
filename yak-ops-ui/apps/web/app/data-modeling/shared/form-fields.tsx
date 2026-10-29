@@ -52,7 +52,9 @@ export function InputField(props: InputFieldProps) {
         />
         <FieldError match={Boolean(props.error)}>{props.error}</FieldError>
         {props.hint && !props.error && (
-          <p className="mt-1 text-[11px] leading-4 text-[#667085]">{props.hint}</p>
+          <p className="mt-1 text-xs leading-4 text-[var(--yak-color-text-secondary)]">
+            {props.hint}
+          </p>
         )}
       </div>
     </Field>
@@ -105,7 +107,9 @@ export function SelectField(props: SelectFieldProps) {
         </Select>
         <FieldError match={Boolean(props.error)}>{props.error}</FieldError>
         {props.hint && !props.error && (
-          <p className="mt-1 text-[11px] leading-4 text-[#667085]">{props.hint}</p>
+          <p className="mt-1 text-xs leading-4 text-[var(--yak-color-text-secondary)]">
+            {props.hint}
+          </p>
         )}
       </div>
     </Field>

@@ -32,19 +32,22 @@ export default function BatchImportDialog({ existing, onClose, onImport }: Props
     >
       <DialogContent className="w-[760px] rounded-xl p-5 shadow-none">
         <DialogTitle className="text-sm font-medium">批量录入字段</DialogTitle>
-        <p className="mt-2 text-xs leading-5 text-[#667475]">
-          粘贴 Doris / Paimon 的<code className="mx-1 rounded bg-[#f2f4f7] px-1">CREATE TABLE</code>
+        <p className="mt-2 text-xs leading-5 text-[var(--yak-color-text-secondary)]">
+          粘贴 Doris / Paimon 的
+          <code className="mx-1 rounded bg-[var(--yak-components-badge-neutral-bg)] px-1">
+            CREATE TABLE
+          </code>
           语句，自动提取字段、类型、COMMENT 与主键；ENGINE、分区、索引等表级子句会被忽略。
         </p>
-        <p className="mt-1 text-xs leading-5 text-[#667475]">
+        <p className="mt-1 text-xs leading-5 text-[var(--yak-color-text-secondary)]">
           也可以每行一个字段，列之间用 Tab 或逗号分隔：
-          <code className="mx-1 rounded bg-[#f2f4f7] px-1">
+          <code className="mx-1 rounded bg-[var(--yak-components-badge-neutral-bg)] px-1">
             英文编码, 中文名, 数据类型[, 长度/精度]
           </code>
           。数据类型支持 STRING / BIGINT / DECIMAL / DATE / TIMESTAMP，也可写「字符串 / 整数 / 小数
           / 日期 / 时间戳」。
         </p>
-        <p className="mt-1 text-xs text-[#98a2b3]">
+        <p className="mt-1 text-xs text-[var(--yak-components-muted-text)]">
           行格式示例：{SAMPLE_LINES.replace(/\n/g, "　")}
         </p>
         <div className="mt-3">
@@ -60,12 +63,14 @@ export default function BatchImportDialog({ existing, onClose, onImport }: Props
           />
         </div>
         <div className="mt-2 flex items-center gap-3 text-xs">
-          <span className="text-[#475467]">
+          <span className="text-[var(--yak-components-field-label)]">
             {parsed.mode === "DDL" ? "CREATE TABLE 解析" : "逐行录入"} · 可导入 {parsed.rows.length}{" "}
             行
           </span>
           {parsed.errors.length > 0 && (
-            <span className="text-[#b42318]">有 {parsed.errors.length} 行无法解析</span>
+            <span className="text-[var(--yak-components-badge-danger-text)]">
+              有 {parsed.errors.length} 行无法解析
+            </span>
           )}
         </div>
         {parsed.errors.length > 0 && (

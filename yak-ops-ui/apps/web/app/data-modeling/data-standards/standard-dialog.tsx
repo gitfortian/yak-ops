@@ -371,7 +371,7 @@ export default function StandardDialog(props: {
             onBlur={() => void validateCode()}
           />
           {checkingCode && (
-            <p role="status" className="pl-[116px] text-xs text-[#667085]">
+            <p role="status" className="pl-[116px] text-xs text-[var(--yak-color-text-secondary)]">
               编码校验中
             </p>
           )}
@@ -426,9 +426,13 @@ export default function StandardDialog(props: {
                 </div>
               </div>
               {errors.lengthPrecision ? (
-                <p className="pl-[116px] text-xs text-[#d92d20]">{errors.lengthPrecision}</p>
+                <p className="pl-[116px] text-xs text-[var(--yak-components-danger-text)]">
+                  {errors.lengthPrecision}
+                </p>
               ) : integerDigits === null ? null : (
-                <p className="pl-[116px] text-[11px] text-[#667085]">整数位 {integerDigits} 位</p>
+                <p className="pl-[116px] text-xs text-[var(--yak-color-text-secondary)]">
+                  整数位 {integerDigits} 位
+                </p>
               )}
             </>
           ) : (
@@ -547,8 +551,10 @@ export default function StandardDialog(props: {
                     parentStatus ? (
                       <SelectFooter
                         className={
-                          "min-h-0 px-3 py-1.5 text-[11px] " +
-                          (parentState === "error" ? "text-[#d92d20]" : "text-[#667085]")
+                          "min-h-0 px-3 py-1.5 text-xs " +
+                          (parentState === "error"
+                            ? "text-[var(--yak-components-danger-text)]"
+                            : "text-[var(--yak-color-text-secondary)]")
                         }
                       >
                         {parentStatus}

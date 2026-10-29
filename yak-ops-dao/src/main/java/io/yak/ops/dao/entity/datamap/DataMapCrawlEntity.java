@@ -12,6 +12,10 @@ public class DataMapCrawlEntity {
     private String id;
     /** Workspace owning the run. */
     private String workspaceId;
+    /** Task configuration that produced the run; null for legacy standalone runs. */
+    private String taskId;
+    /** Task name resolved at read time; never stored on the run. */
+    private String taskName;
     /** Datasource whose namespace is enumerated. */
     private String datasourceId;
     /** Datasource binding revision pinned at submission. */
@@ -40,8 +44,10 @@ public class DataMapCrawlEntity {
     private Integer filteredCount;
     /** How the run was requested: MANUAL or SCHEDULED. */
     private String triggerType;
-    /** Java regex; matching tables are kept alive but not re-crawled. */
+    /** Java regex snapshot; matching tables are kept alive but not re-crawled. */
     private String excludePattern;
+    /** JSON array snapshot of excluded table names; matching tables are kept alive. */
+    private String excludeTables;
     /** Crawl whose failed tables this run re-attempts; null for a fresh run. */
     private String retryOf;
     /** Run-level failure text; null on success. */

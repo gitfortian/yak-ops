@@ -1,12 +1,12 @@
 import HttpUtils from "@/service/http/HttpUtils";
 
 import { dataMapRequest } from "./request";
-import type { Crawl, CrawlDetail, CrawlSubmission, Paging } from "./types";
+import type { Crawl, CrawlDetail, Paging } from "./types";
 
 const API = "/api/v1/data-map";
 
 export const listCrawls = (
-  query: { datasourceId?: string; pageNo: number; pageSize: number },
+  query: { datasourceId?: string; taskId?: string; pageNo: number; pageSize: number },
   signal?: AbortSignal,
 ) => {
   const search = new URLSearchParams({
@@ -14,6 +14,7 @@ export const listCrawls = (
     pageSize: String(query.pageSize),
   });
   if (query.datasourceId) search.set("datasourceId", query.datasourceId);
+  if (query.taskId) search.set("taskId", query.taskId);
   return dataMapRequest(
     HttpUtils.getData<Paging<Crawl>>(`${API}/crawls?${search.toString()}`, {
       signal,
@@ -21,9 +22,6 @@ export const listCrawls = (
     }),
   );
 };
-
-export const submitCrawl = (input: CrawlSubmission) =>
-  dataMapRequest(HttpUtils.postData<Crawl>(`${API}/crawls`, input, { skipErrorHandler: true }));
 
 export const getCrawl = (crawlId: string, signal?: AbortSignal) =>
   dataMapRequest(

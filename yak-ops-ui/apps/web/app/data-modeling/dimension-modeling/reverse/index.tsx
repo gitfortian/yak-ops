@@ -1,6 +1,7 @@
 import {
   Alert,
   Button,
+  Checkbox,
   Input,
   Select,
   SelectContent,
@@ -260,7 +261,7 @@ export default function ReverseModelingPage() {
     <div className="flex min-w-0 flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-base font-medium">逆向建模</h1>
-        <span className="text-xs text-[#667475]">
+        <span className="text-xs text-[var(--yak-color-text-secondary)]">
           从 JDBC 数据源的物理表生成逻辑模型草稿，确认字段与归属后保存为 {type} 模型。
         </span>
         <Button
@@ -272,12 +273,18 @@ export default function ReverseModelingPage() {
         </Button>
       </div>
 
-      <ol className="flex flex-wrap items-center gap-2 text-xs text-[#667475]">
-        <li className={step === 1 ? "font-medium text-[#1d2939]" : ""}>1 选择物理表</li>
+      <ol className="flex flex-wrap items-center gap-2 text-xs text-[var(--yak-color-text-secondary)]">
+        <li className={step === 1 ? "font-medium text-[var(--yak-components-panel-text)]" : ""}>
+          1 选择物理表
+        </li>
         <li>·</li>
-        <li className={step === 2 ? "font-medium text-[#1d2939]" : ""}>2 核对字段</li>
+        <li className={step === 2 ? "font-medium text-[var(--yak-components-panel-text)]" : ""}>
+          2 核对字段
+        </li>
         <li>·</li>
-        <li className={step === 3 ? "font-medium text-[#1d2939]" : ""}>3 归属与保存</li>
+        <li className={step === 3 ? "font-medium text-[var(--yak-components-panel-text)]" : ""}>
+          3 归属与保存
+        </li>
       </ol>
 
       {error && (
@@ -318,19 +325,18 @@ export default function ReverseModelingPage() {
               )}
           </div>
           {picker.nonProduction && (
-            <div className="flex items-start gap-2 rounded-lg border border-[#fecdca] bg-[#fffbfa] px-3 py-2 text-xs text-[#93370d]">
-              <input
-                type="checkbox"
+            <Alert>
+              <Checkbox
                 aria-label="确认非生产环境"
                 checked={picker.envConfirmed}
-                onChange={(event) => picker.setEnvConfirmed(event.target.checked)}
+                onCheckedChange={(checked) => picker.setEnvConfirmed(checked)}
               />
               <span>
                 即将从「
                 {ENV_LABEL[picker.datasource?.environment ?? ""] ?? picker.datasource?.environment}
                 」环境读取表结构，请确认连接的是目标库；环境只作提示，不做拦截。
               </span>
-            </div>
+            </Alert>
           )}
           {picker.failureMessages.length > 0 && (
             <Alert>
@@ -388,7 +394,7 @@ export default function ReverseModelingPage() {
             </div>
           )}
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-xs text-[#667475]">
+            <span className="text-xs text-[var(--yak-color-text-secondary)]">
               {picker.selectedTable
                 ? picker.loading.columns
                   ? `正在读取 ${picker.selectedTable.name} 的字段`
@@ -550,7 +556,7 @@ export default function ReverseModelingPage() {
                 options.status !== "ready",
               )}
           </div>
-          <p className="text-xs text-[#667475]">
+          <p className="text-xs text-[var(--yak-color-text-secondary)]">
             保存后进入模型编辑器，可继续调整字段、描述与存储策略。物理发布是后续步骤，不会在此创建物理表。
           </p>
           <div className="flex gap-2">

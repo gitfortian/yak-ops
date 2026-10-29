@@ -8,7 +8,7 @@ const [dataMap] = DATA_GOVERNANCE_NAVIGATION;
 const children = dataMap.children ?? [];
 const overview = children.find((child) => child.path.endsWith("/overview"));
 const catalog = children.find((child) => child.path.endsWith("/catalog"));
-const crawls = children.find((child) => child.path.endsWith("/crawls"));
+const tasks = children.find((child) => child.path.endsWith("/tasks"));
 
 test("every data map page is reachable from the sidebar", () => {
   assert.deepEqual(
@@ -16,7 +16,7 @@ test("every data map page is reachable from the sidebar", () => {
     [
       "/data-governance/data-map/overview",
       "/data-governance/data-map/catalog",
-      "/data-governance/data-map/crawls",
+      "/data-governance/data-map/tasks",
       "/data-governance/data-map/personal",
     ],
   );
@@ -25,7 +25,11 @@ test("every data map page is reachable from the sidebar", () => {
 test("a child is active on its own route only", () => {
   assert.equal(isNavigationChildActive(overview, "/data-governance/data-map/overview"), true);
   assert.equal(isNavigationChildActive(overview, "/data-governance/data-map/catalog"), false);
-  assert.equal(isNavigationChildActive(crawls, "/data-governance/data-map/catalog"), false);
+  assert.equal(isNavigationChildActive(tasks, "/data-governance/data-map/catalog"), false);
+});
+
+test("the task editor keeps its list entry active", () => {
+  assert.equal(isNavigationChildActive(tasks, "/data-governance/data-map/tasks/42/edit"), true);
 });
 
 test("a detail route keeps its list entry active", () => {
