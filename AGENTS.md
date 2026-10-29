@@ -1,141 +1,89 @@
 # Yak Ops AI Agent Instructions
 
-Guidance for contributors and AI coding agents working in this repository. Follow the [Apache Flink contribution process](https://flink.apache.org/how-to-contribute/contribute-code/) and [Code Style and Quality Guide](https://flink.apache.org/how-to-contribute/code-style-and-quality-preamble/) where applicable. Yak Ops build tools and product boundaries remain repository-specific.
+Project rules for humans and coding agents. Follow [Apache Flink's contribution](https://flink.apache.org/how-to-contribute/contribute-code/) and [code-quality](https://flink.apache.org/how-to-contribute/code-style-and-quality-preamble/) guidance where applicable; Yak Ops contracts and tooling take precedence. Keep these rules short; load linked documents only when relevant to the task.
 
 ## Prerequisites and Commands
 
-- Java 21, the checked-in Maven wrapper, and Git. Use Bash or WSL for the repository's `mvnw` wrapper on Windows.
+- Java 21, Git, and the checked-in Maven wrapper. On Windows, run `mvnw` through Bash/WSL.
 - Backend verification: `bash mvnw -pl '!yak-ops-ui,!yak-ops-dist' verify`.
-- Java formatting: `bash mvnw -DskipTests -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' com.diffplug.spotless:spotless-maven-plugin:3.10.2:apply`.
-- Java format check: use the same command with `:check` instead of `:apply`.
-- Frontend verification and tooling: `yak-ops-ui/docs/tooling.md`.
+- Java formatting: `bash mvnw -DskipTests -pl '!yak-ops-bom,!yak-ops-ui,!yak-ops-dist' com.diffplug.spotless:spotless-maven-plugin:3.10.2:apply`; replace `:apply` with `:check` to verify.
+- See [DEVELOPMENT.md](DEVELOPMENT.md) for scoped checks, real-database suites, and review evidence; [frontend tooling](yak-ops-ui/docs/tooling.md) for UI commands.
 
-For environment setup and test scope, see [DEVELOPMENT.md](DEVELOPMENT.md). Only report checks that actually ran; a skipped integration test is not a pass.
+## Agent Working Protocol
+
+- **Evidence before assumption:** Read current code, callers, tests, configuration, and dependencies before claiming behavior. Trace execution and state transitions rather than relying on names or comments. Separate verified facts, assumptions, and recommendations; cite paths and line numbers for findings.
+- **Understand before edit:** Identify entry points, ownership, lifecycle, supported contracts, and affected consumers. Search for existing implementations before creating types or abstractions. Analysis/review requests are read-only; do not turn a discussion into an implementation or PR.
+- **Root cause before fix:** Locate the first actionable failure. Distinguish production defects, tests, configuration, and infrastructure. Never suppress a failure by weakening assertions, skipping checks, silently swallowing errors, or changing unrelated production behavior.
+- **Minimal complete change:** Prefer the smallest coherent solution, not merely the fewest lines. Replace the authoritative execution path completely; delete obsolete code and tests when safe, and update only affected callers and documentation. Do not broaden scope into speculative cleanup.
+- **Verification before completion:** Run the narrowest meaningful checks first; widen scope for shared contracts, persisted state, and recovery behavior. State exactly what ran, passed, failed, was skipped, and remains uncertain. No unexecuted test counts as passed.
+- **Authorization and reporting:** Do not create PRs, merge, change branch protection, or mutate repository settings unless requested. Keep findings actionable and concise. If evidence overturns an earlier conclusion, correct it.
 
 ## Repository Structure
 
-- `yak-ops-core`: public, database-neutral flow contracts; must not depend on Runtime.
-- `yak-flow`: local execution runtime and JDBC/CDC connectors.
-- `yak-ops-business`: datasource and task business operations, including persisted execution lifecycle.
-- `yak-ops-task-execution`: process-owned Task dispatch, observation, cancellation and embedded execution ownership.
-- `yak-ops-plugins`: plugin APIs and implementations.
-- `yak-ops-dao`: persistence, repositories and Flyway migrations.
-- `yak-ops-platform`: security, workspace and user preferences.
-- `yak-ops-common`: cross-module shared types and utilities.
-- `yak-ops-boot`: HTTP boundary and application assembly.
-- `yak-ops-ui`: frontend application and shared UI components.
-- `yak-ops-test-utils`: JUnit-owned database resources and typed assertions; test-only dependencies.
-- `yak-ops-e2e`: real HTTP Task tests against the packaged Boot process.
-
-Inspect the current code, direct callers, tests and Maven dependencies before changing a boundary. Derive current functionality from code, tests, and supported public interfaces.
+- `yak-ops-core` owns database-neutral Source/Sink and value contracts; it cannot depend on Runtime.
+- `yak-flow` owns local execution, physical graphs, mailbox scheduling, checkpointing, and JDBC/CDC connectors.
+- `yak-ops-business` owns datasource/task business lifecycle; `yak-ops-task-execution` owns process-level dispatch, observation, cancellation, and embedded Task execution.
+- `yak-ops-plugins` owns plugin APIs and implementations; `yak-ops-dao` owns repositories, persistence, and Flyway; `yak-ops-platform` owns Workspace, security, and preferences.
+- `yak-ops-common` holds genuine shared utilities; `yak-ops-boot` assembles the application and HTTP boundary.
+- `yak-ops-ui` owns the frontend; `yak-ops-test-utils` is test-only; `yak-ops-e2e` owns packaged-process HTTP Task tests.
 
 ## Architecture Boundaries
 
-- Do not introduce reverse dependencies from Core to Runtime or from business modules to Boot.
-- Keep credentials out of task definitions and user-facing plugin parameters.
-- Keep Workspace isolation, immutable task versions, migration history and existing safety checks intact.
-- Do not claim exactly-once processing, distributed execution or product runtime integration without executable evidence.
-- Do not add interfaces, factories, managers or compatibility layers without a real owner and caller.
+- Do not add reverse dependencies from Core to Runtime or from business modules to Boot. Connectors must not depend on Controllers/DAO or product Task identity for runtime creation.
+- Preserve Workspace authorization and isolation, immutable task versions, task-definition identity, credential separation, and safety checks. Accepted task configuration is JSON; plugin validation must not read credentials or silently rewrite user parameters.
+- Keep Reader/Writer mutable execution state separate from immutable checkpoint snapshots. Preserve checkpoint, serializer, handoff, offset, and recovery guarantees; do not claim exactly-once or distributed behavior without executable evidence.
+- Logging and diagnostics must not expose credentials, sensitive row data, dispatch tokens, or state bytes, including via `toString()`. Preserve exception types and causes; never derive execution decisions from exception message text or expose raw internal diagnostics to users. Technical logs and JavaDoc use English; user-visible errors are localized at their owning boundary.
 
 ## Minimal Implementation and Compatibility
 
-- Implement one clear current execution path. Do not preserve deprecated implementations, duplicate protocols, alias options, fallback branches, forwarding wrappers or outdated documentation just in case. Delete the replaced path when its replacement becomes authoritative.
-- Compatibility is not the default. Add an adapter only for a documented, currently supported published contract, named consumer and explicit maintainer decision. State its removal condition; never invent speculative consumers.
-- Prefer verified Flink/Flink CDC lifecycle and vocabulary where the semantics match. Do not copy names while silently weakening checkpoint or recovery guarantees. Reuse existing contracts before creating interfaces, factories or shared helpers.
-- Reject speculative switches, duplicate models, defensive null-handling without a real trust boundary, and layers that only delegate. Retain fail-closed state, resource and data-safety checks.
-- When removing an execution protocol, remove its implementation, tests and current documentation together. Explicitly reject incompatible persisted definitions and checkpoints; never silently reinterpret them, migrate running state or degrade delivery guarantees.
-- Every new branch, interface, compatibility exception and configuration field requires a concrete use case and owning caller. Do not delete essential recovery tests or lower verification gates to make a simplification pass.
+- Maintain one current execution path. Do not keep duplicate protocols, deprecated implementations, alias options, forwarding wrappers, or fallback paths without a supported consumer.
+- Compatibility requires a documented published contract, named consumer, maintainer decision, and removal condition. Explicitly reject incompatible persisted definitions/checkpoints; never silently reinterpret running state or downgrade guarantees.
+- Prefer established Flink, Flink CDC, and SeaTunnel classes, lifecycle, naming, and algorithms **where semantics match**. Verify upstream version and dependencies; adapt real Runtime or Debezium differences explicitly. Do not copy a name while changing its contract.
+- New interfaces, factories, helpers, configuration options, branches, and defensive checks need a real caller, owner, and failure case. Keep fail-closed validation and resource/data safety.
 
-## Common Change Patterns
+## Java Type Design and Naming
 
-- **Bug fix or internal refactor:** implement the smallest coherent change, update relevant tests and JavaDoc as needed. No routine Markdown synchronization.
-- **New major subsystem or public contract change:** discuss and accept a YOIP before implementation. See [CONTRIBUTING.md](.github/CONTRIBUTING.md) and the [YOIP template](.github/YOIP_TEMPLATE.md). One accepted proposal may guide many implementation PRs. Never mint a YOIP for an individual CDC stage, bug fix, CI repair or routine refactor.
-- **YOIP governance:** use the six English template sections in order and exact `Discussion`/`Accepted` status, register new proposals in [the YOIP index](docs/yoips/README.md), and reserve retired IDs 7–19 without historical navigation stubs. Keep architectural proposals only in `docs/yoips/`, never in a parallel engineering-note directory. A proposal PR must be linked, with an explicit maintainer decision permalink before acceptance. Do not invent votes, test evidence or release claims. `scripts/ci/check_yoips.py` checks changed records; it does not replace human review.
-- **Public interface:** assess REST, plugin SPI, persisted formats, checkpoint/state compatibility, configuration and monitoring consumers.
-- **Database migration:** v1.3.0 intentionally resets to one fresh-install-only Flyway baseline and does not upgrade existing databases. After publication, keep the new V1 and subsequent release migrations immutable; use forward-only migrations for explicitly approved changes, never rewrite business rows implicitly, and never use `flyway repair` to conceal incompatible history.
-- **Frontend change:** follow `yak-ops-ui/FRONTEND_RULES.md`, TypeScript contracts and affected tests; apply the repository-wide YOIP process to significant public changes, and use focused PRs for routine UI work.
-
-## Repository-Specific Invariants
-
-- Keep task-definition identity, Workspace authorization and immutable definition versions in the business/persistence boundary. Plugin validation must not access credentials or silently rewrite requested parameters; accepted task configuration is JSON.
-- Core owns Source/Sink and value contracts; Runtime owns physical graphs, tasks, mailbox scheduling and checkpoint execution. Connectors must not couple their runtime implementations to product Controllers/DAO.
-- Keep the v1.3.0 fresh-install baseline and later published Flyway migrations frozen. Old databases need a separate explicitly approved upgrade path; release scripts verify naming and ordering but cannot establish data safety.
-- Internal SLF4J log templates and Core / YakFlow technical diagnostics use English. Preserve exception types, causes and contextual fields; execution decisions must not parse exception message text.
-- Product-facing ErrorCode descriptions, Bean Validation messages and other user messages remain localized at their owning boundary. Never expose raw internal diagnostics or credentials to users.
-- Logging must not expose credentials or sensitive data. JavaDoc and implementation comments use English.
-- Use meaningful top-level API contracts and explicit ownership; avoid redundant null-checking, normalization and compatibility layers. Current code, tests, and accepted public contracts determine supported behavior.
-
-## Java Type Design and Package Ownership
-
-- Organize packages by functional ownership, such as `source`, `reader`, `writer`, `state`, `execution`, and `repository`, not by whether a type is a record, class, or interface. Keep a public contract and its directly related value types together when they share ownership.
-- Reserve `domain` for business domain concepts and behavior. Introduce `model` only for a cohesive, independently owned set of models; do not create generic buckets or one-type packages without a meaningful boundary.
-- Context types carry inputs or capabilities for one stage; do not use them as cross-layer service containers. Connector creation must not require Task platform identity or admission claims.
-- Resource types express a real capability or ownership lifecycle. Avoid marker wrappers whose consumers immediately recover a concrete type with casts.
-- Cross-layer models require a distinct semantic contract. Reuse existing values when a mapping only copies fields; do not create synonym DTO chains. Runtime names require actual execution ownership.
-- Introduce interfaces for distinct implementation or caller contracts and abstract classes only for shared behavior or state. Keep resource-owning and lifecycle-managed implementations in concrete classes.
-- **Do not declare new Java `record` types in Yak Ops production source.** Prefer ordinary classes with explicit fields, constructors and accessors, following Flink CDC where applicable. Existing `record` declarations are grandfathered; do not migrate them in unrelated changes. New `record` declarations are rejected by the backend naming check against the recorded baseline commit.
-- Defensively copy mutable arrays and collections at ownership boundaries. During gradual conversion of existing records, preserve equality, hashing, serializer formats and sensitive-data protections; never change checkpoint semantics to satisfy a naming rule.
-- Treat `toString()` as diagnostic output. Never expose credentials, dispatch tokens, database row values, checkpoint state bytes, or other sensitive payloads through generated or custom representations, including nested record and collection wrappers.
-- Keep mutable Reader and Writer state distinct from immutable checkpoint snapshots. Preserve public accessors and persisted serializer formats during type refactoring, with focused tests for equality, ownership, and safe diagnostics.
-
-## Java Naming and Vocabulary
-
-- Name project-owned Java types and methods for their actual responsibilities. Prefer established Apache Flink and SeaTunnel vocabulary when the corresponding contract and behavior match, rather than inventing a new abstraction name. Use `Parser` for parsing, `Serializer` for serialization, `Mapper` or `Converter` for well-defined mappings, and `Factory`, `Builder`, or `Generator` only when construction is the actual responsibility.
-- **Do not introduce `Codec` in names of new or renamed Yak Ops classes, interfaces, records, enums, methods, or packages.** A JSON reader with a `parse` method is a parser, not a generic codec. Existing externally owned APIs and third-party identifiers are not renamed by this rule.
-- Use `normalize` only when a value is actually brought into one canonical form. Prefer `parse`, `validate`, `resolve`, `toTargetLogicalType`, `derive`, or `apply` when the method parses, rejects, selects, maps, plans, or changes state. A single method should not silently mix these responsibilities. Do not ban legitimate normalization such as canonical identifiers or names.
-- Use `Gate` only for Runtime network I/O boundaries, where it represents the physical flow of records or events (for example, `InputGate`). Schedule callback ownership, transactional permits, and asynchronous CDC schema acknowledgments belong to their explicit controllers or handlers. `Gateway` is a separate established integration term, not a substitute for a network gate.
-- Keep shared helpers in the module that owns their invariant. String trimming belongs in established string utilities; JDBC type selection belongs in `JdbcDialect`; schema difference reporting belongs in derivation; CDC acknowledgment and offset checkpoint coordination belong in the SourceReader boundary. Similar names alone do not justify extracting another common utility.
-- `python3 scripts/ci/check_backend_naming.py` checks declared types, methods and package names in production Java. It prevents new Java `record` declarations, new `Codec` symbols and non-network `*Gate` types without scanning comments, string literals or third-party packages. Semantic naming and responsibility are still reviewed against callers and tests; the automated check is intentionally not a blanket word blacklist.
-- Avoid redundant domain prefixes within an already scoped package, such as `Sync*` in `io.yak.ops.plugin.task.datasync`. Keep a domain qualifier on a public or cross-module type only when it prevents real ambiguity. Name technology-specific implementations with recognizable identifiers such as `Jdbc` or `MySqlCdc`.
-- Do not use broad labels such as `Compiler`, `Policy`, `Manager`, or `Handler` as substitutes for identifying a concrete operation. Such names require matching responsibilities; choose the narrower established term when applicable. Before introducing or renaming a type, check neighboring APIs, upstream precedents, package ownership and direct callers.
-- Naming-only refactors must preserve externally visible type identifiers, persisted JSON fields, configuration keys and checkpoint formats. Update source and tests consistently; do not add wrappers or compatibility aliases solely to retain old internal names.
+- Organize packages by ownership (`source`, `reader`, `state`, `execution`, `repository`), not mechanical categories. Use `domain` for business concepts and `model` only for a cohesive owned model set; avoid one-type packages and synonym DTO chains.
+- Interfaces express an independent caller/implementation contract; abstract classes share actual behavior/state. Contexts carry one stage's inputs/capabilities, not cross-layer service locators. Resource wrappers must represent real ownership.
+- **Do not introduce production Java `record` declarations.** Existing records are grandfathered; preserve equality, hashing, ownership, serializer formats, and sensitive-data protection when changing them.
+- Defensively copy mutable arrays and collections at ownership boundaries, especially when creating checkpoint snapshots.
+- **Do not introduce `Codec` in project-owned Java type, method, or package names.** Use precise terms such as `Parser`, `Serializer`, `Mapper`, and `Converter` when applicable; do not rename third-party identifiers.
+- `normalize` means canonicalization, not parsing, validation, resolution, planning, or applying state. Reserve `*Gate` types for Runtime network I/O boundaries (`InputGate`); do not use `Manager`, `Handler`, `Compiler`, or `Policy` as vague substitutes for an actual responsibility.
+- Avoid redundant package-local prefixes (for example, `Sync*` under `io.yak.ops.plugin.task.datasync`). Preserve meaningful `Jdbc` and `MySqlCdc` qualifiers where they disambiguate public APIs.
+- Keep shared helpers with the module owning their invariant. Naming-only changes must not alter published identifiers, JSON fields, configuration keys, or checkpoint formats; do not add aliases merely to preserve internal names.
+- `python3 scripts/ci/check_backend_naming.py` enforces new Java records, `Codec` symbols, and invalid `*Gate` types. Semantic ownership still requires review.
 
 ## Code Quality and Review
 
-- Follow Flink's emphasis on clear ownership, readable code, explicit contracts and targeted tests; avoid redundant comments that repeat the code.
-- Use the repository's existing Spotless + Palantir Java Format baseline until a separately reviewed tooling change is accepted. Do not switch formatters as a documentation side effect.
-- Preserve Spotless, Checkstyle, ArchUnit, logging safety checks and real-database integration-test workflows. Never weaken or skip checks to make a PR green.
-- Keep implementation facts in code, JavaDoc and tests. Avoid duplicating technical implementation descriptions in Markdown.
-- For documentation, change published user guidance when behavior changes, not when an implementation detail changes. Do not create descriptive Capability/Contract/Architecture copies for a routine PR.
-- Keep one issue or coherent change per PR and explain purpose, tests, public impact and any YOIP in the PR body.
+- Use the existing Spotless + Palantir Java Format, Checkstyle, ArchUnit, and logging checks. Never weaken them to make CI green.
+- Test externally observable contracts and invariants, not every new method or class. Do not expose production accessors just for tests. Prefer deterministic assertions to sleeps, reflection into private state, and method-count mocks.
+- Ordinary bug fixes/refactors need focused code/tests/JavaDoc, not parallel Markdown narratives. Use [the YOIP process](.github/CONTRIBUTING.md) before major subsystem or public contract changes; routine CDC stages, CI fixes, and refactors do not need YOIPs.
+- Frontend changes follow [FRONTEND_RULES.md](yak-ops-ui/FRONTEND_RULES.md). Keep one coherent change per PR and report its purpose, public impact, and evidence using [the PR template](.github/PULL_REQUEST_TEMPLATE.md).
 
 ## Verification Scope and Incremental Review
 
-- JUnit / TypeScript unit and frontend contract checks run on affected PRs. `Backend Tests` selects Connector, YakFlow, business database and Backend E2E tests from the complete diff. Manual and release calls run all suites by default. Playwright verifies UI interactions; Docker Compose verifies release deployment.
-- Test externally observable behavior and invariants, not a one-to-one list of implementation methods. A new test must identify the regression or risk that existing tests do not already protect. Reuse existing scenarios for internal refactors; do not add tests merely because a new class, helper or branch exists.
-- Prefer small deterministic tests for parsing, state machines, serializers and boundary conditions. Use real JDBC/CDC IT for driver/transaction semantics and real process-recovery E2E for durable correctness. Avoid repeating the same scenario across every database; retain distinct dialect, checkpoint, schema and XA guarantees.
-- Prefer explicit test fixtures, parameterized cases and AssertJ-style outcome assertions over reflection into private fields, method-call-count mocks, sleeps or large duplicated setups. Interaction verification is appropriate when the interaction itself is the contract (for example, no dispatch after an idempotent replay). Never expose a production accessor solely for a test.
-- When removing or consolidating a test, document which remaining test protects each unique behavior and keep evidence that the affected suite still runs. Do not delete fault-injection, crash recovery, security or persistence checks just to reduce CI duration.
-- Ordinary Maven `verify` must not start Docker. Use `scripts/tests/run.sh` for database tests. Register every concrete `*IT` class in the suite manifest; missing, skipped, failed or incomplete selected reports fail the check. Backend E2E belongs in `yak-ops-e2e`, not Boot or Connector tests.
-- Name jobs after the test type or tool actually executed, such as `Playwright UI Tests`, `JDBC Source IT` or `Docker Compose Smoke`. Do not use vague names such as `Product Acceptance` for test jobs.
-- UI automation verifies browser-facing behavior only. Do not add per-feature or per-PR browser scripts, or depend on real JDBC, CDC, Cron, checkpoint, or process recovery waits inside Playwright. Extend stable business scenario files in `yak-ops-ui/tests/e2e/`. Keep Playwright setup out of normal product PR jobs.
-- The Release Gate requires full Backend Tests, including Oracle, CDC and process recovery, plus candidate Playwright and Docker Compose. Match release version, commit SHA and built artifacts. Unselected tests are NOT SELECTED, not passed tests.
-- Reuse database processes inside a JUnit root execution; isolate tables, schemas, Workspace and state per test. Process recovery and destructive tests need private environments. Capture diagnostics before cleanup, and stop tasks before deleting their data. Do not ship test utilities or add reverse dependencies from Runtime to Connectors.
-- Use fresh isolated fixtures and condition-based bounded waits for integration tests. Never hide flakes with silent retries or change production checkpoint intervals for tests.
-- At initial review, record head SHA, base SHA, tested commit/tree, changed files and relevant CI results once. Read the full diff and affected callers/tests. After a fix, review the delta from the previously reviewed SHA; reopen wider scope if the base or shared contracts changed. Known unresolved failures remain blockers even when a later scope omits their suite.
-- Do not change branch protection to speed merging. If an obsolete required check remains after retiring a suite, report it explicitly and resolve it as a separate repository setting change.
+- Ordinary `verify` must not start Docker. Use `scripts/tests/run.sh` and its suite manifest for real JDBC/CDC IT and packaged-process recovery E2E. Keep registered IT reports complete; missing, skipped, or failed selected tests are failures.
+- Select unit tests for pure logic, real database IT for JDBC/CDC semantics, and process-recovery E2E for durable guarantees. Do not repeat the same scenario for every class/database. Retain unique dialect, XA, security, checkpoint, and crash-recovery coverage; map coverage before removing tests.
+- Isolate data, Workspace, and state per test. Use bounded condition-based waits; do not hide flakes via silent retries or change production checkpoint intervals for tests. Recovery/destructive tests need private environments and captured diagnostics before cleanup.
+- Follow the [Backend Tests and Release Gate](DEVELOPMENT.md#test-types-and-execution) scope. Frontend Playwright checks browser behavior; do not place real CDC/transaction waits in browser tests. Unselected suites are **not selected**, not passed.
+- For reviews, record head, base, tested tree/SHA, changed files, and relevant CI evidence. Read affected callers/tests; after fixes review the delta from the prior reviewed SHA, expanding when shared contracts or base change. Known unresolved failures remain blockers.
 
 ## Persistence and Public Contract Documentation
 
-- Document every newly introduced or changed persisted Entity field with concise English JavaDoc explaining its meaning, ownership, and lifecycle or safety semantics where relevant. Inherited audit fields retain their BaseEntity documentation.
-- For new Flyway CREATE TABLE statements, include meaningful SQL COMMENT descriptions on every table and column. Explain identity, ownership, state, and null semantics where they matter. Do not modify an applied migration merely to add descriptions.
-- Each declared Repository interface method needs JavaDoc for its contract, `@param` for every formal parameter, and `@return` for every non-void return type. Apply the same parameter and result documentation to newly exposed business Service methods and public Task plugin SPI methods. Document atomic updates, Workspace scoping and conflict behavior when relevant. Implementations inherit those method contracts and document only additional non-obvious behavior, rather than duplicating JavaDoc.
-- Business service boundaries with independent callers use an interface and a corresponding Impl class, with transactional annotations on the managed implementation. Do not introduce interfaces for private helpers without independent contracts.
-- Review these comments when adding Entities, Repository APIs, Service boundaries or Flyway migrations. Follow the existing formatting checks and do not create parallel comment-rules files.
+- Treat the v1.3.0 fresh-install Flyway baseline and subsequent published migrations as immutable. New approved changes use forward-only migrations; never conceal incompatible history via `flyway repair`.
+- Document new/changed persisted Entity fields and new Flyway tables/columns with meaningful English JavaDoc/SQL comments. Document each declared Repository method (`@param` and non-void `@return`), and newly exposed business Service and public Task plugin SPI contracts, including Workspace/transaction semantics.
+- Business Service boundaries with independent callers use an interface and managed Impl with transaction ownership; avoid interfaces for private helpers.
 
 ## Current-State Comments and Documentation
 
-- Describe current responsibilities, behavior, ownership, lifecycle, and invariants in the present tense. Comments and active rules must be understandable without implementation history or an upstream reference.
-- Remove development-phase labels, previous-implementation narratives, and comparisons such as `PR1`, `legacy implementation`, `Flink-style`, or `unlike Flink` from ordinary JavaDoc, code comments, and active guidance. Keep design provenance in relevant PR or YOIP discussions.
-- Preserve meaningful version numbers, persisted-format compatibility, safety constraints, recovery guarantees, and supported limitations. Express these as current behavioral contracts, not as reasons a compatibility layer was introduced.
-- Keep FLIP references, migration analysis, and rejected alternatives in design proposals where they inform decisions. Published Flyway migrations and third-party notices are immutable or externally owned and are excluded from prose cleanup.
-- Check rewritten descriptions against code and tests. Do not change public APIs, execution behavior, compatibility policies, or CI gates merely to improve wording.
+- Describe current responsibility, lifecycle, invariants, and supported limitations in present tense. Do not leave development-phase labels, PR numbers, obsolete implementation narratives, or comparison commentary in ordinary code/JavaDoc.
+- Keep upstream rationale, FLIP comparisons, and rejected alternatives in YOIPs/PR discussions. Do not duplicate implementation facts in Markdown; update published user guidance when user-visible behavior changes.
+- Do not change public behavior, persisted formats, existing safety gates, or immutable third-party/release notices just to simplify prose.
 
 ## References
 
-- [Development](DEVELOPMENT.md) — local setup and verification.
-- [Contribution process](.github/CONTRIBUTING.md) — discuss, implement, review.
-- [PR template](.github/PULL_REQUEST_TEMPLATE.md) — review expectations.
-- [YOIP template](.github/YOIP_TEMPLATE.md) — major design proposals.
-- [Flink Code Style and Quality Guide](https://flink.apache.org/how-to-contribute/code-style-and-quality-preamble/).
-- [Frontend rules](yak-ops-ui/FRONTEND_RULES.md) — frontend ownership, behavior and UI conventions.
+- [Local development and verification](DEVELOPMENT.md)
+- [Contributing and YOIP governance](.github/CONTRIBUTING.md)
+- [YOIP index](docs/yoips/README.md)
+- [Frontend rules](yak-ops-ui/FRONTEND_RULES.md)
+- [OpenCode project commands](.opencode/commands/) — invoke targeted analysis/review workflows on demand rather than embedding them in these always-loaded rules.
