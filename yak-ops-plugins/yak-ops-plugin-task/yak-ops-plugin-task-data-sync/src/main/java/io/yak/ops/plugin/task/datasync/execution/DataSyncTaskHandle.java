@@ -100,8 +100,11 @@ final class DataSyncTaskHandle implements TaskHandle {
                     preparation.prepare(plan, identity, progress);
                 }
                 checkCanceled();
-                // Re-read source and target metadata after DDL; creation itself leaves admission stable.
-                JobPlan current = planner.plan(parameters, identity);
+                // Schema preparation and cursor freezing change the physical plan. Revalidate
+                // its resource binding before submission; otherwise reuse the just-admitted plan.
+                JobPlan current = config.steps().contains(Step.SCHEMA) || incremental != null
+                        ? planner.plan(parameters, identity)
+                        : plan;
                 verifyAdmission(current);
                 var pipeline = builder.build(
                         incremental == null ? current : incremental.apply(current),
