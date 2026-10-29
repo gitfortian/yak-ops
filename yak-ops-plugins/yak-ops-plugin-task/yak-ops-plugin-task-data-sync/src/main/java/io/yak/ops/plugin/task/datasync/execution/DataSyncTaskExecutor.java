@@ -5,7 +5,9 @@ import io.yak.ops.core.execution.PipelineExecutor;
 import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskHandle;
+import io.yak.ops.plugin.task.api.execution.TaskStartRejectedException;
 import io.yak.ops.plugin.task.datasync.pipeline.PipelineBuilder;
+import io.yak.ops.plugin.task.datasync.plan.JobPlan;
 import io.yak.ops.plugin.task.datasync.plan.JobPlanner;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -44,6 +46,15 @@ public final class DataSyncTaskExecutor {
      */
     public CompletionStage<TaskHandle> start(
             ReadonlyConfig parameters, TaskAdmissionPlan plan, TaskExecutionIdentity identity, boolean debug) {
+        try {
+            JobPlan current = planner.plan(parameters, identity);
+            if (!plan.equals(current.admissionPlan())) {
+                throw new IllegalStateException("DATA_SYNC resource binding changed before execution");
+            }
+        } catch (RuntimeException failure) {
+            return CompletableFuture.failedFuture(
+                    new TaskStartRejectedException("DATA_SYNC rejected before engine submission", failure));
+        }
         return CompletableFuture.completedFuture(new DataSyncTaskHandle(
                 parameters, plan, identity, debug, planner, builder, executor, incrementalPreparation));
     }
