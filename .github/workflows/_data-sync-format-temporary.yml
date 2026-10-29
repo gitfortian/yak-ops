@@ -20,7 +20,7 @@ jobs:
       - name: Format DATA_SYNC sources and emit the resulting text for review
         shell: bash
         run: |
-          mvn -B -ntp -pl yak-ops-plugins/yak-ops-plugin-task/yak-ops-plugin-task-data-sync -am com.diffplug.spotless:spotless-maven-plugin:3.10.2:apply -DskipTests
+          mvn -B -ntp -pl yak-ops-plugins/yak-ops-plugin-task/yak-ops-plugin-task-data-sync com.diffplug.spotless:spotless-maven-plugin:3.10.2:apply -DskipTests
           python3 - <<'PY'
           import json
           from pathlib import Path
