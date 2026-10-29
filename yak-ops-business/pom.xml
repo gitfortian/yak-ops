@@ -23,5 +23,6 @@
         <module>yak-ops-business-datamap</module>
         <module>yak-ops-business-task</module>
         <module>yak-ops-business-schedule</module>
+        <module>yak-ops-business-governance</module>
     </modules>
 </project>

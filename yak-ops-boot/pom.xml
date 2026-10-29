@@ -17,6 +17,7 @@
     <dependencies>
         <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-modeling</artifactId></dependency>
         <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-datamap</artifactId></dependency>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-governance</artifactId></dependency>
         <dependency><groupId>org.mockito</groupId><artifactId>mockito-core</artifactId><scope>test</scope></dependency>
         <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-schedule</artifactId></dependency>
         <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-plugin-scheduler-quartz</artifactId></dependency>
