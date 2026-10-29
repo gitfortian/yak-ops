@@ -1,12 +1,12 @@
 # FYOIP-16: Data Asset Governance — Workspace Scans and Issue Lifecycle
 
-Status: Discussion
+Status: Accepted
 
 Discussion: https://github.com/gitfortian/yak-ops/pull/43
 
-Decision: Pending
+Decision: [VOTE] Accepted — https://github.com/gitfortian/yak-ops/pull/43#issuecomment-6489810217
 
-Implementation: N/A until accepted (migration `V8__v1_10_0.sql`)
+Implementation: N/A until implementation opens (starts from `V9__v1_11_0.sql`)
 
 Release: N/A until released
 
@@ -112,7 +112,7 @@ Unknown Issues and scans reuse `RESOURCE_NOT_EXISTS`. New error codes belong to 
 
 ### Persisted formats
 
-The migration is `V8__v1_10_0.sql`, the first migration after `V7__v1_9_0.sql`, and it is additive. It creates five tables and changes none. All five use `InnoDB`, `utf8mb4_unicode_ci`, `VARCHAR(64)` application identities, `DATETIME(3)` timestamps and explicit audit columns where the row is user-mutated.
+The migration is `V9__v1_11_0.sql`, the first migration after `V8__v1_10_0.sql`, and it is additive. It creates five tables and changes none. All five use `InnoDB`, `utf8mb4_unicode_ci`, `VARCHAR(64)` application identities, `DATETIME(3)` timestamps and explicit audit columns where the row is user-mutated.
 
 `yak_ops_governance_scan_run`
 
@@ -351,7 +351,7 @@ The scan runner logs the Workspace, scan id, rule code, outcome, duration and co
 
 ## Compatibility, Deprecation, and Migration Plan
 
-- The migration is the first migration after `V7__v1_9_0.sql`, numbered `V8__v1_10_0.sql`. It is additive and forward-only. A fresh install applies `V1` through `V8`; a database already on 1.9.x applies `V8` only. No existing table, column or row is changed.
+- The migration is the first migration after `V8__v1_10_0.sql`, numbered `V9__v1_11_0.sql`. It is additive and forward-only. A fresh install applies `V1` through `V9`; a database already on 1.10.x applies `V9` only. No existing table, column or row is changed.
 - There is no backfill. The new tables start empty; the first successful scan creates Issues and the first complete scan creates snapshots for evaluated dimensions. Until then the overview reports `N/A` and the last scan as absent.
 - No existing REST endpoint, Task publication path, data map endpoint or plugin SPI changes. The data map detail page gains a read-only tab after FYOIP-15's UI exists; the data map API is untouched.
 - A datasource deletion cascades its data map tables but does not cascade governance Issues. The next complete data map rule scan resolves those Issues. A Task definition deletion or unpublish likewise resolves on the next complete Task rule scan. This one-scan delay is deliberate: the governance history must not vanish because a source object was deleted.
@@ -377,7 +377,7 @@ The scan runner logs the Workspace, scan id, rule code, outcome, duration and co
 - **Retention:** seed old scan runs, snapshots and resolved Issues; run cleanup; assert old rows are deleted, open/handling/ignored rows are retained, and deletes are chunked.
 - **Workspace isolation:** every read and write with a foreign-Workspace Issue, scan or owner returns `RESOURCE_NOT_EXISTS` or `INVALID_OWNER` without revealing the other Workspace's data.
 - **Rules registry:** duplicate rule codes fail fast at startup; invalid versions fail fast; no startup SQL writes occur when the context starts.
-- **Database integration:** apply `V8` after `V7`; assert the unique active scan key, the unique Issue target key across statuses, the rule-result foreign key cascade and the health-snapshot uniqueness. Assert the tables use `VARCHAR(64)` identities and `DATETIME(3)`.
+- **Database integration:** apply `V9` after `V8`; assert the unique active scan key, the unique Issue target key across statuses, the rule-result foreign key cascade and the health-snapshot uniqueness. Assert the tables use `VARCHAR(64)` identities and `DATETIME(3)`.
 - **End to end:** create an active table with no owner and no description, run a manual scan, assert two Issues and a dimension score; assign and resolve one; run a complete scan and assert the fixed target resolves while the unfixed one reopens; open the data map detail tab and assert it lists the same Issue.
 - **Frontend:** the `资产治理` route is reachable before and after sign-in, the authenticated path prefix survives a signed-out deep link, the overview renders `N/A` rather than zero for an unevaluated dimension, and a missing snapshot day renders as a trend gap.
 - **Verification commands:** backend `bash mvnw -pl '!yak-ops-ui,!yak-ops-dist' verify`; frontend checks follow `yak-ops-ui/docs/tooling.md`. Integration tests that require MySQL must use the repository's owned database resources, not a developer database.
