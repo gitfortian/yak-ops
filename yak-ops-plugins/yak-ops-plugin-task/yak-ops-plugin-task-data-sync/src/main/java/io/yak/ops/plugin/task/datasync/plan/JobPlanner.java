@@ -17,7 +17,7 @@ import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.datasync.config.JobConfig;
 import io.yak.ops.plugin.task.datasync.config.JobOptions;
-import io.yak.ops.plugin.task.datasync.solution.SolutionCatalog;
+import io.yak.ops.plugin.task.datasync.solution.SolutionValidator;
 import io.yak.ops.plugin.task.datasync.solution.Step;
 import io.yak.ops.plugin.task.datasync.validation.JobConfigValidator;
 import io.yak.ops.plugin.task.datasync.validation.SchemaValidator;
@@ -88,7 +88,6 @@ public final class JobPlanner {
         boolean prepareSchema = job.steps().contains(Step.SCHEMA);
         List<TablePlan> tables = new ArrayList<>();
         List<ExecutionResource> claims = new ArrayList<>();
-        SolutionCatalog solutions = new SolutionCatalog(factories);
         java.util.Set<TableId> sources = new java.util.HashSet<>();
         java.util.Set<TableId> targets = new java.util.HashSet<>();
         StringBuilder bindings = new StringBuilder();
@@ -136,11 +135,12 @@ public final class JobPlanner {
             }
             sourceFactory.validateDatasource(from.datasourceType());
             sourceFactory.validateSchema(JobOptions.connectorOptions(source), from.schema());
-            SolutionCatalog.validate(job.solutionType(), from.datasourceType(), targetInfo.type());
-            SolutionCatalog.validateSchemaChanges(
+            SolutionValidator.validate(job.solutionType(), from.datasourceType(), targetInfo.type());
+            SolutionValidator.validateSchemaChanges(
                     job.solutionType(), from.datasourceType(), targetInfo.type(), job.schemaChangesEnabled());
-            SolutionCatalog.validateSteps(from.datasourceType(), targetInfo.type(), job.steps());
-            solutions.validateCombination(
+            SolutionValidator.validateSteps(from.datasourceType(), targetInfo.type(), job.steps());
+            SolutionValidator.validateCombination(
+                    factories,
                     job.solutionType(),
                     from.datasourceType(),
                     targetInfo.type(),
