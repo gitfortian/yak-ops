@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalInt;
 
-
 /** Owns the active per-table preparation state and Connector metrics for one Task Instance. */
 public final class TableExecutionProgress {
     private final List<TablePlan> plans;
