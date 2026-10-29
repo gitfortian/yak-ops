@@ -82,7 +82,7 @@ final class DataSyncTaskHandle implements TaskHandle {
                 JobPlan plan = planner.plan(parameters, identity);
                 verifyAdmission(plan);
                 JobConfig config = JobConfig.from(parameters);
-                var incremental = config.solutionType().supportsScheduling()
+                IncrementalBatchPreparation.IncrementalRun incremental = config.solutionType().supportsScheduling()
                                 && config.steps().contains(Step.INCREMENTAL)
                         ? incrementalPreparation.prepare(plan, config, identity)
                         : null;
@@ -106,7 +106,7 @@ final class DataSyncTaskHandle implements TaskHandle {
                         ? planner.plan(parameters, identity)
                         : plan;
                 verifyAdmission(current);
-                var pipeline = builder.build(
+                io.yak.ops.plugin.task.datasync.pipeline.CompiledPipeline pipeline = builder.build(
                         incremental == null ? current : incremental.apply(current),
                         identity,
                         debug,
@@ -118,7 +118,7 @@ final class DataSyncTaskHandle implements TaskHandle {
                     submissionInvoked = true;
                     progress.dataSubmissionStarted();
                 }
-                var client = executor.execute(pipeline.graph(), pipeline.configuration())
+                io.yak.ops.core.execution.JobClient client = executor.execute(pipeline.graph(), pipeline.configuration())
                         .join();
                 runtime = new YakFlowTaskHandle(client, progress);
                 reference.complete(runtime.runtimeReference());
@@ -179,14 +179,14 @@ final class DataSyncTaskHandle implements TaskHandle {
 
     @Override
     public OptionalInt progressPercent() {
-        var current = progress;
+        TableExecutionProgress current = progress;
         return current == null ? OptionalInt.empty() : current.percent();
     }
 
     @Override
     public Optional<String> executionReport() {
-        var current = progress;
-        var running = runtime;
+        TableExecutionProgress current = progress;
+        YakFlowTaskHandle running = runtime;
         return running != null
                 ? running.executionReport()
                 : current == null ? Optional.empty() : Optional.of(current.report(status));
@@ -194,8 +194,8 @@ final class DataSyncTaskHandle implements TaskHandle {
 
     @Override
     public Optional<String> executionSummary() {
-        var current = progress;
-        var running = runtime;
+        TableExecutionProgress current = progress;
+        YakFlowTaskHandle running = runtime;
         return running != null
                 ? running.executionSummary()
                 : current == null ? Optional.empty() : Optional.ofNullable(current.summary(status));
@@ -220,7 +220,7 @@ final class DataSyncTaskHandle implements TaskHandle {
             try (MDC.MDCCloseable ignored = MDC.putCloseable("taskLogId", identity.instanceId())) {
                 try {
                     preparation.cancel();
-                    var running = runtime;
+                    YakFlowTaskHandle running = runtime;
                     if (running == null) cancellation.complete(null);
                     else
                         running.cancel().whenComplete((unused, failure) -> {

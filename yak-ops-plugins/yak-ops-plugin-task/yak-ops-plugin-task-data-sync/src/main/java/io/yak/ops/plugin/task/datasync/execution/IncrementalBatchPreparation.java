@@ -43,11 +43,11 @@ public final class IncrementalBatchPreparation {
             throw new IllegalArgumentException("Expected bounded offline incremental task");
         List<TaskCursorBatch> proposals = new ArrayList<>();
         for (int index = 0; index < plan.tables().size(); index++) {
-            var table = plan.tables().get(index);
+            TablePlan table = plan.tables().get(index);
             IncrementalConfig increment = config.tables().get(index).incremental();
             if (increment == null) throw new IllegalArgumentException("Missing per-table incremental configuration");
             String datasourceId = table.sourceParameters().get(JobOptions.DATASOURCE_ID);
-            var conn = new JdbcConnectionOptions(resources.connectionOptions(
+            JdbcConnectionOptions conn = new JdbcConnectionOptions(resources.connectionOptions(
                     identity.workspaceId(), datasourceId, table.source().revision()));
             JdbcIncrementalRange.Mode mode =
                     JdbcIncrementalRange.Mode.valueOf(increment.mode().name());
@@ -85,15 +85,15 @@ public final class IncrementalBatchPreparation {
                     config.steps().contains(Step.FULL)));
         }
         List<TaskCursorBatch> frozen = cursors.freeze(identity, proposals);
-        var byKey = new HashMap<String, TaskCursorBatch>();
-        for (var row : frozen) byKey.put(row.tableKey(), row);
+        Map<String, TaskCursorBatch> byKey = new HashMap<String, TaskCursorBatch>();
+        for (TaskCursorBatch row : frozen) byKey.put(row.tableKey(), row);
         if (byKey.size() != plan.tables().size())
             throw new IllegalStateException("Frozen incremental plan is incomplete");
         boolean initialLoad = frozen.getFirst().initialLoad();
         List<TablePlan> enriched = new ArrayList<>();
         for (int index = 0; index < plan.tables().size(); index++) {
-            var table = plan.tables().get(index);
-            var proposal = proposals.get(index);
+            TablePlan table = plan.tables().get(index);
+            TaskCursorBatch proposal = proposals.get(index);
             TaskCursorBatch batch = byKey.get(proposal.tableKey());
             if (batch == null || !batch.binding().equals(proposal.binding()) || batch.initialLoad() != initialLoad)
                 throw new IllegalStateException("Frozen cursor identity or stage differs from current binding");

@@ -108,7 +108,7 @@ public final class SourceConfig {
         if (startupOptions != null) {
             physical.put(MySqlSourceOptions.SCAN_STARTUP_MODE.key(), startupOptions.asModeString());
             if (startupOptions.startupMode() == StartupMode.SPECIFIC_OFFSETS) {
-                var offset = startupOptions.binlogOffset;
+                io.yak.ops.connector.cdc.mysql.source.offset.BinlogOffset offset = startupOptions.binlogOffset;
                 if (offset.getFilename() != null && !offset.getFilename().isBlank()) {
                     physical.put(MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_FILE.key(), offset.getFilename());
                     physical.put(MySqlSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_POS.key(), offset.getPosition());

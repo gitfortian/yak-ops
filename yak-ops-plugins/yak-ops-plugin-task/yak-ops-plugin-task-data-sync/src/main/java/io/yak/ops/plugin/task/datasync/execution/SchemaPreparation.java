@@ -41,7 +41,7 @@ public final class SchemaPreparation {
             checkCanceled();
             progress.schemaStarted(index);
             try {
-                var changes = table.schemaChanges();
+                java.util.List<io.yak.ops.core.event.SchemaChangeEvent> changes = table.schemaChanges();
                 if (!changes.isEmpty()) {
                     try (MetadataApplier applier = builder.createMetadataApplier(table, identity)) {
                         synchronized (this) {
@@ -49,11 +49,11 @@ public final class SchemaPreparation {
                             active = applier;
                         }
                         Set<SchemaChangeEventType> accepted = new HashSet<>();
-                        for (var change : changes) accepted.add(change.getType());
+                        for (io.yak.ops.core.event.SchemaChangeEvent change : changes) accepted.add(change.getType());
                         if (!accepted.equals(Set.of(SchemaChangeEventType.CREATE_TABLE))) {
                             applier.setAcceptedSchemaEvolutionTypes(Set.copyOf(accepted));
                         }
-                        for (var change : changes) {
+                        for (io.yak.ops.core.event.SchemaChangeEvent change : changes) {
                             checkCanceled();
                             applier.applySchemaChange(change);
                         }

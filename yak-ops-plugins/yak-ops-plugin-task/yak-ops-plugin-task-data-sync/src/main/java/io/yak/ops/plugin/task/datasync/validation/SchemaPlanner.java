@@ -54,7 +54,7 @@ public final class SchemaPlanner {
                 throw new IllegalArgumentException(
                         "Physical column expressions require a verified same-database dialect");
             }
-            var properties = source.columnProperties();
+            java.util.Map<String, ColumnProperties> properties = source.columnProperties();
             if (!source.datasourceType().equals(target.type())) {
                 // MySQL COLUMN_TYPE belongs to its source dialect; other targets use logical types.
                 properties = properties.entrySet().stream()

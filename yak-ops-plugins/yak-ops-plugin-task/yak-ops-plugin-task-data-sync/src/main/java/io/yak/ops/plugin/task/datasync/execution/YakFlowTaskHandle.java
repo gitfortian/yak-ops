@@ -38,7 +38,7 @@ final class YakFlowTaskHandle implements TaskHandle {
     @Override
     public Optional<String> executionReport() {
         if (progress == null) return Optional.empty();
-        var status = client.getJobStatus().getNow(null);
+        io.yak.ops.core.api.common.JobStatus status = client.getJobStatus().getNow(null);
         if (status == null) return Optional.empty();
         return Optional.of(progress.report(status));
     }
@@ -46,7 +46,7 @@ final class YakFlowTaskHandle implements TaskHandle {
     @Override
     public Optional<String> executionSummary() {
         if (progress == null) return Optional.empty();
-        var status = client.getJobStatus().getNow(null);
+        io.yak.ops.core.api.common.JobStatus status = client.getJobStatus().getNow(null);
         if (status == null) return Optional.empty();
         return Optional.ofNullable(progress.summary(status));
     }
