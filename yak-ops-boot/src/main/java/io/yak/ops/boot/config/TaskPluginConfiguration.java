@@ -9,9 +9,9 @@ import io.yak.ops.flow.runtime.execution.EmbeddedPipelineExecutor;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
 import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.datasync.DataSyncTaskPlugin;
-import io.yak.ops.plugin.task.datasync.config.EnvironmentOptions;
-import io.yak.ops.plugin.task.datasync.config.ExecutionConfigurationFactory;
 import io.yak.ops.plugin.task.datasync.execution.DataSyncTaskExecutor;
+import io.yak.ops.plugin.task.datasync.pipeline.EnvironmentOptions;
+import io.yak.ops.plugin.task.datasync.pipeline.ExecutionConfigurationFactory;
 import io.yak.ops.plugin.task.datasync.pipeline.PipelineBuilder;
 import io.yak.ops.plugin.task.datasync.plan.JobPlanner;
 import java.nio.file.Path;
@@ -100,9 +100,9 @@ public class TaskPluginConfiguration {
     }
 
     @Bean
-    io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner incrementalBatchPlanner(
+    io.yak.ops.plugin.task.datasync.execution.IncrementalBatchPreparation incrementalBatchPlanner(
             DataSourceLookupService resources, io.yak.ops.plugin.task.api.execution.TaskCursorStore cursors) {
-        return new io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner(resources, cursors);
+        return new io.yak.ops.plugin.task.datasync.execution.IncrementalBatchPreparation(resources, cursors);
     }
 
     @Bean
@@ -110,7 +110,7 @@ public class TaskPluginConfiguration {
             JobPlanner planner,
             PipelineBuilder builder,
             PipelineExecutor executor,
-            io.yak.ops.plugin.task.datasync.plan.IncrementalBatchPlanner incrementalPlanner) {
+            io.yak.ops.plugin.task.datasync.execution.IncrementalBatchPreparation incrementalPlanner) {
         return new DataSyncTaskExecutor(planner, builder, executor, incrementalPlanner);
     }
 

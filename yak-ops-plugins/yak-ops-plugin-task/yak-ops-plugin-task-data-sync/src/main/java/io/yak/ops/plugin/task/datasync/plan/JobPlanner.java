@@ -17,9 +17,10 @@ import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.datasync.config.JobConfig;
 import io.yak.ops.plugin.task.datasync.config.JobOptions;
-import io.yak.ops.plugin.task.datasync.solution.SolutionCatalog;
+import io.yak.ops.plugin.task.datasync.solution.SolutionValidator;
 import io.yak.ops.plugin.task.datasync.solution.Step;
 import io.yak.ops.plugin.task.datasync.validation.JobConfigValidator;
+import io.yak.ops.plugin.task.datasync.validation.SchemaPlanner;
 import io.yak.ops.plugin.task.datasync.validation.SchemaValidator;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -88,7 +89,6 @@ public final class JobPlanner {
         boolean prepareSchema = job.steps().contains(Step.SCHEMA);
         List<TablePlan> tables = new ArrayList<>();
         List<ExecutionResource> claims = new ArrayList<>();
-        SolutionCatalog solutions = new SolutionCatalog(factories);
         java.util.Set<TableId> sources = new java.util.HashSet<>();
         java.util.Set<TableId> targets = new java.util.HashSet<>();
         StringBuilder bindings = new StringBuilder();
@@ -136,22 +136,14 @@ public final class JobPlanner {
             }
             sourceFactory.validateDatasource(from.datasourceType());
             sourceFactory.validateSchema(JobOptions.connectorOptions(source), from.schema());
-            SolutionCatalog.validate(job.solutionType(), from.datasourceType(), targetInfo.type());
-            SolutionCatalog.validateSchemaChanges(
-                    job.solutionType(), from.datasourceType(), targetInfo.type(), job.schemaChangesEnabled());
-            SolutionCatalog.validateSteps(from.datasourceType(), targetInfo.type(), job.steps());
-            solutions.validateCombination(
+            SolutionValidator.validateSelection(
+                    factories,
                     job.solutionType(),
                     from.datasourceType(),
                     targetInfo.type(),
                     job.steps(),
+                    job.schemaChangesEnabled(),
                     sink.get(JdbcSinkOptions.WRITE_MODE).name());
-            if (job.solutionType().supportsScheduling()
-                    && job.steps().contains(Step.INCREMENTAL)
-                    && (!java.util.Set.of("MYSQL", "POSTGRE_SQL").contains(from.datasourceType())
-                            || !java.util.Set.of("MYSQL", "POSTGRE_SQL").contains(targetInfo.type()))) {
-                throw new IllegalArgumentException("Offline incremental is limited to MySQL and PostgreSQL");
-            }
             if (!sources.add(from.table()) || !targets.add(targetTable)) {
                 throw new IllegalArgumentException("Duplicate resolved source or destination table");
             }
@@ -173,9 +165,9 @@ public final class JobPlanner {
                     job.schemaChangesEnabled());
             TableSchema writeSource = SchemaValidator.writeSchema(from, mapping.targetPrimaryKeys());
             CreateTableEvent event = prepareSchema
-                    ? SchemaValidator.createEvent(from, targetInfo, targetTable, mapping.targetPrimaryKeys())
+                    ? SchemaPlanner.createEvent(from, targetInfo, targetTable, mapping.targetPrimaryKeys())
                     : null;
-            SchemaChangePlan schema = event == null ? null : SchemaValidator.plan(event, targetInfo.type(), actual);
+            SchemaChangePlan schema = event == null ? null : SchemaPlanner.plan(event, targetInfo.type(), actual);
             if (schema != null) SchemaValidator.requireCompatible(schema);
             TableSchema expected = event == null ? actual.schema() : event.getSchema();
             sinkFactory.validateSchema(sink, writeSource, expected, sourceFactory.producesChangelog());

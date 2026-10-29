@@ -1,4 +1,4 @@
-package io.yak.ops.plugin.task.datasync.plan;
+package io.yak.ops.plugin.task.datasync.execution;
 
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.connector.jdbc.JdbcConnectionOptions;
@@ -13,6 +13,8 @@ import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.datasync.config.IncrementalConfig;
 import io.yak.ops.plugin.task.datasync.config.JobConfig;
 import io.yak.ops.plugin.task.datasync.config.JobOptions;
+import io.yak.ops.plugin.task.datasync.plan.JobPlan;
+import io.yak.ops.plugin.task.datasync.plan.TablePlan;
 import io.yak.ops.plugin.task.datasync.solution.Step;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -27,11 +29,11 @@ import java.util.Map;
 import java.util.Objects;
 
 /** Resolves source-clock upper bounds and freezes one Task-owned incremental batch before execution. */
-public final class IncrementalBatchPlanner {
+public final class IncrementalBatchPreparation {
     private final DataSourceLookupService resources;
     private final TaskCursorStore cursors;
 
-    public IncrementalBatchPlanner(DataSourceLookupService resources, TaskCursorStore cursors) {
+    public IncrementalBatchPreparation(DataSourceLookupService resources, TaskCursorStore cursors) {
         this.resources = Objects.requireNonNull(resources, "resources");
         this.cursors = Objects.requireNonNull(cursors, "cursors");
     }
@@ -139,7 +141,24 @@ public final class IncrementalBatchPlanner {
         }
     }
 
-    public record IncrementalRun(JobPlan plan, boolean initialLoad) {
+    /** One frozen incremental batch and its actual initial-load decision. */
+    public static final class IncrementalRun {
+        private final JobPlan plan;
+        private final boolean initialLoad;
+
+        public IncrementalRun(JobPlan plan, boolean initialLoad) {
+            this.plan = Objects.requireNonNull(plan, "plan");
+            this.initialLoad = initialLoad;
+        }
+
+        public JobPlan plan() {
+            return plan;
+        }
+
+        public boolean initialLoad() {
+            return initialLoad;
+        }
+
         /** Rebinds frozen source scan ranges after target DDL readback while preserving admission. */
         public JobPlan apply(JobPlan resolved) {
             if (resolved.tables().size() != plan.tables().size())

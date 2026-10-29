@@ -1,5 +1,7 @@
 package io.yak.ops.plugin.task.datasync.config;
 
+import io.yak.ops.plugin.task.datasync.pipeline.EnvironmentOptions;
+import io.yak.ops.plugin.task.datasync.pipeline.ExecutionConfigurationFactory;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;

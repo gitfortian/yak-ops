@@ -110,15 +110,11 @@ public final class JobConfig {
             }
             dataSteps.add(step);
         }
-        if (!type.supportsScheduling()
-                && !List.of(List.of(Step.FULL, Step.INCREMENTAL), List.of(Step.INCREMENTAL), List.of(Step.FULL))
-                        .contains(dataSteps)) {
-            throw new IllegalArgumentException("Realtime requires FULL, INCREMENTAL or both");
-        }
-        if (type.supportsScheduling()
-                && !List.of(List.of(Step.FULL), List.of(Step.INCREMENTAL), List.of(Step.FULL, Step.INCREMENTAL))
-                        .contains(dataSteps)) {
-            throw new IllegalArgumentException("Unsupported offline data steps");
+        // Only the shape and canonical order belong to the V4 parser.
+        // SolutionValidator owns the product-specific allowed combinations.
+        if (dataSteps.size() > 2
+                || (dataSteps.size() == 2 && !dataSteps.equals(List.of(Step.FULL, Step.INCREMENTAL)))) {
+            throw new IllegalArgumentException("Expected FULL, INCREMENTAL, or FULL then INCREMENTAL");
         }
         if (!parameters.get(SolutionOptions.TRANSFORM).isEmpty()
                 || !parameters.get(SolutionOptions.ENV).isEmpty()) {
@@ -272,16 +268,6 @@ public final class JobConfig {
 
     public String targetDataSourceId() {
         return tables.getFirst().sink().get(JobOptions.DATASOURCE_ID);
-    }
-
-    public ReadonlyConfig source() {
-        if (tables.size() != 1) throw new IllegalStateException("Multiple Source routes");
-        return tables.getFirst().source();
-    }
-
-    public ReadonlyConfig sink() {
-        if (tables.size() != 1) throw new IllegalStateException("Multiple Sink routes");
-        return tables.getFirst().sink();
     }
 
     /** SCHEMA is a derived execution stage, never a second persisted user setting. */

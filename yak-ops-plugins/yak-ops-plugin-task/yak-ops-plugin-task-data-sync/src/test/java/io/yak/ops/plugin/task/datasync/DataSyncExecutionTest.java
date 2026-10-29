@@ -35,8 +35,8 @@ import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
 import io.yak.ops.plugin.task.api.execution.TaskOutcome;
 import io.yak.ops.plugin.task.api.execution.TaskStartRejectedException;
-import io.yak.ops.plugin.task.datasync.config.EnvironmentOptions;
-import io.yak.ops.plugin.task.datasync.config.ExecutionConfigurationFactory;
+import io.yak.ops.plugin.task.datasync.pipeline.EnvironmentOptions;
+import io.yak.ops.plugin.task.datasync.pipeline.ExecutionConfigurationFactory;
 import io.yak.ops.plugin.task.datasync.config.JobConfig;
 import io.yak.ops.plugin.task.datasync.config.JobOptions;
 import io.yak.ops.plugin.task.datasync.execution.DataSyncTaskExecutor;
@@ -75,13 +75,32 @@ class DataSyncExecutionTest {
 
         var handle =
                 plugin.start(parameters, plan, CONTEXT, false).toCompletableFuture().join();
+        assertEquals(0, submissions.get());
+        handle.start();
+        handle.completion().toCompletableFuture().join();
         assertEquals(1, submissions.get());
         assertEquals("YAKFLOW", handle.runtimeReference().orElseThrow().engine());
         assertEquals(
                 TaskOutcome.FINISHED, handle.completion().toCompletableFuture().join());
         assertEquals(0, resources.openedConnections.get());
-        assertEquals(4, resources.tables.get());
+        assertEquals(6, resources.tables.get());
         assertEquals(2, resources.connections.get());
+    }
+
+    @Test
+    void boundedJdbcCancellationBeforeActivationDoesNotSubmitEngineJob() {
+        Resources resources = new Resources();
+        AtomicInteger submissions = new AtomicInteger();
+        DataSyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
+        ReadonlyConfig parameters = parameters(false);
+        var handle = plugin.start(parameters, plugin.plan(parameters, CONTEXT), CONTEXT, false)
+                .toCompletableFuture()
+                .join();
+        assertEquals(0, submissions.get());
+        handle.cancel().toCompletableFuture().join();
+        handle.start();
+        assertEquals(TaskOutcome.CANCELED, handle.completion().toCompletableFuture().join());
+        assertEquals(0, submissions.get());
     }
 
     @Test
@@ -90,9 +109,9 @@ class DataSyncExecutionTest {
         JobPlanner planner = new JobPlanner(resources, new FactoryUtil());
         ReadonlyConfig parameters = parameters(true);
         JobPlan prepared = planner.plan(parameters, CONTEXT);
-        assertEquals(JobConfig.from(parameters).source(), prepared.sourceParameters());
-        assertEquals(JobConfig.from(parameters).sink(), prepared.sinkParameters());
-        assertEquals("orders", prepared.source().table().table());
+        assertEquals(JobConfig.from(parameters).tables().getFirst().source(), prepared.tables().getFirst().sourceParameters());
+        assertEquals(JobConfig.from(parameters).tables().getFirst().sink(), prepared.tables().getFirst().sinkParameters());
+        assertEquals("orders", prepared.tables().getFirst().source().table().table());
         assertEquals("ods_orders", prepared.tables().getFirst().targetTable().table());
         assertEquals(planner.admissionPlan(parameters, CONTEXT), prepared.admissionPlan());
         assertEquals(0, resources.connections.get());
@@ -151,6 +170,8 @@ class DataSyncExecutionTest {
         assertTrue(plan.resourceRevision().length() <= 128);
         var handle =
                 plugin.start(parameters, plan, CONTEXT, false).toCompletableFuture().join();
+        handle.start();
+        handle.completion().toCompletableFuture().join();
         assertEquals("YAKFLOW", handle.runtimeReference().orElseThrow().engine());
         assertEquals(1, submissions.get());
         assertEquals(0, resources.openedConnections.get());
@@ -169,9 +190,11 @@ class DataSyncExecutionTest {
         };
         DataSyncTaskPlugin plugin = plugin(resources, capture);
         ReadonlyConfig jdbc = parameters(false);
-        plugin.start(jdbc, plugin.plan(jdbc, CONTEXT), CONTEXT, false)
+        var jdbcHandle = plugin.start(jdbc, plugin.plan(jdbc, CONTEXT), CONTEXT, false)
                 .toCompletableFuture()
                 .join();
+        jdbcHandle.start();
+        jdbcHandle.completion().toCompletableFuture().join();
         StreamGraph bounded = lastGraph.get();
         assertTrue(bounded.isBounded());
         assertInstanceOf(
@@ -186,9 +209,11 @@ class DataSyncExecutionTest {
                 "data-sync-sink-definition", bounded.getSinkNodes().getFirst().getUid());
         assertEquals(java.time.Duration.ZERO, lastConfiguration.get().get(CheckpointingOptions.CHECKPOINTING_INTERVAL));
         ReadonlyConfig cdc = parameters(true);
-        plugin.start(cdc, plugin.plan(cdc, CONTEXT), CONTEXT, false)
+        var cdcHandle = plugin.start(cdc, plugin.plan(cdc, CONTEXT), CONTEXT, false)
                 .toCompletableFuture()
                 .join();
+        cdcHandle.start();
+        cdcHandle.completion().toCompletableFuture().join();
         StreamGraph continuous = lastGraph.get();
         assertTrue(!continuous.isBounded());
         assertInstanceOf(
@@ -260,12 +285,13 @@ class DataSyncExecutionTest {
         ReadonlyConfig parameters = parameters(false);
         TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
         resources.sourceConnectionRevision = 2;
-        CompletionException failure = assertThrows(
-                CompletionException.class,
-                () -> plugin.start(parameters, plan, CONTEXT, false)
-                        .toCompletableFuture()
-                        .join());
-        assertInstanceOf(TaskStartRejectedException.class, failure.getCause());
+        var handle = plugin.start(parameters, plan, CONTEXT, false)
+                .toCompletableFuture()
+                .join();
+        assertEquals(0, submissions.get());
+        handle.start();
+        assertEquals(TaskOutcome.FAILED, handle.completion().toCompletableFuture().join());
+        assertTrue(handle.runtimeReference().isEmpty());
         assertEquals(0, submissions.get());
         assertEquals(0, resources.openedConnections.get());
     }
@@ -278,12 +304,13 @@ class DataSyncExecutionTest {
         DataSyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
         ReadonlyConfig parameters = parameters(true);
         TaskAdmissionPlan plan = plugin.plan(parameters, CONTEXT);
-        CompletionException failure = assertThrows(
-                CompletionException.class,
-                () -> plugin.start(parameters, plan, CONTEXT, false)
-                        .toCompletableFuture()
-                        .join());
-        assertInstanceOf(TaskStartRejectedException.class, failure.getCause());
+        var handle = plugin.start(parameters, plan, CONTEXT, false)
+                .toCompletableFuture()
+                .join();
+        assertEquals(0, submissions.get());
+        handle.start();
+        assertEquals(TaskOutcome.FAILED, handle.completion().toCompletableFuture().join());
+        assertTrue(handle.runtimeReference().isEmpty());
         assertEquals(0, submissions.get());
         assertEquals(0, resources.openedConnections.get());
     }
@@ -337,8 +364,8 @@ class DataSyncExecutionTest {
         var sourceConfig = mysql.config();
         assertEquals(64, sourceConfig.queueCapacity());
         JobPlan prepared = planner.plan(parameters, CONTEXT);
-        assertEquals(prepared.sourceOptions().get(MySqlSourceOptions.SERVER_ID), Integer.toString(sourceConfig.serverId()));
-        assertEquals(prepared.sourceOptions().get(MySqlSourceOptions.TOPIC_PREFIX), sourceConfig.topicPrefix());
+        assertEquals(prepared.tables().getFirst().sourceOptions().get(MySqlSourceOptions.SERVER_ID), Integer.toString(sourceConfig.serverId()));
+        assertEquals(prepared.tables().getFirst().sourceOptions().get(MySqlSourceOptions.TOPIC_PREFIX), sourceConfig.topicPrefix());
         assertEquals(false, compiled.configuration().get(CheckpointingOptions.RESTORE_LATEST));
         assertEquals(2, resources.connections.get());
         assertEquals(0, resources.openedConnections.get());
@@ -421,7 +448,7 @@ class DataSyncExecutionTest {
         assertEquals("secret", sinkConnection.password());
         assertEquals("not-the-datasource-password", sourceSettings.get(JdbcConnectionOptions.PASSWORD));
         assertTrue(!compiled.configuration().contains(JdbcConnectionOptions.PASSWORD));
-        assertTrue(!plan.sourceOptions().contains(JdbcConnectionOptions.PASSWORD));
+        assertTrue(!plan.tables().getFirst().sourceOptions().contains(JdbcConnectionOptions.PASSWORD));
         assertEquals(0, resources.openedConnections.get());
     }
 
@@ -469,7 +496,13 @@ class DataSyncExecutionTest {
         FactoryUtil factories = new FactoryUtil();
         JobPlanner planner = new JobPlanner(resources, factories);
         PipelineBuilder builder = new PipelineBuilder(resources, factories, Path.of("target/data-sync"));
-        return new DataSyncTaskPlugin(planner, new DataSyncTaskExecutor(planner, builder, executor), factories);
+        return new DataSyncTaskPlugin(planner, new DataSyncTaskExecutor(
+                        planner,
+                        builder,
+                        executor,
+                        new io.yak.ops.plugin.task.datasync.execution.IncrementalBatchPreparation(
+                                resources, (identity, proposed) -> proposed)),
+                factories);
     }
 
     private static ReadonlyConfig cdcParameters(String steps, String startupMode) {

@@ -18,8 +18,6 @@ import io.yak.ops.flow.runtime.transformations.SinkTransformation;
 import io.yak.ops.flow.runtime.transformations.SourceTransformation;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
-import io.yak.ops.plugin.task.datasync.config.EnvironmentOptions;
-import io.yak.ops.plugin.task.datasync.config.ExecutionConfigurationFactory;
 import io.yak.ops.plugin.task.datasync.config.JobOptions;
 import io.yak.ops.plugin.task.datasync.execution.TableExecutionProgress;
 import io.yak.ops.plugin.task.datasync.plan.JobPlan;
@@ -95,47 +93,12 @@ public final class PipelineBuilder {
      * @param debug whether to enable detailed execution diagnostics
      * @return compiled topology and execution configuration
      */
+    /** Compiles a plan without an existing preparation observation. */
     public CompiledPipeline build(JobPlan plan, TaskExecutionIdentity identity, boolean debug) {
-        return build(plan, identity, debug, false);
+        return build(plan, identity, debug, null, false, false);
     }
 
-    public CompiledPipeline build(
-            JobPlan plan, TaskExecutionIdentity identity, boolean debug, boolean schemaChangesEnabled) {
-        return build(plan, identity, debug, schemaChangesEnabled, false);
-    }
-
-    public CompiledPipeline build(
-            JobPlan plan,
-            TaskExecutionIdentity identity,
-            boolean debug,
-            boolean schemaChangesEnabled,
-            boolean allowDropColumns) {
-        return build(plan, identity, debug, null, schemaChangesEnabled, allowDropColumns);
-    }
-
-    /**
-     * Compiles an already prepared plan while retaining Task-owned schema and data observations.
-     *
-     * @param plan authorized plan with physical target schemas
-     * @param identity trusted Task Instance identity
-     * @param debug Instance diagnostics flag
-     * @param progress observations spanning preparation and data execution
-     * @return one physical pipeline
-     */
-    public CompiledPipeline build(
-            JobPlan plan, TaskExecutionIdentity identity, boolean debug, TableExecutionProgress progress) {
-        return build(plan, identity, debug, progress, false);
-    }
-
-    public CompiledPipeline build(
-            JobPlan plan,
-            TaskExecutionIdentity identity,
-            boolean debug,
-            TableExecutionProgress progress,
-            boolean schemaChangesEnabled) {
-        return build(plan, identity, debug, progress, schemaChangesEnabled, false);
-    }
-
+    /** Compiles one fully prepared physical Job with its Task-owned observations. */
     public CompiledPipeline build(
             JobPlan plan,
             TaskExecutionIdentity identity,
@@ -202,10 +165,10 @@ public final class PipelineBuilder {
         TableExecutionProgress observations = progress;
         if (observations == null) {
             boolean continuous = source.getBoundedness() != Boundedness.BOUNDED;
-            String dataStep =
-                    source instanceof MySqlSource mysql && mysql.startupOptions().isStreamOnly()
-                            ? "INCREMENTAL"
-                            : "FULL";
+            String dataStep = source instanceof MySqlSource mysql
+                            && mysql.startupOptions().isStreamOnly()
+                    ? "INCREMENTAL"
+                    : "FULL";
             observations = new TableExecutionProgress(plan.tables(), metrics, continuous, dataStep);
         }
         return new CompiledPipeline(graph, configuration, observations);
