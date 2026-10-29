@@ -80,6 +80,41 @@ assert.equal(latestOnly.source.startup.mode, "latest-offset");
 assert.equal(latestOnly.source.tables[0].snapshot, undefined);
 assert.equal(readSyncParameters(4, latestOnly), latestOnly);
 assert.deepEqual(displaySyncSteps(latestOnly), ["INCREMENTAL"]);
+
+const snapshotOnly = createDefinitionRequest({
+  ...realtime,
+  steps: ["FULL"],
+}).parameters;
+assert.deepEqual(snapshotOnly.steps, ["FULL"]);
+assert.equal(snapshotOnly.source.startup.mode, "snapshot");
+assert.equal(snapshotOnly.sink.schemaPolicy.evolution.enabled, false);
+assert.equal(snapshotOnly.sink.tables[0].write.mode, "UPSERT");
+assert.equal(readSyncParameters(4, snapshotOnly), snapshotOnly);
+const reordered = createDefinitionRequest({
+  ...realtime,
+  steps: ["INCREMENTAL", "FULL"],
+}).parameters;
+assert.deepEqual(reordered.steps, ["FULL", "INCREMENTAL"]);
+assert.equal(reordered.source.startup.mode, "initial");
+assert.equal(readSyncParameters(4, reordered), reordered);
+assert.throws(() =>
+  readSyncParameters(4, {
+    ...snapshotOnly,
+    sink: {
+      ...snapshotOnly.sink,
+      schemaPolicy: {
+        ...snapshotOnly.sink.schemaPolicy,
+        evolution: { enabled: true, allowDropColumns: false },
+      },
+    },
+  }),
+);
+assert.throws(() =>
+  readSyncParameters(4, {
+    ...snapshotOnly,
+    source: { ...snapshotOnly.source, startup: { mode: "initial" } },
+  }),
+);
 assert.throws(() =>
   readSyncParameters(4, {
     ...latestOnly,
