@@ -112,8 +112,10 @@ public final class PipelineBuilder {
             throw new IllegalStateException("Every target must be prepared and read back before pipeline compilation");
         }
         TablePlan first = plan.tables().getFirst();
-        io.yak.ops.connector.base.factory.TableSourceFactory sourceFactory = factories.source(first.sourceParameters().get(JobOptions.TYPE));
-        io.yak.ops.connector.base.factory.TableSinkFactory sinkFactory = factories.sink(first.sinkParameters().get(JobOptions.TYPE));
+        io.yak.ops.connector.base.factory.TableSourceFactory sourceFactory =
+                factories.source(first.sourceParameters().get(JobOptions.TYPE));
+        io.yak.ops.connector.base.factory.TableSinkFactory sinkFactory =
+                factories.sink(first.sinkParameters().get(JobOptions.TYPE));
         int sourceParallelism = options.get(EnvironmentOptions.SOURCE_PARALLELISM);
         int sinkParallelism = options.get(EnvironmentOptions.SINK_PARALLELISM);
         if (sourceFactory.producesChangelog() && sinkParallelism != 1) {
@@ -182,7 +184,8 @@ public final class PipelineBuilder {
      * @return unstarted metadata applier; its execution owner must close it
      */
     public MetadataApplier createMetadataApplier(TablePlan table, TaskExecutionIdentity identity) {
-        io.yak.ops.connector.base.factory.TableSinkFactory factory = factories.sink(table.sinkParameters().get(JobOptions.TYPE));
+        io.yak.ops.connector.base.factory.TableSinkFactory factory =
+                factories.sink(table.sinkParameters().get(JobOptions.TYPE));
         ReadonlyConfig connection = resources.connectionOptions(
                 identity.workspaceId(),
                 table.sinkParameters().get(JobOptions.DATASOURCE_ID),

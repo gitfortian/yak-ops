@@ -1,6 +1,5 @@
 package io.yak.ops.plugin.task.datasync.plan;
 
-
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.yak.ops.configuration.ReadonlyConfig;
@@ -34,7 +33,18 @@ public final class TablePlan {
     private final TableSchema writeSourceSchema;
 
     @JsonCreator
-    public TablePlan(@JsonProperty("sourceParameters") ReadonlyConfig sourceParameters, @JsonProperty("sinkParameters") ReadonlyConfig sinkParameters, @JsonProperty("source") DataSourceTable source, @JsonProperty("targetDatasource") DataSourceInfo targetDatasource, @JsonProperty("targetTable") TableId targetTable, @JsonProperty("targetSchema") TableSchema targetSchema, @JsonProperty("schemaChange") CreateTableEvent schemaChange, @JsonProperty("sourceOptions") ReadonlyConfig sourceOptions, @JsonProperty("schemaPlan") SchemaChangePlan schemaPlan, @JsonProperty("targetMetadata") DataSourceTable targetMetadata, @JsonProperty("writeSourceSchema") TableSchema writeSourceSchema) {
+    public TablePlan(
+            @JsonProperty("sourceParameters") ReadonlyConfig sourceParameters,
+            @JsonProperty("sinkParameters") ReadonlyConfig sinkParameters,
+            @JsonProperty("source") DataSourceTable source,
+            @JsonProperty("targetDatasource") DataSourceInfo targetDatasource,
+            @JsonProperty("targetTable") TableId targetTable,
+            @JsonProperty("targetSchema") TableSchema targetSchema,
+            @JsonProperty("schemaChange") CreateTableEvent schemaChange,
+            @JsonProperty("sourceOptions") ReadonlyConfig sourceOptions,
+            @JsonProperty("schemaPlan") SchemaChangePlan schemaPlan,
+            @JsonProperty("targetMetadata") DataSourceTable targetMetadata,
+            @JsonProperty("writeSourceSchema") TableSchema writeSourceSchema) {
         Objects.requireNonNull(sourceParameters, "sourceParameters");
         Objects.requireNonNull(sinkParameters, "sinkParameters");
         Objects.requireNonNull(source, "source");
@@ -43,18 +53,18 @@ public final class TablePlan {
         Objects.requireNonNull(targetTable, "targetTable");
         Objects.requireNonNull(sourceOptions, "sourceOptions");
         if (targetSchema == null && schemaChange == null) {
-        throw new IllegalArgumentException("An absent target requires schema preparation");
+            throw new IllegalArgumentException("An absent target requires schema preparation");
         }
         if (schemaChange != null && !targetTable.equals(schemaChange.tableId())) {
-        throw new IllegalArgumentException("Schema event and target identities differ");
+            throw new IllegalArgumentException("Schema event and target identities differ");
         }
         if (schemaPlan != null && !targetTable.equals(schemaPlan.tableId())) {
-        throw new IllegalArgumentException("Schema plan and target identities differ");
+            throw new IllegalArgumentException("Schema plan and target identities differ");
         }
         if (targetMetadata != null
-        && (!targetTable.equals(targetMetadata.table())
-        || targetMetadata.revision() != targetDatasource.revision())) {
-        throw new IllegalArgumentException("Target metadata does not match the admitted route");
+                && (!targetTable.equals(targetMetadata.table())
+                        || targetMetadata.revision() != targetDatasource.revision())) {
+            throw new IllegalArgumentException("Target metadata does not match the admitted route");
         }
         this.sourceParameters = sourceParameters;
         this.sinkParameters = sinkParameters;
@@ -128,15 +138,34 @@ public final class TablePlan {
     public boolean equals(Object value) {
         if (this == value) return true;
         if (!(value instanceof TablePlan other)) return false;
-        return java.util.Objects.equals(sourceParameters, other.sourceParameters) && java.util.Objects.equals(sinkParameters, other.sinkParameters) && java.util.Objects.equals(source, other.source) && java.util.Objects.equals(targetDatasource, other.targetDatasource) && java.util.Objects.equals(targetTable, other.targetTable) && java.util.Objects.equals(targetSchema, other.targetSchema) && java.util.Objects.equals(schemaChange, other.schemaChange) && java.util.Objects.equals(sourceOptions, other.sourceOptions) && java.util.Objects.equals(schemaPlan, other.schemaPlan) && java.util.Objects.equals(targetMetadata, other.targetMetadata) && java.util.Objects.equals(writeSourceSchema, other.writeSourceSchema);
+        return java.util.Objects.equals(sourceParameters, other.sourceParameters)
+                && java.util.Objects.equals(sinkParameters, other.sinkParameters)
+                && java.util.Objects.equals(source, other.source)
+                && java.util.Objects.equals(targetDatasource, other.targetDatasource)
+                && java.util.Objects.equals(targetTable, other.targetTable)
+                && java.util.Objects.equals(targetSchema, other.targetSchema)
+                && java.util.Objects.equals(schemaChange, other.schemaChange)
+                && java.util.Objects.equals(sourceOptions, other.sourceOptions)
+                && java.util.Objects.equals(schemaPlan, other.schemaPlan)
+                && java.util.Objects.equals(targetMetadata, other.targetMetadata)
+                && java.util.Objects.equals(writeSourceSchema, other.writeSourceSchema);
     }
 
     @Override
     public int hashCode() {
-        return java.util.Objects.hash(sourceParameters, sinkParameters, source, targetDatasource, targetTable, targetSchema, schemaChange, sourceOptions, schemaPlan, targetMetadata, writeSourceSchema);
+        return java.util.Objects.hash(
+                sourceParameters,
+                sinkParameters,
+                source,
+                targetDatasource,
+                targetTable,
+                targetSchema,
+                schemaChange,
+                sourceOptions,
+                schemaPlan,
+                targetMetadata,
+                writeSourceSchema);
     }
-
-    
 
     /** Ordered physical changes for one target table. */
     public List<SchemaChangeEvent> schemaChanges() {

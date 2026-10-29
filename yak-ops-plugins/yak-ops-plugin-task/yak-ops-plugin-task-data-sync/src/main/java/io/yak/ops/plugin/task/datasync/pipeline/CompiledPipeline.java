@@ -1,6 +1,5 @@
 package io.yak.ops.plugin.task.datasync.pipeline;
 
-
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.yak.ops.configuration.Configuration;
@@ -15,7 +14,10 @@ public final class CompiledPipeline {
     private final TableExecutionProgress progress;
 
     @JsonCreator
-    public CompiledPipeline(@JsonProperty("graph") StreamGraph graph, @JsonProperty("configuration") Configuration configuration, @JsonProperty("progress") TableExecutionProgress progress) {
+    public CompiledPipeline(
+            @JsonProperty("graph") StreamGraph graph,
+            @JsonProperty("configuration") Configuration configuration,
+            @JsonProperty("progress") TableExecutionProgress progress) {
         Objects.requireNonNull(graph, "graph");
         Objects.requireNonNull(configuration, "configuration");
         this.graph = graph;
@@ -42,13 +44,13 @@ public final class CompiledPipeline {
     public boolean equals(Object value) {
         if (this == value) return true;
         if (!(value instanceof CompiledPipeline other)) return false;
-        return java.util.Objects.equals(graph, other.graph) && java.util.Objects.equals(configuration, other.configuration) && java.util.Objects.equals(progress, other.progress);
+        return java.util.Objects.equals(graph, other.graph)
+                && java.util.Objects.equals(configuration, other.configuration)
+                && java.util.Objects.equals(progress, other.progress);
     }
 
     @Override
     public int hashCode() {
         return java.util.Objects.hash(graph, configuration, progress);
     }
-
-    
 }

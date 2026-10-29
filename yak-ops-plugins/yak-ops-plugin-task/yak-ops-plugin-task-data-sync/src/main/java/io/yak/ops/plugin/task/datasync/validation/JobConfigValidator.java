@@ -25,8 +25,10 @@ public final class JobConfigValidator {
         try {
             JobConfig job = JobConfig.from(parameters);
             for (io.yak.ops.plugin.task.datasync.config.TableConfig table : job.tables()) {
-                io.yak.ops.connector.base.factory.TableSourceFactory sourceFactory = factories.source(table.source().get(JobOptions.TYPE));
-                io.yak.ops.connector.base.factory.TableSinkFactory sinkFactory = factories.sink(table.sink().get(JobOptions.TYPE));
+                io.yak.ops.connector.base.factory.TableSourceFactory sourceFactory =
+                        factories.source(table.source().get(JobOptions.TYPE));
+                io.yak.ops.connector.base.factory.TableSinkFactory sinkFactory =
+                        factories.sink(table.sink().get(JobOptions.TYPE));
                 FactoryUtil.validate(table.source(), sourceFactory, JobOptions.ENDPOINT_RULE);
                 FactoryUtil.validate(table.sink(), sinkFactory, JobOptions.ENDPOINT_RULE);
                 sinkFactory.validate(table.sink(), sourceFactory.producesChangelog());
@@ -61,8 +63,10 @@ public final class JobConfigValidator {
             Set<TableId> sources = new HashSet<>();
             Set<TableId> targets = new HashSet<>();
             for (io.yak.ops.plugin.task.datasync.config.TableConfig table : job.tables()) {
-                io.yak.ops.connector.base.factory.TableSourceFactory sourceFactory = factories.source(table.source().get(JobOptions.TYPE));
-                io.yak.ops.connector.base.factory.TableSinkFactory sinkFactory = factories.sink(table.sink().get(JobOptions.TYPE));
+                io.yak.ops.connector.base.factory.TableSourceFactory sourceFactory =
+                        factories.source(table.source().get(JobOptions.TYPE));
+                io.yak.ops.connector.base.factory.TableSinkFactory sinkFactory =
+                        factories.sink(table.sink().get(JobOptions.TYPE));
                 SolutionValidator.validateSelection(
                         factories,
                         job.solutionType(),
@@ -82,7 +86,8 @@ public final class JobConfigValidator {
                 }
                 if (prepareSchema) SchemaValidator.validateNamespace(to, target);
                 if (schemas && prepareSchema) {
-                    io.yak.ops.plugin.datasource.api.lookup.DataSourceTable sourceTable = SchemaValidator.sourceMetadata(() -> context.tableMetadata(sourceId, source));
+                    io.yak.ops.plugin.datasource.api.lookup.DataSourceTable sourceTable =
+                            SchemaValidator.sourceMetadata(() -> context.tableMetadata(sourceId, source));
                     SchemaValidator.validateCdcWrite(
                             sourceTable.schema(),
                             to.type(),
@@ -90,15 +95,19 @@ public final class JobConfigValidator {
                             table.sink(),
                             table.targetPrimaryKeys(),
                             job.schemaChangesEnabled());
-                    io.yak.ops.core.types.TableSchema writeSource = SchemaValidator.writeSchema(sourceTable, table.targetPrimaryKeys());
+                    io.yak.ops.core.types.TableSchema writeSource =
+                            SchemaValidator.writeSchema(sourceTable, table.targetPrimaryKeys());
                     SchemaValidator.validateWrite(() -> sourceFactory.validateSchema(
                             JobOptions.connectorOptions(table.source()), sourceTable.schema()));
-                    io.yak.ops.core.event.CreateTableEvent event = SchemaPlanner.createEvent(sourceTable, to, target, table.targetPrimaryKeys());
-                    io.yak.ops.plugin.datasource.api.lookup.DataSourceTable current = context.findTable(sinkId, target).orElse(null);
+                    io.yak.ops.core.event.CreateTableEvent event =
+                            SchemaPlanner.createEvent(sourceTable, to, target, table.targetPrimaryKeys());
+                    io.yak.ops.plugin.datasource.api.lookup.DataSourceTable current =
+                            context.findTable(sinkId, target).orElse(null);
                     if (current != null && current.revision() != to.revision()) {
                         throw new IllegalStateException("Target datasource revision changed during validation");
                     }
-                    io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan schemaPlan = SchemaPlanner.plan(event, to.type(), current);
+                    io.yak.ops.connector.jdbc.database.schema.SchemaChangePlan schemaPlan =
+                            SchemaPlanner.plan(event, to.type(), current);
                     SchemaValidator.requireCompatible(schemaPlan);
                     SchemaValidator.validateWrite(() -> sinkFactory.validateSchema(
                             table.sink(), writeSource, event.getSchema(), sourceFactory.producesChangelog()));

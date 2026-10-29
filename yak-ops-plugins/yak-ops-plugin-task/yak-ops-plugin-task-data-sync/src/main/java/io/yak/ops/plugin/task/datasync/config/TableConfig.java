@@ -1,6 +1,5 @@
 package io.yak.ops.plugin.task.datasync.config;
 
-
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.yak.ops.configuration.ReadonlyConfig;
@@ -15,7 +14,11 @@ public final class TableConfig {
     private final List<String> targetPrimaryKeys;
 
     @JsonCreator
-    public TableConfig(@JsonProperty("source") ReadonlyConfig source, @JsonProperty("sink") ReadonlyConfig sink, @JsonProperty("incremental") IncrementalConfig incremental, @JsonProperty("targetPrimaryKeys") List<String> targetPrimaryKeys) {
+    public TableConfig(
+            @JsonProperty("source") ReadonlyConfig source,
+            @JsonProperty("sink") ReadonlyConfig sink,
+            @JsonProperty("incremental") IncrementalConfig incremental,
+            @JsonProperty("targetPrimaryKeys") List<String> targetPrimaryKeys) {
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(sink, "sink");
         if (targetPrimaryKeys != null) targetPrimaryKeys = List.copyOf(targetPrimaryKeys);
@@ -49,7 +52,10 @@ public final class TableConfig {
     public boolean equals(Object value) {
         if (this == value) return true;
         if (!(value instanceof TableConfig other)) return false;
-        return java.util.Objects.equals(source, other.source) && java.util.Objects.equals(sink, other.sink) && java.util.Objects.equals(incremental, other.incremental) && java.util.Objects.equals(targetPrimaryKeys, other.targetPrimaryKeys);
+        return java.util.Objects.equals(source, other.source)
+                && java.util.Objects.equals(sink, other.sink)
+                && java.util.Objects.equals(incremental, other.incremental)
+                && java.util.Objects.equals(targetPrimaryKeys, other.targetPrimaryKeys);
     }
 
     @Override
@@ -64,6 +70,4 @@ public final class TableConfig {
     public TableConfig(ReadonlyConfig source, ReadonlyConfig sink, IncrementalConfig incremental) {
         this(source, sink, incremental, null);
     }
-
-    
 }

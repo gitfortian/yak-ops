@@ -97,7 +97,8 @@ public final class JobPlanner {
             ReadonlyConfig sink = mapping.sink();
             String sourceId = source.get(JobOptions.DATASOURCE_ID);
             String sinkId = sink.get(JobOptions.DATASOURCE_ID);
-            io.yak.ops.connector.base.factory.TableSourceFactory sourceFactory = factories.source(source.get(JobOptions.TYPE));
+            io.yak.ops.connector.base.factory.TableSourceFactory sourceFactory =
+                    factories.source(source.get(JobOptions.TYPE));
             io.yak.ops.connector.base.factory.TableSinkFactory sinkFactory = factories.sink(sink.get(JobOptions.TYPE));
             java.util.function.Supplier<DataSourceTable> sourceLookup = () -> resources.table(
                     workspaceId,
@@ -196,7 +197,8 @@ public final class JobPlanner {
             if (event != null) {
                 binding += encodePart("SCHEMA") + encodePart(event.getTableComment());
                 binding += encodeProperties(event.getColumnProperties());
-                for (Map.Entry<String, String> comment : new java.util.TreeMap<>(event.getColumnComments()).entrySet()) {
+                for (Map.Entry<String, String> comment :
+                        new java.util.TreeMap<>(event.getColumnComments()).entrySet()) {
                     binding += encodePart(comment.getKey()) + encodePart(comment.getValue());
                 }
             }
@@ -243,7 +245,8 @@ public final class JobPlanner {
     /** Physical metadata changes invalidate previously admitted schema plans. */
     private static String encodeProperties(java.util.Map<String, io.yak.ops.core.event.ColumnProperties> properties) {
         StringBuilder value = new StringBuilder();
-        for (Map.Entry<String, io.yak.ops.core.event.ColumnProperties> entry : new java.util.TreeMap<>(properties).entrySet()) {
+        for (Map.Entry<String, io.yak.ops.core.event.ColumnProperties> entry :
+                new java.util.TreeMap<>(properties).entrySet()) {
             io.yak.ops.core.event.ColumnProperties attribute = entry.getValue();
             value.append(encodePart(entry.getKey()))
                     .append(encodePart(attribute.defaultExpression()))

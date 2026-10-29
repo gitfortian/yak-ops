@@ -33,7 +33,7 @@ METHOD = re.compile(
 )
 CODEC = re.compile(r"Codec|(?<![A-Za-z])codec")
 RECORD_DECLARATION = re.compile(r"\brecord\s+([A-Za-z_$][\w$]*)\s*\(")
-VAR_DECLARATION = re.compile(r"\\bvar\\s+[A-Za-z_$][\\w$]*\\s*(?:=|:)")
+VAR_DECLARATION = re.compile(r"\bvar\s+[A-Za-z_$][\w$]*\s*(?:=|:)")
 DATA_SYNC_JAVA = (
     "yak-ops-plugins/yak-ops-plugin-task/"
     "yak-ops-plugin-task-data-sync/src/main/java/"

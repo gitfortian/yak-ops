@@ -82,10 +82,11 @@ final class DataSyncTaskHandle implements TaskHandle {
                 JobPlan plan = planner.plan(parameters, identity);
                 verifyAdmission(plan);
                 JobConfig config = JobConfig.from(parameters);
-                IncrementalBatchPreparation.IncrementalRun incremental = config.solutionType().supportsScheduling()
-                                && config.steps().contains(Step.INCREMENTAL)
-                        ? incrementalPreparation.prepare(plan, config, identity)
-                        : null;
+                IncrementalBatchPreparation.IncrementalRun incremental =
+                        config.solutionType().supportsScheduling()
+                                        && config.steps().contains(Step.INCREMENTAL)
+                                ? incrementalPreparation.prepare(plan, config, identity)
+                                : null;
                 boolean continuous = !config.solutionType().supportsScheduling()
                         && config.steps().contains(Step.INCREMENTAL);
                 String dataStep = continuous
@@ -118,7 +119,8 @@ final class DataSyncTaskHandle implements TaskHandle {
                     submissionInvoked = true;
                     progress.dataSubmissionStarted();
                 }
-                io.yak.ops.core.execution.JobClient client = executor.execute(pipeline.graph(), pipeline.configuration())
+                io.yak.ops.core.execution.JobClient client = executor.execute(
+                                pipeline.graph(), pipeline.configuration())
                         .join();
                 runtime = new YakFlowTaskHandle(client, progress);
                 reference.complete(runtime.runtimeReference());

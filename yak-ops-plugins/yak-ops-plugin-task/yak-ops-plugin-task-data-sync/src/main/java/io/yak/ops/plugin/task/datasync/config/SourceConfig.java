@@ -1,6 +1,5 @@
 package io.yak.ops.plugin.task.datasync.config;
 
-
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.yak.ops.configuration.Option;
@@ -24,7 +23,9 @@ public final class SourceConfig {
     private final IncrementalConfig incremental;
 
     @JsonCreator
-    public SourceConfig(@JsonProperty("options") ReadonlyConfig options, @JsonProperty("incremental") IncrementalConfig incremental) {
+    public SourceConfig(
+            @JsonProperty("options") ReadonlyConfig options,
+            @JsonProperty("incremental") IncrementalConfig incremental) {
         this.options = options;
         this.incremental = incremental;
     }
@@ -43,7 +44,8 @@ public final class SourceConfig {
     public boolean equals(Object value) {
         if (this == value) return true;
         if (!(value instanceof SourceConfig other)) return false;
-        return java.util.Objects.equals(options, other.options) && java.util.Objects.equals(incremental, other.incremental);
+        return java.util.Objects.equals(options, other.options)
+                && java.util.Objects.equals(incremental, other.incremental);
     }
 
     @Override

@@ -1,6 +1,5 @@
 package io.yak.ops.plugin.task.datasync.config;
 
-
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.yak.ops.configuration.Option;
@@ -24,7 +23,9 @@ public final class SinkConfig {
     private final List<String> targetPrimaryKeys;
 
     @JsonCreator
-    public SinkConfig(@JsonProperty("options") ReadonlyConfig options, @JsonProperty("targetPrimaryKeys") List<String> targetPrimaryKeys) {
+    public SinkConfig(
+            @JsonProperty("options") ReadonlyConfig options,
+            @JsonProperty("targetPrimaryKeys") List<String> targetPrimaryKeys) {
         if (targetPrimaryKeys != null) targetPrimaryKeys = List.copyOf(targetPrimaryKeys);
         this.options = options;
         this.targetPrimaryKeys = targetPrimaryKeys;
@@ -44,7 +45,8 @@ public final class SinkConfig {
     public boolean equals(Object value) {
         if (this == value) return true;
         if (!(value instanceof SinkConfig other)) return false;
-        return java.util.Objects.equals(options, other.options) && java.util.Objects.equals(targetPrimaryKeys, other.targetPrimaryKeys);
+        return java.util.Objects.equals(options, other.options)
+                && java.util.Objects.equals(targetPrimaryKeys, other.targetPrimaryKeys);
     }
 
     @Override
@@ -128,8 +130,6 @@ public final class SinkConfig {
         if (xa) physical.put(JdbcSinkOptions.XA_ENABLED.key(), true);
         return new SinkConfig(ReadonlyConfig.fromMap(physical), keys);
     }
-
-    
 
     private static void validate(ReadonlyConfig settings, OptionRule rule, String component) {
         ConfigValidator.of(settings).validate(rule);

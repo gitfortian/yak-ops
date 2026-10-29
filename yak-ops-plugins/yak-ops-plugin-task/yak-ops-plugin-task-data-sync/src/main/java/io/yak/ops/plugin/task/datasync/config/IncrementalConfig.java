@@ -1,6 +1,5 @@
 package io.yak.ops.plugin.task.datasync.config;
 
-
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.yak.ops.configuration.Option;
@@ -13,11 +12,16 @@ import java.util.Objects;
 
 /** Non-secret, per-table JDBC incremental selection. Cursor progress is never stored in task parameters. */
 public final class IncrementalConfig {
-    private static final Option<Mode> MODE = Options.key("mode").enumType(Mode.class).noDefaultValue();
-    private static final Option<String> COLUMN = Options.key("column").stringType().noDefaultValue();
-    private static final Option<String> INITIAL_VALUE = Options.key("initialValue").stringType().noDefaultValue();
-    private static final Option<Long> DELAY_SECONDS = Options.key("delaySeconds").longType().noDefaultValue();
-    private static final Option<Long> LOOKBACK_SECONDS = Options.key("lookbackSeconds").longType().noDefaultValue();
+    private static final Option<Mode> MODE =
+            Options.key("mode").enumType(Mode.class).noDefaultValue();
+    private static final Option<String> COLUMN =
+            Options.key("column").stringType().noDefaultValue();
+    private static final Option<String> INITIAL_VALUE =
+            Options.key("initialValue").stringType().noDefaultValue();
+    private static final Option<Long> DELAY_SECONDS =
+            Options.key("delaySeconds").longType().noDefaultValue();
+    private static final Option<Long> LOOKBACK_SECONDS =
+            Options.key("lookbackSeconds").longType().noDefaultValue();
 
     public static final OptionRule RULE = OptionRule.builder()
             .required(MODE, COLUMN)
@@ -31,27 +35,32 @@ public final class IncrementalConfig {
     private final long lookbackSeconds;
 
     @JsonCreator
-    public IncrementalConfig(@JsonProperty("mode") Mode mode, @JsonProperty("column") String column, @JsonProperty("initialValue") String initialValue, @JsonProperty("delaySeconds") long delaySeconds, @JsonProperty("lookbackSeconds") long lookbackSeconds) {
+    public IncrementalConfig(
+            @JsonProperty("mode") Mode mode,
+            @JsonProperty("column") String column,
+            @JsonProperty("initialValue") String initialValue,
+            @JsonProperty("delaySeconds") long delaySeconds,
+            @JsonProperty("lookbackSeconds") long lookbackSeconds) {
         Objects.requireNonNull(mode, "mode");
         if (column == null || column.isBlank() || column.length() > 128) {
-        throw new IllegalArgumentException("Incremental column must name an existing table column");
+            throw new IllegalArgumentException("Incremental column must name an existing table column");
         }
         if (delaySeconds < 0 || delaySeconds > 86_400 || lookbackSeconds < 0 || lookbackSeconds > 604_800) {
-        throw new IllegalArgumentException("Invalid incremental delay or lookback");
+            throw new IllegalArgumentException("Invalid incremental delay or lookback");
         }
         if (mode == Mode.INCREASING && (delaySeconds != 0 || lookbackSeconds != 0)) {
-        throw new IllegalArgumentException("Increasing cursors do not use timestamp delay or lookback");
+            throw new IllegalArgumentException("Increasing cursors do not use timestamp delay or lookback");
         }
         if (initialValue != null && initialValue.length() > 64) {
-        throw new IllegalArgumentException("Incremental initial cursor is too long");
+            throw new IllegalArgumentException("Incremental initial cursor is too long");
         }
         if (initialValue != null && !initialValue.isBlank()) {
-        try {
-        if (mode == Mode.TIMESTAMP) java.time.LocalDateTime.parse(initialValue);
-        else new java.math.BigInteger(initialValue);
-        } catch (RuntimeException failure) {
-        throw new IllegalArgumentException("Invalid incremental initial cursor", failure);
-        }
+            try {
+                if (mode == Mode.TIMESTAMP) java.time.LocalDateTime.parse(initialValue);
+                else new java.math.BigInteger(initialValue);
+            } catch (RuntimeException failure) {
+                throw new IllegalArgumentException("Invalid incremental initial cursor", failure);
+            }
         }
         this.mode = mode;
         this.column = column;
@@ -89,7 +98,11 @@ public final class IncrementalConfig {
     public boolean equals(Object value) {
         if (this == value) return true;
         if (!(value instanceof IncrementalConfig other)) return false;
-        return java.util.Objects.equals(mode, other.mode) && java.util.Objects.equals(column, other.column) && java.util.Objects.equals(initialValue, other.initialValue) && java.util.Objects.equals(delaySeconds, other.delaySeconds) && java.util.Objects.equals(lookbackSeconds, other.lookbackSeconds);
+        return java.util.Objects.equals(mode, other.mode)
+                && java.util.Objects.equals(column, other.column)
+                && java.util.Objects.equals(initialValue, other.initialValue)
+                && java.util.Objects.equals(delaySeconds, other.delaySeconds)
+                && java.util.Objects.equals(lookbackSeconds, other.lookbackSeconds);
     }
 
     @Override
@@ -101,8 +114,6 @@ public final class IncrementalConfig {
         TIMESTAMP,
         INCREASING
     }
-
-    
 
     /** Parses public incremental options using the component-owned rule. */
     public static IncrementalConfig from(Map<?, ?> values) {
@@ -118,8 +129,7 @@ public final class IncrementalConfig {
         ConfigValidator.validateUnknownKeys(options, RULE, "source.tables.incremental");
         // Do not widen the V4 JSON string contract via Jackson's scalar coercion.
         if (!(fields.get(COLUMN.key()) instanceof String)
-                || (fields.containsKey(INITIAL_VALUE.key())
-                        && !(fields.get(INITIAL_VALUE.key()) instanceof String))) {
+                || (fields.containsKey(INITIAL_VALUE.key()) && !(fields.get(INITIAL_VALUE.key()) instanceof String))) {
             throw new IllegalArgumentException("Incremental column and initial value must be text");
         }
         return new IncrementalConfig(
