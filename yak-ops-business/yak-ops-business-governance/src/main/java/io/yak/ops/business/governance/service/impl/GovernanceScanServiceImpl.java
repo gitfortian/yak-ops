@@ -30,7 +30,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class GovernanceScanServiceImpl implements GovernanceScanService {
 
-    private static final Logger log = LoggerFactory.getLogger(GovernanceScanServiceImpl.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GovernanceScanServiceImpl.class);
 
     /** Actor a scheduled run is submitted under. */
     private static final String SYSTEM_ACTOR = "system";
@@ -84,7 +84,7 @@ public class GovernanceScanServiceImpl implements GovernanceScanService {
             try {
                 request(workspaceId, SYSTEM_ACTOR, GovernanceScanTrigger.SCHEDULED, false);
             } catch (RuntimeException failure) {
-                log.warn("scheduled governance scan for workspace {} was not submitted", workspaceId, failure);
+                LOG.warn("scheduled governance scan for workspace {} was not submitted", workspaceId, failure);
             }
         }
     }

@@ -24,7 +24,7 @@ public class GovernanceStartupRecovery {
     /** Reason code recorded on a run the restart interrupted. */
     public static final String APP_RESTART = "APP_RESTART";
 
-    private static final Logger log = LoggerFactory.getLogger(GovernanceStartupRecovery.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GovernanceStartupRecovery.class);
 
     private final GovernanceScanRunMapper scanRunMapper;
 
@@ -43,7 +43,7 @@ public class GovernanceStartupRecovery {
         int rules = ruleResultMapper.markAllRunningFailed(APP_RESTART, now);
         int runs = scanRunMapper.failAllLive(APP_RESTART, now);
         if (runs > 0 || rules > 0) {
-            log.warn(
+            LOG.warn(
                     "governance startup recovery failed {} interrupted run(s) and {} rule result(s) with {}",
                     runs,
                     rules,

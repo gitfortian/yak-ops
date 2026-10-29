@@ -50,7 +50,7 @@ public class GovernanceScanExecutor {
     /** Reason code of a run whose orchestration threw outside a rule. */
     private static final String SCAN_FAILED = "SCAN_FAILED";
 
-    private static final Logger log = LoggerFactory.getLogger(GovernanceScanExecutor.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GovernanceScanExecutor.class);
 
     private final GovernanceRuleRegistry registry;
 
@@ -85,7 +85,7 @@ public class GovernanceScanExecutor {
             WorkspaceContext.bind(workspaceId);
             run(workspaceId, scanId, claimedAt);
         } catch (RuntimeException failure) {
-            log.error("governance scan {} of workspace {} aborted", scanId, workspaceId, failure);
+            LOG.error("governance scan {} of workspace {} aborted", scanId, workspaceId, failure);
             writer.finish(
                     workspaceId, scanId, GovernanceScanStatus.FAILED, 0, 0, 0, 0, 0, SCAN_FAILED, LocalDateTime.now());
         } finally {
@@ -156,7 +156,7 @@ public class GovernanceScanExecutor {
                 succeeded++;
                 resolved += autoResolved;
             } catch (RuntimeException failure) {
-                log.warn(
+                LOG.warn(
                         "governance rule {} failed in scan {} of workspace {}",
                         rule.code(),
                         scanId,
