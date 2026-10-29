@@ -133,7 +133,9 @@ public final class JobConfigValidator {
         } catch (RuntimeException failure) {
             if (schemas && failure instanceof SchemaValidationException schemaFailure) {
                 throw new TaskValidationException(
-                        "SCHEMA_VALIDATION", SchemaValidationMessages.safeSchemaMessage(schemaFailure.failure()), schemaFailure);
+                        "SCHEMA_VALIDATION",
+                        SchemaValidationMessages.safeSchemaMessage(schemaFailure.failure()),
+                        schemaFailure);
             }
             if (schemas) {
                 String message = SchemaValidationMessages.safeSchemaMessage(failure);
