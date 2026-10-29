@@ -84,5 +84,4 @@ public final class SolutionValidator {
             throw new IllegalArgumentException("Schema preparation requires MySQL or PostgreSQL endpoints");
         }
     }
-
 }
