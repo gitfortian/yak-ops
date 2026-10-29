@@ -1,14 +1,15 @@
 package io.yak.ops.plugin.task.datasync.execution;
 
+import static io.yak.ops.plugin.task.datasync.execution.DataSyncExecutionReport.schemaStage;
+
 import io.yak.ops.connector.base.metrics.TableMetrics;
 import io.yak.ops.core.api.common.JobStatus;
+import io.yak.ops.plugin.task.datasync.execution.DataSyncExecutionReport.StageResult;
 import io.yak.ops.plugin.task.datasync.plan.TablePlan;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalInt;
 
-import static io.yak.ops.plugin.task.datasync.execution.DataSyncExecutionReport.schemaStage;
-import io.yak.ops.plugin.task.datasync.execution.DataSyncExecutionReport.StageResult;
 
 /** Owns the active per-table preparation state and Connector metrics for one Task Instance. */
 public final class TableExecutionProgress {
