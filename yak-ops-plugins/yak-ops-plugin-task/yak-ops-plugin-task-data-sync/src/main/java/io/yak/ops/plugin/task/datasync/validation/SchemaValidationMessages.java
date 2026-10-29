@@ -99,5 +99,4 @@ public final class SchemaValidationMessages {
         }
         return "目标表结构不兼容，请检查字段类型和默认值等属性";
     }
-
 }
