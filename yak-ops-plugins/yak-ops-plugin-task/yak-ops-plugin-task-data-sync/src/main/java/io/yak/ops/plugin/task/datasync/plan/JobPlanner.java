@@ -88,6 +88,7 @@ public final class JobPlanner {
         boolean prepareSchema = job.steps().contains(Step.SCHEMA);
         List<TablePlan> tables = new ArrayList<>();
         List<ExecutionResource> claims = new ArrayList<>();
+        SolutionCatalog solutions = new SolutionCatalog(factories);
         java.util.Set<TableId> sources = new java.util.HashSet<>();
         java.util.Set<TableId> targets = new java.util.HashSet<>();
         StringBuilder bindings = new StringBuilder();
@@ -139,6 +140,12 @@ public final class JobPlanner {
             SolutionCatalog.validateSchemaChanges(
                     job.solutionType(), from.datasourceType(), targetInfo.type(), job.schemaChangesEnabled());
             SolutionCatalog.validateSteps(from.datasourceType(), targetInfo.type(), job.steps());
+            solutions.validateCombination(
+                    job.solutionType(),
+                    from.datasourceType(),
+                    targetInfo.type(),
+                    job.steps(),
+                    sink.get(JdbcSinkOptions.WRITE_MODE).name());
             if (job.solutionType().supportsScheduling()
                     && job.steps().contains(Step.INCREMENTAL)
                     && (!java.util.Set.of("MYSQL", "POSTGRE_SQL").contains(from.datasourceType())

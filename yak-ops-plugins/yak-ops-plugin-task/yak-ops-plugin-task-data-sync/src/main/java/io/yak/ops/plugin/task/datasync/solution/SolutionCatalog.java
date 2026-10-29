@@ -38,6 +38,20 @@ public final class SolutionCatalog {
         return List.copyOf(choices);
     }
 
+    /** Validates a physical plan against the same combinations offered to the editor. */
+    public void validateCombination(
+            SolutionType type, String sourceType, String targetType, List<Step> steps, String writeMode) {
+        Solution selected = list(sourceType, targetType).stream()
+                .filter(choice -> choice.solutionType() == type)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unsupported synchronization solution"));
+        if (selected.allowedCombinations().stream()
+                .noneMatch(choice ->
+                        choice.steps().equals(steps) && choice.writeModes().contains(writeMode))) {
+            throw new IllegalArgumentException("Unsupported synchronization steps or target write mode");
+        }
+    }
+
     /**
      * Validates resolved datasource types for the selected solution without connecting.
      *
@@ -102,6 +116,7 @@ public final class SolutionCatalog {
         List<Solution.Combination> combinations = new ArrayList<>();
         combinations.add(new Solution.Combination(type.steps(), type.supportsScheduling(), writes));
         if (!type.supportsScheduling()) {
+            combinations.add(new Solution.Combination(List.of(Step.FULL), false, List.of("UPSERT")));
             combinations.add(new Solution.Combination(List.of(Step.INCREMENTAL), false, List.of("UPSERT")));
         }
         boolean supportedIncremental =
@@ -113,8 +128,10 @@ public final class SolutionCatalog {
         }
         if (SCHEMA_TYPES.contains(sourceType) && SCHEMA_TYPES.contains(targetType)) {
             applicable.addFirst(Step.SCHEMA);
-            combinations.add(
-                    new Solution.Combination(List.of(Step.SCHEMA, Step.FULL), type.supportsScheduling(), writes));
+            combinations.add(new Solution.Combination(
+                    List.of(Step.SCHEMA, Step.FULL),
+                    type.supportsScheduling(),
+                    type.supportsScheduling() ? writes : List.of("UPSERT")));
             if (supportedIncremental) {
                 combinations.add(new Solution.Combination(
                         List.of(Step.SCHEMA, Step.FULL, Step.INCREMENTAL), true, List.of("UPSERT")));

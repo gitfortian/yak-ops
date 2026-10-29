@@ -68,7 +68,11 @@ public record SinkConfig(ReadonlyConfig options, List<String> targetPrimaryKeys)
             xa = true;
         }
         if (mode == JdbcWriteMode.RETRACT
-                && (!xa || keys != null || type != SolutionType.SINGLE_TABLE_REALTIME || schemaChangesEnabled)) {
+                && (!xa
+                        || keys != null
+                        || type != SolutionType.SINGLE_TABLE_REALTIME
+                        || !steps.contains(Step.INCREMENTAL)
+                        || schemaChangesEnabled)) {
             throw new IllegalArgumentException(
                     "RETRACT requires realtime checkpoint XA, no target keys and no schema evolution");
         }

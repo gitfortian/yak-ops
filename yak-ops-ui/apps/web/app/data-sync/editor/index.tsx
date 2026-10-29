@@ -73,8 +73,8 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
   const prepareSchema = draft.steps.includes("SCHEMA");
   const useIncremental = offlineIncremental(draft.solutionType, draft.steps);
   const initialLoad = draft.steps.includes("FULL");
-  const usesChangelog =
-    draft.steps.includes("INCREMENTAL") && solutionSyncType(draft.solutionType) === "REALTIME";
+  const usesChangelog = solutionSyncType(draft.solutionType) === "REALTIME";
+  const continuous = usesChangelog && draft.steps.includes("INCREMENTAL");
 
   const [form, setForm] = useState<EditorForm>(() => {
     const value = initialTask || draft.form;
@@ -97,8 +97,9 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
         database: value?.targetDatabase || "",
         schema: value?.targetSchema || "",
         table: value?.targetTable || "",
-        schemaChangesEnabled: value?.schemaChangesEnabled ?? draft.targetType !== "ORACLE",
-        allowDropColumns: value?.allowDropColumns ?? false,
+        schemaChangesEnabled:
+          continuous && (value?.schemaChangesEnabled ?? draft.targetType !== "ORACLE"),
+        allowDropColumns: continuous && (value?.allowDropColumns ?? false),
         writeMode:
           value?.writeMode === "RETRACT"
             ? "RETRACT"
@@ -389,6 +390,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             writeMode={combination?.writeModes[0]}
             allowChunkKey={usesChangelog && initialLoad && !batch && draft.sourceType === "MYSQL"}
             usesChangelog={usesChangelog}
+            continuous={continuous}
             useIncremental={useIncremental}
             initialLoad={initialLoad}
             patchSource={patchSource}
@@ -414,6 +416,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             writeModes={combination?.writeModes || []}
             hasCombination={Boolean(combination)}
             usesChangelog={usesChangelog}
+            continuous={continuous}
             useIncremental={useIncremental}
             initialLoad={initialLoad}
             targetType={draft.targetType}
@@ -428,7 +431,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
             <div className="space-y-4 rounded-lg border border-[var(--yak-components-panel-border)] bg-white p-4">
               <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
                 <FieldLabel>执行模式</FieldLabel>
-                <span className="text-sm">{usesChangelog ? "流式" : "批式"}</span>
+                <span className="text-sm">{continuous ? "流式" : "批式"}</span>
               </Field>
               <Field className="grid grid-cols-[112px_minmax(0,1fr)] items-center !gap-3">
                 <FieldLabel>Debug</FieldLabel>

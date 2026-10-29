@@ -6,8 +6,10 @@ import io.yak.ops.connector.base.factory.FactoryUtil;
 import io.yak.ops.connector.base.factory.TableSinkFactoryContext;
 import io.yak.ops.connector.base.factory.TableSourceFactoryContext;
 import io.yak.ops.connector.base.metrics.TableMetrics;
+import io.yak.ops.connector.cdc.mysql.source.MySqlSource;
 import io.yak.ops.core.api.connector.sink.MetadataApplier;
 import io.yak.ops.core.api.connector.sink.Sink;
+import io.yak.ops.core.api.connector.source.Boundedness;
 import io.yak.ops.core.api.connector.source.Source;
 import io.yak.ops.core.data.TableRecord;
 import io.yak.ops.flow.runtime.graph.StreamGraph;
@@ -108,18 +110,7 @@ public final class PipelineBuilder {
             boolean debug,
             boolean schemaChangesEnabled,
             boolean allowDropColumns) {
-        var sourceFactory =
-                factories.source(plan.tables().getFirst().sourceParameters().get(JobOptions.TYPE));
-        return build(
-                plan,
-                identity,
-                debug,
-                new TableExecutionProgress(
-                        plan.tables(),
-                        new TableMetrics(),
-                        sourceFactory.boundedness() != io.yak.ops.core.api.connector.source.Boundedness.BOUNDED),
-                schemaChangesEnabled,
-                allowDropColumns);
+        return build(plan, identity, debug, null, schemaChangesEnabled, allowDropColumns);
     }
 
     /**
@@ -166,15 +157,13 @@ public final class PipelineBuilder {
             throw new UnsupportedOperationException(
                     "DATA_SYNC changelog requires a single Sink writer until keyed routing is configured");
         }
-        Configuration configuration = configurationFactory.create(
-                identity, sourceFactory.boundedness(), debug, schemaChangesEnabled, allowDropColumns);
         String sourceId = first.sourceParameters().get(JobOptions.DATASOURCE_ID);
         String sinkId = first.sinkParameters().get(JobOptions.DATASOURCE_ID);
         ReadonlyConfig sourceConnection = resources.connectionOptions(
                 identity.workspaceId(), sourceId, first.source().revision());
         ReadonlyConfig targetConnection = resources.connectionOptions(
                 identity.workspaceId(), sinkId, first.targetDatasource().revision());
-        TableMetrics metrics = progress.metrics();
+        TableMetrics metrics = progress == null ? new TableMetrics() : progress.metrics();
         List<TableSourceFactoryContext> sourceContexts = new ArrayList<>();
         List<TableSinkFactoryContext> sinkContexts = new ArrayList<>();
         for (var table : plan.tables()) {
@@ -197,9 +186,11 @@ public final class PipelineBuilder {
                     metrics));
         }
         Source<TableRecord, ?, ?> source = sourceFactory.createSource(sourceContexts);
-        if (source.getBoundedness() != sourceFactory.boundedness()) {
-            throw new IllegalStateException("DATA_SYNC Source boundedness differs from its Factory contract");
+        if (source instanceof MySqlSource mysql && mysql.startupOptions().isStreamOnly() && sourceParallelism != 1) {
+            throw new UnsupportedOperationException("Stream-only MySQL CDC requires Source parallelism 1");
         }
+        Configuration configuration = configurationFactory.create(
+                identity, source.getBoundedness(), debug, schemaChangesEnabled, allowDropColumns);
         Sink<TableRecord> sink = sinkFactory.createSink(sinkContexts);
         SourceTransformation<TableRecord> input =
                 new SourceTransformation<>("data-sync-source", source, TableRecord.class, sourceParallelism);
@@ -208,7 +199,16 @@ public final class PipelineBuilder {
         input.setUid("data-sync-source-" + identity.definitionId());
         output.setUid("data-sync-sink-" + identity.definitionId());
         StreamGraph graph = new StreamGraphGenerator(output, configuration).generate();
-        return new CompiledPipeline(graph, configuration, progress);
+        TableExecutionProgress observations = progress;
+        if (observations == null) {
+            boolean continuous = source.getBoundedness() != Boundedness.BOUNDED;
+            String dataStep =
+                    source instanceof MySqlSource mysql && mysql.startupOptions().isStreamOnly()
+                            ? "INCREMENTAL"
+                            : "FULL";
+            observations = new TableExecutionProgress(plan.tables(), metrics, continuous, dataStep);
+        }
+        return new CompiledPipeline(graph, configuration, observations);
     }
 
     /**

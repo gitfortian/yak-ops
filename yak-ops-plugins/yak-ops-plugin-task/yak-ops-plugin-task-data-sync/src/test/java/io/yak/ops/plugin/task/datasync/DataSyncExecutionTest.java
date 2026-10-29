@@ -202,6 +202,57 @@ class DataSyncExecutionTest {
     }
 
     @Test
+    void snapshotOnlyCompilesToBoundedBatchWithoutCheckpoint() {
+        Resources resources = new Resources();
+        FactoryUtil factories = new FactoryUtil();
+        JobPlanner planner = new JobPlanner(resources, factories);
+        PipelineBuilder builder = new PipelineBuilder(resources, factories, Path.of("target/data-sync"));
+        var compiled = builder.build(planner.plan(cdcParameters("[\"FULL\"]", "snapshot"), CONTEXT), CONTEXT, false);
+        assertTrue(compiled.graph().isBounded());
+        var source = assertInstanceOf(
+                MySqlSource.class, compiled.graph().getSourceNodes().getFirst().getSource().orElseThrow());
+        assertTrue(source.startupOptions().isSnapshotOnly());
+        assertEquals(Duration.ZERO, compiled.configuration().get(CheckpointingOptions.CHECKPOINTING_INTERVAL));
+        assertEquals(
+                io.yak.ops.core.api.RuntimeExecutionMode.BATCH,
+                compiled.configuration().get(ExecutionOptions.RUNTIME_MODE));
+        assertEquals(2, resources.connections.get());
+        assertEquals(0, resources.openedConnections.get());
+    }
+
+    @Test
+    void streamOnlyCompilesToContinuousPipelineWithCheckpoint() {
+        Resources resources = new Resources();
+        FactoryUtil factories = new FactoryUtil();
+        JobPlanner planner = new JobPlanner(resources, factories);
+        PipelineBuilder builder = new PipelineBuilder(resources, factories, Path.of("target/data-sync"));
+        var compiled = builder.build(
+                planner.plan(cdcParameters("[\"INCREMENTAL\"]", "latest-offset"), CONTEXT), CONTEXT, false);
+        assertTrue(!compiled.graph().isBounded());
+        var source = assertInstanceOf(
+                MySqlSource.class, compiled.graph().getSourceNodes().getFirst().getSource().orElseThrow());
+        assertTrue(source.startupOptions().isStreamOnly());
+        assertEquals(Duration.ofSeconds(10), compiled.configuration().get(CheckpointingOptions.CHECKPOINTING_INTERVAL));
+        assertEquals(0, resources.openedConnections.get());
+    }
+
+    @Test
+    void streamOnlyRejectsUnsupportedSourceParallelismBeforeSubmission() {
+        Resources resources = new Resources();
+        FactoryUtil factories = new FactoryUtil();
+        ReadonlyConfig settings = runtimeOptions(2, 1, Duration.ofSeconds(10), 1);
+        PipelineBuilder builder = new PipelineBuilder(
+                resources,
+                factories,
+                settings,
+                new ExecutionConfigurationFactory(settings, Path.of("target/data-sync")));
+        JobPlanner planner = new JobPlanner(resources, factories);
+        var plan = planner.plan(cdcParameters("[\"INCREMENTAL\"]", "latest-offset"), CONTEXT);
+        assertThrows(UnsupportedOperationException.class, () -> builder.build(plan, CONTEXT, false));
+        assertEquals(0, resources.openedConnections.get());
+    }
+
+    @Test
     void refusesChangedConnectionRevisionBeforePhysicalSubmission() {
         Resources resources = new Resources();
         AtomicInteger submissions = new AtomicInteger();
@@ -419,6 +470,19 @@ class DataSyncExecutionTest {
         JobPlanner planner = new JobPlanner(resources, factories);
         PipelineBuilder builder = new PipelineBuilder(resources, factories, Path.of("target/data-sync"));
         return new DataSyncTaskPlugin(planner, new DataSyncTaskExecutor(planner, builder, executor), factories);
+    }
+
+    private static ReadonlyConfig cdcParameters(String steps, String startupMode) {
+        return ConfigParser.parseJson("""
+                {"solutionType":"SINGLE_TABLE_REALTIME","steps":%s,
+                 "source":{"datasourceId":"source","startup":{"mode":"%s"},
+                           "tables":[{"id":"orders","table":"orders"}]},
+                 "transform":[],
+                 "sink":{"datasourceId":"target",
+                         "schemaPolicy":{"initial":"VERIFY","evolution":{"enabled":false,"allowDropColumns":false}},
+                         "tables":[{"input":"orders","table":"ods_orders","write":{"mode":"UPSERT"}}]},
+                 "env":{}}
+                """.formatted(steps, startupMode));
     }
 
     private static ReadonlyConfig parameters(boolean cdc) {

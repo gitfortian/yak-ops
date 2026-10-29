@@ -180,6 +180,9 @@ public final class JobConfig {
         if (type.supportsScheduling() && (evolve || drop)) {
             throw new IllegalArgumentException("Runtime schema evolution requires realtime");
         }
+        if (!type.supportsScheduling() && dataSteps.equals(List.of(Step.FULL)) && evolve) {
+            throw new IllegalArgumentException("Snapshot-only CDC cannot enable runtime schema evolution");
+        }
         String initial = schema.get(INITIAL);
         if (!"VERIFY".equals(initial) && !"CREATE_OR_ALTER".equals(initial)) {
             throw new IllegalArgumentException("Unsupported initial target schema preparation");

@@ -25,6 +25,7 @@ interface Props {
   writeMode?: DataSyncWriteMode;
   allowChunkKey: boolean;
   usesChangelog: boolean;
+  continuous: boolean;
   useIncremental: boolean;
   initialLoad: boolean;
   patchSource: <K extends keyof EditorSource>(key: K, value: EditorSource[K]) => void;
@@ -44,6 +45,7 @@ export function SourceSection({
   writeMode,
   allowChunkKey,
   usesChangelog,
+  continuous,
   useIncremental,
   initialLoad,
   patchSource,
@@ -120,8 +122,11 @@ export function SourceSection({
           onSchemaChange={onSourceSchemaChange}
           onTableChange={onSourceTableChange}
         >
-          {usesChangelog ? (
+          {usesChangelog && continuous ? (
             <Alert>实时同步依赖 ROW Binlog 和 CDC 权限；连接测试通过不代表 CDC 可用。</Alert>
+          ) : null}
+          {usesChangelog && !continuous ? (
+            <Alert>仅全量同步会读取当前表快照，完成后自动结束，不会持续读取 Binlog。</Alert>
           ) : null}
           {usesChangelog && !initialLoad ? (
             <Alert>仅从任务启动时的最新 Binlog 位点同步变更，不会补录已有数据。</Alert>

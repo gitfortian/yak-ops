@@ -18,6 +18,7 @@ interface Props {
   writeModes: DataSyncWriteMode[];
   hasCombination: boolean;
   usesChangelog: boolean;
+  continuous: boolean;
   useIncremental: boolean;
   initialLoad: boolean;
   targetType: string;
@@ -39,6 +40,7 @@ export function TargetSection({
   writeModes,
   hasCombination,
   usesChangelog,
+  continuous,
   useIncremental,
   initialLoad,
   targetType,
@@ -153,7 +155,7 @@ export function TargetSection({
           ) : null}
         </TableSection>
       )}
-      {usesChangelog ? (
+      {usesChangelog && continuous ? (
         <Field className="mt-4 flex items-center justify-between rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-4 py-3">
           <FieldLabel>同步结构变更</FieldLabel>
           <Switch
@@ -173,7 +175,7 @@ export function TargetSection({
           />
         </Field>
       ) : null}
-      {usesChangelog && form.sink.schemaChangesEnabled && targetType !== "ORACLE" ? (
+      {usesChangelog && continuous && form.sink.schemaChangesEnabled && targetType !== "ORACLE" ? (
         <Field className="mt-3 flex flex-col gap-2 rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-4 py-3">
           <div className="flex items-center justify-between">
             <FieldLabel>允许删除目标字段</FieldLabel>
