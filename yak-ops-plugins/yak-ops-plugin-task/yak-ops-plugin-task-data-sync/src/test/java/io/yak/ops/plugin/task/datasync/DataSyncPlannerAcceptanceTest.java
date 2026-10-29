@@ -45,9 +45,9 @@ class DataSyncPlannerAcceptanceTest {
         JobConfig job = JobConfig.from(parsed);
         assertEquals("updated_at", job.tables().getFirst().incremental().column());
         assertEquals(5, job.tables().getFirst().incremental().lookbackSeconds());
-        assertFalse(job.source().getSourceMap().containsKey("incremental"));
-        assertFalse(job.sink().getSourceMap().containsKey("incremental"));
-        assertEquals("UPSERT", job.sink().get(JdbcSinkOptions.WRITE_MODE).name());
+        assertFalse(job.tables().getFirst().source().getSourceMap().containsKey("incremental"));
+        assertFalse(job.tables().getFirst().sink().getSourceMap().containsKey("incremental"));
+        assertEquals("UPSERT", job.tables().getFirst().sink().get(JdbcSinkOptions.WRITE_MODE).name());
 
         var resources = new Metadata();
         var planned = new JobPlanner(resources, new FactoryUtil()).plan(parsed, IDENTITY);
