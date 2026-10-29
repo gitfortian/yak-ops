@@ -112,8 +112,7 @@ public final class PipelineBuilder {
             boolean allowDropColumns) {
         var first = plan.tables().getFirst();
         var sourceFactory = factories.source(first.sourceParameters().get(JobOptions.TYPE));
-        boolean continuous = sourceFactory.boundedness()
-                        != io.yak.ops.core.api.connector.source.Boundedness.BOUNDED
+        boolean continuous = sourceFactory.boundedness() != io.yak.ops.core.api.connector.source.Boundedness.BOUNDED
                 && !"snapshot".equals(first.sourceOptions().get(MySqlSourceOptions.SCAN_STARTUP_MODE));
         return build(
                 plan,
@@ -197,9 +196,7 @@ public final class PipelineBuilder {
                     metrics));
         }
         Source<TableRecord, ?, ?> source = sourceFactory.createSource(sourceContexts);
-        if (source instanceof MySqlSource mysql
-                && mysql.startupOptions().isStreamOnly()
-                && sourceParallelism != 1) {
+        if (source instanceof MySqlSource mysql && mysql.startupOptions().isStreamOnly() && sourceParallelism != 1) {
             throw new UnsupportedOperationException("Stream-only MySQL CDC requires Source parallelism 1");
         }
         Configuration configuration = configurationFactory.create(
