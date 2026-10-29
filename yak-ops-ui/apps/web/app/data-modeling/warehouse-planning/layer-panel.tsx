@@ -75,68 +75,70 @@ export default function LayerPanel() {
     {
       title: "分层中文名",
       key: "cnName",
-      width: 180,
+      width: 140,
       render: (_, row) => (
-        <span>
+        <span className="flex items-baseline gap-1">
           {row.cnName}
-          {row.builtin && <span className="ml-1 text-xs text-[#667085]">（默认）</span>}
+          {row.builtin && (
+            <span className="text-xs text-[var(--yak-components-muted-text)]">默认</span>
+          )}
         </span>
       ),
     },
-    { title: "英文缩写", dataIndex: "enCode", width: 120 },
-    {
-      title: "物理数据源",
-      key: "dataSource",
-      width: 200,
-      render: (_, row) => row.dataSourceName ?? <span className="text-[#98a2b3]">未绑定</span>,
-    },
-    {
-      title: "描述",
-      dataIndex: "description",
-      ellipsis: true,
-      render: (_, row) => row.description ?? "—",
-    },
+    { title: "英文缩写", dataIndex: "enCode", width: 84 },
     {
       title: "状态",
       key: "enabled",
-      width: 130,
+      width: 64,
       render: (_, row) => (
-        <label className="flex items-center gap-2">
-          <Switch
-            size="small"
-            aria-label={`${row.enabled ? "禁用" : "启用"}分层：${row.cnName}`}
-            checked={row.enabled}
-            loading={toggling === row.id}
-            disabled={loading || toggling !== null}
-            onCheckedChange={(checked) => void toggle(row, checked)}
-          />
-          <span className="text-xs text-[#667085]">{row.enabled ? "启用" : "禁用"}</span>
-        </label>
+        <Switch
+          size="small"
+          aria-label={`${row.enabled ? "禁用" : "启用"}分层：${row.cnName}`}
+          checked={row.enabled}
+          loading={toggling === row.id}
+          disabled={loading || toggling !== null}
+          onCheckedChange={(checked) => void toggle(row, checked)}
+        />
       ),
+    },
+    {
+      title: "物理数据源",
+      key: "dataSource",
+      width: 132,
+      render: (_, row) =>
+        row.dataSourceName ?? (
+          <span className="text-[var(--yak-components-muted-text)]">未绑定</span>
+        ),
     },
     {
       title: "命名规则",
       key: "naming",
-      width: 100,
+      width: 84,
       render: (_, row) => (
-        <span className="text-xs text-[#667085]">
-          {row.namingRuleEnabled ? "已启用" : "未启用"}
+        <span className="text-xs text-[var(--yak-color-text-secondary)]">
+          {row.namingRuleEnabled ? "已配置" : "未配置"}
         </span>
       ),
     },
     {
+      title: "描述",
+      dataIndex: "description",
+      minWidth: 120,
+      ellipsis: true,
+      render: (_, row) => row.description ?? "—",
+    },
+    {
       title: "操作",
       key: "actions",
-      width: 190,
-      fixed: "right",
-      align: "center",
+      width: 168,
+      align: "right",
       render: (_, row) => (
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex items-center justify-end gap-0.5">
           <Button
             size="small"
             variant="ghost"
             disabled={loading}
-            className="px-0.5 font-normal text-[#667085]"
+            className="px-1.5 text-xs font-normal"
             onClick={() => setNaming(row)}
           >
             命名规则
@@ -145,18 +147,17 @@ export default function LayerPanel() {
             size="small"
             variant="ghost"
             disabled={loading}
-            className="px-0.5 font-normal [color:var(--yak-color-primary)] hover:[color:var(--yak-color-primary)]"
+            className="px-1.5 text-xs font-normal"
             onClick={() => setDraft(row)}
           >
             编辑
           </Button>
-          <span aria-hidden="true" className="h-3 w-px shrink-0 bg-[#e4e7ec]" />
           <Button
             size="small"
             variant="ghost"
             disabled={loading || row.builtin}
             title={row.builtin ? "默认分层不允许删除" : undefined}
-            className="px-0.5 font-normal text-[#667085] hover:text-[#d92d20]"
+            className="px-1.5 text-xs font-normal hover:bg-[var(--yak-components-button-danger-bg)]! hover:[color:var(--yak-components-danger-text)]"
             onClick={() => setDeleting(row)}
           >
             删除
@@ -168,13 +169,8 @@ export default function LayerPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="mb-3 flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-sm font-medium">数仓分层</h2>
-          <p className="mt-1 text-xs text-[#667085]">
-            维度建模只可选用启用状态的分层；物理发布时按分层绑定的数据源执行。
-          </p>
-        </div>
+      <div className="mb-3 flex items-center justify-between gap-4">
+        <h2 className="text-sm font-semibold">数仓分层</h2>
         <Button
           size="small"
           variant="primary"
@@ -202,7 +198,7 @@ export default function LayerPanel() {
             loading={loading}
             size="small"
             bordered={false}
-            scroll={{ x: 1250 }}
+            scroll={{ x: 840 }}
             emptyText="暂无分层"
             pagination={false}
           />
