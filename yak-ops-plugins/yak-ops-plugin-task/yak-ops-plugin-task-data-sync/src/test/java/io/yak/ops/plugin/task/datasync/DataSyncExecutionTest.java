@@ -75,6 +75,7 @@ class DataSyncExecutionTest {
 
         var handle =
                 plugin.start(parameters, plan, CONTEXT, false).toCompletableFuture().join();
+        assertEquals(0, submissions.get());
         handle.start();
         handle.completion().toCompletableFuture().join();
         assertEquals(1, submissions.get());
@@ -84,6 +85,22 @@ class DataSyncExecutionTest {
         assertEquals(0, resources.openedConnections.get());
         assertEquals(6, resources.tables.get());
         assertEquals(2, resources.connections.get());
+    }
+
+    @Test
+    void boundedJdbcCancellationBeforeActivationDoesNotSubmitEngineJob() {
+        Resources resources = new Resources();
+        AtomicInteger submissions = new AtomicInteger();
+        DataSyncTaskPlugin plugin = plugin(resources, finishedExecutor(submissions));
+        ReadonlyConfig parameters = parameters(false);
+        var handle = plugin.start(parameters, plugin.plan(parameters, CONTEXT), CONTEXT, false)
+                .toCompletableFuture()
+                .join();
+        assertEquals(0, submissions.get());
+        handle.cancel().toCompletableFuture().join();
+        handle.start();
+        assertEquals(TaskOutcome.CANCELED, handle.completion().toCompletableFuture().join());
+        assertEquals(0, submissions.get());
     }
 
     @Test
