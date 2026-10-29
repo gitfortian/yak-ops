@@ -24,7 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
-/** Owns one deferred schema-plus-data execution from platform registration through physical termination. */
+/** Owns every DATA_SYNC execution from platform registration through physical termination. */
 final class DataSyncTaskHandle implements TaskHandle {
     private static final Logger LOG = LoggerFactory.getLogger(DataSyncTaskHandle.class);
     private final ReadonlyConfig parameters;
@@ -35,7 +35,7 @@ final class DataSyncTaskHandle implements TaskHandle {
     private final PipelineBuilder builder;
     private final PipelineExecutor executor;
     private final SchemaPreparation preparation;
-    private final io.yak.ops.plugin.task.datasync.execution.IncrementalBatchPreparation incrementalPlanner;
+    private final IncrementalBatchPreparation incrementalPreparation;
     private final CompletableFuture<TaskOutcome> result = new CompletableFuture<>();
     private final CompletableFuture<Optional<TaskRuntimeReference>> reference = new CompletableFuture<>();
     private volatile TableExecutionProgress progress;
@@ -53,20 +53,9 @@ final class DataSyncTaskHandle implements TaskHandle {
             boolean debug,
             JobPlanner planner,
             PipelineBuilder builder,
-            PipelineExecutor executor) {
-        this(parameters, admission, identity, debug, planner, builder, executor, null);
-    }
-
-    DataSyncTaskHandle(
-            ReadonlyConfig parameters,
-            TaskAdmissionPlan admission,
-            TaskExecutionIdentity identity,
-            boolean debug,
-            JobPlanner planner,
-            PipelineBuilder builder,
             PipelineExecutor executor,
-            io.yak.ops.plugin.task.datasync.execution.IncrementalBatchPreparation incrementalPlanner) {
-        this.incrementalPlanner = incrementalPlanner;
+            IncrementalBatchPreparation incrementalPreparation) {
+        this.incrementalPreparation = incrementalPreparation;
         this.parameters = parameters;
         this.admission = admission;
         this.identity = identity;
@@ -93,10 +82,9 @@ final class DataSyncTaskHandle implements TaskHandle {
                 JobPlan plan = planner.plan(parameters, identity);
                 verifyAdmission(plan);
                 JobConfig config = JobConfig.from(parameters);
-                var incremental = incrementalPlanner != null
-                                && config.solutionType().supportsScheduling()
+                var incremental = config.solutionType().supportsScheduling()
                                 && config.steps().contains(Step.INCREMENTAL)
-                        ? incrementalPlanner.prepare(plan, config, identity)
+                        ? incrementalPreparation.prepare(plan, config, identity)
                         : null;
                 boolean continuous = !config.solutionType().supportsScheduling()
                         && config.steps().contains(Step.INCREMENTAL);
