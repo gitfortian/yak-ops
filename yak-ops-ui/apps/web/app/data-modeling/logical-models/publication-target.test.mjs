@@ -1,65 +1,33 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
-  describeAddress,
-  toTargetPayload,
-  validatePublicationTarget,
-} from "./publication-target.ts";
+import { toTargetPayload, validatePublicationTarget } from "./publication-target.ts";
 
-test("requires a database before anything else", () => {
-  assert.deepEqual(validatePublicationTarget({ dbType: "MYSQL", database: "  ", schema: null }), {
-    field: "database",
-    message: "请选择目标数据库",
+test("requires an environment before anything else", () => {
+  assert.deepEqual(validatePublicationTarget("", "MYSQL"), {
+    field: "environment",
+    message: "请选择发布环境（开发或生产）",
   });
+  assert.deepEqual(validatePublicationTarget("TEST", "MYSQL")?.field, "environment");
 });
 
 test("refuses an engine it cannot connect to", () => {
-  assert.equal(
-    validatePublicationTarget({ dbType: "HIVE", database: "dw", schema: null })?.field,
-    "engine",
-  );
-  assert.equal(
-    validatePublicationTarget({ dbType: null, database: "dw", schema: null })?.field,
-    "engine",
-  );
+  assert.equal(validatePublicationTarget("DEVELOP", "HIVE")?.field, "engine");
+  assert.equal(validatePublicationTarget("PROD", null)?.field, "engine");
 });
 
-test("demands a schema on the engines that namespace by it", () => {
-  assert.equal(
-    validatePublicationTarget({ dbType: "POSTGRE_SQL", database: "dw", schema: null })?.field,
-    "schema",
-  );
-  assert.equal(
-    validatePublicationTarget({ dbType: "ORACLE", database: "dw", schema: "" })?.field,
-    "schema",
-  );
-  assert.equal(
-    validatePublicationTarget({ dbType: "ORACLE", database: "dw", schema: "EDW" }),
-    null,
-  );
+test("accepts both publication environments on the supported engines", () => {
+  assert.equal(validatePublicationTarget("DEVELOP", "MYSQL"), null);
+  assert.equal(validatePublicationTarget("PROD", "DORIS"), null);
+  assert.equal(validatePublicationTarget("PROD", "POSTGRE_SQL"), null);
 });
 
-test("refuses a surplus schema on MySQL, where the database is the schema", () => {
-  assert.equal(
-    validatePublicationTarget({ dbType: "MYSQL", database: "dw", schema: "public" })?.field,
-    "schema",
-  );
-  assert.equal(validatePublicationTarget({ dbType: "MYSQL", database: "dw", schema: null }), null);
-});
-
-test("renders the address the confirmation sentence shows", () => {
-  assert.equal(describeAddress("dw", "public", "POSTGRE_SQL"), "dw.public");
-  assert.equal(describeAddress("dw", "  ", "ORACLE"), "dw");
-  assert.equal(describeAddress(" dw ", "ignored", "MYSQL"), "dw");
-});
-
-test("never sends a schema the engine does not have", () => {
-  assert.deepEqual(toTargetPayload({ dbType: "MYSQL", database: " dw ", schema: "public" }), {
-    database: "dw",
-    schema: null,
+test("submits the environment and the loss acknowledgement only", () => {
+  assert.deepEqual(toTargetPayload("DEVELOP"), {
+    environment: "DEVELOP",
+    acknowledgeDataLoss: false,
   });
-  assert.deepEqual(toTargetPayload({ dbType: "postgresql", database: "dw", schema: " public " }), {
-    database: "dw",
-    schema: "public",
+  assert.deepEqual(toTargetPayload("PROD", true), {
+    environment: "PROD",
+    acknowledgeDataLoss: true,
   });
 });

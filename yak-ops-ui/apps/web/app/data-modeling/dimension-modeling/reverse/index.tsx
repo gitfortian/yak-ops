@@ -222,6 +222,7 @@ export default function ReverseModelingPage() {
         lifecycleDays: 30,
         ownerId: currentUser?.id ?? "",
         description: null,
+        physicalProperties: null,
         fields: rows.map(toModelFieldInput),
       };
       const saved = await saveModel(null, input);

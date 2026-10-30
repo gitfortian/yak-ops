@@ -32,6 +32,7 @@ import java.util.List;
  * @param lifecycleDays data retention in days
  * @param ownerId assigned owner identity
  * @param description optional business description
+ * @param physicalProperties engine-specific physical table properties as a JSON object, null when unset
  * @param namingRootWordId naming-dictionary word root chosen when the layer rule was applied, null
  *     when the model was created without a naming rule or before the rule existed
  * @param fieldCount number of fields, zero on write paths
@@ -61,6 +62,7 @@ public record ModelVO(
         int lifecycleDays,
         String ownerId,
         String description,
+        String physicalProperties,
         String namingRootWordId,
         long fieldCount,
         long revision,

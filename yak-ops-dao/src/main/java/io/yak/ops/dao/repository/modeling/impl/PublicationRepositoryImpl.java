@@ -40,8 +40,15 @@ public class PublicationRepositoryImpl implements PublicationRepository {
     }
 
     @Override
-    public boolean finish(String workspaceId, String id, String status, String error, LocalDateTime finishedTime) {
-        return mapper.finish(workspaceId, id, status, error, finishedTime) > 0;
+    public boolean finish(
+            String workspaceId,
+            String id,
+            String status,
+            String error,
+            Long durationMs,
+            String executionLog,
+            LocalDateTime finishedTime) {
+        return mapper.finish(workspaceId, id, status, error, durationMs, executionLog, finishedTime) > 0;
     }
 
     @Override

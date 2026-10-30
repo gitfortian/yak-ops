@@ -85,6 +85,45 @@ export const getLayerDataSources = (signal?: AbortSignal) =>
     HttpUtils.getData<LayerDataSource[]>(`${API}/datasources`, { signal, skipErrorHandler: true }),
   );
 
+/** One per-environment physical target bound to a layer. */
+export interface LayerTarget {
+  id: string;
+  layerId: string;
+  environment: "DEVELOP" | "PROD";
+  dataSourceId: string;
+  dataSourceName: string | null;
+  database: string;
+  schema: string | null;
+}
+
+/** One submitted binding; {@code schema} is null for engines that have no separate schema. */
+export interface LayerTargetInput {
+  environment: string;
+  dataSourceId: string;
+  database: string;
+  schema: string | null;
+}
+
+export const getLayerTargets = (layerId: string, signal?: AbortSignal) =>
+  layerRequest(
+    HttpUtils.getData<LayerTarget[]>(`${API}/${encodeURIComponent(layerId)}/targets`, {
+      signal,
+      skipErrorHandler: true,
+    }),
+  );
+
+export function saveLayerTargets(layerId: string, targets: LayerTargetInput[]) {
+  return layerRequest(
+    HttpUtils.putData<LayerTarget[]>(
+      `${API}/${encodeURIComponent(layerId)}/targets`,
+      { targets },
+      {
+        skipErrorHandler: true,
+      },
+    ),
+  );
+}
+
 export function checkLayerCode(enCode: string, excludeId?: string, signal?: AbortSignal) {
   const query = new URLSearchParams({ enCode });
   if (excludeId) query.set("excludeId", excludeId);

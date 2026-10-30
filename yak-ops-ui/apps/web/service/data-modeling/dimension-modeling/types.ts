@@ -110,6 +110,8 @@ export interface LogicalModel {
   lifecycleDays: number;
   ownerId: string;
   description: string | null;
+  /** Engine-specific physical table properties as a JSON object string; null when unset. */
+  physicalProperties: string | null;
   /** Naming-dictionary root the layer rule recorded for this model; null when the rule was off. */
   namingRootWordId: string | null;
   fieldCount: number;
@@ -176,6 +178,8 @@ export interface ModelInput {
   lifecycleDays: number;
   ownerId: string;
   description: string | null;
+  /** Engine-specific physical table properties as a JSON object string; null when unset. */
+  physicalProperties: string | null;
   fields: ModelFieldInput[];
 }
 

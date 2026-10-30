@@ -18,7 +18,7 @@ class MySqlDataSourcePluginTest {
         for (DataSourcePlugin plugin : ServiceLoader.load(DataSourcePlugin.class)) {
             types.add(plugin.type());
         }
-        assertEquals(Set.of("MYSQL", "ORACLE", "POSTGRE_SQL"), types);
+        assertEquals(Set.of("MYSQL", "DORIS", "ORACLE", "POSTGRE_SQL"), types);
     }
 
     @Test
