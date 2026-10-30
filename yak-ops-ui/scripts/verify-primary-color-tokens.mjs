@@ -74,7 +74,9 @@ const detailTabs = read("apps/web/app/data-sync/detail/execution-tabs.tsx");
 const execution = read("apps/web/app/data-sync/execution/execution-detail.css");
 const cron = read("packages/yak-ui/src/cron-scheduler/CronSchedulerPicker.tsx");
 
-assert.match(sidebar, /border-\[var\(--yak-color-primary\)\]/);
+// The active nav item is a filled pill now: primary tint for the surface and
+// primary text for the label. Its left-edge border was replaced by that pill.
+assert.match(sidebar, /text-\[var\(--yak-color-primary\)\]/);
 assert.match(sidebar, /bg-\[var\(--yak-color-primary-subtle\)\]/);
 assert.match(workspaceSwitcher, /text-\[var\(--yak-color-primary\)\]/);
 assert.match(detail, /bg-\[var\(--yak-color-primary-subtle\)\]/);

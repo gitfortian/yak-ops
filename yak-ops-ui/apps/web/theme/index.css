@@ -1,0 +1,11 @@
+/*
+ * Fork-owned design layer. Everything here is additive: no upstream file is
+ * edited except the single import at the end of `main.tsx`.
+ *
+ * Order matters — `light` must be declared before `dark` so that the
+ * `[data-theme="dark"]` block wins at equal specificity.
+ */
+@import "./brand.css";
+@import "./light.css";
+@import "./dark.css";
+@import "./components.css";

@@ -1,0 +1,159 @@
+/*
+ * Light scheme — OpenMetadata (Untitled UI) token set.
+ *
+ * Distilled from
+ *   openmetadata-ui/.../src/styles/tokens.css
+ *   openmetadata-ui-core-components/globals.css
+ *
+ * Brand ramp 600 = #1570ef, neutral ramp 50..950, border = gray.200,
+ * canvas = gray.50, text = gray.900 / gray.700.
+ */
+:root,
+[data-theme="light"] {
+  /* ---------- Brand ---------------------------------------------------- */
+  --yak-color-primary: #1570ef; /* brand.600 */
+
+  /* ---------- Surfaces and text ---------------------------------------- */
+  --yak-color-background: #fafafa; /* bg.canvas  = gray.50 */
+  --yak-color-surface: #ffffff; /* bg.surface = white */
+  --yak-color-surface-muted: #f5f5f5; /* bg.tertiary = gray.100 */
+  --yak-color-border: #e9eaeb; /* border.secondary = gray.200 */
+  --yak-color-text-primary: #181d27; /* text.primary = gray.900 */
+  --yak-color-text-secondary: #414651; /* text.secondary = gray.700 */
+  --yak-color-hover: #fafafa;
+  --yak-color-scrollbar: rgb(10 13 18 / 18%);
+  --yak-color-scrollbar-hover: rgb(10 13 18 / 30%);
+  /* Danger surfaces, used by inline form validation blocks. */
+  --yak-color-text-danger: #b42318;
+  --yak-color-border-danger-subtle: #fecdca;
+  --yak-color-surface-danger-subtle: #fffbfa;
+  /* Status colours: status text, progress fills and their tinted surfaces. */
+  --yak-color-status-success: #079455;
+  --yak-color-status-success-surface: #ecfdf3;
+  --yak-color-status-warning: #dc6803;
+  --yak-color-status-danger-surface: #fee4e2;
+  --yak-color-status-danger-soft: #fda29b;
+  /* Top bar logo silhouette: black on light chrome, inverted on dark. */
+  --yak-logo-filter: brightness(0);
+
+  /* ---------- Button --------------------------------------------------- */
+  /* Untitled UI steps the brand ramp instead of mixing toward black. */
+  --yak-components-button-primary-bg-hover: #175cd3; /* brand.700 */
+  --yak-components-button-primary-bg-active: #1849a9; /* brand.800 */
+  --yak-components-button-primary-text: #ffffff;
+  --yak-components-button-secondary-bg: #ffffff;
+  --yak-components-button-secondary-bg-hover: #fafafa;
+  --yak-components-button-secondary-bg-active: #f5f5f5;
+  --yak-components-button-secondary-text: #414651;
+  --yak-components-button-ghost-text: #414651;
+  --yak-components-button-ghost-bg-hover: #f5f5f5;
+  --yak-components-button-danger-bg: #fef3f2;
+  --yak-components-button-danger-bg-hover: #fee4e2;
+  --yak-components-button-danger-bg-active: #fecdca;
+  --yak-components-button-danger-text: #d92d20;
+
+  /* ---------- Input and textarea --------------------------------------- */
+  /* White field with a real border: `theme/components.css` gives the default
+   * `filled` variant its outline, because that variant ships border-transparent. */
+  --yak-components-input-bg: #ffffff;
+  --yak-components-input-bg-hover: #ffffff;
+  --yak-components-input-bg-focus: #ffffff;
+  --yak-components-input-bg-disabled: #f5f5f5;
+  --yak-components-input-text: #181d27;
+  --yak-components-input-text-disabled: #a4a7ae;
+  --yak-components-input-placeholder: #717680;
+  --yak-components-input-icon: #717680;
+  --yak-components-input-border: #d5d7da; /* border.primary = gray.300 */
+  --yak-components-input-border-hover: #a4a7ae; /* gray.400 */
+  --yak-components-input-border-danger: #d92d20;
+
+  /* ---------- Checkbox and switch -------------------------------------- */
+  --yak-components-checkbox-bg: #ffffff;
+  --yak-components-checkbox-border: #d5d7da;
+  --yak-components-checkbox-border-hover: #a4a7ae;
+  --yak-components-switch-bg: #e9eaeb;
+  --yak-components-switch-bg-hover: #d5d7da;
+
+  /* ---------- Select and menu ------------------------------------------ */
+  --yak-components-select-bg: #ffffff;
+  --yak-components-select-border: #d5d7da;
+  --yak-components-select-shadow: 0 4px 6px -1px rgb(10 13 18 / 10%), 0 2px 4px -2px rgb(10 13 18 / 6%);
+  --yak-components-select-item-text: #414651;
+  --yak-components-select-item-bg-hover: #fafafa;
+  --yak-components-menu-item-hover: #f5f5f5;
+
+  /* ---------- Panel, dialog, overlay ----------------------------------- */
+  --yak-components-panel-bg: #ffffff;
+  --yak-components-panel-border: #e9eaeb;
+  --yak-components-panel-text: #181d27;
+  --yak-components-panel-shadow: 0 4px 6px -1px rgb(10 13 18 / 10%), 0 2px 4px -2px rgb(10 13 18 / 6%);
+  --yak-components-dialog-shadow: 0 20px 24px -4px rgb(10 13 18 / 8%), 0 8px 8px -4px rgb(10 13 18 / 3%);
+  --yak-components-overlay: rgb(10 13 18 / 60%);
+  --yak-components-tooltip-bg: #181d27;
+  --yak-components-tooltip-text: #ffffff;
+
+  /* ---------- Table ---------------------------------------------------- */
+  --yak-components-table-bg: #ffffff;
+  --yak-components-table-header-bg: #fafafa;
+  --yak-components-table-header-text: #535862; /* text.tertiary */
+  --yak-components-table-row-bg: #ffffff;
+  --yak-components-table-text: #414651;
+  --yak-components-table-border: #f5f5f5; /* border.tertiary */
+  --yak-components-table-border-strong: #e9eaeb;
+  --yak-components-table-loading-bg: rgb(255 255 255 / 72%);
+  --yak-components-table-sorter-inactive: #a4a7ae;
+  --yak-components-table-filter-inactive: #717680;
+  --yak-components-table-filter-bg-hover: #f5f5f5;
+
+  /* ---------- Pagination ----------------------------------------------- */
+  --yak-components-pagination-bg: #ffffff;
+  --yak-components-pagination-bg-hover: #fafafa;
+  --yak-components-pagination-border: #d5d7da;
+  --yak-components-pagination-text: #414651;
+  --yak-components-pagination-active-bg: #ffffff;
+
+  /* ---------- Badge ---------------------------------------------------- */
+  --yak-components-badge-neutral-bg: #f5f5f5;
+  --yak-components-badge-neutral-text: #414651;
+  --yak-components-badge-success-bg: #ecfdf3;
+  --yak-components-badge-success-text: #079455;
+  --yak-components-badge-warning-bg: #fffaeb;
+  --yak-components-badge-warning-text: #dc6803;
+  --yak-components-badge-danger-bg: #fef3f2;
+  --yak-components-badge-danger-text: #d92d20;
+  --yak-components-badge-info-bg: #eff8ff;
+  --yak-components-badge-info-text: #175cd3;
+
+  /* ---------- Toast ---------------------------------------------------- */
+  --yak-components-toast-bg: #ffffff;
+  --yak-components-toast-border: #e9eaeb;
+  --yak-components-toast-title: #181d27;
+  --yak-components-toast-description: #414651;
+  --yak-components-toast-meta: #717680;
+  --yak-components-toast-shadow: 0 20px 24px -4px rgb(10 13 18 / 8%), 0 8px 8px -4px rgb(10 13 18 / 3%);
+
+  /* ---------- Field, header, misc -------------------------------------- */
+  --yak-components-field-label: #414651;
+  --yak-components-field-description: #717680;
+  --yak-components-control-border: #f5f5f5;
+  --yak-components-muted-text: #717680;
+  --yak-components-spinner: #717680;
+  --yak-components-skeleton-bg: #f5f5f5;
+  --yak-components-empty-icon: #d5d7da;
+  --yak-components-empty-title: #414651;
+  --yak-components-empty-description: #717680;
+  --yak-components-page-header-title: #181d27;
+  --yak-components-page-header-description: #414651;
+  --yak-components-page-header-border: #e9eaeb;
+  --yak-components-tab-text: #535862;
+  --yak-components-tab-text-hover: #414651;
+  --yak-components-collapse-section-bg: #fafafa;
+  --yak-components-collapse-section-border: #e9eaeb;
+  --yak-components-collapse-section-text: #414651;
+  --yak-components-collapse-section-icon: #717680;
+
+  /* ---------- Data map surface ----------------------------------------- */
+  --yak-datamap-page-bg: #fafafa;
+  --yak-datamap-surface: #ffffff;
+  --yak-datamap-card-shadow: 0 1px 2px 0 rgb(10 13 18 / 5%);
+}
