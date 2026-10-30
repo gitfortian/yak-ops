@@ -34,14 +34,15 @@ public interface ModelMapper {
             + "LEFT JOIN yak_ops_modeling_datamart dm ON dm.workspace_id=m.workspace_id AND dm.id=m.datamart_id "
             + "LEFT JOIN yak_ops_modeling_dimension dim ON dim.workspace_id=m.workspace_id AND dim.id=m.dimension_id ";
 
+    // name is ascii_bin while bound parameters arrive as utf8mb4; CONVERT keeps the LIKE collation-compatible.
     String FILTER = " WHERE m.workspace_id=#{workspaceId}"
             + "<if test='type != null'> AND m.type=#{type}</if>"
             + "<if test='layerId != null'> AND m.layer_id=#{layerId}</if>"
             + "<if test='ownerId != null'> AND m.owner_id=#{ownerId}</if>"
             + "<if test='domainId != null'> AND m.domain_id=#{domainId}</if>"
             + "<if test='datamartId != null'> AND m.datamart_id=#{datamartId}</if>"
-            + "<if test='keyword != null'> AND (m.name LIKE #{keyword} ESCAPE '!' "
-            + "OR m.cn_name LIKE #{keyword} ESCAPE '!')</if> ";
+            + "<if test='keyword != null'> AND (CONVERT(m.name USING utf8mb4) COLLATE utf8mb4_unicode_ci "
+            + "LIKE #{keyword} ESCAPE '!' OR m.cn_name LIKE #{keyword} ESCAPE '!')</if> ";
 
     @Select("<script>"
             + PROJECTION
