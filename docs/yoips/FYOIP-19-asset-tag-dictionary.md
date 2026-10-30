@@ -1,12 +1,12 @@
 # FYOIP-19: Asset Tag Dictionary and Value Bindings
 
-Status: Discussion
+Status: Accepted
 
 Discussion: https://github.com/gitfortian/yak-ops/pull/44
 
-Decision: Pending maintainer vote — scope decisions D1 and D2 recorded 2026-10-27, see "Recorded scope decisions"
+Decision: [VOTE] Accepted — https://github.com/gitfortian/yak-ops/pull/44#issuecomment-6514062166
 
-Implementation: N/A until accepted
+Implementation: N/A until implementation opens (starts from migration `V10`)
 
 Release: N/A until released
 
