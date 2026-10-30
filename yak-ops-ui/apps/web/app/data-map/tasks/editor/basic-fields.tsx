@@ -187,6 +187,7 @@ export default function BasicFields({
         <Combobox<OwnerChoice>
           items={ownerChoices}
           value={selectedOwner}
+          autoHighlight
           disabled={owners.isPending}
           itemToStringLabel={(owner) => owner.displayName}
           itemToStringValue={(owner) => owner.userId}
