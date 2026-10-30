@@ -1,4 +1,4 @@
--- Yak Ops v1.11.0 incremental schema.
+-- Yak Ops v1.13.0 incremental schema.
 -- Logical model publication closed loop: per-environment layer targets, engine-specific physical
 -- table properties on the model, and execution evidence (operation, duration, log, diff) on every
 -- publication record.

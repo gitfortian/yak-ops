@@ -1289,7 +1289,9 @@ export default function LogicalModelEditorPage() {
                   <div className="flex items-baseline justify-between gap-2">
                     <p className="text-xs font-medium">物理表属性（{layerDbType}）</p>
                     {errors.physicalProperties && (
-                      <span className="text-xs text-[var(--yak-components-badge-danger-text)]">{errors.physicalProperties}</span>
+                      <span className="text-xs text-[var(--yak-components-badge-danger-text)]">
+                        {errors.physicalProperties}
+                      </span>
                     )}
                   </div>
                   <p className="mt-0.5 text-xs text-[var(--yak-color-text-secondary)]">

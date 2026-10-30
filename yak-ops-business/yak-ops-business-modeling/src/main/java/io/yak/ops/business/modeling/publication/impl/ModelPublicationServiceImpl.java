@@ -42,8 +42,6 @@ import io.yak.ops.dao.repository.modeling.LayerTargetRepository;
 import io.yak.ops.dao.repository.modeling.PublicationRepository;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
 import jakarta.annotation.Resource;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -587,9 +585,19 @@ public class ModelPublicationServiceImpl implements ModelPublicationService {
     }
 
     private static String stackTraceOf(Throwable failure) {
-        var buffer = new StringWriter();
-        failure.printStackTrace(new PrintWriter(buffer));
-        return buffer.toString();
+        var text = new StringBuilder(failure.toString());
+        for (var element : failure.getStackTrace()) {
+            text.append("\n\tat ").append(element);
+        }
+        var cause = failure.getCause();
+        while (cause != null) {
+            text.append("\nCaused by: ").append(cause);
+            for (var element : cause.getStackTrace()) {
+                text.append("\n\tat ").append(element);
+            }
+            cause = cause.getCause();
+        }
+        return text.toString();
     }
 
     private static PublicationVO project(ModelPublicationEntity record) {

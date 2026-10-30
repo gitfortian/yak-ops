@@ -314,7 +314,9 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
                 </div>
                 <div className="grid gap-1 text-xs">
                   <span className="font-medium">目标库（由分层绑定自动带出）</span>
-                  <span className="text-[var(--yak-components-field-label)]">{addressText || "-"}</span>
+                  <span className="text-[var(--yak-components-field-label)]">
+                    {addressText || "-"}
+                  </span>
                 </div>
               </div>
             )}
@@ -356,7 +358,9 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
                     {PUBLICATION_OPERATION_LABEL[preview.operation ?? "NONE"]}
                   </Badge>
                   {preview.operation === "NONE" && (
-                    <span className="text-[var(--yak-components-field-label)]">物理表与模型结构一致，无需发布。</span>
+                    <span className="text-[var(--yak-components-field-label)]">
+                      物理表与模型结构一致，无需发布。
+                    </span>
                   )}
                 </div>
                 {preview.changes.length > 0 && (

@@ -415,7 +415,10 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
                 const databaseKey = `${environment}:${draft.dataSourceId}`;
                 const schemaKey = `${databaseKey}:${draft.database}`;
                 return (
-                  <div key={environment} className="grid gap-2 rounded-md bg-[var(--yak-color-surface-muted)] p-2">
+                  <div
+                    key={environment}
+                    className="grid gap-2 rounded-md bg-[var(--yak-color-surface-muted)] p-2"
+                  >
                     <p className="text-xs font-medium">{ENVIRONMENT_LABEL[environment]}环境</p>
                     <div className="grid gap-2 md:grid-cols-2">
                       <Field>

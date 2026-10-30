@@ -66,11 +66,15 @@ export default function PublicationDetailDialog({ record, onClose }: Props) {
           </div>
           <div className="grid gap-1">
             <span className="font-medium">发起时间</span>
-            <span className="text-[var(--yak-components-field-label)]">{formatTime(record.createdTime)}</span>
+            <span className="text-[var(--yak-components-field-label)]">
+              {formatTime(record.createdTime)}
+            </span>
           </div>
           <div className="grid gap-1">
             <span className="font-medium">结束时间</span>
-            <span className="text-[var(--yak-components-field-label)]">{formatTime(record.finishedTime)}</span>
+            <span className="text-[var(--yak-components-field-label)]">
+              {formatTime(record.finishedTime)}
+            </span>
           </div>
         </div>
 
@@ -112,7 +116,9 @@ export default function PublicationDetailDialog({ record, onClose }: Props) {
               {record.executionLog}
             </pre>
           ) : (
-            <p className="mt-1 text-xs text-[var(--yak-components-muted-text)]">该记录没有执行日志。</p>
+            <p className="mt-1 text-xs text-[var(--yak-components-muted-text)]">
+              该记录没有执行日志。
+            </p>
           )}
         </div>
 
