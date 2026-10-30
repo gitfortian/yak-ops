@@ -15,13 +15,16 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Pencil, Play } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 
+import { searchTables } from "@/service/data-map/catalog";
 import { getCrawl, listCrawls } from "@/service/data-map/crawl";
 import type { Crawl, CrawlTask } from "@/service/data-map/types";
 
 import { dataMapKeys } from "../../shared/keys";
 import {
   clockLabel,
+  DATA_MAP_BASE,
   formatDuration,
   locationLabel,
   relativeTime,
@@ -278,6 +281,29 @@ export default function TaskDrawer({
     staleTime: 15 * 1000,
   });
 
+  // How many assets this task actually owns, so the overview can link into the catalog view of
+  // exactly that scope instead of sending the user to filter by hand.
+  const scopeAssets = useQuery({
+    queryKey: dataMapKeys.tables(scope, {
+      datasourceId: task?.datasourceId ?? "",
+      database: task?.database ?? "",
+      pageNo: 1,
+      pageSize: 1,
+    }),
+    queryFn: ({ signal }) =>
+      searchTables(
+        {
+          datasourceId: task!.datasourceId,
+          database: task!.database,
+          pageNo: 1,
+          pageSize: 1,
+        },
+        signal,
+      ),
+    enabled: ready && open && Boolean(task),
+    staleTime: 60 * 1000,
+  });
+
   const records = useMemo(
     () =>
       [...(runs.data?.bizData ?? [])].sort((a, b) => (a.createdTime < b.createdTime ? 1 : -1)),
@@ -402,10 +428,25 @@ export default function TaskDrawer({
                   </Section>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <Section title="采集范围">
+                    <Section
+                      title="数据源"
+                      extra={
+                        <Link
+                          className="text-[11px] text-[var(--yak-color-primary)] hover:underline"
+                          to={`${DATA_MAP_BASE}/catalog?datasourceId=${encodeURIComponent(task.datasourceId)}&database=${encodeURIComponent(task.database)}`}
+                        >
+                          查看资产
+                        </Link>
+                      }
+                    >
                       <Field label="数据源">{datasourceName}</Field>
                       <Field label="库 / Schema">{locationLabel(task.database, task.schema)}</Field>
-                      <Field label="已排除表">{task.excludeTables.length} 张</Field>
+                      <Field label="该范围资产">
+                        {scopeAssets.isPending ? "…" : (scopeAssets.data?.pagination.total ?? 0)} 张
+                      </Field>
+                      <Field label="最近同步">
+                        {latest ? relativeTime(latest.createdTime) : "未采集"}
+                      </Field>
                     </Section>
                     <Section title="调度">
                       <Field label="方式">
@@ -422,7 +463,7 @@ export default function TaskDrawer({
                     </Section>
                   </div>
 
-                  <Section title="排除规则">
+                  <Section title="排除规则" extra={<span className="text-[11px] text-[var(--yak-components-muted-text)]">已排除 {task.excludeTables.length} 张</span>}>
                     {task.excludePattern ? (
                       <code className="block break-all rounded-md bg-[var(--yak-color-surface-muted)] px-2 py-1.5 text-[11px] text-[var(--yak-components-panel-text)]">
                         {task.excludePattern}

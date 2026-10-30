@@ -157,6 +157,59 @@ public interface DataMapCrawlMapper {
     DataMapRunSummaryRow summarizeRuns(@Param("workspaceId") String workspaceId, @Param("since") LocalDateTime since);
 
     /**
+     * Quality figures of the run window: today's ratio, a seven-day success rate and how long a
+     * successful run takes.
+     *
+     * <p>Only terminal outcomes (SUCCEEDED or FAILED) enter every figure, so a run that is still
+     * queued cannot move the success rate in either direction. A succeeded run with failed tables
+     * counts as a success, because it did catalogue the namespace. Duration is measured over the
+     * successful runs only: a failed run usually aborts early and would drag the average down
+     * without describing a healthy run.
+     *
+     * @param workspaceId owning Workspace
+     * @param todayStart local start of the current day
+     * @param weekStart local start seven days ago
+     * @return quality figures of the window
+     */
+    @Select("SELECT COUNT(CASE WHEN c.created_time>=#{todayStart} THEN 1 END) AS today_total,"
+            + "COUNT(CASE WHEN c.created_time>=#{todayStart} AND c.status='SUCCEEDED' THEN 1 END)"
+            + " AS today_succeeded,"
+            + "COUNT(CASE WHEN c.created_time>=#{weekStart} THEN 1 END) AS week_total,"
+            + "COUNT(CASE WHEN c.created_time>=#{weekStart} AND c.status='SUCCEEDED' THEN 1 END)"
+            + " AS week_succeeded,"
+            + "AVG(CASE WHEN c.status='SUCCEEDED' AND c.started_time IS NOT NULL"
+            + " AND c.finished_time IS NOT NULL"
+            + " AND c.created_time>=#{weekStart}"
+            + " THEN TIMESTAMPDIFF(SECOND, c.started_time, c.finished_time) END) AS avg_seconds"
+            + " FROM yak_ops_data_map_crawl c"
+            + " WHERE c.workspace_id=#{workspaceId}"
+            + " AND c.status IN ('SUCCEEDED','FAILED')"
+            + " AND c.created_time>=#{weekStart}")
+    DataMapRunQualityRow summarizeRunQuality(
+            @Param("workspaceId") String workspaceId,
+            @Param("todayStart") LocalDateTime todayStart,
+            @Param("weekStart") LocalDateTime weekStart);
+
+    /**
+     * P95 duration of successful runs in the window, resolved with a window function because no
+     * supported dialect ships a percentile aggregate. Rows are rare (a few runs per datasource
+     * per day), so scanning them twice is cheaper than the complexity of an approximation.
+     *
+     * @param workspaceId owning Workspace
+     * @param weekStart local start seven days ago
+     * @return p95 of successful run durations in seconds, or null when nothing succeeded
+     */
+    @Select("WITH ranked AS (SELECT TIMESTAMPDIFF(SECOND, c.started_time, c.finished_time) AS seconds,"
+            + " ROW_NUMBER() OVER (ORDER BY c.finished_time-c.started_time) AS rn,"
+            + " COUNT(*) OVER () AS total"
+            + " FROM yak_ops_data_map_crawl c"
+            + " WHERE c.workspace_id=#{workspaceId} AND c.status='SUCCEEDED'"
+            + " AND c.started_time IS NOT NULL AND c.finished_time IS NOT NULL"
+            + " AND c.created_time>=#{weekStart})"
+            + " SELECT MIN(CASE WHEN rn>=CEIL(total*0.95) THEN seconds END) AS p95_seconds FROM ranked")
+    Long percentile95Duration(@Param("workspaceId") String workspaceId, @Param("weekStart") LocalDateTime weekStart);
+
+    /**
      * Sums the failure backlog over the newest run of each task.
      *
      * <p>A failure a later run already fixed is not pending anymore, so the newest run per task is

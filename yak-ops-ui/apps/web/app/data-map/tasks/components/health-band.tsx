@@ -1,36 +1,23 @@
 import type { CrawlSummary } from "@/service/data-map/types";
 
+import { formatDuration } from "../../shared/labels";
+
 interface MetricProps {
   label: string;
   value: string;
-  unit?: string;
   detail: string;
   tone?: "default" | "danger";
-  active?: boolean;
-  onClick?: () => void;
 }
 
 /**
- * One health metric. Only the actionable metric is a button; the other three stay read-only so the
- * band keeps a single call to action.
+ * One health metric, read-only: quality figures describe, they do not act. Only the failure
+ * backlog below stays clickable, keeping the band's single call to action.
  */
-function Metric({ label, value, unit, detail, tone = "default", active, onClick }: MetricProps) {
-  const className = [
-    "rounded-[var(--yak-radius-control-medium)] border bg-[var(--yak-components-panel-bg)] px-3.5 py-3 text-left",
-    "border-[var(--yak-components-panel-border)]",
-    tone === "danger" ? "border-l-2 border-l-[var(--yak-components-badge-danger-text)]" : "",
-    onClick
-      ? "cursor-pointer transition-colors hover:border-[var(--yak-components-control-border)]"
-      : "",
-    active ? "bg-[var(--yak-components-badge-danger-bg)]" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const body = (
-    <>
+function Metric({ label, value, detail, tone = "default" }: MetricProps) {
+  return (
+    <div className="rounded-[var(--yak-radius-control-medium)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-components-panel-bg)] px-3.5 py-3 text-left">
       <div className="text-[11px] text-[var(--yak-components-muted-text)]">{label}</div>
-      <div className="mt-1 flex items-baseline gap-1">
+      <div className="mt-1">
         <span
           className={`text-[20px] leading-6 font-semibold tabular-nums ${
             tone === "danger"
@@ -40,21 +27,11 @@ function Metric({ label, value, unit, detail, tone = "default", active, onClick 
         >
           {value}
         </span>
-        {unit && (
-          <span className="text-[11px] text-[var(--yak-components-muted-text)]">{unit}</span>
-        )}
       </div>
       <div className="mt-1 truncate text-[11px] text-[var(--yak-components-muted-text)]">
         {detail}
       </div>
-    </>
-  );
-
-  if (!onClick) return <div className={className}>{body}</div>;
-  return (
-    <button type="button" className={className} aria-pressed={active} onClick={onClick}>
-      {body}
-    </button>
+    </div>
   );
 }
 
@@ -110,6 +87,12 @@ function outcomeSegments(summary: CrawlSummary): Outcome[] {
   ].filter((outcome) => outcome.count > 0);
 }
 
+/** Comment coverage of the active assets' columns, shown beside the run window. */
+function coverageLabel(summary: CrawlSummary): string {
+  if (summary.columnTotal <= 0) return "字段描述 -";
+  return `字段描述 ${Math.round((summary.describedColumnCount / summary.columnTotal) * 100)}%`;
+}
+
 /** The run window as a single quiet line: total, a proportion bar, and a per-outcome legend. */
 function RunWindow({ summary }: { summary: CrawlSummary }) {
   const outcomes = outcomeSegments(summary);
@@ -146,75 +129,122 @@ function RunWindow({ summary }: { summary: CrawlSummary }) {
       ) : (
         <span>没有采集记录</span>
       )}
+      <span className="shrink-0 max-md:basis-full">· {coverageLabel(summary)}</span>
     </div>
   );
 }
 
 interface Props {
   summary: CrawlSummary;
-  managedDatasources: number;
-  datasourceTotal: number;
-  assetCount: number;
-  newTablesLastSevenDays: number;
   onlyAbnormal: boolean;
   onToggleAbnormal: () => void;
 }
 
 /**
- * Comment coverage of the active assets' columns. A workspace without assets shows a dash rather
- * than 100%, because "every column is described" would be a lie when there is nothing to describe.
+ * Quality-first band: how today's runs went, the seven-day success rate, and how long a healthy
+ * run takes. Raw counts (tasks, datasources, assets) are not quality signals; they live in the
+ * table summary and the drawer instead of taking a card each.
  */
-function coverageLabel(summary: CrawlSummary): string {
-  if (summary.columnTotal <= 0) return "字段描述 -";
-  return `字段描述 ${Math.round((summary.describedColumnCount / summary.columnTotal) * 100)}%`;
-}
+export default function HealthBand({ summary, onlyAbnormal, onToggleAbnormal }: Props) {
+  const todayFailed = summary.todayRunTotal - summary.todayRunSucceeded;
+  const weekFailed = summary.weekRunTotal - summary.weekRunSucceeded;
+  const successRate =
+    summary.weekRunTotal > 0
+      ? `${Math.round((summary.weekRunSucceeded / summary.weekRunTotal) * 100)}%`
+      : "—";
 
-export default function HealthBand({
-  summary,
-  managedDatasources,
-  datasourceTotal,
-  assetCount,
-  newTablesLastSevenDays,
-  onlyAbnormal,
-  onToggleAbnormal,
-}: Props) {
   return (
     <div className="shrink-0 rounded-[var(--yak-radius-control-medium)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-components-panel-bg)]">
       <div className="grid grid-cols-4 gap-3 p-3 max-lg:grid-cols-2">
         <Metric
-          label="采集任务"
-          value={String(summary.taskTotal)}
-          unit="个"
-          detail={`${summary.onlineTaskCount} 个已上线`}
-        />
-        <Metric
-          label="已接入数据源"
-          value={String(managedDatasources)}
-          unit={`/ ${datasourceTotal}`}
-          detail="有采集产出的数据源"
-        />
-        <Metric
-          label="目录资产"
-          value={assetCount.toLocaleString()}
-          unit="表"
-          detail={`近 7 天 +${newTablesLastSevenDays} · ${coverageLabel(summary)}`}
-        />
-        <Metric
-          label="待处理失败表"
-          value={String(summary.failedTableCount)}
-          detail={
-            summary.failedTableCount > 0
-              ? `${summary.abnormalTaskCount} 个任务 · 点击只看异常`
-              : "无"
+          label="今日运行"
+          value={
+            summary.todayRunTotal > 0
+              ? `${summary.todayRunSucceeded}/${summary.todayRunTotal}`
+              : "—"
           }
-          tone="danger"
-          active={onlyAbnormal}
-          onClick={summary.failedTableCount > 0 ? onToggleAbnormal : undefined}
+          detail={
+            summary.todayRunTotal === 0
+              ? "今天还没有运行"
+              : todayFailed > 0
+                ? `${todayFailed} 次失败`
+                : "全部成功"
+          }
+          tone={todayFailed > 0 ? "danger" : "default"}
         />
+        <Metric
+          label="7 日成功率"
+          value={successRate}
+          detail={
+            summary.weekRunTotal > 0
+              ? `${summary.weekRunTotal} 次运行 · ${weekFailed} 次失败`
+              : "近 7 天没有运行"
+          }
+        />
+        <Metric
+          label="平均耗时"
+          value={summary.weekRunSucceeded > 0 ? formatDuration(summary.avgDurationSeconds) : "—"}
+          detail={
+            summary.p95DurationSeconds > 0
+              ? `P95 ${formatDuration(summary.p95DurationSeconds)}`
+              : "成功运行太少"
+          }
+        />
+        <FailureMetric summary={summary} onlyAbnormal={onlyAbnormal} onToggle={onToggleAbnormal} />
       </div>
       <div className="border-t border-[var(--yak-components-panel-border)]">
         <RunWindow summary={summary} />
       </div>
     </div>
+  );
+}
+
+/** The single actionable metric: pending failures filter the table when clicked. */
+function FailureMetric({
+  summary,
+  onlyAbnormal,
+  onToggle,
+}: {
+  summary: CrawlSummary;
+  onlyAbnormal: boolean;
+  onToggle: () => void;
+}) {
+  const className = [
+    "rounded-[var(--yak-radius-control-medium)] border bg-[var(--yak-components-panel-bg)] px-3.5 py-3 text-left",
+    "border-[var(--yak-components-panel-border)]",
+    summary.failedTableCount > 0
+      ? "border-l-2 border-l-[var(--yak-components-badge-danger-text)]"
+      : "",
+    summary.failedTableCount > 0
+      ? "cursor-pointer transition-colors hover:border-[var(--yak-components-control-border)]"
+      : "",
+    onlyAbnormal ? "bg-[var(--yak-components-badge-danger-bg)]" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const body = (
+    <>
+      <div className="text-[11px] text-[var(--yak-components-muted-text)]">待处理失败表</div>
+      <div
+        className={`mt-1 text-[20px] leading-6 font-semibold tabular-nums ${
+          summary.failedTableCount > 0
+            ? "text-[var(--yak-components-badge-danger-text)]"
+            : "text-[var(--yak-components-panel-text)]"
+        }`}
+      >
+        {summary.failedTableCount}
+      </div>
+      <div className="mt-1 truncate text-[11px] text-[var(--yak-components-muted-text)]">
+        {summary.failedTableCount > 0 ? `${summary.abnormalTaskCount} 个任务 · 点击只看异常` : "无"}
+      </div>
+    </>
+  );
+
+  if (summary.failedTableCount === 0) return <div className={className}>{body}</div>;
+  return (
+    <button type="button" className={className} aria-pressed={onlyAbnormal} onClick={onToggle}>
+      {body}
+    </button>
   );
 }

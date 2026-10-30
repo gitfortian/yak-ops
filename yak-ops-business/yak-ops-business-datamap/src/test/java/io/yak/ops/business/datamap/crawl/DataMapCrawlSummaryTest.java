@@ -12,6 +12,7 @@ import io.yak.ops.dao.mapper.datamap.DataMapColumnCoverageRow;
 import io.yak.ops.dao.mapper.datamap.DataMapColumnMapper;
 import io.yak.ops.dao.mapper.datamap.DataMapCrawlMapper;
 import io.yak.ops.dao.mapper.datamap.DataMapCrawlTaskMapper;
+import io.yak.ops.dao.mapper.datamap.DataMapRunQualityRow;
 import io.yak.ops.dao.mapper.datamap.DataMapRunSummaryRow;
 import io.yak.ops.dao.mapper.datamap.DataMapTaskFailureRow;
 import java.time.LocalDateTime;
@@ -62,7 +63,11 @@ class DataMapCrawlSummaryTest {
         when(taskMapper.count(eq("ws"), isNull(), isNull(), isNull(), isNull())).thenReturn(0L);
         when(taskMapper.count(eq("ws"), isNull(), eq("RUNNING"), isNull(), isNull())).thenReturn(0L);
         // MySQL reports SUM over no rows as null, so the mapper row itself carries nulls.
-        when(crawlMapper.summarizeRuns(eq("ws"), org.mockito.ArgumentMatchers.any())).thenReturn(new DataMapRunSummaryRow());
+        when(crawlMapper.summarizeRuns(eq("ws"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new DataMapRunSummaryRow());
+        when(crawlMapper.summarizeRunQuality(eq("ws"), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new DataMapRunQualityRow());
+        when(crawlMapper.percentile95Duration(eq("ws"), org.mockito.ArgumentMatchers.any())).thenReturn(null);
         when(crawlMapper.summarizeLatestTaskFailures("ws")).thenReturn(new DataMapTaskFailureRow());
         when(columnMapper.summarizeCoverage("ws")).thenReturn(new DataMapColumnCoverageRow());
 
@@ -71,6 +76,9 @@ class DataMapCrawlSummaryTest {
         assertEquals(0, summary.getRunTotal());
         assertEquals(0, summary.getFailedTableCount());
         assertEquals(0, summary.getColumnTotal());
+        assertEquals(0, summary.getWeekRunTotal());
+        assertEquals(0, summary.getAvgDurationSeconds());
+        assertEquals(0, summary.getP95DurationSeconds());
         assertEquals(24, summary.getWindowHours());
     }
 
@@ -87,6 +95,15 @@ class DataMapCrawlSummaryTest {
         when(taskMapper.count(eq("ws"), isNull(), isNull(), isNull(), isNull())).thenReturn(5L);
         when(taskMapper.count(eq("ws"), isNull(), eq("RUNNING"), isNull(), isNull())).thenReturn(3L);
         when(crawlMapper.summarizeRuns(eq("ws"), org.mockito.ArgumentMatchers.any())).thenReturn(runs);
+        DataMapRunQualityRow quality = new DataMapRunQualityRow();
+        quality.setTodayTotal(4L);
+        quality.setTodaySucceeded(4L);
+        quality.setWeekTotal(28L);
+        quality.setWeekSucceeded(27L);
+        quality.setAvgSeconds(42L);
+        when(crawlMapper.summarizeRunQuality(eq("ws"), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(quality);
+        when(crawlMapper.percentile95Duration(eq("ws"), org.mockito.ArgumentMatchers.any())).thenReturn(61L);
         DataMapTaskFailureRow backlog = new DataMapTaskFailureRow();
         backlog.setFailedTables(7L);
         backlog.setAbnormalTasks(2L);
@@ -108,6 +125,12 @@ class DataMapCrawlSummaryTest {
         assertEquals(2, summary.getAbnormalTaskCount());
         assertEquals(200, summary.getColumnTotal());
         assertEquals(150, summary.getDescribedColumnCount());
+        assertEquals(4, summary.getTodayRunTotal());
+        assertEquals(4, summary.getTodayRunSucceeded());
+        assertEquals(28, summary.getWeekRunTotal());
+        assertEquals(27, summary.getWeekRunSucceeded());
+        assertEquals(42, summary.getAvgDurationSeconds());
+        assertEquals(61, summary.getP95DurationSeconds());
     }
 
     @Test

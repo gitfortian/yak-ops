@@ -182,6 +182,15 @@ export interface CrawlSummary {
   abnormalTaskCount: number;
   columnTotal: number;
   describedColumnCount: number;
+  /** Terminal runs submitted today, and how many of them succeeded. */
+  todayRunTotal: number;
+  todayRunSucceeded: number;
+  /** Terminal runs of the last seven days, and how many of them succeeded. */
+  weekRunTotal: number;
+  weekRunSucceeded: number;
+  /** Average and P95 duration of the successful runs in the last seven days, in seconds. */
+  avgDurationSeconds: number;
+  p95DurationSeconds: number;
 }
 
 export interface CrawlDetail {

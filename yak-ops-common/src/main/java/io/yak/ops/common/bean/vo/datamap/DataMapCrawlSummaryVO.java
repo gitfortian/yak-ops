@@ -54,6 +54,24 @@ public class DataMapCrawlSummaryVO {
     /** Tasks whose newest run is failed or partially succeeded. */
     private long abnormalTaskCount;
 
+    /** Terminal runs submitted today, every outcome. */
+    private long todayRunTotal;
+
+    /** Terminal runs submitted today that ended succeeded. */
+    private long todayRunSucceeded;
+
+    /** Terminal runs submitted in the last seven days, every outcome. */
+    private long weekRunTotal;
+
+    /** Terminal runs submitted in the last seven days that ended succeeded. */
+    private long weekRunSucceeded;
+
+    /** Average duration of the successful runs in the last seven days, in seconds. */
+    private long avgDurationSeconds;
+
+    /** P95 duration of the successful runs in the last seven days, in seconds. */
+    private long p95DurationSeconds;
+
     /** Columns of active assets, the denominator of {@code describedColumnCount}. */
     private long columnTotal;
 

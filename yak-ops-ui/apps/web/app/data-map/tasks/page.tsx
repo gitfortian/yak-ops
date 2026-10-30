@@ -3,7 +3,6 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-import { getOverview } from "@/service/data-map/catalog";
 import { getCrawlSummary, listCrawls } from "@/service/data-map/crawl";
 import { dataMapFailureMessage } from "@/service/data-map/request";
 import { changeTaskStatus, deleteTask, listTasks, runTask } from "@/service/data-map/task";
@@ -31,8 +30,7 @@ const DEFAULT_PAGE_SIZE = 20;
 const ACTIVE_POLL_MS = 5000;
 /** Runs read for the "newest instance per task" join; wide enough for a full page of tasks. */
 const LATEST_RUN_WINDOW = 50;
-const OVERVIEW_STALE_TIME = 60 * 1000;
-/** The run window; fixed so the strip cannot silently change meaning between loads. */
+/** The band's run window; fixed so the strip cannot silently change meaning between loads. */
 const SUMMARY_HOURS = 24;
 /** Shown until the first summary arrives; zeros read as "nothing known", not as a real state. */
 const EMPTY_SUMMARY: CrawlSummary = {
@@ -50,6 +48,12 @@ const EMPTY_SUMMARY: CrawlSummary = {
   abnormalTaskCount: 0,
   columnTotal: 0,
   describedColumnCount: 0,
+  todayRunTotal: 0,
+  todayRunSucceeded: 0,
+  weekRunTotal: 0,
+  weekRunSucceeded: 0,
+  avgDurationSeconds: 0,
+  p95DurationSeconds: 0,
 };
 
 const readPageNo = (value: string | null) => {
@@ -132,13 +136,6 @@ export default function CrawlTasksPage() {
         : false,
   });
 
-  const overview = useQuery({
-    queryKey: dataMapKeys.overview(scope),
-    queryFn: ({ signal }) => getOverview(signal),
-    enabled: ready,
-    staleTime: OVERVIEW_STALE_TIME,
-  });
-
   const summary = useQuery({
     queryKey: dataMapKeys.crawlSummary(scope, SUMMARY_HOURS),
     queryFn: ({ signal }) => getCrawlSummary(SUMMARY_HOURS, signal),
@@ -199,7 +196,6 @@ export default function CrawlTasksPage() {
     void queryClient.invalidateQueries({ queryKey: [...dataMapKeys.all, "task"] });
     void queryClient.invalidateQueries({ queryKey: [...dataMapKeys.all, "crawls"] });
     void queryClient.invalidateQueries({ queryKey: [...dataMapKeys.all, "crawl-summary"] });
-    void queryClient.invalidateQueries({ queryKey: [...dataMapKeys.all, "overview"] });
   };
 
   const run = useMutation({
@@ -294,10 +290,6 @@ export default function CrawlTasksPage() {
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-6 pb-4 pt-4 max-md:px-4">
         <HealthBand
           summary={summary.data ?? EMPTY_SUMMARY}
-          managedDatasources={overview.data?.managedDatasourceCount ?? 0}
-          datasourceTotal={datasources.options.length}
-          assetCount={overview.data?.assetCount ?? 0}
-          newTablesLastSevenDays={overview.data?.newTablesLastSevenDays ?? 0}
           onlyAbnormal={onlyAbnormal}
           onToggleAbnormal={() => writeParams({ abnormal: onlyAbnormal ? "" : "1" })}
         />

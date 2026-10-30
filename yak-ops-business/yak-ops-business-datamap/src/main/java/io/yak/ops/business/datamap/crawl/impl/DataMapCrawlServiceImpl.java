@@ -29,6 +29,7 @@ import io.yak.ops.dao.mapper.datamap.DataMapColumnCoverageRow;
 import io.yak.ops.dao.mapper.datamap.DataMapColumnMapper;
 import io.yak.ops.dao.mapper.datamap.DataMapCrawlMapper;
 import io.yak.ops.dao.mapper.datamap.DataMapCrawlTaskMapper;
+import io.yak.ops.dao.mapper.datamap.DataMapRunQualityRow;
 import io.yak.ops.dao.mapper.datamap.DataMapRunSummaryRow;
 import io.yak.ops.dao.mapper.datamap.DataMapTaskFailureRow;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
@@ -61,6 +62,7 @@ public class DataMapCrawlServiceImpl implements DataMapCrawlService, DataMapCraw
 
     private static final int FAILURE_LIMIT = 200;
     private static final int DEFAULT_SUMMARY_HOURS = 24;
+    private static final int DEFAULT_QUALITY_DAYS = 7;
     private static final String RESTART_ERROR = "应用重启导致采集中断";
     private static final long RECOVERY_WAIT_MILLIS = 30_000L;
 
@@ -124,8 +126,11 @@ public class DataMapCrawlServiceImpl implements DataMapCrawlService, DataMapCraw
     @Override
     public DataMapCrawlSummaryVO summary(String workspaceId, Integer hours) {
         int windowHours = hours == null ? DEFAULT_SUMMARY_HOURS : hours;
-        DataMapRunSummaryRow runs =
-                crawlMapper.summarizeRuns(workspaceId, DateUtils.now().minusHours(windowHours));
+        LocalDateTime now = DateUtils.now();
+        DataMapRunSummaryRow runs = crawlMapper.summarizeRuns(workspaceId, now.minusHours(windowHours));
+        DataMapRunQualityRow quality = crawlMapper.summarizeRunQuality(
+                workspaceId, now.toLocalDate().atStartOfDay(), now.minusDays(DEFAULT_QUALITY_DAYS));
+        Long p95 = crawlMapper.percentile95Duration(workspaceId, now.minusDays(DEFAULT_QUALITY_DAYS));
         DataMapTaskFailureRow backlog = crawlMapper.summarizeLatestTaskFailures(workspaceId);
         DataMapColumnCoverageRow coverage = columnMapper.summarizeCoverage(workspaceId);
         DataMapCrawlSummaryVO summary = new DataMapCrawlSummaryVO();
@@ -140,6 +145,12 @@ public class DataMapCrawlServiceImpl implements DataMapCrawlService, DataMapCraw
         summary.setRunInterrupted(count(runs == null ? null : runs.getInterrupted()));
         summary.setRunRunning(count(runs == null ? null : runs.getRunning()));
         summary.setRunPending(count(runs == null ? null : runs.getPending()));
+        summary.setTodayRunTotal(count(quality == null ? null : quality.getTodayTotal()));
+        summary.setTodayRunSucceeded(count(quality == null ? null : quality.getTodaySucceeded()));
+        summary.setWeekRunTotal(count(quality == null ? null : quality.getWeekTotal()));
+        summary.setWeekRunSucceeded(count(quality == null ? null : quality.getWeekSucceeded()));
+        summary.setAvgDurationSeconds(count(quality == null ? null : quality.getAvgSeconds()));
+        summary.setP95DurationSeconds(count(p95));
         summary.setFailedTableCount(count(backlog == null ? null : backlog.getFailedTables()));
         summary.setAbnormalTaskCount(count(backlog == null ? null : backlog.getAbnormalTasks()));
         summary.setColumnTotal(count(coverage == null ? null : coverage.getColumnTotal()));
