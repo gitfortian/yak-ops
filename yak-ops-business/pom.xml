@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.yak.ops</groupId>
         <artifactId>yak-ops</artifactId>
-        <version>1.11.0</version>
+        <version>1.12.0</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -23,5 +23,6 @@
         <module>yak-ops-business-datamap</module>
         <module>yak-ops-business-task</module>
         <module>yak-ops-business-schedule</module>
+        <module>yak-ops-business-governance</module>
     </modules>
 </project>
