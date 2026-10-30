@@ -7,7 +7,6 @@ import {
   Field,
   FieldError,
   FieldLabel,
-  Form,
   Table,
   Textarea,
   toast,
@@ -114,7 +113,7 @@ function EntryDialog(props: {
         <DialogTitle className="mb-5 text-sm font-medium">
           {edited ? "编辑命名词根" : "新建命名词根"}
         </DialogTitle>
-        <Form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
+        <form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
           <InputField
             id={id + "-code"}
             label="词根"
@@ -180,7 +179,7 @@ function EntryDialog(props: {
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );

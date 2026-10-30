@@ -182,7 +182,7 @@ export default function LayerPanel() {
         <div>
           <h2 className="text-sm font-medium">数仓分层</h2>
           <p className="mt-1 text-xs text-[var(--yak-color-text-secondary)]">
-            维度建模只可选用启用状态的分层；物理发布时按分层绑定的数据源执行。
+            仅启用状态的分层可选。
           </p>
         </div>
         <Button

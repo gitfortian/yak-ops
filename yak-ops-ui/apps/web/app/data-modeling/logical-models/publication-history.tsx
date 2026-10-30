@@ -89,7 +89,7 @@ export default function PublicationHistory({ modelId, refreshKey }: Props) {
       } else {
         const snapshot = await refreshPublicationMetadata(row.id);
         toast.success(
-          `元数据已重新采集：${snapshot.tableCount} 张表 / ${snapshot.fieldCount} 个字段`,
+          `已重读物理表结构：${snapshot.tableCount} 张表 / ${snapshot.fieldCount} 个字段`,
         );
       }
       setReload((value) => value + 1);
@@ -167,7 +167,7 @@ export default function PublicationHistory({ modelId, refreshKey }: Props) {
             loading={busyId === row.id}
             onClick={() => void act(row, "refresh")}
           >
-            重新采集
+            重读表结构
           </Button>
         ) : (
           <span className="text-xs text-[var(--yak-components-muted-text)]">-</span>

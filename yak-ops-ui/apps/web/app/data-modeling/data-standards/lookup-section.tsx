@@ -7,7 +7,6 @@ import {
   Field,
   FieldError,
   FieldLabel,
-  Form,
   Input,
   Table,
   Textarea,
@@ -196,7 +195,7 @@ function LookupDialog(props: { draft: LookupDraft; onClose: () => void; onSaved:
         <DialogTitle className="mb-5 text-sm font-medium">
           {props.draft.mode === "edit" ? "编辑标准代码" : "新建标准代码"}
         </DialogTitle>
-        <Form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
+        <form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
           <InputField
             id={id + "-category"}
             label="所属分类"
@@ -309,6 +308,9 @@ function LookupDialog(props: { draft: LookupDraft; onClose: () => void; onSaved:
                     disabled={saving || loading}
                     aria-label="值编码"
                     aria-invalid={Boolean(errors["value-" + index]) || undefined}
+                    aria-describedby={
+                      errors["value-" + index] ? `${id}-value-${index}-error` : undefined
+                    }
                     placeholder="值编码，如 paid"
                     onChange={(event) => value(index, { valueCode: event.target.value })}
                   />
@@ -349,7 +351,10 @@ function LookupDialog(props: { draft: LookupDraft; onClose: () => void; onSaved:
                   </Button>
                 </div>
                 {errors["value-" + index] && (
-                  <p className="mt-1 text-xs text-[var(--yak-components-danger-text)]">
+                  <p
+                    id={`${id}-value-${index}-error`}
+                    className="mt-1 text-xs text-[var(--yak-components-danger-text)]"
+                  >
                     {errors["value-" + index]}
                   </p>
                 )}
@@ -372,7 +377,7 @@ function LookupDialog(props: { draft: LookupDraft; onClose: () => void; onSaved:
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );

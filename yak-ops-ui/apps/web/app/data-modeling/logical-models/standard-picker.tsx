@@ -12,6 +12,7 @@ import {
 import { useEffect, useState } from "react";
 import { getStandards } from "@/service/data-modeling/data-standards";
 import type { StandardField } from "@/service/data-modeling/data-standards/types";
+import type { StandardBindingWarning } from "./standard-binding";
 
 interface Props {
   mode: "single" | "multiple";
@@ -19,11 +20,19 @@ interface Props {
   takenCodes: string[];
   onClose: () => void;
   onPick: (standards: StandardField[]) => void;
+  /** Explains why this standard would detach the target row from its source column. */
+  bindingWarning?: (standard: StandardField) => StandardBindingWarning | null;
 }
 
 const PAGE_SIZE = 20;
 
-export default function StandardPicker({ mode, takenCodes, onClose, onPick }: Props) {
+export default function StandardPicker({
+  mode,
+  takenCodes,
+  onClose,
+  onPick,
+  bindingWarning,
+}: Props) {
   const [searchText, setSearchText] = useState("");
   const [keyword, setKeyword] = useState("");
   const [pageNo, setPageNo] = useState(1);
@@ -32,6 +41,10 @@ export default function StandardPicker({ mode, takenCodes, onClose, onPick }: Pr
   const [failed, setFailed] = useState(false);
   const [version, setVersion] = useState(0);
   const [selected, setSelected] = useState<StandardField[]>([]);
+  const [pending, setPending] = useState<{
+    standard: StandardField;
+    warning: StandardBindingWarning;
+  } | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
@@ -58,8 +71,15 @@ export default function StandardPicker({ mode, takenCodes, onClose, onPick }: Pr
   }, [keyword, pageNo, version]);
   const taken = new Set(takenCodes);
   const selectedIds = new Set(selected.map((item) => item.id));
+  const rows = failed ? [] : (page?.bizData ?? []);
+  const blockedCount = rows.filter((row) => taken.has(row.enCode)).length;
   const toggle = (row: StandardField) => {
     if (mode === "single") {
+      const warning = bindingWarning?.(row) ?? null;
+      if (warning) {
+        setPending({ standard: row, warning });
+        return;
+      }
       onPick([row]);
       return;
     }
@@ -88,9 +108,20 @@ export default function StandardPicker({ mode, takenCodes, onClose, onPick }: Pr
       ellipsis: true,
     },
     {
-      title: mode === "single" ? "操作" : "",
+      title: "说明",
+      key: "note",
+      width: 104,
+      render: (_, row) =>
+        taken.has(row.enCode) ? (
+          <span className="text-xs text-[var(--yak-color-text-secondary)]">编码已占用</span>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      title: "操作",
       key: "action",
-      width: mode === "single" ? 84 : 56,
+      width: 84,
       align: "center",
       render: (_, row) => {
         const disabled = taken.has(row.enCode);
@@ -127,8 +158,10 @@ export default function StandardPicker({ mode, takenCodes, onClose, onPick }: Pr
         <DialogTitle className="text-sm font-medium">
           {mode === "single" ? "绑定数据标准" : "从数据标准导入字段"}
         </DialogTitle>
-        <p className="mt-2 text-xs text-[var(--yak-color-text-secondary)]">
-          绑定后字段的编码、类型与长度精度由标准决定，不再手工维护。
+        <p className="mt-2 text-xs leading-5 text-[var(--yak-color-text-secondary)]">
+          {mode === "single"
+            ? "绑定后该字段的中文名、英文编码、数据类型与长度/精度会按标准覆盖；非空以标准为默认值，可再修改。"
+            : "导入的字段沿用标准的中文名、英文编码、数据类型与长度/精度。"}
         </p>
         <form
           className="mt-3 flex items-center gap-2"
@@ -177,7 +210,7 @@ export default function StandardPicker({ mode, takenCodes, onClose, onPick }: Pr
           <Table<StandardField>
             rowKey="id"
             columns={columns}
-            dataSource={failed ? [] : (page?.bizData ?? [])}
+            dataSource={rows}
             loading={loading}
             size="small"
             bordered={false}
@@ -192,9 +225,27 @@ export default function StandardPicker({ mode, takenCodes, onClose, onPick }: Pr
             }}
           />
         </div>
+        {pending && (
+          <Alert className="mt-3">
+            <div>
+              绑定后英文编码将由「{pending.warning.currentCode}」改为「
+              {pending.warning.nextCode}」，与来源表 {pending.warning.sourceTable} 的物理列「
+              {pending.warning.sourceColumn}」不再一致；下游字段映射需同步调整。
+              <div className="mt-2 flex gap-2">
+                <Button size="small" onClick={() => setPending(null)}>
+                  返回选择
+                </Button>
+                <Button size="small" variant="primary" onClick={() => onPick([pending.standard])}>
+                  确认绑定
+                </Button>
+              </div>
+            </div>
+          </Alert>
+        )}
         <div className="mt-4 flex items-center justify-between">
           <span className="text-xs text-[var(--yak-color-text-secondary)]">
             {mode === "multiple" ? `已选 ${selected.length} 项` : "点击「选择」绑定到当前字段"}
+            {blockedCount > 0 && ` · ${blockedCount} 项因编码已占用不可选`}
           </span>
           <div className="flex gap-2">
             <Button size="small" onClick={onClose}>

@@ -62,3 +62,23 @@ export function toTargetPayload(input: PublicationTargetInput) {
     schema: requiresSchema(input.dbType) && schema ? schema : null,
   };
 }
+
+/**
+ * Names the environment the target datasource is registered in.
+ *
+ * <p>Environment and connection status are separate dictionaries that share no value, so a status
+ * such as {@code CONNECTED} must never render as an environment. An unregistered environment stays
+ * visibly unregistered rather than falling through to a friendly label that reads as "not production".
+ */
+export function describeEnvironment(environment: string | null): string {
+  switch (environment) {
+    case "PROD":
+      return "生产";
+    case "TEST":
+      return "测试";
+    case "DEVELOP":
+      return "开发";
+    default:
+      return "环境未登记";
+  }
+}

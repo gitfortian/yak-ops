@@ -7,7 +7,6 @@ import {
   Field,
   FieldError,
   FieldLabel,
-  Form,
   Input,
   Select,
   SelectContent,
@@ -160,7 +159,7 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
         <DialogTitle className="mb-5 text-sm font-medium">
           {layer ? "编辑分层" : "新建分层"}
         </DialogTitle>
-        <Form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
+        <form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
           <Field className={FIELD_CLASS} invalid={Boolean(errors.cnName)}>
             <FieldLabel htmlFor={id + "-cn-name"} required className="pt-1">
               分层中文名
@@ -300,7 +299,7 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );

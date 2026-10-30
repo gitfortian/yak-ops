@@ -6,7 +6,6 @@ import {
   DialogTitle,
   Field,
   FieldLabel,
-  Form,
   toast,
 } from "@yak-ops/yak-ui";
 import { useId, useRef, useState } from "react";
@@ -117,7 +116,7 @@ export default function DimensionDialog({ existing, tree, initial, onClose, onSa
         <DialogTitle className="mb-5 text-sm font-medium">
           {existing ? "编辑概念维度" : "新建概念维度"}
         </DialogTitle>
-        <Form
+        <form
           noValidate
           className="space-y-3"
           onSubmit={(event) => {
@@ -215,7 +214,7 @@ export default function DimensionDialog({ existing, tree, initial, onClose, onSa
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );

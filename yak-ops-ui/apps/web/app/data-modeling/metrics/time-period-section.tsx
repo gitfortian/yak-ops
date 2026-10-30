@@ -7,7 +7,6 @@ import {
   Field,
   FieldError,
   FieldLabel,
-  Form,
   Table,
   Textarea,
   toast,
@@ -124,7 +123,7 @@ function PeriodDialog(props: {
         <DialogTitle className="mb-5 text-sm font-medium">
           {edited ? "编辑时间周期" : "新建时间周期"}
         </DialogTitle>
-        <Form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
+        <form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
           <InputField
             id={id + "-name"}
             label="中文名称"
@@ -180,7 +179,7 @@ function PeriodDialog(props: {
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );

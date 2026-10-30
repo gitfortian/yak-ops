@@ -9,12 +9,11 @@
 import type { DataSourceCatalogColumn } from "@/service/datasource";
 import type { ModelField } from "@/service/data-modeling/dimension-modeling/reverse-modeling";
 // The extension keeps this module loadable by the Node test runner; the bundler resolves it too.
-import { mapPhysicalColumn, normalizeFieldCode } from "./field-mapping.ts";
+import { commentDescription, mapPhysicalColumn, normalizeFieldCode } from "./field-mapping.ts";
 import type { FieldDraft } from "./fields";
 
-/** Matches the server limits for the Chinese name and the field description. */
+/** Matches the server limit for the Chinese name. */
 export const CN_NAME_MAX = 128;
-export const DESCRIPTION_MAX = 500;
 
 let draftSequence = 0;
 const nextKey = () => `reverse-field-${(draftSequence += 1)}`;
@@ -29,7 +28,10 @@ const truncate = (value: string, max: number) => (value.length > max ? value.sli
  * import path requires. Duplicate derived codes are reported rather than silently renamed, because
  * renaming would invent a column identity the physical table does not have.
  */
-export function describeFieldDrafts(columns: readonly DataSourceCatalogColumn[]): FieldDraft[] {
+export function describeFieldDrafts(
+  columns: readonly DataSourceCatalogColumn[],
+  sourceTable: string | null = null,
+): FieldDraft[] {
   const firstByCode = new Map<string, number>();
   return columns.map((column, index) => {
     const mapping = mapPhysicalColumn(column);
@@ -57,8 +59,9 @@ export function describeFieldDrafts(columns: readonly DataSourceCatalogColumn[])
       measureUnitId: null,
       measureUnitEnCode: null,
       metricId: null,
-      description: remarks ? truncate(remarks, DESCRIPTION_MAX) : null,
+      description: commentDescription(column.remarks),
       importNote: note || null,
+      source: sourceTable ? { table: sourceTable, column: column.name } : null,
     };
   });
 }

@@ -40,6 +40,11 @@ interface Props {
   /** Set when layers or owners could not be read, so the bar can say so instead of hiding it. */
   optionsFailed?: boolean;
   onChange: (next: ModelSearchFilters) => void;
+  /**
+   * Clears the tree node that pins a scope. Without it the bar's reset could clear every filter and
+   * still show one node's models, which reads as the full list.
+   */
+  onResetNode?: () => void;
 }
 
 function FilterSelect(props: {
@@ -97,9 +102,13 @@ export default function ModelSearchBar(props: Props) {
   }, [keyword]);
 
   const update = (patch: Partial<ModelSearchFilters>) => onChange({ ...filters, ...patch });
+  const pinned = Boolean(props.pinnedDomain || props.pinnedDatamart);
   const reset = () => {
     setKeyword("");
     onChange(EMPTY_MODEL_SEARCH);
+    // Resetting while a node pins the scope must also leave that node, otherwise "清空" restores
+    // the same one-node list the user is trying to get out of.
+    if (pinned) props.onResetNode?.();
   };
   const domains = props.tree.categories.flatMap((category) =>
     category.children.map((domain) => ({
@@ -182,7 +191,7 @@ export default function ModelSearchBar(props: Props) {
         size="small"
         className="justify-self-start"
         onClick={reset}
-        disabled={!isModelSearching(filters) && !keyword.trim()}
+        disabled={!isModelSearching(filters) && !keyword.trim() && !pinned}
       >
         清空
       </Button>

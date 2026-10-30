@@ -6,6 +6,7 @@ import {
   mapPhysicalColumn,
   normalizeFieldCode,
   normalizePhysicalType,
+  qualifiedTableName,
 } from "./field-mapping.ts";
 
 const column = (typeName, extra = {}) => ({ name: "physical_column", typeName, ...extra });
@@ -133,4 +134,40 @@ test("keeps unresolved mapping reasons and physical remarks on the editable row"
   assert.equal(row.importNote, mapPhysicalColumn(column("BLOB")).note);
   assert.equal(row.isPrimaryKey, true);
   assert.equal(row.isNotNull, true);
+});
+
+test("remembers the physical origin of an imported row for this session", () => {
+  const row = columnToField(
+    column("VARCHAR", { name: "Amount" }),
+    mapPhysicalColumn(column("VARCHAR")),
+    "field-test",
+    "ods.trade_order_detail",
+  );
+  assert.deepEqual(row.source, { table: "ods.trade_order_detail", column: "Amount" });
+  const manual = columnToField(column("VARCHAR"), mapPhysicalColumn(column("VARCHAR")), "field-2");
+  assert.equal(manual.source, null);
+});
+
+test("copies the physical comment into the field description", () => {
+  const row = columnToField(
+    column("VARCHAR", { name: "amount", remarks: "  金额  " }),
+    mapPhysicalColumn(column("VARCHAR")),
+    "field-test",
+  );
+  assert.equal(row.cnName, "金额");
+  assert.equal(row.description, "金额");
+  const bare = columnToField(column("VARCHAR"), mapPhysicalColumn(column("VARCHAR")), "field-2");
+  assert.equal(bare.description, null);
+  const long = columnToField(
+    column("VARCHAR", { remarks: "注".repeat(600) }),
+    mapPhysicalColumn(column("VARCHAR")),
+    "field-3",
+  );
+  assert.equal(long.description.length, 500);
+});
+
+test("qualifies a table by schema before database", () => {
+  assert.equal(qualifiedTableName({ name: "orders" }), "orders");
+  assert.equal(qualifiedTableName({ database: "shop", name: "orders" }), "shop.orders");
+  assert.equal(qualifiedTableName({ database: "shop", schema: "dw", name: "orders" }), "dw.orders");
 });

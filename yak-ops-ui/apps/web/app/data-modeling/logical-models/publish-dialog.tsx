@@ -17,6 +17,7 @@ import {
   toast,
 } from "@yak-ops/yak-ui";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   classifyPublicationFailure,
   getPublicationMetadata,
@@ -34,9 +35,12 @@ import { getLayerDataSources, getLayers } from "@/service/data-modeling/warehous
 import { listDataSourceDatabases, listDataSourceSchemas } from "@/service/datasource";
 import { requiresSchema } from "../shared/jdbc-engines";
 import PublicationHistory from "./publication-history";
-import { describeAddress, toTargetPayload, validatePublicationTarget } from "./publication-target";
-
-const ENV_LABEL: Record<string, string> = { PROD: "生产", TEST: "测试", DEVELOP: "开发" };
+import {
+  describeAddress,
+  describeEnvironment,
+  toTargetPayload,
+  validatePublicationTarget,
+} from "./publication-target";
 
 const STATUS_TONE: Record<PublicationStatus, "info" | "success" | "danger" | "warning"> = {
   PENDING: "info",
@@ -61,11 +65,13 @@ interface Props {
  * confirmation, because a table created here outlives the model.
  */
 export default function PublishDialog({ model, onClose, onPublished }: Props) {
+  const navigate = useNavigate();
   const [layerName, setLayerName] = useState(model.layerName ?? "");
   const [datasourceId, setDatasourceId] = useState("");
   const [datasourceName, setDatasourceName] = useState("");
   const [dbType, setDbType] = useState<string | null>(null);
   const [connection, setConnection] = useState<string | null>(null);
+  const [environment, setEnvironment] = useState<string | null>(null);
   const [sourceLoading, setSourceLoading] = useState(true);
   const [sourceFailure, setSourceFailure] = useState("");
 
@@ -109,6 +115,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
         setDatasourceName(source.name);
         setDbType(source.dbType);
         setConnection(source.connStatus ?? null);
+        setEnvironment(source.environment ?? null);
       })
       .catch(() => {
         if (active) setSourceFailure("分层与数据源加载失败，请稍后重试");
@@ -235,7 +242,12 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
     }
   };
 
-  const canPublish = Boolean(preview) && previewKey === targetKey && confirmed && !problem;
+  // Publishing writes, so an unregistered environment is refused instead of guessed to be a
+  // harmless one; reading a wrong database costs nothing, creating a table in one does.
+  const environmentMissing = environment === null;
+  const production = environment === "PROD";
+  const canPublish =
+    Boolean(preview) && previewKey === targetKey && confirmed && !problem && !environmentMissing;
   const disconnected = connection === "DISCONNECTED";
 
   return (
@@ -271,7 +283,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
               <div className="grid gap-1 text-xs">
                 <span className="font-medium">数据源</span>
                 <span className="text-[var(--yak-components-field-label)]">
-                  {datasourceName || datasourceId}（{ENV_LABEL[connection ?? ""] ?? "环境未知"}）
+                  {datasourceName || datasourceId}（{describeEnvironment(environment)}）
                 </span>
               </div>
               <div className="grid gap-1 text-xs">
@@ -351,6 +363,13 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
                 </Alert>
               </div>
             )}
+            {environmentMissing && (
+              <div className="mt-3">
+                <Alert>
+                  该数据源未登记环境，无法判断目标是否为生产库；发布已禁用，请先在数据源页面补全环境。
+                </Alert>
+              </div>
+            )}
 
             <div className="mt-4 flex items-center gap-2">
               <Button
@@ -387,6 +406,11 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
                   onCheckedChange={(checked) => setConfirmed(checked)}
                 />
                 <span>
+                  {production && (
+                    <span className="text-[var(--yak-components-badge-danger-text)]">
+                      目标数据源登记为生产环境，这张表会直接建在生产库中。
+                    </span>
+                  )}
                   我确认在「{addressText}」创建或校验物理表「
                   {preview.table}」；若该表已存在，只做结构校验，不会被修改。
                 </span>
@@ -417,7 +441,20 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
                 </div>
                 {snapshot && (
                   <div className="mt-1">
-                    已采集元数据：{snapshot.tableCount} 张表 / {snapshot.fieldCount} 个字段。
+                    已回读物理表结构：{snapshot.tableCount} 张表 / {snapshot.fieldCount} 个字段。
+                  </div>
+                )}
+                {result.status === "SUCCEEDED" && (
+                  <div className="mt-1">
+                    发布不会登记资产目录；需在「元数据采集」运行采集任务后，资产才会出现在资产目录。
+                    <Button
+                      size="small"
+                      variant="ghost"
+                      className="ml-2 font-normal"
+                      onClick={() => navigate("/data-governance/data-map/tasks")}
+                    >
+                      去元数据采集
+                    </Button>
                   </div>
                 )}
                 {result.status === "UNKNOWN" && (
@@ -431,7 +468,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
             <div className="mt-4">
               <h3 className="text-sm font-medium">发布历史</h3>
               <p className="mt-1 text-xs text-[var(--yak-color-text-secondary)]">
-                最近 50 次发布记录。失败记录不会自动重试，「结果未知」只能对账。
+                失败不自动重试；「结果未知」需对账。
               </p>
               <div className="mt-2">
                 <PublicationHistory modelId={model.id} refreshKey={historyKey} />

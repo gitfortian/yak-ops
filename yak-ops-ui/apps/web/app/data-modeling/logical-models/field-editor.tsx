@@ -12,7 +12,7 @@ import {
   SelectValue,
   toast,
 } from "@yak-ops/yak-ui";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { getLookups, getMeasureUnits } from "@/service/data-modeling/data-standards";
 import type { StandardField, StandardLookup } from "@/service/data-modeling/data-standards/types";
 import {
@@ -25,7 +25,13 @@ import { useOptions } from "../data-standards/state";
 import BatchImportDialog from "./batch-import-dialog";
 import ImportDialog from "./import-dialog";
 import type { FieldDraft, FieldIssue, FieldIssueField } from "./fields";
-import { emptyField, fromStandard, TYPE_ITEMS } from "./fields";
+import { emptyField, TYPE_ITEMS } from "./fields";
+import {
+  applyStandard,
+  bindingWarningNote,
+  fromStandard,
+  standardBindingWarning,
+} from "./standard-binding";
 import StandardPicker from "./standard-picker";
 
 interface Props {
@@ -58,6 +64,13 @@ export default function FieldEditor({
   const [importing, setImporting] = useState(false);
   const [importingSource, setImportingSource] = useState(false);
   const [optionVersion, setOptionVersion] = useState(0);
+  /** Rows removed since the last structural edit, with the position each one occupied. */
+  const [removed, setRemoved] = useState<{ index: number; row: FieldDraft }[]>([]);
+  // Saving or loading replaces the row set, so restoring a row captured from the old set would
+  // splice a stale row back into a different model.
+  useEffect(() => {
+    if (disabled) setRemoved([]);
+  }, [disabled]);
   const lookups = useOptions(
     (signal) =>
       getLookups({ scope: "KEYWORD", keyword: "", pageNo: 1, pageSize: 100 }, signal).then(
@@ -80,24 +93,31 @@ export default function FieldEditor({
     next.splice(target, 0, moved);
     onChange(next);
   };
+  const removeRow = (index: number) => {
+    const row = rows[index];
+    if (!row) return;
+    setRemoved((previous) => [...previous, { index, row }]);
+    onChange(rows.filter((_, position) => position !== index));
+  };
+  // Deleting is one click and is otherwise unrecoverable before save; restoring by the position
+  // each row held keeps the order and every checkbox exactly as they were.
+  const undoRemove = () => {
+    if (removed.length === 0) return;
+    const next = [...rows];
+    [...removed]
+      .sort((left, right) => left.index - right.index)
+      .forEach(({ index, row }) => next.splice(Math.min(index, next.length), 0, row));
+    setRemoved([]);
+    onChange(next);
+  };
   const issueFor = (index: number, field: FieldIssueField) =>
     issues.find((issue) => issue.index === index && issue.field === field)?.message;
   const bindStandard = (index: number, standard: StandardField) => {
-    const replacement = fromStandard(standard);
+    const warning = standardBindingWarning(rows[index], standard);
     onChange(
       rows.map((row, position) =>
         position === index
-          ? {
-              ...row,
-              cnName: row.cnName.trim() || replacement.cnName,
-              enCode: replacement.enCode,
-              dataType: replacement.dataType,
-              lengthPrecision: replacement.lengthPrecision,
-              isNotNull: replacement.isNotNull,
-              standardId: replacement.standardId,
-              standardEnCode: replacement.standardEnCode,
-              importNote: null,
-            }
+          ? applyStandard(row, standard, warning ? bindingWarningNote(warning) : null)
           : row,
       ),
     );
@@ -108,6 +128,7 @@ export default function FieldEditor({
     const added = standards.filter((standard) => !taken.has(standard.enCode));
     if (added.length < standards.length)
       toast.info(`已跳过 ${standards.length - added.length} 个编码重复的标准`);
+    setRemoved([]);
     onChange([...rows, ...added.map(fromStandard)]);
     setPicker(null);
   };
@@ -169,7 +190,14 @@ export default function FieldEditor({
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="small" disabled={disabled} onClick={() => onChange([...rows, emptyField()])}>
+        <Button
+          size="small"
+          disabled={disabled}
+          onClick={() => {
+            setRemoved([]);
+            onChange([...rows, emptyField()]);
+          }}
+        >
           添加字段
         </Button>
         {!hideImportActions && (
@@ -214,6 +242,14 @@ export default function FieldEditor({
             ))}
             {issues.length > 6 && <li>另有 {issues.length - 6} 个问题未列出</li>}
           </ul>
+        </Alert>
+      )}
+      {removed.length > 0 && (
+        <Alert>
+          <span>已删除 {removed.length} 行</span>
+          <Button size="small" disabled={disabled} onClick={undoRemove}>
+            撤销
+          </Button>
         </Alert>
       )}
       <div className="min-w-0 overflow-auto rounded-lg border border-[var(--yak-components-panel-border)]">
@@ -350,8 +386,14 @@ export default function FieldEditor({
                         disabled || (row.dataType !== "STRING" && row.dataType !== "DECIMAL")
                       }
                       aria-label={`第 ${index + 1} 行长度或精度`}
+                      aria-invalid={Boolean(issueFor(index, "lengthPrecision")) || undefined}
                       onChange={(event) => patch(index, { lengthPrecision: event.target.value })}
                     />
+                    {issueFor(index, "lengthPrecision") && (
+                      <p className="mt-1 text-xs leading-4 text-[var(--yak-components-badge-danger-text)]">
+                        {issueFor(index, "lengthPrecision")}
+                      </p>
+                    )}
                   </td>
                   <td className={`${cell} text-center`}>
                     <Checkbox
@@ -419,7 +461,13 @@ export default function FieldEditor({
                           variant="ghost"
                           disabled={disabled}
                           className="shrink-0 px-0.5 font-normal text-[var(--yak-color-text-secondary)]"
-                          onClick={() => patch(index, { standardId: null, standardEnCode: null })}
+                          onClick={() =>
+                            patch(index, {
+                              standardId: null,
+                              standardEnCode: null,
+                              importNote: null,
+                            })
+                          }
                         >
                           解绑
                         </Button>
@@ -535,7 +583,7 @@ export default function FieldEditor({
                         className="px-0.5 font-normal text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-danger-text)]"
                         aria-label={`删除第 ${index + 1} 行`}
                         title={lastMeasure ? "汇总表至少需要一个度量字段" : undefined}
-                        onClick={() => onChange(rows.filter((_, position) => position !== index))}
+                        onClick={() => removeRow(index)}
                       >
                         删除
                       </Button>
@@ -564,6 +612,7 @@ export default function FieldEditor({
           takenCodes={rows
             .filter((_, position) => position !== picker.index)
             .map((row) => row.enCode.trim())}
+          bindingWarning={(standard) => standardBindingWarning(rows[picker.index], standard)}
           onClose={() => setPicker(null)}
           onPick={(standards) => bindStandard(picker.index, standards[0])}
         />
@@ -581,6 +630,7 @@ export default function FieldEditor({
           existing={rows}
           onClose={() => setImportingSource(false)}
           onImport={(imported) => {
+            setRemoved([]);
             onChange([...rows, ...imported]);
             setImportingSource(false);
             toast.success(`已导入 ${imported.length} 个字段`);
@@ -592,6 +642,7 @@ export default function FieldEditor({
           existing={rows}
           onClose={() => setImporting(false)}
           onImport={(imported) => {
+            setRemoved([]);
             onChange([...rows, ...imported]);
             setImporting(false);
             toast.success(`已导入 ${imported.length} 个字段`);

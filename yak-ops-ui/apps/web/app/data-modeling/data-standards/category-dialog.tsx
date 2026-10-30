@@ -1,4 +1,4 @@
-import { Alert, Button, Dialog, DialogContent, DialogTitle, Form, toast } from "@yak-ops/yak-ui";
+import { Alert, Button, Dialog, DialogContent, DialogTitle, toast } from "@yak-ops/yak-ui";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { saveCategory, classifyStandardFailure } from "@/service/data-modeling/data-standards";
 import type {
@@ -92,7 +92,7 @@ export default function CategoryDialog(props: {
         <DialogTitle className="mb-5 text-sm font-medium">
           {renaming ? "编辑节点" : "新建目录"}
         </DialogTitle>
-        <Form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
+        <form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
           <InputField
             id={id + "-parent"}
             label="上级目录"
@@ -130,11 +130,7 @@ export default function CategoryDialog(props: {
               label="标准种类"
               value={kind}
               disabled={saving || kindLocked}
-              hint={
-                kindLocked
-                  ? "该标准集已有记录，种类已锁定；清空记录后才能切换。"
-                  : "标准集只能存放所选种类的记录；目录下两种都可以。"
-              }
+              hint={kindLocked ? "该标准集已有记录，种类已锁定；清空记录后才能切换。" : undefined}
               items={STANDARD_KINDS.map((value) => ({ value, label: STANDARD_KIND_LABEL[value] }))}
               onChange={(value) => {
                 const next = STANDARD_KINDS.find((item) => item === value);
@@ -158,7 +154,7 @@ export default function CategoryDialog(props: {
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );

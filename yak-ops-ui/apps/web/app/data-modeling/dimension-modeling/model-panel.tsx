@@ -30,8 +30,8 @@ const STORAGE_LABEL: Record<StoragePolicy, string> = {
 
 interface Props {
   title: string;
-  /** Line under the title; an empty value is stated instead of rendered as a blank row. */
-  description: string;
+  /** The node's own business description. Scope nodes leave it out; the title already names the scope. */
+  description?: string;
   /** Scope labels the header shows next to the title, such as the owning domain and code. */
   tags?: string[];
   models: LogicalModel[];
@@ -139,29 +139,36 @@ export default function ModelPanel(props: Props) {
       ),
     },
   ];
-  const description = props.description.trim();
+  const description = props.description?.trim();
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="truncate text-sm font-medium">{props.title}</h2>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-            {props.tags?.map((tag) => (
-              <Badge key={tag} tone="neutral">
-                {tag}
-              </Badge>
-            ))}
-            <p
-              title={description || undefined}
-              className={`line-clamp-2 min-w-0 text-xs ${
-                description
-                  ? "text-[var(--yak-color-text-secondary)]"
-                  : "text-[var(--yak-components-muted-text)]"
-              }`}
-            >
-              {description || "暂无描述"}
-            </p>
+          <div className="flex min-w-0 items-baseline gap-2">
+            <h2 className="truncate text-sm font-medium">{props.title}</h2>
+            {!props.loading && (
+              <span className="shrink-0 text-xs text-[var(--yak-components-muted-text)]">
+                {total} 个
+              </span>
+            )}
           </div>
+          {Boolean(props.tags?.length) || description ? (
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+              {props.tags?.map((tag) => (
+                <Badge key={tag} tone="neutral">
+                  {tag}
+                </Badge>
+              ))}
+              {description && (
+                <p
+                  title={description}
+                  className="line-clamp-2 min-w-0 text-xs text-[var(--yak-color-text-secondary)]"
+                >
+                  {description}
+                </p>
+              )}
+            </div>
+          ) : null}
         </div>
         {props.actions && <div className="flex flex-wrap items-center gap-2">{props.actions}</div>}
       </header>
