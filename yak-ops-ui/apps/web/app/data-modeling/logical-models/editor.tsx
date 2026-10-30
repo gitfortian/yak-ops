@@ -4,7 +4,6 @@ import {
   Button,
   Card,
   CardContent,
-  CardHeader,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -20,9 +19,13 @@ import {
   SelectItemText,
   SelectTrigger,
   SelectValue,
+  Tabs,
+  TabsList,
+  TabsPanel,
+  TabsTab,
   toast,
 } from "@yak-ops/yak-ui";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 import { getNamingEntries } from "@/service/data-modeling/data-standards";
@@ -85,6 +88,7 @@ import {
 import { datamartsOf, domainsOf, processesOf } from "../shared/planning-tree";
 import { DimensionScopeRadio } from "../shared/scope-radio";
 import PublishDialog from "./publish-dialog";
+import PublicationHistory from "./publication-history";
 import { useModelOptions } from "./state";
 
 interface FormState {
@@ -201,27 +205,14 @@ interface DimensionState {
   failed: boolean;
 }
 
-function Section({
-  title,
-  extra,
-  children,
-}: {
-  title: string;
-  extra?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <Card>
-      <CardHeader title={title} extra={extra} />
-      <CardContent>{children}</CardContent>
-    </Card>
-  );
-}
+/** The editor tabs; 发布 exists only for a saved model. */
+const EDITOR_TABS = ["info", "fields", "publish"] as const;
+type EditorTab = (typeof EDITOR_TABS)[number];
 
 export default function LogicalModelEditorPage() {
   const { id } = useParams<{ id: string }>();
   const editing = Boolean(id);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { currentUser, loading: authLoading } = useAuth();
   const options = useModelOptions();
@@ -236,6 +227,8 @@ export default function LogicalModelEditorPage() {
    */
   const [savedModel, setSavedModel] = useState<LogicalModel | null>(null);
   const [publishing, setPublishing] = useState(false);
+  /** Bumped after a publication so the page-level history table re-reads without a reopen. */
+  const [publishHistoryKey, setPublishHistoryKey] = useState(0);
   const [revision, setRevision] = useState<number | undefined>(undefined);
   const [unknownType, setUnknownType] = useState(false);
   const [stale, setStale] = useState(false);
@@ -300,6 +293,20 @@ export default function LogicalModelEditorPage() {
     [searchParams],
   );
   const ownershipLocked = !editing && prefill.locked;
+  // The active tab is shareable page state, so it lives in the URL. A create page has nothing to
+  // publish yet, so a publish deep link there lands on the basic-information tab.
+  const requestedTab = searchParams.get("tab");
+  const activeTab: EditorTab =
+    editing && requestedTab === "publish"
+      ? "publish"
+      : requestedTab === "fields"
+        ? "fields"
+        : "info";
+  const setTab = (next: EditorTab) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("tab", next);
+    setSearchParams(params, { replace: true });
+  };
   /**
    * A link that names no kind this build can bind — `type=ODS`, a typo, a removed kind. The form
    * still opens on its default, but the kind field states which value it refused instead of
@@ -317,6 +324,7 @@ export default function LogicalModelEditorPage() {
     baselineKnown.current = false;
     setBaseline(null);
     setConfirmLeave(false);
+    setPublishHistoryKey(0);
     setRootId("");
     setQualifier("");
     setModelRootId(null);
@@ -879,6 +887,10 @@ export default function LogicalModelEditorPage() {
       })
       .catch(() => undefined);
   };
+  const onPublished = () => {
+    setPublishHistoryKey((value) => value + 1);
+    refreshSavedModel();
+  };
 
   if (loadFailed)
     return (
@@ -898,12 +910,15 @@ export default function LogicalModelEditorPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
-        title={editing ? "编辑逻辑模型" : "新建逻辑模型"}
+        title={editing ? (savedModel?.name ?? "编辑逻辑模型") : "新建逻辑模型"}
         className="px-6 pb-5 pt-5 max-md:px-4"
         extra={
           <div className="flex items-center gap-2">
             {editing && savedModel && !unknownType && (
               <>
+                {savedModel.type && (
+                  <Badge tone="neutral">{MODEL_TYPE_LABEL[savedModel.type]}</Badge>
+                )}
                 <PublicationBadge status={savedModel.latestPublicationStatus} />
                 <Button size="small" disabled={saving} onClick={() => setPublishing(true)}>
                   发布
@@ -952,464 +967,521 @@ export default function LogicalModelEditorPage() {
             datamarts.length === 0 && (
               <Alert>当前工作空间还没有数据集市，请先到「数仓规划」创建应用层数据集市。</Alert>
             )}
-          <Section title="基本信息">
-            <div className="grid grid-cols-1 gap-x-10 gap-y-3 md:grid-cols-2">
-              {unknownType ? (
-                <InputField
-                  id="model-type"
-                  label="模型类型"
-                  value="未知类型"
-                  required
-                  readOnly
-                  hint="存储的类型不在当前版本支持范围内"
-                />
-              ) : (
-                <SelectField
-                  id="model-type"
-                  label="模型类型"
-                  value={form.type}
-                  required
-                  disabled={disabled || editing || ownershipLocked}
-                  hint={
-                    editing
-                      ? "类型创建后不可变更"
-                      : rejectedEntryType ||
-                        (ownershipLocked ? "从概念维度进入，类型与归属已锁定" : undefined)
-                  }
-                  items={MODEL_TYPES.map((value) => ({ value, label: MODEL_TYPE_LABEL[value] }))}
-                  onChange={(value) => {
-                    // The items come from MODEL_TYPES, so an unknown value can only mean a
-                    // desynchronized option list; ignore it instead of coercing to DWD.
-                    const next = MODEL_TYPES.find((candidate) => candidate === value);
-                    if (next) changeType(next);
-                  }}
-                />
-              )}
-              <SelectField
-                id="model-layer"
-                label="数仓分层"
-                value={form.layerId}
-                required
-                disabled={disabled}
-                error={errors.layerId}
-                hint={
-                  layerMismatch
-                    ? `${layerRuleMessage}，请重新选择`
-                    : selectedLayer
-                      ? `表名前缀 ${prefix}_`
-                      : undefined
-                }
-                items={layerItems}
-                onChange={(value) => patch({ layerId: value })}
-              />
-              {form.type === "DIM" && (
-                <Field className="grid grid-cols-[104px_minmax(0,1fr)] items-start !gap-3">
-                  <FieldLabel className="pt-1" required>
-                    归属类型
-                  </FieldLabel>
-                  <DimensionScopeRadio
-                    value={form.scope}
-                    disabled={disabled}
-                    onChange={changeScope}
-                  />
-                </Field>
-              )}
-              {form.type === "DWD" || form.type === "DWS" || publicDimension ? (
-                <>
-                  <SelectField
-                    id="model-category"
-                    label="业务分类"
-                    value={form.categoryId}
-                    required
-                    disabled={disabled || ownershipLocked}
-                    items={options.tree.categories.map((category) => ({
-                      value: category.id,
-                      label: category.name,
-                    }))}
-                    onChange={(value) =>
-                      patch({ categoryId: value, domainId: "", processId: "", dimensionId: "" })
-                    }
-                  />
-                  <SelectField
-                    id="model-domain"
-                    label="数据域"
-                    value={form.domainId}
-                    required
-                    disabled={disabled || ownershipLocked}
-                    items={domains.map((domain) => ({ value: domain.id, label: domain.name }))}
-                    onChange={(value) => patch({ domainId: value, processId: "", dimensionId: "" })}
-                  />
-                </>
-              ) : (
-                <SelectField
-                  id="model-datamart"
-                  label="数据集市"
-                  value={form.datamartId}
-                  required
-                  disabled={disabled || ownershipLocked}
-                  items={datamarts.map((datamart) => ({
-                    value: datamart.id,
-                    label: datamart.name,
-                  }))}
-                  onChange={(value) => patch({ datamartId: value, dimensionId: "" })}
-                />
-              )}
-              {(form.type === "DWD" || form.type === "DWS") && (
-                <SelectField
-                  id="model-process"
-                  label="业务过程"
-                  value={form.processId}
-                  required
-                  disabled={disabled || ownershipLocked}
-                  hint={
-                    form.domainId && processes.length === 0
-                      ? "该数据域下还没有业务过程，请先到「数仓规划」创建"
-                      : undefined
-                  }
-                  items={processes.map((process) => ({ value: process.id, label: process.name }))}
-                  onChange={(value) => patch({ processId: value })}
-                />
-              )}
-              {form.type === "DIM" && (
-                <SelectField
-                  id="model-dimension"
-                  label="概念维度"
-                  value={form.dimensionId}
-                  required={publicDimension}
-                  disabled={disabled || !dimensionScopeId || ownershipLocked}
-                  hint={
-                    dimensions.failed
-                      ? "概念维度加载失败"
-                      : dimensionScopeId && dimensions.loading
-                        ? "概念维度加载中"
-                        : publicDimension && dimensions.items.length === 0
-                          ? "该数据域下还没有概念维度，请先到「概念维度」创建"
-                          : undefined
-                  }
-                  items={dimensionItems}
-                  onChange={(value) => patch({ dimensionId: value })}
-                />
-              )}
-              {(form.type === "ADS" || (form.type === "DIM" && form.scope === "APPLICATION")) && (
-                <SelectField
-                  id="model-archive-category"
-                  label="归档分类"
-                  value={form.categoryId}
-                  required
-                  disabled={disabled}
-                  hint="仅用于资产归档"
-                  items={options.tree.categories.map((category) => ({
-                    value: category.id,
-                    label: category.name,
-                  }))}
-                  onChange={(value) => patch({ categoryId: value })}
-                />
-              )}
-              <Field
-                className="grid grid-cols-[104px_minmax(0,1fr)] items-start !gap-3"
-                invalid={Boolean(errors.nameSuffix)}
-              >
-                <FieldLabel
-                  htmlFor={composerActive ? "model-qualifier" : "model-suffix"}
-                  className="pt-1"
-                  required
-                >
-                  表名
-                </FieldLabel>
-                <div>
-                  {composerActive ? (
-                    <>
-                      <div className="flex flex-wrap items-center gap-1">
-                        <span className="shrink-0 font-mono text-xs text-[var(--yak-color-text-secondary)]">
-                          {prefix ? `${prefix}_` : "—"}
-                        </span>
-                        <Select
-                          size="small"
-                          value={rootId || ""}
-                          items={rootItems}
-                          disabled={disabled || rootState !== "ready"}
-                          onValueChange={(value) => {
-                            // A manual pick takes over from pending recovery: it consumes the
-                            // one-shot guard so recovery can neither override it nor keep the
-                            // derivation blocked.
-                            decomposedFor.current = modelRootId;
-                            setRootId(value ?? "");
-                          }}
-                        >
-                          <SelectTrigger
-                            className="w-44"
-                            variant="outlined"
-                            aria-label="表名词根"
-                            aria-invalid={Boolean(errors.nameSuffix) || undefined}
-                          >
-                            <SelectValue
-                              placeholder={
-                                rootState === "loading"
-                                  ? "词根加载中"
-                                  : rootState === "error"
-                                    ? "词根加载失败"
-                                    : "选择词根"
-                              }
-                            />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {rootItems.map((item) => (
-                              <SelectItem key={item.value} value={item.value}>
-                                <SelectItemText>{item.label}</SelectItemText>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <span
-                          className="shrink-0 font-mono text-xs text-[var(--yak-color-text-secondary)]"
-                          title="业务过程编码"
-                        >
-                          _{processCode || "过程编码"}
-                        </span>
-                        <Input
-                          id="model-qualifier"
-                          size="small"
-                          variant="outlined"
-                          value={qualifier}
-                          maxLength={qualifierCap}
+          <Tabs value={activeTab} onValueChange={(value) => setTab(value as EditorTab)}>
+            <TabsList>
+              <TabsTab value="info">基本信息</TabsTab>
+              <TabsTab value="fields">字段定义</TabsTab>
+              {editing && <TabsTab value="publish">发布</TabsTab>}
+            </TabsList>
+            <TabsPanel value="info" className="pt-4">
+              <Card>
+                <CardContent>
+                  <div className="grid grid-cols-1 gap-x-10 gap-y-3 md:grid-cols-2">
+                    {unknownType ? (
+                      <InputField
+                        id="model-type"
+                        label="模型类型"
+                        value="未知类型"
+                        required
+                        readOnly
+                        hint="存储的类型不在当前版本支持范围内"
+                      />
+                    ) : (
+                      <SelectField
+                        id="model-type"
+                        label="模型类型"
+                        value={form.type}
+                        required
+                        disabled={disabled || editing || ownershipLocked}
+                        hint={
+                          editing
+                            ? "类型创建后不可变更"
+                            : rejectedEntryType ||
+                              (ownershipLocked ? "从概念维度进入，类型与归属已锁定" : undefined)
+                        }
+                        items={MODEL_TYPES.map((value) => ({
+                          value,
+                          label: MODEL_TYPE_LABEL[value],
+                        }))}
+                        onChange={(value) => {
+                          // The items come from MODEL_TYPES, so an unknown value can only mean a
+                          // desynchronized option list; ignore it instead of coercing to DWD.
+                          const next = MODEL_TYPES.find((candidate) => candidate === value);
+                          if (next) changeType(next);
+                        }}
+                      />
+                    )}
+                    <SelectField
+                      id="model-layer"
+                      label="数仓分层"
+                      value={form.layerId}
+                      required
+                      disabled={disabled}
+                      error={errors.layerId}
+                      hint={
+                        layerMismatch
+                          ? `${layerRuleMessage}，请重新选择`
+                          : selectedLayer
+                            ? `表名前缀 ${prefix}_`
+                            : undefined
+                      }
+                      items={layerItems}
+                      onChange={(value) => patch({ layerId: value })}
+                    />
+                    {form.type === "DIM" && (
+                      <Field className="grid grid-cols-[104px_minmax(0,1fr)] items-start !gap-3">
+                        <FieldLabel className="pt-1" required>
+                          归属类型
+                        </FieldLabel>
+                        <DimensionScopeRadio
+                          value={form.scope}
                           disabled={disabled}
-                          placeholder="限定词（可选）"
-                          aria-label="表名限定词"
-                          className="w-40"
-                          onChange={(event) => setQualifier(sanitizeQualifier(event.target.value))}
-                          onBlur={() => setQualifier((value) => stripLayerPrefix(value, prefix))}
+                          onChange={changeScope}
                         />
-                        {rootState === "error" && (
-                          <Button
-                            size="small"
-                            variant="ghost"
-                            className="shrink-0 font-normal"
-                            onClick={() => setRootVersion((value) => value + 1)}
-                          >
-                            重试
-                          </Button>
-                        )}
-                      </div>
-                      <FieldError match={Boolean(errors.nameSuffix)}>
-                        {errors.nameSuffix}
-                      </FieldError>
-                      <p className="mt-1 text-xs leading-4 text-[var(--yak-color-text-secondary)]">
-                        {prefix && suffix ? `完整表名：${prefix}_${suffix}` : null}
-                        {nameState === "checking" && " · 校验中"}
-                        {nameState === "available" && " · 可用"}
-                        {nameState === "taken" && (
-                          <span className="text-[var(--yak-components-badge-danger-text)]">
-                            {" "}
-                            · 已存在
-                          </span>
-                        )}
-                        {nameState === "error" && " · 名称校验失败"}
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex items-center gap-1">
-                        <span className="shrink-0 font-mono text-xs text-[var(--yak-color-text-secondary)]">
-                          {prefix ? `${prefix}_` : "—"}
-                        </span>
-                        <Input
-                          id="model-suffix"
-                          size="small"
-                          variant="outlined"
-                          value={form.nameSuffix}
-                          maxLength={41}
-                          disabled={disabled}
-                          placeholder="order_detail"
-                          aria-invalid={Boolean(errors.nameSuffix) || undefined}
-                          onBlur={normalizeSuffix}
-                          onChange={(event) =>
+                      </Field>
+                    )}
+                    {form.type === "DWD" || form.type === "DWS" || publicDimension ? (
+                      <>
+                        <SelectField
+                          id="model-category"
+                          label="业务分类"
+                          value={form.categoryId}
+                          required
+                          disabled={disabled || ownershipLocked}
+                          items={options.tree.categories.map((category) => ({
+                            value: category.id,
+                            label: category.name,
+                          }))}
+                          onChange={(value) =>
                             patch({
-                              nameSuffix: stripLayerPrefix(event.target.value, prefix),
+                              categoryId: value,
+                              domainId: "",
+                              processId: "",
+                              dimensionId: "",
                             })
                           }
                         />
-                      </div>
-                      <FieldError match={Boolean(errors.nameSuffix)}>
-                        {errors.nameSuffix}
-                      </FieldError>
-                      <p className="mt-1 text-xs leading-4 text-[var(--yak-color-text-secondary)]">
-                        {prefix && suffix ? `完整表名：${prefix}_${suffix}` : null}
-                        {nameState === "checking" && " · 校验中"}
-                        {nameState === "available" && " · 可用"}
-                        {nameState === "taken" && (
-                          <span className="text-[var(--yak-components-badge-danger-text)]">
-                            {" "}
-                            · 已存在
-                          </span>
-                        )}
-                        {nameState === "error" && " · 名称校验失败"}
-                      </p>
-                    </>
-                  )}
-                </div>
-              </Field>
-              <InputField
-                id="model-cn-name"
-                label="表中文名"
-                value={form.cnName}
-                required
-                maxLength={128}
-                disabled={disabled}
-                error={errors.cnName}
-                onChange={(value) => patch({ cnName: value })}
-              />
-              <SelectField
-                id="model-storage"
-                label="存储策略"
-                value={form.storagePolicy}
-                required
-                disabled={disabled}
-                items={STORAGE_POLICIES.map((value) => ({
-                  value,
-                  label: STORAGE_POLICY_LABEL[value],
-                }))}
-                onChange={(value) =>
-                  patch({
-                    storagePolicy: value === "DAILY_FULL" ? "DAILY_FULL" : "DAILY_INCREMENTAL",
-                  })
-                }
-              />
-              <InputField
-                id="model-lifecycle"
-                label="生命周期（天）"
-                value={form.lifecycleDays}
-                required
-                maxLength={5}
-                disabled={disabled}
-                error={errors.lifecycle}
-                onChange={(value) => patch({ lifecycleDays: value.replace(/[^\d]/g, "") })}
-              />
-              {propertyFields.length > 0 && (
-                <div className="rounded-lg border border-[var(--yak-components-panel-border)] p-3 md:col-span-2">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p className="text-xs font-medium">物理表属性（{layerDbType}）</p>
-                    {errors.physicalProperties && (
-                      <span className="text-xs text-[var(--yak-components-badge-danger-text)]">
-                        {errors.physicalProperties}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-xs text-[var(--yak-color-text-secondary)]">
-                    按目标引擎透传给 DDL 生成；发布到其他引擎时会被拒绝。
-                  </p>
-                  <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-3">
-                    {propertyFields.map((field) =>
-                      field.kind === "select" ? (
                         <SelectField
-                          key={field.key}
-                          id={`model-prop-${field.key}`}
-                          label={field.label}
-                          value={propertyValues[field.key] ?? ""}
-                          required={field.required}
-                          disabled={disabled}
-                          items={(field.options ?? []).map((option) => ({
-                            value: option.value,
-                            label: option.label,
+                          id="model-domain"
+                          label="数据域"
+                          value={form.domainId}
+                          required
+                          disabled={disabled || ownershipLocked}
+                          items={domains.map((domain) => ({
+                            value: domain.id,
+                            label: domain.name,
                           }))}
-                          onChange={(value) => patchProperty(field.key, value || null)}
-                        />
-                      ) : (
-                        <InputField
-                          key={field.key}
-                          id={`model-prop-${field.key}`}
-                          label={field.label}
-                          value={propertyValues[field.key] ?? ""}
-                          required={field.required}
-                          maxLength={9}
-                          disabled={disabled}
-                          hint={field.hint}
                           onChange={(value) =>
-                            patchProperty(field.key, value.replace(/[^\d]/g, "") || null)
+                            patch({ domainId: value, processId: "", dimensionId: "" })
                           }
                         />
-                      ),
+                      </>
+                    ) : (
+                      <SelectField
+                        id="model-datamart"
+                        label="数据集市"
+                        value={form.datamartId}
+                        required
+                        disabled={disabled || ownershipLocked}
+                        items={datamarts.map((datamart) => ({
+                          value: datamart.id,
+                          label: datamart.name,
+                        }))}
+                        onChange={(value) => patch({ datamartId: value, dimensionId: "" })}
+                      />
                     )}
+                    {(form.type === "DWD" || form.type === "DWS") && (
+                      <SelectField
+                        id="model-process"
+                        label="业务过程"
+                        value={form.processId}
+                        required
+                        disabled={disabled || ownershipLocked}
+                        hint={
+                          form.domainId && processes.length === 0
+                            ? "该数据域下还没有业务过程，请先到「数仓规划」创建"
+                            : undefined
+                        }
+                        items={processes.map((process) => ({
+                          value: process.id,
+                          label: process.name,
+                        }))}
+                        onChange={(value) => patch({ processId: value })}
+                      />
+                    )}
+                    {form.type === "DIM" && (
+                      <SelectField
+                        id="model-dimension"
+                        label="概念维度"
+                        value={form.dimensionId}
+                        required={publicDimension}
+                        disabled={disabled || !dimensionScopeId || ownershipLocked}
+                        hint={
+                          dimensions.failed
+                            ? "概念维度加载失败"
+                            : dimensionScopeId && dimensions.loading
+                              ? "概念维度加载中"
+                              : publicDimension && dimensions.items.length === 0
+                                ? "该数据域下还没有概念维度，请先到「概念维度」创建"
+                                : undefined
+                        }
+                        items={dimensionItems}
+                        onChange={(value) => patch({ dimensionId: value })}
+                      />
+                    )}
+                    {(form.type === "ADS" ||
+                      (form.type === "DIM" && form.scope === "APPLICATION")) && (
+                      <SelectField
+                        id="model-archive-category"
+                        label="归档分类"
+                        value={form.categoryId}
+                        required
+                        disabled={disabled}
+                        hint="仅用于资产归档"
+                        items={options.tree.categories.map((category) => ({
+                          value: category.id,
+                          label: category.name,
+                        }))}
+                        onChange={(value) => patch({ categoryId: value })}
+                      />
+                    )}
+                    <Field
+                      className="grid grid-cols-[104px_minmax(0,1fr)] items-start !gap-3"
+                      invalid={Boolean(errors.nameSuffix)}
+                    >
+                      <FieldLabel
+                        htmlFor={composerActive ? "model-qualifier" : "model-suffix"}
+                        className="pt-1"
+                        required
+                      >
+                        表名
+                      </FieldLabel>
+                      <div>
+                        {composerActive ? (
+                          <>
+                            <div className="flex flex-wrap items-center gap-1">
+                              <span className="shrink-0 font-mono text-xs text-[var(--yak-color-text-secondary)]">
+                                {prefix ? `${prefix}_` : "—"}
+                              </span>
+                              <Select
+                                size="small"
+                                value={rootId || ""}
+                                items={rootItems}
+                                disabled={disabled || rootState !== "ready"}
+                                onValueChange={(value) => {
+                                  // A manual pick takes over from pending recovery: it consumes the
+                                  // one-shot guard so recovery can neither override it nor keep the
+                                  // derivation blocked.
+                                  decomposedFor.current = modelRootId;
+                                  setRootId(value ?? "");
+                                }}
+                              >
+                                <SelectTrigger
+                                  className="w-44"
+                                  variant="outlined"
+                                  aria-label="表名词根"
+                                  aria-invalid={Boolean(errors.nameSuffix) || undefined}
+                                >
+                                  <SelectValue
+                                    placeholder={
+                                      rootState === "loading"
+                                        ? "词根加载中"
+                                        : rootState === "error"
+                                          ? "词根加载失败"
+                                          : "选择词根"
+                                    }
+                                  />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {rootItems.map((item) => (
+                                    <SelectItem key={item.value} value={item.value}>
+                                      <SelectItemText>{item.label}</SelectItemText>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <span
+                                className="shrink-0 font-mono text-xs text-[var(--yak-color-text-secondary)]"
+                                title="业务过程编码"
+                              >
+                                _{processCode || "过程编码"}
+                              </span>
+                              <Input
+                                id="model-qualifier"
+                                size="small"
+                                variant="outlined"
+                                value={qualifier}
+                                maxLength={qualifierCap}
+                                disabled={disabled}
+                                placeholder="限定词（可选）"
+                                aria-label="表名限定词"
+                                className="w-40"
+                                onChange={(event) =>
+                                  setQualifier(sanitizeQualifier(event.target.value))
+                                }
+                                onBlur={() =>
+                                  setQualifier((value) => stripLayerPrefix(value, prefix))
+                                }
+                              />
+                              {rootState === "error" && (
+                                <Button
+                                  size="small"
+                                  variant="ghost"
+                                  className="shrink-0 font-normal"
+                                  onClick={() => setRootVersion((value) => value + 1)}
+                                >
+                                  重试
+                                </Button>
+                              )}
+                            </div>
+                            <FieldError match={Boolean(errors.nameSuffix)}>
+                              {errors.nameSuffix}
+                            </FieldError>
+                            <p className="mt-1 text-xs leading-4 text-[var(--yak-color-text-secondary)]">
+                              {prefix && suffix ? `完整表名：${prefix}_${suffix}` : null}
+                              {nameState === "checking" && " · 校验中"}
+                              {nameState === "available" && " · 可用"}
+                              {nameState === "taken" && (
+                                <span className="text-[var(--yak-components-badge-danger-text)]">
+                                  {" "}
+                                  · 已存在
+                                </span>
+                              )}
+                              {nameState === "error" && " · 名称校验失败"}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-1">
+                              <span className="shrink-0 font-mono text-xs text-[var(--yak-color-text-secondary)]">
+                                {prefix ? `${prefix}_` : "—"}
+                              </span>
+                              <Input
+                                id="model-suffix"
+                                size="small"
+                                variant="outlined"
+                                value={form.nameSuffix}
+                                maxLength={41}
+                                disabled={disabled}
+                                placeholder="order_detail"
+                                aria-invalid={Boolean(errors.nameSuffix) || undefined}
+                                onBlur={normalizeSuffix}
+                                onChange={(event) =>
+                                  patch({
+                                    nameSuffix: stripLayerPrefix(event.target.value, prefix),
+                                  })
+                                }
+                              />
+                            </div>
+                            <FieldError match={Boolean(errors.nameSuffix)}>
+                              {errors.nameSuffix}
+                            </FieldError>
+                            <p className="mt-1 text-xs leading-4 text-[var(--yak-color-text-secondary)]">
+                              {prefix && suffix ? `完整表名：${prefix}_${suffix}` : null}
+                              {nameState === "checking" && " · 校验中"}
+                              {nameState === "available" && " · 可用"}
+                              {nameState === "taken" && (
+                                <span className="text-[var(--yak-components-badge-danger-text)]">
+                                  {" "}
+                                  · 已存在
+                                </span>
+                              )}
+                              {nameState === "error" && " · 名称校验失败"}
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    </Field>
+                    <InputField
+                      id="model-cn-name"
+                      label="表中文名"
+                      value={form.cnName}
+                      required
+                      maxLength={128}
+                      disabled={disabled}
+                      error={errors.cnName}
+                      onChange={(value) => patch({ cnName: value })}
+                    />
+                    <SelectField
+                      id="model-storage"
+                      label="存储策略"
+                      value={form.storagePolicy}
+                      required
+                      disabled={disabled}
+                      items={STORAGE_POLICIES.map((value) => ({
+                        value,
+                        label: STORAGE_POLICY_LABEL[value],
+                      }))}
+                      onChange={(value) =>
+                        patch({
+                          storagePolicy:
+                            value === "DAILY_FULL" ? "DAILY_FULL" : "DAILY_INCREMENTAL",
+                        })
+                      }
+                    />
+                    <InputField
+                      id="model-lifecycle"
+                      label="生命周期（天）"
+                      value={form.lifecycleDays}
+                      required
+                      maxLength={5}
+                      disabled={disabled}
+                      error={errors.lifecycle}
+                      onChange={(value) => patch({ lifecycleDays: value.replace(/[^\d]/g, "") })}
+                    />
+                    {propertyFields.length > 0 && (
+                      <div className="rounded-lg border border-[var(--yak-components-panel-border)] p-3 md:col-span-2">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <p className="text-xs font-medium">物理表属性（{layerDbType}）</p>
+                          {errors.physicalProperties && (
+                            <span className="text-xs text-[var(--yak-components-badge-danger-text)]">
+                              {errors.physicalProperties}
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs text-[var(--yak-color-text-secondary)]">
+                          按目标引擎透传给 DDL 生成；发布到其他引擎时会被拒绝。
+                        </p>
+                        <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-3">
+                          {propertyFields.map((field) =>
+                            field.kind === "select" ? (
+                              <SelectField
+                                key={field.key}
+                                id={`model-prop-${field.key}`}
+                                label={field.label}
+                                value={propertyValues[field.key] ?? ""}
+                                required={field.required}
+                                disabled={disabled}
+                                items={(field.options ?? []).map((option) => ({
+                                  value: option.value,
+                                  label: option.label,
+                                }))}
+                                onChange={(value) => patchProperty(field.key, value || null)}
+                              />
+                            ) : (
+                              <InputField
+                                key={field.key}
+                                id={`model-prop-${field.key}`}
+                                label={field.label}
+                                value={propertyValues[field.key] ?? ""}
+                                required={field.required}
+                                maxLength={9}
+                                disabled={disabled}
+                                hint={field.hint}
+                                onChange={(value) =>
+                                  patchProperty(field.key, value.replace(/[^\d]/g, "") || null)
+                                }
+                              />
+                            ),
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <SelectField
+                      id="model-owner"
+                      label="负责人"
+                      value={form.ownerId}
+                      required
+                      disabled={disabled || options.status !== "ready"}
+                      error={errors.ownerId}
+                      items={ownerItems}
+                      onChange={(value) => patch({ ownerId: value })}
+                    />
+                    <div className="md:col-span-2">
+                      <TextareaField
+                        id="model-description"
+                        label="描述"
+                        value={form.description}
+                        rows={2}
+                        maxLength={500}
+                        disabled={disabled}
+                        onChange={(value) => patch({ description: value })}
+                      />
+                    </div>
                   </div>
-                </div>
-              )}
-              <SelectField
-                id="model-owner"
-                label="负责人"
-                value={form.ownerId}
-                required
-                disabled={disabled || options.status !== "ready"}
-                error={errors.ownerId}
-                items={ownerItems}
-                onChange={(value) => patch({ ownerId: value })}
-              />
-              <div className="md:col-span-2">
-                <TextareaField
-                  id="model-description"
-                  label="描述"
-                  value={form.description}
-                  rows={2}
-                  maxLength={500}
-                  disabled={disabled}
-                  onChange={(value) => patch({ description: value })}
-                />
-              </div>
-            </div>
-            {errors.ownership && (
-              <p className="mt-2 text-xs text-[var(--yak-components-badge-danger-text)]">
-                {errors.ownership}
-              </p>
+                  {errors.ownership && (
+                    <p className="mt-2 text-xs text-[var(--yak-components-badge-danger-text)]">
+                      {errors.ownership}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsPanel>
+            <TabsPanel value="fields" className="pt-4">
+              <Card>
+                <CardContent>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    {errors.fields && rows.length === 0 && (
+                      <p className="text-xs text-[var(--yak-components-badge-danger-text)]">
+                        {errors.fields}
+                      </p>
+                    )}
+                    <span className="ml-auto flex items-center gap-3 text-xs text-[var(--yak-color-text-secondary)]">
+                      整表保存，字段顺序即写入顺序
+                      {rows.length > 0 && !rows.some((row) => row.isPrimaryKey) && (
+                        <span className="text-[var(--yak-components-badge-warning-text)]">
+                          未设置主键，发布生成的表将不含主键
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <FieldEditor
+                    rows={rows}
+                    onChange={setRows}
+                    issues={attempted ? issues : []}
+                    disabled={disabled}
+                    allowAggregate={AGGREGATE_MODEL_TYPES.has(form.type)}
+                    requireMeasure={form.type === "DWS"}
+                  />
+                </CardContent>
+              </Card>
+            </TabsPanel>
+            {editing && savedModel && (
+              <TabsPanel value="publish" className="pt-4">
+                <Card>
+                  <CardContent>
+                    <div className="mb-3 flex items-center gap-2">
+                      <PublicationBadge status={savedModel.latestPublicationStatus} />
+                      <Button
+                        size="small"
+                        variant="primary"
+                        className="ml-auto"
+                        onClick={() => setPublishing(true)}
+                      >
+                        发布到物理表
+                      </Button>
+                    </div>
+                    <PublicationHistory modelId={savedModel.id} refreshKey={publishHistoryKey} />
+                  </CardContent>
+                </Card>
+              </TabsPanel>
             )}
-          </Section>
-          <Section
-            title="字段定义"
-            extra={
-              <span className="flex items-center gap-3 text-xs text-[var(--yak-color-text-secondary)]">
-                整表保存，字段顺序即写入顺序
-                {rows.length > 0 && !rows.some((row) => row.isPrimaryKey) && (
-                  <span className="text-[var(--yak-components-badge-warning-text)]">
-                    未设置主键，发布生成的表将不含主键
-                  </span>
-                )}
-              </span>
-            }
-          >
-            {errors.fields && rows.length === 0 && (
-              <p className="mb-2 text-xs text-[var(--yak-components-badge-danger-text)]">
-                {errors.fields}
-              </p>
-            )}
-            <FieldEditor
-              rows={rows}
-              onChange={setRows}
-              issues={attempted ? issues : []}
-              disabled={disabled}
-              allowAggregate={AGGREGATE_MODEL_TYPES.has(form.type)}
-              requireMeasure={form.type === "DWS"}
-            />
-          </Section>
+          </Tabs>
         </div>
       </div>
       {/* Pinned to the bottom of the viewport: a long field table scrolls behind it instead of
-          pushing the actions out of reach. */}
-      <div className="sticky bottom-0 z-10 flex items-center justify-end gap-2 border-t border-[var(--yak-components-panel-border)] bg-[var(--yak-components-panel-bg)] px-6 py-3">
-        {processBlocked && (
-          <span className="mr-auto text-xs text-[var(--yak-color-text-secondary)]">
-            请先选择「业务过程」后再保存
-          </span>
-        )}
-        <Button size="small" onClick={requestLeave}>
-          取消
-        </Button>
-        <Button
-          size="small"
-          variant="primary"
-          loading={saving}
-          disabled={disabled || suffixMismatch || nameState === "taken" || processBlocked}
-          onClick={() => void submit()}
-        >
-          保存
-        </Button>
-      </div>
+          pushing the actions out of reach. The publish tab is read-only, so it shows no actions. */}
+      {activeTab !== "publish" && (
+        <div className="sticky bottom-0 z-10 flex items-center justify-end gap-2 border-t border-[var(--yak-components-panel-border)] bg-[var(--yak-components-panel-bg)] px-6 py-3">
+          {processBlocked && (
+            <span className="mr-auto text-xs text-[var(--yak-color-text-secondary)]">
+              请先选择「业务过程」后再保存
+            </span>
+          )}
+          <Button size="small" onClick={requestLeave}>
+            取消
+          </Button>
+          <Button
+            size="small"
+            variant="primary"
+            loading={saving}
+            disabled={disabled || suffixMismatch || nameState === "taken" || processBlocked}
+            onClick={() => void submit()}
+          >
+            保存
+          </Button>
+        </div>
+      )}
       {confirmLeave && (
         <Dialog open onOpenChange={(open) => !open && setConfirmLeave(false)}>
           <DialogContent className="w-[480px] rounded-xl p-5 shadow-none">
@@ -1439,7 +1511,7 @@ export default function LogicalModelEditorPage() {
         <PublishDialog
           model={savedModel}
           onClose={() => setPublishing(false)}
-          onPublished={refreshSavedModel}
+          onPublished={onPublished}
         />
       )}
     </div>

@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>维度建模重构 · 交互原型</title>
+<style>
+  :root{
+    --primary:#2f6bff; --primary-hover:#265ad9; --primary-bg:#e8f3ff;
+    --bg:#f5f6fa; --card:#ffffff; --border:#e5e6eb; --border-light:#f0f0f0;
+    --text:#1d2129; --text-2:#86909c; --text-3:#c9cdd4;
+    --green:#00b42a; --green-bg:#e8f8ee; --red:#f53f3f; --red-bg:#ffece8;
+    --amber:#ff7d00; --amber-bg:#fff7e8; --orange:#d25f00;
+    --radius:10px; --radius-sm:8px;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:"PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;font-size:13px;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+  .app{display:flex;height:100vh;overflow:hidden}
+
+  /* ============ 侧边栏 ============ */
+  .sidebar{width:212px;background:#fff;border-right:1px solid var(--border-light);display:flex;flex-direction:column;flex-shrink:0}
+  .logo{height:50px;display:flex;align-items:center;gap:8px;padding:0 16px;font-size:15px;font-weight:600;border-bottom:1px solid var(--border-light)}
+  .logo .mark{width:22px;height:22px;border-radius:6px;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+  .logo .tag{font-size:10px;font-weight:500;color:#fff;background:#1d2129;border-radius:4px;padding:1px 5px}
+  .menu{padding:10px 8px;flex:1;overflow:auto}
+  .menu-group{font-size:12px;color:var(--text-2);padding:8px 10px 6px}
+  .menu-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;color:var(--text);cursor:pointer;margin:1px 0}
+  .menu-item svg{width:16px;height:16px;stroke:var(--text-2);flex-shrink:0}
+  .menu-item:hover{background:#f2f3f5}
+  .menu-item.active{background:var(--primary-bg);color:var(--primary);font-weight:500}
+  .menu-item.active svg{stroke:var(--primary)}
+  .menu-foot{padding:12px 16px;border-top:1px solid var(--border-light);font-size:12px;color:var(--text-3)}
+
+  /* ============ 顶栏 ============ */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .topbar{height:50px;background:#fff;border-bottom:1px solid var(--border-light);display:flex;align-items:center;padding:0 20px;gap:16px;flex-shrink:0}
+  .topbar .burger{cursor:pointer;color:var(--text-2);display:flex}
+  .crumb{font-size:14px;font-weight:500;display:flex;align-items:center;gap:8px}
+  .crumb .ws{font-size:12px;color:var(--text-2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;cursor:pointer}
+  .spacer{flex:1}
+  .user{display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--text)}
+  .avatar{width:26px;height:26px;border-radius:50%;background:#165dff22;color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+
+  .content{flex:1;overflow:auto;padding:20px 24px 40px}
+
+  /* ============ 通用 ============ */
+  .screen{display:none}
+  .screen.on{display:block}
+  .page-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px}
+  .page-head .titles h1{font-size:18px;font-weight:600}
+  .page-head .titles p{font-size:12px;color:var(--text-2);margin-top:4px}
+  .page-head .actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .card{background:var(--card);border:1px solid var(--border-light);border-radius:var(--radius)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:var(--radius-sm);padding:7px 14px;font-size:13px;cursor:pointer;border:1px solid transparent;background:#fff;line-height:1;transition:all .15s;white-space:nowrap}
+  .btn.primary{background:var(--primary);color:#fff}
+  .btn.primary:hover{background:var(--primary-hover)}
+  .btn.outline{border-color:var(--border);color:var(--text)}
+  .btn.outline:hover{border-color:var(--primary);color:var(--primary)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.sm{padding:4px 10px;font-size:12px}
+  .link{color:var(--primary);cursor:pointer}
+  .link:hover{text-decoration:underline}
+  .link.danger{color:var(--red)}
+  .link.muted{color:var(--text-2)}
+  .btn-group{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+  .btn-group .btn{border-radius:0;border:none}
+  .btn-group .btn+.btn{border-left:1px solid var(--border-light)}
+  .btn-group .btn.on{background:var(--primary-bg);color:var(--primary);font-weight:500}
+
+  .badge{display:inline-flex;align-items:center;gap:4px;font-size:12px;border-radius:4px;padding:2px 8px;line-height:18px;white-space:nowrap}
+  .badge.blue{background:var(--primary-bg);color:var(--primary)}
+  .badge.amber{background:#fef3c7;color:#b45309}
+  .badge.green{background:var(--green-bg);color:var(--green)}
+  .badge.red{background:var(--red-bg);color:var(--red)}
+  .badge.gray{background:#f2f3f5;color:var(--text-2)}
+  .badge.purple{background:#f3e8ff;color:#7c3aed}
+  .dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+  .dot.green{background:var(--green)} .dot.red{background:var(--red)} .dot.amber{background:var(--amber)} .dot.gray{background:var(--text-3)}
+
+  .chip{font-family:var(--mono);font-size:11px;border-radius:4px;padding:1px 5px;margin-right:4px}
+  .chip.add{background:var(--green-bg);color:var(--green)}
+  .chip.mod{background:var(--amber-bg);color:var(--orange)}
+  .chip.del{background:var(--red-bg);color:var(--red)}
+
+  table.tb{width:100%;border-collapse:collapse}
+  .tb th{font-size:12px;color:var(--text-2);font-weight:500;text-align:left;padding:10px 12px;background:#f7f8fa;border-bottom:1px solid var(--border-light);white-space:nowrap}
+  .tb td{padding:11px 12px;border-bottom:1px solid var(--f2,#f2f3f5);font-size:13px;vertical-align:middle}
+  .tb tbody tr{cursor:pointer}
+  .tb tbody tr:hover{background:#f7f8fa}
+  .tb .mono{font-family:var(--mono);font-size:12px}
+
+  input[type=text],select.in{border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;color:var(--text);background:#fff;outline:none}
+  input[type=text]:focus,select.in:focus{border-color:var(--primary)}
+  .empty{color:var(--text-3);text-align:center;padding:36px 0;font-size:12px}
+
+  /* ============ 工作台 ============ */
+  .wb-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+  .wb-toolbar .grow{flex:1}
+  .wb-body{display:flex;gap:14px;align-items:flex-start}
+  .wb-left{width:264px;flex-shrink:0;position:sticky;top:0}
+  .wb-right{flex:1;min-width:0}
+  .panel-title{font-size:13px;font-weight:600;padding:14px 14px 10px;display:flex;align-items:center;gap:6px}
+  .panel-title .cnt{margin-left:auto;font-size:12px;color:var(--text-2);font-weight:400}
+  .tree{padding:0 8px 12px}
+  .tnode{display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--text)}
+  .tnode:hover{background:#f2f3f5}
+  .tnode.on{background:var(--primary-bg);color:var(--primary);font-weight:500}
+  .tnode svg{width:14px;height:14px;stroke:var(--text-2);flex-shrink:0}
+  .tnode.on svg{stroke:var(--primary)}
+  .tnode .sub{color:var(--text-2);font-size:12px;margin-left:auto;display:flex;align-items:center;gap:6px}
+  .tnode.indent{padding-left:26px}
+  .tnode.indent2{padding-left:44px}
+  .tgroup{font-size:12px;color:var(--text-2);padding:10px 8px 4px}
+  .batch-bar{display:flex;align-items:center;gap:10px;background:var(--primary-bg);border:1px solid #b3cdff;border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:10px;font-size:13px}
+  .proto-note{display:flex;gap:8px;align-items:center;background:#fffbe8;border:1px solid #ffe58f;color:#ad6800;border-radius:var(--radius-sm);padding:8px 12px;font-size:12px;margin-bottom:14px}
+
+  /* ============ 逆向工作台 ============ */
+  .rev-body{display:flex;gap:14px;align-items:flex-start}
+  .rev-left{width:340px;flex-shrink:0}
+  .rev-right{flex:1;min-width:0}
+  .rule-bar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:#f7f8fa;border:1px solid var(--border-light);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;color:var(--text-2)}
+  .rule-bar b{color:var(--text);font-weight:500}
+  .switch{width:30px;height:16px;border-radius:8px;background:var(--primary);position:relative;display:inline-block;vertical-align:middle;margin-right:5px}
+  .switch:after{content:"";position:absolute;width:12px;height:12px;border-radius:50%;background:#fff;top:2px;right:2px}
+  .map-flag{font-size:11px;border-radius:4px;padding:1px 6px}
+  .map-flag.ok{background:var(--green-bg);color:var(--green)}
+  .map-flag.warn{background:var(--amber-bg);color:var(--orange)}
+  .src-table-row{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border-light);cursor:pointer}
+  .src-table-row:hover{background:#f7f8fa}
+  .src-table-row.sel{background:var(--primary-bg)}
+  .summary-pill{display:inline-flex;align-items:center;gap:6px;background:#f2f3f5;border-radius:12px;padding:3px 10px;font-size:12px;color:var(--text-2)}
+  .gen-ok{display:flex;gap:10px;align-items:center;background:var(--green-bg);border:1px solid #a9e8bd;color:#0b6b23;border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;margin-top:12px}
+
+  /* ============ 详情页 ============ */
+  .detail-head{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--border-light);border-radius:var(--radius);padding:14px 18px;margin-bottom:14px;flex-wrap:wrap}
+  .detail-head .name{font-size:17px;font-weight:600;font-family:var(--mono)}
+  .detail-head .meta{font-size:12px;color:var(--text-2)}
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--border-light);margin-bottom:16px}
+  .tab{padding:9px 16px;font-size:13px;color:var(--text-2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tab:hover{color:var(--text)}
+  .tab.on{color:var(--primary);border-bottom-color:var(--primary);font-weight:500}
+  .kv{display:grid;grid-template-columns:repeat(4,1fr);gap:14px 24px}
+  .kv .item .k{font-size:12px;color:var(--text-2);margin-bottom:4px}
+  .kv .item .v{font-size:13px;display:flex;align-items:center;gap:6px}
+  .env-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .env-card{border:1px solid var(--border-light);border-radius:var(--radius-sm);padding:14px}
+  .env-card h4{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .field-new{background:#f2fff6}
+  .field-mod{background:#fffdf5}
+  .legend{display:flex;gap:14px;font-size:12px;color:var(--text-2);align-items:center}
+  .legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:4px;vertical-align:-1px}
+
+  /* ============ 发布中心 ============ */
+  .steps{display:flex;align-items:center;gap:0;margin-bottom:20px}
+  .step{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2)}
+  .step .n{width:24px;height:24px;border-radius:50%;background:#f2f3f5;color:var(--text-2);display:flex;align-items:center;justify-content:center;font-size:12px}
+  .step.on{color:var(--primary);font-weight:500}
+  .step.on .n{background:var(--primary);color:#fff}
+  .step.done{color:var(--green)}
+  .step.done .n{background:var(--green-bg);color:var(--green)}
+  .step-line{width:56px;height:1px;background:var(--border);margin:0 10px}
+  .cs-item{display:flex;align-items:center;gap:12px;border:1px solid var(--border-light);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px}
+  .env-pick{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .env-opt{border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;cursor:pointer;position:relative}
+  .env-opt.on{border-color:var(--primary);background:#f5f9ff}
+  .env-opt .radio{width:16px;height:16px;border-radius:50%;border:1px solid var(--border);display:inline-block;margin-right:8px;vertical-align:-3px}
+  .env-opt.on .radio{border-color:var(--primary);background:radial-gradient(circle,var(--primary) 0 5px,#fff 6px)}
+  .check-list .ci{display:flex;gap:8px;align-items:center;padding:6px 0;font-size:13px}
+  .ddl{background:#1d2129;color:#c9cdd4;border-radius:var(--radius-sm);padding:12px 14px;font-family:var(--mono);font-size:12px;line-height:1.7;overflow:auto;white-space:pre}
+  .diff-line{display:flex;gap:8px;font-size:12px;font-family:var(--mono);padding:3px 0}
+  .exec-row{display:flex;align-items:center;gap:10px;border:1px solid var(--border-light);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px;font-size:13px}
+  .spinner{width:14px;height:14px;border:2px solid #b3cdff;border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .toast{position:fixed;top:64px;left:50%;transform:translateX(-50%);background:#1d2129;color:#fff;border-radius:8px;padding:10px 18px;font-size:13px;z-index:99;box-shadow:0 6px 20px rgba(0,0,0,.18);display:none}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ================= 侧边栏 ================= -->
+  <aside class="sidebar">
+    <div class="logo"><span class="mark">Y</span> Yak-ops <span class="tag">一体化</span></div>
+    <div class="menu">
+      <div class="menu-group">数据建模</div>
+      <div class="menu-item" onclick="toast('原型：该模块不在本次范围')">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5 6 17M12 7.5 18 17M7.5 19h9"/></svg>
+        数仓规划
+      </div>
+      <div class="menu-item" onclick="toast('原型：该模块不在本次范围')">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
+        数据标准
+      </div>
+      <div class="menu-item" onclick="toast('原型：该模块不在本次范围')">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20a8 8 0 1 1 8-8"/><path d="M12 12 16 8"/><path d="M19 16h4M19 20h4"/></svg>
+        数据指标
+      </div>
+      <div class="menu-item active" data-screen="workbench" onclick="showScreen('workbench')">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/></svg>
+        维度建模
+      </div>
+    </div>
+    <div class="menu-foot">交互原型 · v0.1</div>
+  </aside>
+
+  <div class="main">
+    <!-- ================= 顶栏 ================= -->
+    <header class="topbar">
+      <span class="burger"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1d2129" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></span>
+      <span class="crumb">数据建模 <span class="ws">验收空间 ▾</span></span>
+      <span class="spacer"></span>
+      <span class="user"><span class="avatar">系</span> 系统管理员 ▾</span>
+    </header>
+
+    <main class="content">
+
+      <!-- ================================================================ -->
+      <!-- 屏 1：模型工作台 -->
+      <!-- ================================================================ -->
+      <section class="screen on" id="screen-workbench">
+        <div class="proto-note">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ad6800" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/></svg>
+          交互原型 · 数据为示例 · 可点击：视图切换 / 勾选批量操作 / 行进入详情 / 逆向建模与发布中心
+        </div>
+        <div class="page-head">
+          <div class="titles">
+            <h1>维度建模</h1>
+            <p>设计维度模型与事实表，并维护字段映射关系。</p>
+          </div>
+          <div class="actions">
+            <button class="btn outline" onclick="showScreen('reverse')">逆向建模</button>
+            <button class="btn outline" onclick="renderAll()">刷新</button>
+            <button class="btn primary" onclick="openDetail(models[0])">＋ 新建模型</button>
+          </div>
+        </div>
+
+        <div class="wb-toolbar">
+          <div class="btn-group" id="viewSeg">
+            <button class="btn sm on" onclick="setView('layer')">分层视图</button>
+            <button class="btn sm" onclick="setView('biz')">业务视图</button>
+            <button class="btn sm" onclick="setView('publish')">发布视图</button>
+          </div>
+          <input type="text" placeholder="搜索表名或中文名" style="width:200px">
+          <select class="in"><option>全部类型</option><option>明细表</option><option>维度表</option><option>汇总表</option><option>应用表</option></select>
+          <select class="in"><option>全部分层</option><option>明细层</option><option>公共维度层</option><option>汇总层</option><option>应用层</option></select>
+          <select class="in"><option>全部负责人</option><option>系统管理员</option></select>
+          <select class="in"><option>全部数据域</option><option>交易域</option></select>
+          <select class="in"><option>全部数据集市</option><option>电商交易集市</option></select>
+          <span class="link muted">清空</span>
+          <span class="grow"></span>
+          <span style="font-size:12px;color:var(--text-2)" id="wbCount"></span>
+        </div>
+
+        <div id="batchBar"></div>
+
+        <div class="wb-body">
+          <div class="wb-left"><div class="card" id="leftPanel"></div></div>
+          <div class="wb-right"><div class="card" style="overflow:hidden"><div id="modelTable"></div></div></div>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <!-- 屏 2：逆向建模工作台 -->
+      <!-- ================================================================ -->
+      <section class="screen" id="screen-reverse">
+        <div class="page-head">
+          <div class="titles">
+            <h1>逆向建模 <span style="font-size:12px;color:var(--text-3);font-weight:400">从物理表批量生成逻辑模型草稿</span></h1>
+            <p>选择物理表 → 核对映射 → 批量生成。生成后可在编辑器中继续修订，发布需前往发布中心。</p>
+          </div>
+          <div class="actions">
+            <button class="btn outline" onclick="showScreen('workbench')">返回维度建模</button>
+          </div>
+        </div>
+
+        <div class="rev-body">
+          <!-- 左：源导航 -->
+          <div class="rev-left">
+            <div class="card">
+              <div class="panel-title">选择物理表</div>
+              <div style="padding:0 14px 12px;display:grid;gap:8px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                  <select class="in"><option>订单库（开发）</option><option>用户库（开发）</option><option>订单数仓（开发）</option></select>
+                  <select class="in"><option>trade_db</option><option>user_db</option></select>
+                </div>
+                <div style="background:var(--amber-bg);border:1px solid #ffd9a8;color:var(--orange);border-radius:6px;padding:7px 10px;font-size:12px">
+                  ⚠ 即将从「开发」环境读取表结构，环境只作提示，不做拦截。
+                </div>
+                <div style="display:flex;gap:8px">
+                  <input type="text" placeholder="表名关键字" style="flex:1">
+                  <button class="btn outline sm">查询</button>
+                </div>
+              </div>
+              <div style="border-top:1px solid var(--border-light);max-height:420px;overflow:auto" id="srcTables"></div>
+              <div style="padding:10px 14px;border-top:1px solid var(--border-light);display:flex;align-items:center">
+                <span class="summary-pill">已选 <b id="srcSelCnt" style="color:var(--primary)">3</b> 张表</span>
+                <span style="margin-left:auto" class="link" onclick="clearSrcSel()">清空选择</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右：映射工作台 -->
+          <div class="rev-right">
+            <div class="card" style="padding:14px 16px;margin-bottom:14px">
+              <div class="rule-bar">
+                <span>映射规则：</span>
+                <span><span class="switch"></span><b>剥离前缀</b> <select class="in" style="padding:2px 6px;font-size:12px"><option>dwd_</option><option>dim_</option><option>不剥离</option></select></span>
+                <span><span class="switch"></span><b>注释 → 中文名</b></span>
+                <span><span class="switch"></span><b>字段标准自动匹配</b> 相似度 ≥ <b>85%</b></span>
+                <span style="margin-left:auto">目标类型
+                  <select class="in" style="padding:2px 6px;font-size:12px"><option>DWD · 明细层</option><option>DIM · 维度层</option></select>
+                  存储策略
+                  <select class="in" style="padding:2px 6px;font-size:12px"><option>每日增量</option><option>每日全量</option></select>
+                </span>
+              </div>
+              <div style="display:flex;align-items:center;margin:14px 0 10px">
+                <b style="font-size:14px">映射预览：<span class="mono" style="font-size:13px">trade_order_detail</span></b>
+                <span class="badge green" style="margin-left:10px">已映射 7</span>
+                <span class="badge amber">需确认 1</span>
+                <span style="margin-left:auto;font-size:12px;color:var(--text-2)">表中文名（来自注释）：<b style="color:var(--text)">订单明细表</b>，请确认</span>
+              </div>
+              <div style="overflow:auto">
+              <table class="tb" id="mapTable">
+                <thead><tr><th>物理列名</th><th>物理类型</th><th>注释</th><th>逻辑类型</th><th>标准建议</th><th>状态</th></tr></thead>
+                <tbody></tbody>
+              </table>
+              </div>
+            </div>
+
+            <div class="card" style="padding:14px 16px">
+              <div style="display:flex;align-items:center;margin-bottom:10px">
+                <b style="font-size:14px">批量生成摘要</b>
+                <span style="margin-left:auto;font-size:12px;color:var(--text-2)">同名冲突可跳过或修改后缀</span>
+              </div>
+              <div id="genSummary"></div>
+              <div style="display:flex;gap:10px;margin-top:12px;align-items:center">
+                <button class="btn outline">保存草稿</button>
+                <button class="btn primary" onclick="genModels()">生成 2 个模型</button>
+                <span style="font-size:12px;color:var(--text-2)">1 张表因同名冲突被跳过</span>
+                <span style="margin-left:auto;font-size:12px;color:var(--text-3)">仅保存模型，不发布物理表</span>
+              </div>
+              <div id="genOk"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <!-- 屏 3：模型详情页 -->
+      <!-- ================================================================ -->
+      <section class="screen" id="screen-detail">
+        <div class="detail-head">
+          <span class="link" onclick="showScreen('workbench')">← 返回列表</span>
+          <span class="name" id="dName">dwd_item_sales_detail</span>
+          <span id="dBadges"></span>
+          <span class="meta" id="dMeta"></span>
+          <span style="margin-left:auto"></span>
+          <button class="btn outline" disabled>保存</button>
+          <button class="btn primary" onclick="openPublish([currentModel])">发布</button>
+          <button class="btn outline">⋯</button>
+        </div>
+
+        <div class="tabs" id="dTabs">
+          <div class="tab on" data-tab="overview" onclick="setTab('overview')">概览</div>
+          <div class="tab" data-tab="fields" onclick="setTab('fields')">字段</div>
+          <div class="tab" data-tab="refs" onclick="setTab('refs')">引用</div>
+          <div class="tab" data-tab="pub" onclick="setTab('pub')">发布</div>
+        </div>
+
+        <!-- 概览 -->
+        <div class="dtab" id="dtab-overview">
+          <div class="card" style="padding:18px;margin-bottom:14px">
+            <div style="display:flex;align-items:center;margin-bottom:16px"><b>基本信息</b><span class="link" style="margin-left:auto;font-size:12px" onclick="toast('原型：内联编辑')">编辑</span></div>
+            <div class="kv" id="dKv"></div>
+          </div>
+          <div class="card" style="padding:18px;margin-bottom:14px">
+            <b>与物理表差异</b>
+            <div class="env-cards" style="margin-top:14px">
+              <div class="env-card">
+                <h4>DEVELOP · 开发 <span class="badge green" style="margin-left:auto">已发布 v3</span></h4>
+                <div style="font-size:12px;color:var(--text-2);line-height:2">目标：订单数仓（开发）/ trade_dw<br>最近发布：2026-10-28 10:12 · 系统管理员</div>
+                <div style="margin-top:10px;padding:10px;background:var(--amber-bg);border-radius:6px;font-size:12px;display:flex;align-items:center;gap:8px">
+                  <span class="dot amber"></span> 当前定义与物理表存在差异
+                  <span class="chip add">+2</span><span class="chip mod">~1</span><span class="chip del">-0</span>
+                  <span class="link" style="margin-left:auto" onclick="setTab('fields')">查看变更</span>
+                </div>
+              </div>
+              <div class="env-card">
+                <h4>PROD · 生产 <span class="badge gray" style="margin-left:auto">未发布</span></h4>
+                <div style="font-size:12px;color:var(--text-2);line-height:2">目标：订单数仓（生产）/ trade_dw<br>建议先在开发环境验证后再发布生产</div>
+                <div style="margin-top:10px"><button class="btn outline sm" onclick="openPublish([currentModel])">发布到生产</button></div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="padding:18px">
+            <b>最近发布记录</b>
+            <table class="tb" style="margin-top:10px"><thead><tr><th>版本</th><th>环境</th><th>操作</th><th>状态</th><th>发布时间</th><th>发布人</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">v3</td><td>DEVELOP</td><td>ALTER</td><td><span class="badge green">成功</span></td><td>2026-10-28 10:12</td><td>系统管理员</td></tr>
+              <tr><td class="mono">v2</td><td>DEVELOP</td><td>ALTER</td><td><span class="badge green">成功</span></td><td>2026-10-21 15:40</td><td>系统管理员</td></tr>
+              <tr><td class="mono">v1</td><td>DEVELOP</td><td>CREATE</td><td><span class="badge green">成功</span></td><td>2026-10-15 09:26</td><td>系统管理员</td></tr>
+            </tbody></table>
+          </div>
+        </div>
+
+        <!-- 字段 -->
+        <div class="dtab" id="dtab-fields" style="display:none">
+          <div class="card" style="padding:16px 18px">
+            <div style="display:flex;align-items:center;margin-bottom:12px;gap:8px">
+              <button class="btn outline sm" onclick="toast('原型：添加字段')">添加字段</button>
+              <button class="btn outline sm" onclick="toast('原型：批量粘贴')">批量粘贴</button>
+              <button class="btn outline sm" onclick="toast('原型：从表/视图导入')">从表/视图导入</button>
+              <button class="btn outline sm" onclick="toast('原型：从数据标准导入')">从数据标准导入</button>
+              <span class="legend" style="margin-left:auto"><i style="background:#c9f2d7"></i>新增 <i style="background:#ffe9c2"></i>修改 <i style="background:#ffd2cc"></i>删除</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-2);margin-bottom:8px" id="dFieldCnt"></div>
+            <div style="overflow:auto">
+            <table class="tb" id="dFieldTable">
+              <thead><tr><th>序号</th><th>中文名*</th><th>英文编码*</th><th>数据类型*</th><th>长度/精度</th><th>主键</th><th>非空</th><th>分区</th><th>聚合</th><th>数据标准</th><th>变更</th></tr></thead>
+              <tbody></tbody>
+            </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- 引用 -->
+        <div class="dtab" id="dtab-refs" style="display:none">
+          <div class="card" style="padding:18px;margin-bottom:14px">
+            <b>数据标准引用（5）</b>
+            <table class="tb" style="margin-top:10px"><thead><tr><th>标准</th><th>类型</th><th>引用字段</th><th>操作</th></tr></thead><tbody>
+              <tr><td>标识-编号</td><td><span class="badge blue">字段标准</span></td><td class="mono">detail_id / order_id / item_id</td><td><span class="link">查看</span></td></tr>
+              <tr><td>金额-单价</td><td><span class="badge blue">字段标准</span></td><td class="mono">item_price</td><td><span class="link">查看</span></td></tr>
+              <tr><td>数量-件数</td><td><span class="badge blue">字段标准</span></td><td class="mono">item_cnt</td><td><span class="link">查看</span></td></tr>
+              <tr><td>时间-支付 / 时间-下单</td><td><span class="badge blue">字段标准</span></td><td class="mono">pay_time / order_time</td><td><span class="link">查看</span></td></tr>
+              <tr><td>等级-买家</td><td><span class="badge blue">字段标准</span></td><td class="mono">buyer_level</td><td><span class="link">查看</span></td></tr>
+            </tbody></table>
+          </div>
+          <div class="card" style="padding:18px;margin-bottom:14px">
+            <b>指标引用（1）</b>
+            <table class="tb" style="margin-top:10px"><thead><tr><th>指标</th><th>类型</th><th>引用字段</th><th>操作</th></tr></thead><tbody>
+              <tr><td>item_pay_amount · 商品支付金额</td><td><span class="badge purple">派生指标</span></td><td class="mono">item_price × item_cnt</td><td><span class="link">查看</span></td></tr>
+            </tbody></table>
+          </div>
+          <div class="card" style="padding:18px">
+            <b>被引用（1）</b>
+            <table class="tb" style="margin-top:10px"><thead><tr><th>引用方</th><th>类型</th><th>引用内容</th><th>操作</th></tr></thead><tbody>
+              <tr><td class="mono">ads_item_sales_top</td><td><span class="badge gray">应用表</span></td><td class="mono">引用字段 item_id / item_name</td><td><span class="link" onclick="openDetail(models.find(m=>m.name==='ads_item_sales_top'))">查看</span></td></tr>
+            </tbody></table>
+          </div>
+        </div>
+
+        <!-- 发布 -->
+        <div class="dtab" id="dtab-pub" style="display:none">
+          <div class="env-cards" style="margin-bottom:14px">
+            <div class="env-card" style="background:#fff">
+              <h4>DEVELOP · 开发 <span class="badge amber" style="margin-left:auto">有变更待同步</span></h4>
+              <div style="font-size:12px;color:var(--text-2);line-height:2">目标：订单数仓（开发）/ trade_dw<br>当前版本 v3 · 结构比对：<span class="chip add">+2</span><span class="chip mod">~1</span><span class="chip del">-0</span></div>
+              <div style="margin-top:10px"><button class="btn primary sm" onclick="openPublish([currentModel])">发布变更</button></div>
+            </div>
+            <div class="env-card" style="background:#fff">
+              <h4>PROD · 生产 <span class="badge gray" style="margin-left:auto">未发布</span></h4>
+              <div style="font-size:12px;color:var(--text-2);line-height:2">目标：订单数仓（生产）/ trade_dw<br>物理表不存在，首次发布将生成建表语句</div>
+              <div style="margin-top:10px"><button class="btn outline sm" onclick="openPublish([currentModel])">首次发布</button></div>
+            </div>
+          </div>
+          <div class="card" style="padding:18px">
+            <b>发布历史</b>
+            <table class="tb" style="margin-top:10px"><thead><tr><th>版本</th><th>环境</th><th>操作</th><th>目标表</th><th>状态</th><th>耗时</th><th>发布时间</th><th>发布人</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">v3</td><td>DEVELOP</td><td>ALTER</td><td class="mono">trade_dw.dwd_item_sales_detail</td><td><span class="badge green">成功</span></td><td>4.2s</td><td>2026-10-28 10:12</td><td>系统管理员</td></tr>
+              <tr><td class="mono">v2</td><td>DEVELOP</td><td>ALTER</td><td class="mono">trade_dw.dwd_item_sales_detail</td><td><span class="badge green">成功</span></td><td>3.8s</td><td>2026-10-21 15:40</td><td>系统管理员</td></tr>
+              <tr><td class="mono">v1</td><td>DEVELOP</td><td>CREATE</td><td class="mono">trade_dw.dwd_item_sales_detail</td><td><span class="badge green">成功</span></td><td>6.1s</td><td>2026-10-15 09:26</td><td>系统管理员</td></tr>
+            </tbody></table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <!-- 屏 4：发布中心 -->
+      <!-- ================================================================ -->
+      <section class="screen" id="screen-publish">
+        <div class="page-head">
+          <div class="titles">
+            <h1>发布中心</h1>
+            <p>按分层绑定的目标库自动定位物理表：不存在生成建表语句，结构有差异生成 ALTER，一致则无需发布。</p>
+          </div>
+          <div class="actions">
+            <button class="btn outline" onclick="showScreen('workbench')">返回列表</button>
+          </div>
+        </div>
+
+        <div class="card" style="padding:20px 24px">
+          <div class="steps" id="pubSteps"></div>
+
+          <!-- Step 1 变更集 -->
+          <div class="pstep" id="pstep-1">
+            <b style="font-size:14px">变更集（3 个模型）</b>
+            <div style="margin-top:12px" id="csList"></div>
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
+              <button class="btn primary" onclick="pubGoto(2)">下一步：选择环境</button>
+            </div>
+          </div>
+
+          <!-- Step 2 环境选择 -->
+          <div class="pstep" id="pstep-2" style="display:none">
+            <b style="font-size:14px">选择发布环境</b>
+            <div class="env-pick" style="margin-top:12px">
+              <div class="env-opt on" onclick="pickEnv(this,'DEVELOP')">
+                <h4 style="font-size:14px;margin-bottom:8px"><span class="radio"></span>DEVELOP · 开发环境</h4>
+                <div style="font-size:12px;color:var(--text-2);line-height:1.9">订单数仓（开发）/ trade_dw<br>3 个模型当前均有待同步变更</div>
+              </div>
+              <div class="env-opt" onclick="pickEnv(this,'PROD')">
+                <h4 style="font-size:14px;margin-bottom:8px"><span class="radio"></span>PROD · 生产环境</h4>
+                <div style="font-size:12px;color:var(--text-2);line-height:1.9">订单数仓（生产）/ trade_dw<br><span style="color:var(--orange)">建议先在开发环境验证后再发布生产</span></div>
+              </div>
+            </div>
+            <div style="margin-top:16px" class="check-list">
+              <b style="font-size:13px">发布前检查</b>
+              <div class="ci"><span style="color:var(--green)">✓</span> 分层目标绑定：3 个模型所属分层均已绑定 DEVELOP 目标</div>
+              <div class="ci"><span style="color:var(--green)">✓</span> 目标连通性：订单数仓（开发）连接正常</div>
+              <div class="ci"><span style="color:var(--green)">✓</span> 命名规则校验：3 个模型均符合分层命名规则</div>
+              <div class="ci"><span style="color:var(--amber)">!</span> 危险变更：1 项类型变更可能影响存量数据，将在下一步确认</div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
+              <button class="btn outline" onclick="pubGoto(1)">上一步</button>
+              <button class="btn primary" onclick="pubGoto(3)">生成变更对比</button>
+            </div>
+          </div>
+
+          <!-- Step 3 批量预览 -->
+          <div class="pstep" id="pstep-3" style="display:none">
+            <b style="font-size:14px">变更对比（DEVELOP · trade_dw）</b>
+            <div style="margin-top:12px" id="previewList"></div>
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
+              <button class="btn outline" onclick="pubGoto(2)">上一步</button>
+              <button class="btn primary" onclick="pubGoto(4)">下一步：危险确认</button>
+            </div>
+          </div>
+
+          <!-- Step 4 危险确认 -->
+          <div class="pstep" id="pstep-4" style="display:none">
+            <b style="font-size:14px">危险操作确认</b>
+            <div style="margin:12px 0;padding:12px 14px;background:var(--amber-bg);border:1px solid #ffd9a8;border-radius:8px;font-size:13px;line-height:2">
+              <div><span class="badge amber">类型变更</span> <span class="mono">dim_item_info.item_status</span>：BIGINT → STRING，可能影响依赖该字段的查询与下游任务</div>
+              <div><span class="badge gray">DROP 列</span> 本次变更无删除字段</div>
+            </div>
+            <label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer">
+              <input type="checkbox" id="ackBox" onchange="document.getElementById('pubGo5').disabled=!this.checked"> 我已知晓上述变更可能带来的影响
+            </label>
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
+              <button class="btn outline" onclick="pubGoto(3)">上一步</button>
+              <button class="btn primary" id="pubGo5" disabled onclick="pubGoto(5)">确认并执行</button>
+            </div>
+          </div>
+
+          <!-- Step 5 执行 -->
+          <div class="pstep" id="pstep-5" style="display:none">
+            <b style="font-size:14px">执行发布</b>
+            <div style="margin-top:12px" id="execList"></div>
+            <div id="execResult"></div>
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
+              <button class="btn outline" onclick="showScreen('workbench')">返回列表</button>
+              <button class="btn primary" id="execDoneBtn" style="display:none" onclick="finishPublish()">完成</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ==================== 数据 ==================== */
+const models = [
+  {name:'dwd_item_item',          cn:'商品表',         type:'明细表', layer:'明细层',     store:'每日增量', fields:9,  change:null,        st:'未发布'},
+  {name:'dwd_item_sales_detail',  cn:'商品销售明细',    type:'明细表', layer:'明细层',     store:'每日增量', fields:10, change:'+2 ~1 -0', st:'有变更'},
+  {name:'dwd_trade_order_detail', cn:'订单明细表',      type:'明细表', layer:'明细层',     store:'每日增量', fields:8,  change:'+1 ~0 -0', st:'发布失败'},
+  {name:'dim_item_info',          cn:'商品信息维度表',  type:'维度表', layer:'公共维度层', store:'每日增量', fields:9,  change:'+0 ~1 -0', st:'有变更'},
+  {name:'dws_item_pay',           cn:'商品支付日汇总',  type:'汇总表', layer:'汇总层',     store:'每日增量', fields:6,  change:null,        st:'已发布'},
+  {name:'ads_ticket05_no_length', cn:'票05长度留空证据',type:'应用表', layer:'应用层',     store:'每日增量', fields:1,  change:null,        st:'未发布'},
+  {name:'ads_pay_item_top_recheck',cn:'商品支付Top复核',type:'应用表', layer:'应用层',     store:'每日增量', fields:0,  change:null,        st:'未发布'},
+  {name:'ads_item_sales_top',     cn:'商品销售Top榜',   type:'应用表', layer:'应用层',     store:'每日增量', fields:2,  change:'+1 ~0 -0', st:'发布失败'},
+];
+
+const typeBadge = {'明细表':'blue','维度表':'amber','汇总表':'green','应用表':'purple'};
+const stBadge  = {'未发布':'gray','已发布':'green','有变更':'amber','发布失败':'red'};
+
+const srcTables = [
+  {name:'trade_order',        cn:'订单主表（脏数据）', sel:false, conflict:true },
+  {name:'trade_order_detail', cn:'订单明细表',         sel:true,  conflict:true },
+  {name:'trade_item',         cn:'商品信息表',         sel:true,  conflict:false},
+  {name:'trade_pay_flow',     cn:'支付流水表',         sel:true,  conflict:false},
+  {name:'trade_user',         cn:'用户表',             sel:false, conflict:false},
+  {name:'trade_user_addr',    cn:'用户地址表',         sel:false, conflict:false},
+];
+
+const mapRows = [
+  ['detail_id','bigint','明细ID','BIGINT','标识-编号 · 98%','ok'],
+  ['order_id','bigint','订单ID','BIGINT','标识-编号 · 96%','ok'],
+  ['item_id','bigint','商品ID','BIGINT','标识-编号 · 96%','ok'],
+  ['item_name','varchar(128)','商品名称','STRING(128)','名称-通用 · 91%','ok'],
+  ['item_price','decimal(10,2)','成交单价','DECIMAL(10,2)','金额-单价 · 89%','ok'],
+  ['item_cnt','int','购买数量','BIGINT','数量-件数 · 87%','ok'],
+  ['pay_time','datetime','支付时间','DATETIME','时间-支付 · 85%','ok'],
+  ['ext_props','json','扩展属性','（待选择）','未匹配到标准','warn'],
+];
+
+const detailFields = [
+  ['明细ID','detail_id','BIGINT','20','✓','✓','','','标识-编号','new'],
+  ['订单ID','order_id','BIGINT','20','','✓','','','标识-编号',''],
+  ['商品ID','item_id','BIGINT','20','','✓','','','标识-编号',''],
+  ['商品名称','item_name','STRING','128','','✓','','','名称-通用',''],
+  ['成交单价','item_price','DECIMAL','18,4','','✓','','','金额-单价','mod'],
+  ['购买数量','item_cnt','BIGINT','20','','✓','','','数量-件数',''],
+  ['下单时间','order_time','DATETIME','','','✓','','','时间-下单',''],
+  ['支付时间','pay_time','DATETIME','','','✓','','','时间-支付','new'],
+  ['买家等级','buyer_level','STRING','32','','','','','等级-买家','new'],
+  ['分区日期','dt','STRING','8','','','✓','','',''],
+];
+
+const csData = [
+  {m:models[1], op:'ALTER', diff:'+2 ~1 -0', ddl:'ALTER TABLE trade_dw.dwd_item_sales_detail\n  ADD COLUMN pay_time DATETIME NULL COMMENT \'支付时间\' AFTER order_time,\n  ADD COLUMN buyer_level VARCHAR(32) NULL COMMENT \'买家等级\' AFTER pay_time,\n  MODIFY COLUMN item_price DECIMAL(18,4) NOT NULL COMMENT \'成交单价\';'},
+  {m:models[3], op:'ALTER', diff:'+0 ~1 -0', ddl:'ALTER TABLE dim_dw.dim_item_info\n  MODIFY COLUMN item_status VARCHAR(32) NULL COMMENT \'商品状态\';'},
+  {m:models[2], op:'CREATE', diff:'新建',     ddl:'CREATE TABLE trade_dw.dwd_trade_order_detail (\n  detail_id BIGINT NOT NULL COMMENT \'明细ID\',\n  order_id BIGINT NOT NULL COMMENT \'订单ID\',\n  item_id BIGINT NOT NULL COMMENT \'商品ID\',\n  item_price DECIMAL(10,2) NOT NULL COMMENT \'成交单价\',\n  item_cnt BIGINT NOT NULL COMMENT \'购买数量\',\n  PRIMARY KEY (detail_id)\n) ENGINE=InnoDB COMMENT \'订单明细表\';'},
+];
+
+/* ==================== 通用 ==================== */
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.getElementById('screen-'+id).classList.add('on');
+  document.querySelectorAll('.menu-item').forEach(m=>m.classList.toggle('active', m.dataset.screen===id));
+  document.querySelector('.content').scrollTop=0;
+}
+let toastTimer;
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block';
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.style.display='none',2200);
+}
+
+/* ==================== 工作台 ==================== */
+let view='layer', filterFn=null, checked=new Set();
+function setView(v){
+  view=v;
+  document.querySelectorAll('#viewSeg .btn').forEach(b=>b.classList.toggle('on', b.textContent.includes({layer:'分层',biz:'业务',publish:'发布'}[v])));
+  filterFn=null; renderLeft(); renderTable();
+}
+function renderLeft(){
+  const p=document.getElementById('leftPanel');
+  if(view==='layer'){
+    const cnt=l=>models.filter(m=>m.layer===l).length;
+    const pend=l=>models.filter(m=>m.layer===l&&(m.st==='有变更'||m.st==='发布失败')).length;
+    const rows=[['全部逻辑模型',models.length,'',null],['ODS · 贴源层',0,'','ODS'],['DWD · 明细层',cnt('明细层'),pend('明细层'),'明细层'],['DIM · 公共维度层',cnt('公共维度层'),pend('公共维度层'),'公共维度层'],['DWS · 汇总层',cnt('汇总层'),pend('汇总层'),'汇总层'],['ADS · 应用层',cnt('应用层'),pend('应用层'),'应用层']];
+    p.innerHTML=`<div class="panel-title">分层目录</div><div class="tree">`+rows.map(r=>{
+      const on=filterFn&&filterFn.label===r[0];
+      return `<div class="tnode ${on?'on':''}" onclick="filterLayer('${r[0]}','${r[3]||''}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg>
+        ${r[0]}<span class="sub">${r[2]?`<span class="dot ${r[0]==='全部逻辑模型'?'amber':'red'}"></span>`:''}${r[1]} 个</span></div>`;
+    }).join('')+`</div>`;
+  }else if(view==='biz'){
+    p.innerHTML=`<div class="panel-title">业务目录</div><div class="tree">
+      <div class="tgroup">公共层</div>
+      <div class="tnode"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg>电商业务</div>
+      <div class="tnode indent"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/></svg>交易域</div>
+      <div class="tnode indent2 on"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M4 17V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10"/><path d="M2 17h20l-2 4H4l-2-4Z"/></svg>商品支付 <span class="sub">4 个</span></div>
+      <div class="tnode indent2"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 3v18M5 8l7-5 7 5M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/></svg>商品维度 <span class="sub">1 个</span></div>
+      <div class="tgroup">应用层</div>
+      <div class="tnode"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg>电商交易集市 <span class="sub">3 个</span></div>
+    </div>`;
+  }else{
+    const groups=[['待发布','有变更'],['发布失败','发布失败'],['已发布','已发布'],['未发布','未发布']];
+    p.innerHTML=`<div class="panel-title">按发布状态</div><div class="tree">`+groups.map(g=>{
+      const on=filterFn&&filterFn.label===g[0];
+      return `<div class="tnode ${on?'on':''}" onclick="filterSt('${g[0]}','${g[1]}')">
+        <span class="dot ${{待发布:'amber',发布失败:'red',已发布:'green',未发布:'gray'}[g[0]]}"></span>${g[0]}
+        <span class="sub">${models.filter(m=>m.st===g[1]).length} 个</span></div>`;
+    }).join('')+`
+      <div class="tgroup" style="margin-top:6px">按环境</div>
+      <div class="tnode indent">DEVELOP · 开发 <span class="sub">待发布 2</span></div>
+      <div class="tnode indent">PROD · 生产 <span class="sub">待发布 3</span></div>
+    </div>`;
+  }
+}
+function filterLayer(label,layer){ filterFn = layer? (m=>m.layer===layer) : null; if(filterFn) filterFn.label=label; else filterLabelClear(); renderLeft(); renderTable(); }
+function filterSt(label,st){ filterFn = m=>m.st===st; filterFn.label=label; renderLeft(); renderTable(); }
+function filterLabelClear(){}
+function renderBatchBar(){
+  const bar=document.getElementById('batchBar');
+  if(checked.size===0){ bar.innerHTML=''; return; }
+  bar.innerHTML=`<div class="batch-bar">已选 <b>${checked.size}</b> 项
+    <button class="btn primary sm" onclick="openPublish([...checked].map(n=>models.find(m=>m.name===n)))">批量发布</button>
+    <button class="btn outline sm" onclick="toast('原型：批量删除')">批量删除</button>
+    <span class="link" style="margin-left:auto" onclick="checked.clear();renderTable()">取消选择</span></div>`;
+}
+function renderTable(){
+  const list=models.filter(filterFn||(()=>true));
+  document.getElementById('wbCount').textContent=`全部逻辑模型 ${list.length} 个`;
+  const rows=list.map((m,i)=>`<tr>
+    <td onclick="event.stopPropagation()"><input type="checkbox" ${checked.has(m.name)?'checked':''} onchange="toggleCheck('${m.name}')"></td>
+    <td class="mono" onclick="openDetail(models.find(x=>x.name==='${m.name}'))">${m.name}</td>
+    <td onclick="openDetail(models.find(x=>x.name==='${m.name}'))">${m.cn}</td>
+    <td><span class="badge ${typeBadge[m.type]}">${m.type}</span></td>
+    <td>${m.layer}</td>
+    <td>${m.store}</td>
+    <td>${m.fields}</td>
+    <td>${m.change?`<span class="chip add">+${m.change.split(' ')[0].slice(1)}</span><span class="chip mod">~${m.change.split(' ')[1].slice(1)}</span><span class="chip del">-${m.change.split(' ')[2].slice(1)}</span>`:'<span style="color:var(--text-3)">—</span>'}</td>
+    <td><span class="badge ${stBadge[m.st]}"><span class="dot ${{已发布:'green',有变更:'amber',发布失败:'red',未发布:'gray'}[m.st]}"></span>${m.st}</span></td>
+    <td onclick="event.stopPropagation()">
+      <span class="link" onclick="openDetail(models.find(x=>x.name==='${m.name}'))">详情</span>
+      <span class="link" style="margin-left:10px" onclick="openPublish([models.find(x=>x.name==='${m.name}')])">${m.st==='已发布'?'重新发布':'发布'}</span>
+      <span class="link danger" style="margin-left:10px" onclick="toast('原型：删除 ${m.name}')">删除</span>
+    </td></tr>`).join('');
+  document.getElementById('modelTable').innerHTML=`<div style="overflow:auto"><table class="tb">
+    <thead><tr><th style="width:32px"></th><th>表名</th><th>表中文名</th><th>类型</th><th>分层</th><th>存储策略</th><th>字段数</th><th>变更</th><th>发布状态</th><th>操作</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="10" class="empty">暂无模型</td></tr>'}</tbody></table></div>`;
+  renderBatchBar();
+}
+function toggleCheck(n){ checked.has(n)?checked.delete(n):checked.add(n); renderBatchBar(); }
+function renderAll(){ renderLeft(); renderTable(); }
+
+/* ==================== 详情页 ==================== */
+let currentModel=models[1];
+function openDetail(m){
+  currentModel=m;
+  document.getElementById('dName').textContent=m.name;
+  document.getElementById('dBadges').innerHTML=`<span class="badge ${typeBadge[m.type]}">${m.type}</span> <span class="badge blue">${m.layer==='明细层'?'DWD · 明细层':m.layer==='公共维度层'?'DIM · 公共维度层':m.layer==='汇总层'?'DWS · 汇总层':'ADS · 应用层'}</span> <span class="badge ${stBadge[m.st]}"><span class="dot ${{已发布:'green',有变更:'amber',发布失败:'red',未发布:'gray'}[m.st]}"></span>${m.st}</span>`;
+  document.getElementById('dMeta').textContent=`负责人：系统管理员 · 更新于 2026-10-30 14:22`;
+  document.getElementById('dKv').innerHTML=[
+    ['模型类型',m.type+'（创建后不可变更）'],['数仓分层','DWD · 明细层'],['业务分类','电商业务'],['数据域','交易域'],
+    ['业务过程','商品支付'],['表名',m.name],['表中文名',m.cn],['存储策略',m.store],
+    ['生命周期','30 天'],['负责人','系统管理员'],
+  ].map(kv=>`<div class="item"><div class="k">${kv[0]}</div><div class="v">${kv[1]}</div></div>`).join('');
+  const fch={new:['新增','#c9f2d7'],mod:['修改','#ffe9c2'],del:['删除','#ffd2cc']};
+  document.getElementById('dFieldCnt').textContent=`共 ${detailFields.length} 个字段，主键 1 个，分区 1 个`;
+  document.getElementById('dFieldTable').querySelector('tbody').innerHTML=detailFields.map((f,i)=>`<tr class="${f[9]==='new'?'field-new':f[9]==='mod'?'field-mod':''}">
+    <td>${i+1}</td><td>${f[0]}</td><td class="mono">${f[1]}</td><td>${f[2]}</td><td class="mono">${f[3]||'—'}</td>
+    <td>${f[4]||''}</td><td>${f[5]||''}</td><td>${f[6]||''}</td><td>${f[7]||''}</td>
+    <td>${f[8]?`<span class="badge blue">${f[8]}</span>`:'<span style="color:var(--text-3)">—</span>'}</td>
+    <td>${f[9]?`<span class="map-flag ${f[9]==='new'?'ok':'warn'}">${fch[f[9]][0]}</span>`:'<span style="color:var(--text-3)">—</span>'}</td></tr>`).join('');
+  setTab('overview'); showScreen('detail');
+}
+function setTab(t){
+  document.querySelectorAll('#dTabs .tab').forEach(x=>x.classList.toggle('on',x.dataset.tab===t));
+  document.querySelectorAll('.dtab').forEach(x=>x.style.display='none');
+  document.getElementById('dtab-'+t).style.display='block';
+}
+
+/* ==================== 逆向工作台 ==================== */
+let srcSel=srcTables.filter(t=>t.sel).map(t=>t.name);
+function renderSrc(){
+  document.getElementById('srcTables').innerHTML=srcTables.map(t=>`
+    <div class="src-table-row ${srcSel.includes(t.name)?'sel':''}" onclick="toggleSrc('${t.name}')">
+      <input type="checkbox" ${srcSel.includes(t.name)?'checked':''} onclick="event.stopPropagation();toggleSrc('${t.name}')">
+      <span class="mono" style="font-size:12px">${t.name}</span>
+      <span style="color:var(--text-2);font-size:12px;margin-left:auto">${t.cn}</span>
+    </div>`).join('');
+  document.getElementById('srcSelCnt').textContent=srcSel.length;
+  renderGenSummary();
+}
+function toggleSrc(n){ srcSel.includes(n)?srcSel=srcSel.filter(x=>x!==n):srcSel.push(n); renderSrc(); }
+function clearSrcSel(){ srcSel=[]; renderSrc(); }
+function renderGenSummary(){
+  const gen=srcTables.filter(t=>srcSel.includes(t.name));
+  document.getElementById('genSummary').innerHTML=`<table class="tb"><thead><tr><th>源表</th><th>生成表名</th><th>目标类型</th><th>字段</th><th>冲突检查</th><th>操作</th></tr></thead><tbody>`+
+    gen.map(t=>`<tr>
+      <td class="mono" style="font-size:12px">${t.name}</td>
+      <td class="mono" style="font-size:12px">dwd_${t.name.replace(/^trade_/,'trade_')}</td>
+      <td><span class="badge blue">明细表</span></td>
+      <td>${t.name==='trade_order_detail'?8:t.name==='trade_item'?9:t.name==='trade_pay_flow'?7:'—'}</td>
+      <td>${t.conflict?'<span class="badge red">与现有模型同名</span>':'<span class="badge green">可用</span>'}</td>
+      <td>${t.conflict?'<span class="link" onclick="toast(\'原型：修改后缀\')">修改后缀</span> <span class="link muted">跳过</span>':'<span class="link muted">移除</span>'}</td>
+    </tr>`).join('')+`</tbody></table>`;
+  const okCnt=gen.filter(t=>!t.conflict).length;
+  document.querySelector('#screen-reverse .btn.primary').textContent=`生成 ${okCnt} 个模型`;
+}
+function genModels(){
+  const okCnt=srcTables.filter(t=>srcSel.includes(t.name)&&!t.conflict).length;
+  srcTables.filter(t=>srcSel.includes(t.name)&&!t.conflict).forEach(t=>{
+    models.push({name:'dwd_'+t.name, cn:t.cn.replace(/（.*?）/,''), type:'明细表', layer:'明细层', store:'每日增量', fields:9, change:null, st:'未发布'});
+  });
+  srcSel=srcSel.filter(n=>srcTables.find(t=>t.name===n).conflict);
+  renderSrc(); renderAll();
+  document.getElementById('genOk').innerHTML=`<div class="gen-ok">✓ 已生成 ${okCnt} 个模型（未发布状态），可继续编辑后前往发布中心
+    <span style="margin-left:auto;display:flex;gap:8px"><button class="btn outline sm" onclick="showScreen('workbench')">查看模型</button><button class="btn primary sm" onclick="document.getElementById('genOk').innerHTML=''">继续选择</button></span></div>`;
+}
+
+/* ==================== 发布中心 ==================== */
+let pubStep=1, pubEnv='DEVELOP';
+const stepNames=['变更集','环境选择','批量预览','危险确认','执行与结果'];
+function openPublish(list){
+  csData.length=0;
+  list.forEach(x=>{
+    const base=csDataAll.find(c=>c.m.name===x.name);
+    csData.push(base||{m:x,op:'CREATE',diff:'新建',ddl:'-- 目标表不存在，将生成建表语句（示例）\nCREATE TABLE trade_dw.'+x.name+' (\n  id BIGINT NOT NULL,\n  PRIMARY KEY (id)\n);'});
+  });
+  pubStep=1; document.getElementById('execList').innerHTML='';
+  pubGoto(1); showScreen('publish');
+}
+const csDataAll=[...csData];
+function renderSteps(){
+  document.getElementById('pubSteps').innerHTML=stepNames.map((s,i)=>{
+    const n=i+1, cls=n<pubStep?'done':n===pubStep?'on':'';
+    return `<div class="step ${cls}"><span class="n">${n<pubStep?'✓':n}</span>${s}</div>${n<5?'<div class="step-line"></div>':''}`;
+  }).join('');
+}
+function pubGoto(n){
+  pubStep=n; renderSteps();
+  [1,2,3,4,5].forEach(i=>document.getElementById('pstep-'+i).style.display=i===n?'block':'none');
+  if(n===1) renderCs();
+  if(n===3) renderPreview();
+  if(n===5 && !document.getElementById('execList').innerHTML) startExec();
+  document.querySelector('.content').scrollTop=0;
+}
+function renderCs(){
+  document.getElementById('csList').innerHTML=csData.map(c=>`
+    <div class="cs-item">
+      <input type="checkbox" checked onclick="toast('原型：从变更集移除')">
+      <span class="mono" style="font-size:13px">${c.m.name}</span>
+      <span style="color:var(--text-2)">${c.m.cn}</span>
+      <span class="badge ${typeBadge[c.m.type]}">${c.m.type}</span>
+      <span class="chip add">${c.diff.startsWith('新建')?'新建':'+'+c.diff.split(' ')[0].slice(1)}</span>
+      ${c.diff.startsWith('新建')?'':`<span class="chip mod">~${c.diff.split(' ')[1].slice(1)}</span><span class="chip del">-${c.diff.split(' ')[2].slice(1)}</span>`}
+      <span style="margin-left:auto;font-size:12px;color:var(--text-2)">目标：trade_dw.${c.m.name}</span>
+    </div>`).join('');
+}
+function pickEnv(el,env){
+  pubEnv=env;
+  document.querySelectorAll('.env-opt').forEach(o=>o.classList.remove('on')); el.classList.add('on');
+}
+function renderPreview(){
+  document.getElementById('previewList').innerHTML=csData.map(c=>`
+    <div class="card" style="border:1px solid var(--border-light);border-radius:8px;margin-bottom:12px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border-light)">
+        <span class="mono">${c.m.name}</span><span style="color:var(--text-2)">${c.m.cn}</span>
+        <span class="badge ${{ALTER:'amber',CREATE:'green',NONE:'gray'}[c.op]}">${{ALTER:'ALTER 变更',CREATE:'CREATE 建表',NONE:'无需发布'}[c.op]}</span>
+        <span style="margin-left:auto;font-size:12px;color:var(--text-2)">订单数仓（开发）/ trade_dw.${c.m.name}</span>
+      </div>
+      <div style="display:flex;gap:16px;padding:14px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;color:var(--text-2);margin-bottom:6px">结构变更（${c.diff}）</div>
+          ${c.op==='CREATE'?'<div style="font-size:12px;color:var(--green)">+ 目标表不存在，将创建新表（6 列，主键 1 个）</div>':c.m.name==='dwd_item_sales_detail'?`
+            <div class="diff-line"><span class="chip add">+</span> pay_time DATETIME · 支付时间</div>
+            <div class="diff-line"><span class="chip add">+</span> buyer_level VARCHAR(32) · 买家等级</div>
+            <div class="diff-line"><span class="chip mod">~</span> item_price DECIMAL(10,2) → DECIMAL(18,4)</div>`:`
+            <div class="diff-line"><span class="chip mod">~</span> item_status BIGINT → VARCHAR(32) <span class="badge amber" style="margin-left:6px">需谨慎</span></div>`}
+        </div>
+        <div style="flex:1.2;min-width:0"><div class="ddl">${c.ddl}</div></div>
+      </div>
+    </div>`).join('');
+}
+let execTimers=[];
+function startExec(){
+  execTimers.forEach(clearTimeout); execTimers=[];
+  document.getElementById('execResult').innerHTML='';
+  document.getElementById('execDoneBtn').style.display='none';
+  const el=document.getElementById('execList');
+  el.innerHTML=csData.map((c,i)=>`<div class="exec-row" id="exec-${i}">
+    <span class="spinner"></span><span class="mono" style="font-size:13px">${c.m.name}</span>
+    <span style="color:var(--text-2);font-size:12px">${c.op==='CREATE'?'建表':'变更'} trade_dw.${c.m.name}</span>
+    <span style="margin-left:auto;font-size:12px;color:var(--text-2)" id="exec-st-${i}">执行中…</span></div>`).join('');
+  csData.forEach((c,i)=>{
+    execTimers.push(setTimeout(()=>{
+      const row=document.getElementById('exec-'+i);
+      row.querySelector('.spinner').outerHTML='<span style="color:var(--green)">✓</span>';
+      document.getElementById('exec-st-'+i).innerHTML='<span style="color:var(--green)">成功</span> · 8.2s · 已冻结 v'+(c.m.name==='dwd_item_sales_detail'?4:c.m.name==='dim_item_info'?2:1);
+      if(i===csData.length-1){
+        document.getElementById('execResult').innerHTML=`<div class="gen-ok" style="margin-top:4px">✓ 全部成功 · 已生成 3 条发布记录（#1024 / #1025 / #1026），模型状态已更新为「已发布」</div>`;
+        document.getElementById('execDoneBtn').style.display='inline-flex';
+      }
+    },900*(i+1)));
+  });
+}
+function finishPublish(){
+  csData.forEach(c=>{ c.m.st='已发布'; c.m.change=null; });
+  checked.clear(); renderAll(); showScreen('workbench'); toast('发布完成，模型状态已更新');
+}
+
+/* ==================== 初始化 ==================== */
+document.getElementById('mapTable').querySelector('tbody').innerHTML=mapRows.map(r=>`<tr>
+  <td class="mono" style="font-size:12px">${r[0]}</td><td class="mono" style="font-size:12px;color:var(--text-2)">${r[1]}</td>
+  <td>${r[2]}</td><td>${r[3]}</td><td style="font-size:12px">${r[4]}</td>
+  <td>${r[5]==='ok'?'<span class="map-flag ok">已映射</span>':'<span class="map-flag warn">需确认 · 无法自动映射</span>'}</td></tr>`).join('');
+renderSrc(); renderAll();
+</script>
+</body>
+</html>
