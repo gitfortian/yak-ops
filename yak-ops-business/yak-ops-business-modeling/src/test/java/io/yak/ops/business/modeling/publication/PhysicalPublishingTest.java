@@ -138,6 +138,24 @@ class PhysicalPublishingTest {
     }
 
     @Test
+    void namesTheColumnWhoseTypeCannotBePublished() {
+        var failure = assertThrows(
+                IllegalArgumentException.class,
+                () -> PhysicalDdlGenerator.generate(
+                        PhysicalDialect.MYSQL,
+                        MYSQL_ADDRESS,
+                        "ads_top",
+                        List.of(
+                                new PhysicalColumnSpec("item_id", DataType.BIGINT, null, true, null, null),
+                                new PhysicalColumnSpec("item_name", DataType.STRING, null, false, null, null))));
+
+        // One bare rule message over a many-column model makes the user compare every row by hand.
+        assertTrue(failure.getMessage().contains("item_name"), failure.getMessage());
+        assertTrue(failure.getMessage().contains("STRING 字段必须填写长度"), failure.getMessage());
+        assertTrue(failure.getCause() instanceof IllegalArgumentException, "cause stays reachable");
+    }
+
+    @Test
     void qualifiesTheTableByTheNamespaceTheEngineResolves() {
         assertEquals(
                 "CREATE TABLE `warehouse`.`dwd_order`",

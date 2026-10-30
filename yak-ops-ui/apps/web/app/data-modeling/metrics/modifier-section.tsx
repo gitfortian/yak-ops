@@ -7,7 +7,6 @@ import {
   Field,
   FieldError,
   FieldLabel,
-  Form,
   Table,
   Textarea,
   toast,
@@ -152,7 +151,7 @@ function ModifierDialog(props: {
             </Button>
           </Alert>
         )}
-        <Form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
+        <form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
           <SelectField
             id={id + "-domain"}
             label="所属数据域"
@@ -217,7 +216,7 @@ function ModifierDialog(props: {
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );

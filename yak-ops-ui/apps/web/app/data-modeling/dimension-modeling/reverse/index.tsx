@@ -23,6 +23,7 @@ import {
   getDimensions,
   saveModel,
 } from "@/service/data-modeling/dimension-modeling";
+import { MODEL_TYPE_LABEL } from "@/service/data-modeling/dimension-modeling/types";
 import type {
   ConceptDimension,
   DimensionScope,
@@ -39,7 +40,10 @@ import {
   validateFieldRows,
   type FieldDraft,
 } from "../../logical-models/fields";
+import { MODEL_LAYER_CODE, layersForType } from "../../logical-models/layer-binding";
+import { qualifiedTableName } from "../../logical-models/field-mapping";
 import { draftTableCnName, draftTableName } from "../../logical-models/reverse-modeling-draft";
+import { defaultReverseLayer, layerBlock } from "./wizard-layers";
 import { reverseModelingProvider } from "../../logical-models/reverse-modeling-provider";
 import { useModelOptions } from "../../logical-models/state";
 import { datamartsOf, domainsOf, processesOf } from "../../shared/planning-tree";
@@ -71,7 +75,7 @@ const pickerSelect = (
   label: string,
   value: string,
   placeholder: string,
-  items: { value: string; label: string }[],
+  items: { value: string; label: string; disabled?: boolean }[],
   onChange: (value: string) => void,
   disabled = false,
 ) => (
@@ -89,7 +93,7 @@ const pickerSelect = (
       </SelectTrigger>
       <SelectContent>
         {items.map((item) => (
-          <SelectItem key={item.value} value={item.value}>
+          <SelectItem key={item.value} value={item.value} disabled={item.disabled}>
             <SelectItemText>{item.label}</SelectItemText>
           </SelectItem>
         ))}
@@ -125,10 +129,12 @@ export default function ReverseModelingPage() {
 
   useEffect(() => {
     if (layerId) return;
-    // A layer that is not enabled has no bound datasource, so the server rejects it with 19509.
-    const selectable = options.layers.find((layer) => layer.enabled);
-    if (selectable) setLayerId(selectable.id);
-  }, [layerId, options.layers]);
+    // The layer supplies the table prefix and is locked 1:1 to the kind, so the default follows the
+    // kind. Defaulting to the first enabled layer instead lands a detail table in the 贴源 layer,
+    // which saves fine and is then refused by the editor as an illegal model.
+    const suggested = defaultReverseLayer(options.layers, type);
+    if (suggested) setLayerId(suggested.id);
+  }, [layerId, options.layers, type]);
 
   useEffect(() => {
     if (type !== "DIM" || scope !== "PUBLIC" || !domainId) {
@@ -147,6 +153,40 @@ export default function ReverseModelingPage() {
   const processes = useMemo(() => processesOf(options.tree, domainId), [options.tree, domainId]);
   const datamarts = useMemo(() => datamartsOf(options.tree), [options.tree]);
   const issues = useMemo(() => validateFieldRows(rows), [rows]);
+  const selectedLayer = options.layers.find((layer) => layer.id === layerId);
+  /** Layers carrying the kind's own code; none means the workspace defines no layer for this kind. */
+  const boundLayers = useMemo(() => layersForType(options.layers, type), [options.layers, type]);
+  const usableLayer = defaultReverseLayer(options.layers, type);
+  /**
+   * The table comment is only a starting value for the model name. Flagging it while it is
+   * untouched asks the user to confirm, instead of letting a placeholder-looking comment become the
+   * model's Chinese name silently.
+   */
+  const cnNameFromComment =
+    Boolean(picker.selectedTable?.remarks?.trim()) &&
+    cnName === (picker.selectedTable ? draftTableCnName(picker.selectedTable) : "");
+  const layerGapMessage = `${MODEL_TYPE_LABEL[type]}只能建在 ${MODEL_LAYER_CODE[type]} 层，当前工作空间没有启用的该分层，请先到「数仓规划」创建该分层并绑定数据源。`;
+
+  /**
+   * Every layer stays listed, because a controlled select drops its value when the option disappears
+   * and would blank the field the moment the kind changes. Only the kind's own enabled layer stays
+   * pickable, which is the rule the forward editor applies; this page states it per option because
+   * this is where the illegal default used to come from.
+   */
+  const layerItems = options.layers.map((layer) => {
+    const block = layerBlock(layer, type, boundLayers.length > 0);
+    const reason =
+      block === null
+        ? ""
+        : block === "unenabled"
+          ? "未启用"
+          : `${MODEL_TYPE_LABEL[type]}限 ${MODEL_LAYER_CODE[type]} 层`;
+    return {
+      value: layer.id,
+      label: `${layer.enCode} · ${layer.cnName}${reason ? `（${reason}）` : ""}`,
+      disabled: block !== null,
+    };
+  });
 
   const startDraft = () => {
     const table = picker.selectedTable;
@@ -156,8 +196,8 @@ export default function ReverseModelingPage() {
       setError("当前数据源类型不支持逆向建模，请选择 MySQL、Oracle 或 PostgreSQL 数据源");
       return;
     }
-    setRows(provider.describeDrafts(picker.columns));
-    setNameSuffix(draftTableName(table.name, layerId));
+    setRows(provider.describeDrafts(picker.columns, qualifiedTableName(table)));
+    setNameSuffix(draftTableName(table.name, selectedLayer?.enCode));
     setCnName(draftTableCnName(table));
     setError(null);
     setStep(2);
@@ -165,7 +205,26 @@ export default function ReverseModelingPage() {
 
   const changeLayer = (next: string) => {
     setLayerId(next);
-    if (picker.selectedTable) setNameSuffix(draftTableName(picker.selectedTable.name, next));
+    const layer = options.layers.find((item) => item.id === next);
+    // The suffix holds only the part the prefix does not already say, so the strip is keyed on the
+    // layer code; a layer id is not a prefix and would leave the token in the name field.
+    if (picker.selectedTable) {
+      setNameSuffix(draftTableName(picker.selectedTable.name, layer?.enCode));
+    }
+  };
+
+  const changeType = (next: "DWD" | "DIM") => {
+    setType(next);
+    const nextBound = layersForType(options.layers, next);
+    const current = options.layers.find((layer) => layer.id === layerId);
+    // A layer the kind may still live in is kept, so switching back does not discard the choice the
+    // user made in the list. An unmatched layer is replaced instead of kept: leaving a detail table
+    // in the 贴源 layer stores exactly the model the editor flags on open. With no enabled layer for
+    // the kind the field goes empty and the reason is stated, so no illegal model can be saved.
+    if (current && layerBlock(current, next, nextBound.length > 0) === null) return;
+    const suggested = defaultReverseLayer(options.layers, next);
+    if (suggested) changeLayer(suggested.id);
+    else setLayerId("");
   };
 
   const ownership = (): string | null => {
@@ -192,7 +251,7 @@ export default function ReverseModelingPage() {
     const suffix = nameSuffix.trim();
     const problem =
       issues[0]?.message ??
-      (layerId ? null : "请选择数仓分层") ??
+      (usableLayer ? (layerId ? null : "请选择数仓分层") : layerGapMessage) ??
       (!suffix ? "请输入表名后缀" : isValidModelSuffix(suffix) ? null : MODEL_SUFFIX_RULE) ??
       (cnName.trim() ? null : "请输入表中文名") ??
       ownership();
@@ -261,9 +320,6 @@ export default function ReverseModelingPage() {
     <div className="flex min-w-0 flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-base font-medium">逆向建模</h1>
-        <span className="text-xs text-[var(--yak-color-text-secondary)]">
-          从 JDBC 数据源的物理表生成逻辑模型草稿，确认字段与归属后保存为 {type} 模型。
-        </span>
         <Button
           size="small"
           className="ml-auto"
@@ -290,6 +346,12 @@ export default function ReverseModelingPage() {
       {error && (
         <Alert>
           <span>{error}</span>
+        </Alert>
+      )}
+
+      {options.status === "ready" && !usableLayer && (
+        <Alert>
+          <span>{layerGapMessage}</span>
         </Alert>
       )}
 
@@ -386,7 +448,9 @@ export default function ReverseModelingPage() {
                     ? "请先确认非生产环境"
                     : picker.failures.tables
                       ? "表列表读取失败，请重试"
-                      : "未查询到表或视图"
+                      : picker.tablesLoaded
+                        ? "未查询到表或视图"
+                        : "请先选择数据源与库表并查询"
                 }
                 pagination={false}
                 scroll={{ x: 620 }}
@@ -419,10 +483,8 @@ export default function ReverseModelingPage() {
             {pickerSelect(
               "数仓分层",
               layerId,
-              "请选择数仓分层",
-              options.layers
-                .filter((layer) => layer.enabled)
-                .map((layer) => ({ value: layer.id, label: layer.cnName })),
+              usableLayer ? "请选择数仓分层" : `无可用分层（${MODEL_LAYER_CODE[type]}）`,
+              layerItems,
               changeLayer,
               options.status !== "ready",
             )}
@@ -447,6 +509,11 @@ export default function ReverseModelingPage() {
                 aria-label="表中文名"
                 onChange={(event) => setCnName(event.target.value)}
               />
+              {cnNameFromComment && (
+                <span className="text-[var(--yak-color-text-secondary)]">
+                  继承自源表注释，请确认
+                </span>
+              )}
             </label>
           </div>
           <FieldEditor
@@ -483,7 +550,7 @@ export default function ReverseModelingPage() {
                 { value: "DWD", label: "明细表 DWD" },
                 { value: "DIM", label: "维度表 DIM" },
               ],
-              (value) => setType(value === "DIM" ? "DIM" : "DWD"),
+              (value) => changeType(value === "DIM" ? "DIM" : "DWD"),
             )}
             {type === "DIM" &&
               pickerSelect(
@@ -557,7 +624,7 @@ export default function ReverseModelingPage() {
               )}
           </div>
           <p className="text-xs text-[var(--yak-color-text-secondary)]">
-            保存后进入模型编辑器，可继续调整字段、描述与存储策略。物理发布是后续步骤，不会在此创建物理表。
+            仅保存模型，不发布物理表。
           </p>
           <div className="flex gap-2">
             <Button size="small" onClick={() => setStep(2)}>

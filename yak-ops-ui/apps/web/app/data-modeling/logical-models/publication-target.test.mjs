@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   describeAddress,
+  describeEnvironment,
   toTargetPayload,
   validatePublicationTarget,
 } from "./publication-target.ts";
@@ -62,4 +63,19 @@ test("never sends a schema the engine does not have", () => {
     database: "dw",
     schema: "public",
   });
+});
+
+test("names only the environment dictionary", () => {
+  assert.equal(describeEnvironment("PROD"), "生产");
+  assert.equal(describeEnvironment("TEST"), "测试");
+  assert.equal(describeEnvironment("DEVELOP"), "开发");
+});
+
+test("refuses to read a connection status as an environment", () => {
+  // The dialog once fed connStatus into the environment labels, so every source looked like
+  // "环境未知" while the registry said DEVELOP. The two dictionaries share no value.
+  for (const status of ["CONNECTED", "DISCONNECTED", "UNKNOWN"])
+    assert.equal(describeEnvironment(status), "环境未登记");
+  assert.equal(describeEnvironment(null), "环境未登记");
+  assert.equal(describeEnvironment(""), "环境未登记");
 });

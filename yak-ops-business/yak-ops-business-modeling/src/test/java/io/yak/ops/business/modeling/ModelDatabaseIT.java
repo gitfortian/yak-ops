@@ -300,7 +300,36 @@ class ModelDatabaseIT {
         assertEquals(CommonErrorCode.RESOURCE_NOT_EXISTS, missing.getErrorCode());
     }
 
+    @Test
+    void searchMatchesCjkDisplayNameAndKeepsWildcardsLiteral() {
+        createDetailModel("item_sales", 30, List.of(), "商品销售明细");
+        createDetailModel("order_underscore", 30, List.of(), "订单_明细");
+        createDetailModel("order_letter", 30, List.of(), "订单X明细");
+        createDetailModel("order_percent", 30, List.of(), "订单%合计");
+
+        // The display name is the usual search entry, and the ascii_bin name column used to reject the
+        // utf8mb4 bind outright, so a single CJK keyword failed the whole statement.
+        assertEquals(1, service.page("ws", "actor", null, null, null, null, null, "商品", 1, 20).total());
+        assertEquals(
+                "dwd_item_sales",
+                service.page("ws", "actor", null, null, null, null, null, "商品", 1, 20)
+                        .records()
+                        .getFirst()
+                        .name());
+        assertEquals(3, service.page("ws", "actor", null, null, null, null, null, "明细", 1, 20).total());
+        assertEquals(1, service.page("ws", "actor", null, null, null, null, null, "订单_", 1, 20).total());
+        assertEquals(1, service.page("ws", "actor", null, null, null, null, null, "订单%", 1, 20).total());
+        // Every name below holds the literal "order_", so an unescaped underscore widens these counts.
+        assertEquals(3, service.page("ws", "actor", null, null, null, null, null, "order_", 1, 20).total());
+        assertEquals(1, service.page("ws", "actor", null, null, null, null, null, "item_sales", 1, 20).total());
+    }
+
     private String createDetailModel(String suffix, int lifecycleDays, List<ModelFieldInputDTO> fields) {
+        return createDetailModel(suffix, lifecycleDays, fields, "订单明细");
+    }
+
+    private String createDetailModel(
+            String suffix, int lifecycleDays, List<ModelFieldInputDTO> fields, String cnName) {
         var input = new ModelInputDTO();
         input.setType(ModelType.DWD);
         input.setLayerId("layer");
@@ -308,7 +337,7 @@ class ModelDatabaseIT {
         input.setProcessId("process");
         input.setDomainId("domain");
         input.setNameSuffix(suffix);
-        input.setCnName("订单明细");
+        input.setCnName(cnName);
         input.setStoragePolicy(StoragePolicy.DAILY_INCREMENTAL);
         input.setLifecycleDays(lifecycleDays);
         input.setFields(fields);

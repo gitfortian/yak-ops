@@ -7,7 +7,6 @@ import {
   Field,
   FieldError,
   FieldLabel,
-  Form,
   Table,
   Textarea,
   toast,
@@ -190,7 +189,7 @@ function AtomicDialog(props: {
             </Button>
           </Alert>
         )}
-        <Form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
+        <form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
           <SelectField
             id={id + "-process"}
             label="所属业务过程"
@@ -297,7 +296,7 @@ function AtomicDialog(props: {
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );

@@ -7,7 +7,6 @@ import {
   Field,
   FieldError,
   FieldLabel,
-  Form,
   Table,
   Textarea,
   toast,
@@ -136,7 +135,7 @@ function CompositeDialog(props: {
         <DialogTitle className="mb-5 text-sm font-medium">
           {edited ? "编辑复合指标" : "新建复合指标"}
         </DialogTitle>
-        <Form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
+        <form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
           <InputField
             id={id + "-name"}
             label="中文名称"
@@ -174,9 +173,6 @@ function CompositeDialog(props: {
                 onValueChange={(value) => change({ expression: String(value ?? "") })}
               />
               <FieldError match={Boolean(errors.expression)}>{errors.expression}</FieldError>
-              <p className="mt-1 text-xs leading-4 text-[var(--yak-color-text-secondary)]">
-                支持四则运算、括号与数字；引用的派生指标编码是否存在由服务端保存时校验。
-              </p>
             </div>
           </Field>
           {references !== null && (
@@ -233,7 +229,7 @@ function CompositeDialog(props: {
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );

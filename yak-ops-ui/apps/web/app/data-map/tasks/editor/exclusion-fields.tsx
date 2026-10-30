@@ -179,6 +179,7 @@ export default function ExclusionFields({
               multiple
               items={available}
               value={selected}
+              autoHighlight
               inputValue={keyword}
               disabled={!hasScope}
               onInputValueChange={(value) => setKeyword(value)}

@@ -7,7 +7,6 @@ import {
   Field,
   FieldError,
   FieldLabel,
-  Form,
   Input,
   Select,
   SelectContent,
@@ -204,7 +203,7 @@ export default function NodeDialog({ draft, onClose, onSaved }: Props) {
           {edited ? "编辑" : "新建"}
           {LABELS[kind]}
         </DialogTitle>
-        <Form
+        <form
           ref={formRef}
           noValidate
           onSubmit={(event) => void submit(event)}
@@ -236,7 +235,7 @@ export default function NodeDialog({ draft, onClose, onSaved }: Props) {
                 id={id + "-name"}
                 value={input.name}
                 maxLength={128}
-                required
+                aria-required
                 disabled={saving}
                 size="small"
                 variant="outlined"
@@ -256,7 +255,7 @@ export default function NodeDialog({ draft, onClose, onSaved }: Props) {
                   id={id + "-en-name"}
                   value={input.enName}
                   maxLength={128}
-                  required
+                  aria-required
                   disabled={saving}
                   size="small"
                   variant="outlined"
@@ -276,7 +275,7 @@ export default function NodeDialog({ draft, onClose, onSaved }: Props) {
                 id={id + "-code"}
                 value={input.code}
                 maxLength={64}
-                required
+                aria-required
                 disabled={saving}
                 size="small"
                 variant="outlined"
@@ -360,7 +359,7 @@ export default function NodeDialog({ draft, onClose, onSaved }: Props) {
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );

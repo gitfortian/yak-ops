@@ -7,7 +7,6 @@ import {
   Field,
   FieldError,
   FieldLabel,
-  Form,
   Select,
   SelectContent,
   SelectItem,
@@ -113,9 +112,6 @@ function ModifierPicker(props: {
           })}
         </ul>
       )}
-      <p className="text-xs leading-4 text-[var(--yak-color-text-secondary)]">
-        修饰词按提交顺序拼入编码与名称；相同的组成必然得到相同的派生指标。
-      </p>
     </div>
   );
 }
@@ -262,7 +258,7 @@ function DerivedDialog(props: {
             </Button>
           </Alert>
         )}
-        <Form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
+        <form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
           <Field className={FIELD_CLASS} invalid={Boolean(errors.atomicMetricId)}>
             <FieldLabel htmlFor={id + "-atomic"} className="pt-1" required>
               原子指标
@@ -414,7 +410,7 @@ function DerivedDialog(props: {
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );

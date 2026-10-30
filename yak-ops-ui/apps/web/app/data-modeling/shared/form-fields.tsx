@@ -42,7 +42,7 @@ export function InputField(props: InputFieldProps) {
           variant="outlined"
           value={props.value}
           disabled={props.disabled}
-          required={props.required}
+          aria-required={props.required || undefined}
           maxLength={props.maxLength}
           readOnly={props.readOnly}
           placeholder={props.placeholder}
@@ -50,7 +50,9 @@ export function InputField(props: InputFieldProps) {
           onChange={(event) => props.onChange?.(event.target.value)}
           onBlur={props.onBlur}
         />
-        <FieldError match={Boolean(props.error)}>{props.error}</FieldError>
+        {/* No native `required`: Base UI's Form blocks the submit on native constraint state before
+            the app validator runs, which silently retires every message that validator produces. */}
+        {props.error ? <FieldError match>{props.error}</FieldError> : null}
         {props.hint && !props.error && (
           <p className="mt-1 text-xs leading-4 text-[var(--yak-color-text-secondary)]">
             {props.hint}
@@ -105,7 +107,7 @@ export function SelectField(props: SelectFieldProps) {
             ))}
           </SelectContent>
         </Select>
-        <FieldError match={Boolean(props.error)}>{props.error}</FieldError>
+        {props.error ? <FieldError match>{props.error}</FieldError> : null}
         {props.hint && !props.error && (
           <p className="mt-1 text-xs leading-4 text-[var(--yak-color-text-secondary)]">
             {props.hint}
@@ -147,7 +149,7 @@ export function TextareaField(props: TextareaFieldProps) {
           placeholder={props.placeholder}
           onValueChange={(value) => props.onChange(String(value ?? ""))}
         />
-        <FieldError match={Boolean(props.error)}>{props.error}</FieldError>
+        {props.error ? <FieldError match>{props.error}</FieldError> : null}
       </div>
     </Field>
   );
