@@ -47,7 +47,5 @@ export function RunBadge({ status }: { status: RunDisplayStatus }) {
 
 /** A task that has never produced an instance — not an error, just an unarmed configuration. */
 export function RunNotStarted() {
-  return (
-    <span className="text-xs text-[var(--yak-components-muted-text)]">未运行</span>
-  );
+  return <span className="text-xs text-[var(--yak-components-muted-text)]">未运行</span>;
 }

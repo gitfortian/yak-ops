@@ -81,7 +81,9 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function Elapsed({ crawl }: { crawl: Crawl }) {
   if (crawl.status !== "RUNNING") return null;
-  const started = crawl.startedTime ? new Date(crawl.startedTime.replace(" ", "T")).getTime() : null;
+  const started = crawl.startedTime
+    ? new Date(crawl.startedTime.replace(" ", "T")).getTime()
+    : null;
   if (started === null || Number.isNaN(started)) return null;
   const seconds = Math.max(0, Math.round((Date.now() - started) / 1000));
   return <span> · 已运行 {formatDuration(seconds)}</span>;
@@ -92,7 +94,9 @@ function RunCounts({ crawl }: { crawl: Crawl }) {
   const item = (label: string, value: ReactNode, tone?: string) => (
     <div className="min-w-0">
       <div className="text-[11px] text-[var(--yak-components-muted-text)]">{label}</div>
-      <div className={`mt-0.5 text-sm tabular-nums ${tone ?? "text-[var(--yak-components-panel-text)]"}`}>
+      <div
+        className={`mt-0.5 text-sm tabular-nums ${tone ?? "text-[var(--yak-components-panel-text)]"}`}
+      >
         {value}
       </div>
     </div>
@@ -225,9 +229,7 @@ function RunRow({ crawl }: { crawl: Crawl }) {
           </button>
         )}
       </div>
-      {expanded && expandable && (
-        <RunFailures crawlId={crawl.id} failedCount={crawl.failedCount} />
-      )}
+      {expanded && expandable && <RunFailures crawlId={crawl.id} failedCount={crawl.failedCount} />}
     </li>
   );
 }
@@ -249,7 +251,9 @@ function GovernancePlaceholder() {
       </div>
       <div className="rounded-[var(--yak-radius-control-medium)] border border-dashed border-[var(--yak-components-control-border)] p-4">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-[var(--yak-components-panel-text)]">血缘关系</span>
+          <span className="text-xs font-medium text-[var(--yak-components-panel-text)]">
+            血缘关系
+          </span>
           <Badge tone="warning">示例</Badge>
         </div>
         <p className="mt-1.5 text-xs leading-5 text-[var(--yak-components-muted-text)]">
@@ -305,8 +309,7 @@ export default function TaskDrawer({
   });
 
   const records = useMemo(
-    () =>
-      [...(runs.data?.bizData ?? [])].sort((a, b) => (a.createdTime < b.createdTime ? 1 : -1)),
+    () => [...(runs.data?.bizData ?? [])].sort((a, b) => (a.createdTime < b.createdTime ? 1 : -1)),
     [runs.data],
   );
   const latest = records[0];
@@ -463,7 +466,14 @@ export default function TaskDrawer({
                     </Section>
                   </div>
 
-                  <Section title="排除规则" extra={<span className="text-[11px] text-[var(--yak-components-muted-text)]">已排除 {task.excludeTables.length} 张</span>}>
+                  <Section
+                    title="排除规则"
+                    extra={
+                      <span className="text-[11px] text-[var(--yak-components-muted-text)]">
+                        已排除 {task.excludeTables.length} 张
+                      </span>
+                    }
+                  >
                     {task.excludePattern ? (
                       <code className="block break-all rounded-md bg-[var(--yak-color-surface-muted)] px-2 py-1.5 text-[11px] text-[var(--yak-components-panel-text)]">
                         {task.excludePattern}
