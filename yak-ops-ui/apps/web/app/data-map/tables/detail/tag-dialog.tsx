@@ -154,7 +154,7 @@ export default function TagDialog({ tableId, selectedTagIds, onClose, onSaved }:
                 </>
               ) : (
                 <>
-                  <span className="min-w-0 flex-1 truncate text-[13px]">{tag.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm">{tag.name}</span>
                   {confirmingDelete === tag.id ? (
                     <>
                       <Button

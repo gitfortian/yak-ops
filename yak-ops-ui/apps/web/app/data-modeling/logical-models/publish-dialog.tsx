@@ -17,6 +17,7 @@ import {
   toast,
 } from "@yak-ops/yak-ui";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   classifyPublicationFailure,
   getPublicationMetadata,
@@ -55,9 +56,9 @@ const STATUS_TONE: Record<PublicationStatus, "info" | "success" | "danger" | "wa
 };
 
 const CHANGE_TONE: Record<SchemaChange["kind"], { color: string; label: string }> = {
-  ADD: { color: "text-[#067647]", label: "🟢 新增列" },
-  CHANGE: { color: "text-[#b54708]", label: "🟡 类型变更" },
-  DROP: { color: "text-[#b42318]", label: "🔴 删除列" },
+  ADD: { color: "text-[var(--yak-components-badge-success-text)]", label: "🟢 新增列" },
+  CHANGE: { color: "text-[var(--yak-components-badge-warning-text)]", label: "🟡 类型变更" },
+  DROP: { color: "text-[var(--yak-components-badge-danger-text)]", label: "🔴 删除列" },
 };
 
 const OPERATION_TONE: Record<string, "info" | "warning" | "neutral"> = {
@@ -82,6 +83,7 @@ interface Props {
  * needs a separate「我已知晓数据将丢失」acknowledgement before the publish button unlocks.
  */
 export default function PublishDialog({ model, onClose, onPublished }: Props) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [loadFailure, setLoadFailure] = useState("");
   const [layerName, setLayerName] = useState("");
@@ -241,7 +243,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
     >
       <DialogContent className="w-[860px] max-w-[95vw] rounded-xl p-5 shadow-none">
         <DialogTitle className="text-sm font-medium">发布到物理表</DialogTitle>
-        <DialogDescription className="mt-2 text-xs leading-5 text-[#667475]">
+        <DialogDescription className="mt-2 text-xs leading-5 text-[var(--yak-color-text-secondary)]">
           选择发布环境后，系统按分层绑定的目标库自动定位物理表：目标表不存在时生成建表语句；
           已存在且结构有差异时生成 ALTER 变更语句；结构一致时提示无需发布。
         </DialogDescription>
@@ -287,7 +289,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
               </label>
               <div className="grid gap-1 text-xs">
                 <span className="font-medium">物理表</span>
-                <span className="text-[#475467]">{model.name}</span>
+                <span className="text-[var(--yak-components-field-label)]">{model.name}</span>
               </div>
             </div>
 
@@ -304,15 +306,15 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
               <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div className="grid gap-1 text-xs">
                   <span className="font-medium">目标数据源</span>
-                  <span className="text-[#475467]">
+                  <span className="text-[var(--yak-components-field-label)]">
                     {source
-                      ? `${source.name}（${ENV_LABEL[source.environment ?? ""] ?? "环境未知"} · ${source.dbType}）`
+                      ? `${source.name}（${ENV_LABEL[source.environment ?? ""] ?? "环境未登记"} · ${source.dbType}）`
                       : bound.dataSourceId}
                   </span>
                 </div>
                 <div className="grid gap-1 text-xs">
                   <span className="font-medium">目标库（由分层绑定自动带出）</span>
-                  <span className="text-[#475467]">{addressText || "-"}</span>
+                  <span className="text-[var(--yak-components-field-label)]">{addressText || "-"}</span>
                 </div>
               </div>
             )}
@@ -334,7 +336,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
               >
                 生成变更对比
               </Button>
-              <span className="text-xs text-[#667475]">
+              <span className="text-xs text-[var(--yak-color-text-secondary)]">
                 {previewFresh && preview
                   ? `已生成：目标 ${addressText}.${preview.table}`
                   : "先选择环境，再生成变更对比核对"}
@@ -354,11 +356,11 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
                     {PUBLICATION_OPERATION_LABEL[preview.operation ?? "NONE"]}
                   </Badge>
                   {preview.operation === "NONE" && (
-                    <span className="text-[#475467]">物理表与模型结构一致，无需发布。</span>
+                    <span className="text-[var(--yak-components-field-label)]">物理表与模型结构一致，无需发布。</span>
                   )}
                 </div>
                 {preview.changes.length > 0 && (
-                  <ul className="mt-2 grid gap-1 rounded-lg border border-[#e4e7ec] px-3 py-2 text-xs">
+                  <ul className="mt-2 grid gap-1 rounded-lg border border-[var(--yak-components-panel-border)] px-3 py-2 text-xs">
                     {preview.changes.map((change) => (
                       <li
                         key={`${change.kind}-${change.column}`}
@@ -370,18 +372,23 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
                   </ul>
                 )}
                 {preview.ddl && (
-                  <pre className="mt-3 max-h-56 overflow-auto rounded-lg border border-[#e4e7ec] bg-[#f9fafb] p-3 text-xs leading-5 whitespace-pre-wrap text-[#344054]">
+                  <pre className="mt-3 max-h-56 overflow-auto rounded-lg border border-[var(--yak-components-panel-border)] bg-[var(--yak-color-surface)] p-3 text-xs leading-5 whitespace-pre-wrap text-[var(--yak-components-field-label)]">
                     {preview.ddl}
                   </pre>
                 )}
                 {preview.ddl && (
-                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-[#e4e7ec] px-3 py-2 text-xs text-[#475467]">
+                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-[var(--yak-components-panel-border)] px-3 py-2 text-xs text-[var(--yak-components-field-label)]">
                     <Checkbox
                       aria-label="确认发布目标"
                       checked={confirmed}
                       onCheckedChange={(checked) => setConfirmed(checked)}
                     />
                     <span>
+                      {environment === "PROD" && (
+                        <span className="text-[var(--yak-components-badge-danger-text)]">
+                          当前为生产环境，本次操作将直接作用于生产库。
+                        </span>
+                      )}
                       我确认执行以上 DDL，在「{addressText}」
                       {preview.operation === "CREATE" ? "创建" : "变更"}物理表「
                       {preview.table}」。
@@ -389,7 +396,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
                   </div>
                 )}
                 {preview.requiresDataLossAck && (
-                  <div className="mt-2 flex items-start gap-2 rounded-lg border border-[#f04438] bg-[#fef3f2] px-3 py-2 text-xs text-[#b42318]">
+                  <div className="mt-2 flex items-start gap-2 rounded-lg border border-[var(--yak-color-border-danger-subtle)] bg-[var(--yak-components-badge-danger-bg)] px-3 py-2 text-xs text-[var(--yak-components-badge-danger-text)]">
                     <Checkbox
                       aria-label="确认数据丢失风险"
                       checked={ackLoss}
@@ -408,7 +415,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
               </div>
             )}
             {result && (
-              <div className="mt-3 rounded-lg border border-[#e4e7ec] px-3 py-2 text-xs text-[#475467]">
+              <div className="mt-3 rounded-lg border border-[var(--yak-components-panel-border)] px-3 py-2 text-xs text-[var(--yak-components-field-label)]">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">本次发布结果</span>
                   {result.status ? (
@@ -428,7 +435,20 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
                 </div>
                 {snapshot && (
                   <div className="mt-1">
-                    已采集元数据：{snapshot.tableCount} 张表 / {snapshot.fieldCount} 个字段。
+                    已回读物理表结构：{snapshot.tableCount} 张表 / {snapshot.fieldCount} 个字段。
+                  </div>
+                )}
+                {result.status === "SUCCEEDED" && (
+                  <div className="mt-1">
+                    发布不会登记资产目录；需在「元数据采集」运行采集任务后，资产才会出现在资产目录。
+                    <Button
+                      size="small"
+                      variant="ghost"
+                      className="ml-2 font-normal"
+                      onClick={() => navigate("/data-governance/data-map/tasks")}
+                    >
+                      去元数据采集
+                    </Button>
                   </div>
                 )}
                 {result.status === "UNKNOWN" && (
@@ -441,7 +461,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
 
             <div className="mt-4">
               <h3 className="text-sm font-medium">发布历史</h3>
-              <p className="mt-1 text-xs text-[#667475]">
+              <p className="mt-1 text-xs text-[var(--yak-color-text-secondary)]">
                 最近 50 次发布记录。失败记录不会自动重试，「结果未知」只能对账；点击「详情」可查看
                 DDL、耗时与执行日志。
               </p>

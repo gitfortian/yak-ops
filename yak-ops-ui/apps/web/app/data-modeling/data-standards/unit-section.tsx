@@ -7,7 +7,6 @@ import {
   Field,
   FieldError,
   FieldLabel,
-  Form,
   Select,
   SelectContent,
   SelectItem,
@@ -127,7 +126,7 @@ function UnitDialog(props: {
         <DialogTitle className="mb-5 text-sm font-medium">
           {edited ? "编辑度量单位" : "新建度量单位"}
         </DialogTitle>
-        <Form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
+        <form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
           <SelectField
             id={id + "-category"}
             label="单位类型"
@@ -206,7 +205,7 @@ function UnitDialog(props: {
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );
@@ -264,7 +263,7 @@ export default function UnitSection(props: Props) {
             size="small"
             variant="ghost"
             disabled={props.unavailable}
-            className="px-0.5 font-normal text-[#667085] hover:text-[#d92d20]"
+            className="px-0.5 font-normal text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-danger-text)]"
             onClick={() => props.onDelete({ kind: "unit", node: row })}
           >
             删除

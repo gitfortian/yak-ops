@@ -85,7 +85,7 @@ export const DATA_GOVERNANCE_NAVIGATION: ProductNavigationItem[] = [
         path: "/data-governance/data-map/catalog",
         activePrefixes: ["/data-governance/data-map/tables"],
       },
-      { label: "采集任务", path: "/data-governance/data-map/crawls" },
+      { label: "元数据采集", path: "/data-governance/data-map/tasks" },
       { label: "我的数据", path: "/data-governance/data-map/personal" },
     ],
   },

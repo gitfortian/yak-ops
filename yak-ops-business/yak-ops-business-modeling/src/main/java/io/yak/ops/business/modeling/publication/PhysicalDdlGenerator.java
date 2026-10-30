@@ -60,7 +60,7 @@ public final class PhysicalDdlGenerator {
             if (column.name() == null || column.name().isBlank()) {
                 throw new IllegalArgumentException("字段英文编码不能为空");
             }
-            var type = PhysicalTypes.of(dialect, column.dataType(), column.lengthPrecision());
+            var type = typeOf(dialect, column);
             var definition = new StringBuilder("  ")
                     .append(dialect.quote(column.name()))
                     .append(' ')
@@ -234,6 +234,25 @@ public final class PhysicalDdlGenerator {
     private static String firstKey(PhysicalDialect dialect, String keys) {
         var separator = keys.indexOf(", ");
         return separator < 0 ? keys : keys.substring(0, separator);
+    }
+
+    /**
+     * Resolves one column's physical type, stating which column broke the rule.
+     *
+     * <p>A per-column rejection without its column name leaves the user comparing every row of the
+     * model by hand, so the name is attached while the original failure stays the cause.
+     *
+     * @param dialect target dialect
+     * @param column column being defined
+     * @return resolved physical type
+     * @throws IllegalArgumentException naming the column when the declaration cannot be published
+     */
+    private static PhysicalTypeSpec typeOf(PhysicalDialect dialect, PhysicalColumnSpec column) {
+        try {
+            return PhysicalTypes.of(dialect, column.dataType(), column.lengthPrecision());
+        } catch (IllegalArgumentException failure) {
+            throw new IllegalArgumentException("字段 " + column.name() + "：" + failure.getMessage(), failure);
+        }
     }
 
     private static String commentOf(PhysicalColumnSpec column) {

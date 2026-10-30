@@ -17,6 +17,19 @@ export const MODEL_LAYER_CODE: Record<ModelType, string> = {
   ADS: "ADS",
 };
 
+/**
+ * The kind a tree node named in the URL, or null when it names no kind this build can bind.
+ *
+ * <p>`MODEL_LAYER_CODE` is exhaustive over `ModelType`, so a new kind only becomes reachable from
+ * an entry link once it also has a layer of its own — the two lists cannot drift apart unnoticed. An
+ * unreadable value stays null so the form keeps its own default rather than being coerced into a
+ * kind the link never asked for.
+ */
+export function modelTypeFromCode(value: string | null): ModelType | null {
+  const kinds = Object.keys(MODEL_LAYER_CODE) as ModelType[];
+  return kinds.find((kind) => kind === value) ?? null;
+}
+
 /** True when the layer carries the code its kind is bound to; an absent layer never matches. */
 export function layerMatchesType(layer: Layer | undefined, type: ModelType): boolean {
   return layer !== undefined && layer.enCode.trim().toUpperCase() === MODEL_LAYER_CODE[type];

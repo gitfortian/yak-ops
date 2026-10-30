@@ -7,7 +7,6 @@ import {
   Field,
   FieldError,
   FieldLabel,
-  Form,
   Table,
   Textarea,
   toast,
@@ -114,7 +113,7 @@ function EntryDialog(props: {
         <DialogTitle className="mb-5 text-sm font-medium">
           {edited ? "编辑命名词根" : "新建命名词根"}
         </DialogTitle>
-        <Form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
+        <form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
           <InputField
             id={id + "-code"}
             label="词根"
@@ -180,7 +179,7 @@ function EntryDialog(props: {
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );
@@ -238,7 +237,7 @@ export default function NamingEntrySection(props: Props) {
             size="small"
             variant="ghost"
             disabled={props.unavailable}
-            className="px-0.5 font-normal text-[#667085] hover:text-[#d92d20]"
+            className="px-0.5 font-normal text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-danger-text)]"
             onClick={() => props.onDelete({ kind: "naming", node: row })}
           >
             删除
@@ -265,7 +264,11 @@ export default function NamingEntrySection(props: Props) {
         }}
         createLabel="新建词根"
         createDisabled={false}
-        hint={<span className="text-xs text-[#667085]">分层命名规则的词根来自这里</span>}
+        hint={
+          <span className="text-xs text-[var(--yak-color-text-secondary)]">
+            分层命名规则的词根来自这里
+          </span>
+        }
         onCreate={() => setDraft({ mode: "create" })}
       />
       {list.failed && (

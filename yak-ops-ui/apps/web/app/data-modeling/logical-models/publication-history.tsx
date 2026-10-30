@@ -92,7 +92,7 @@ export default function PublicationHistory({ modelId, refreshKey }: Props) {
       } else {
         const snapshot = await refreshPublicationMetadata(row.id);
         toast.success(
-          `元数据已重新采集：${snapshot.tableCount} 张表 / ${snapshot.fieldCount} 个字段`,
+          `已重读物理表结构：${snapshot.tableCount} 张表 / ${snapshot.fieldCount} 个字段`,
         );
       }
       setReload((value) => value + 1);
@@ -129,7 +129,11 @@ export default function PublicationHistory({ modelId, refreshKey }: Props) {
       ellipsis: true,
       render: (_, row) => (
         <span
-          className={row.error ? "text-[#b42318]" : "text-[#667475]"}
+          className={
+            row.error
+              ? "text-[var(--yak-components-badge-danger-text)]"
+              : "text-[var(--yak-color-text-secondary)]"
+          }
           title={row.error ?? PUBLICATION_STATUS_HINT[row.status ?? "PENDING"]}
         >
           {row.error ?? PUBLICATION_STATUS_HINT[row.status ?? "PENDING"]}
@@ -176,7 +180,7 @@ export default function PublicationHistory({ modelId, refreshKey }: Props) {
               loading={busyId === row.id}
               onClick={() => void act(row, "refresh")}
             >
-              重新采集
+              重读表结构
             </Button>
           )}
         </div>

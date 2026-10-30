@@ -25,9 +25,10 @@ import {
   findDuplicateFieldCodes,
   mapPhysicalColumn,
   normalizeFieldCode,
+  qualifiedTableName,
 } from "./field-mapping";
+import { newFieldKey } from "./field-key";
 import type { FieldDraft } from "./fields";
-import { newFieldKey } from "./fields";
 
 interface Props {
   existing: FieldDraft[];
@@ -64,6 +65,7 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
     setTableKeyword,
     searchTables,
     tables,
+    tablesLoaded,
     selectedTable,
     selectTable,
     columns,
@@ -191,8 +193,15 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
             selected.includes(column.name) && !takenCodes.has(code) && !conflictingCodes.has(code)
           );
         })
-        .map((column) => columnToField(column, mapPhysicalColumn(column), newFieldKey())),
-    [columns, selected, takenCodes, conflictingCodes],
+        .map((column) =>
+          columnToField(
+            column,
+            mapPhysicalColumn(column),
+            newFieldKey(),
+            selectedTable ? qualifiedTableName(selectedTable) : null,
+          ),
+        ),
+    [columns, selected, takenCodes, conflictingCodes, selectedTable],
   );
   const mappedCount = columns.filter((column) => {
     const code = normalizeFieldCode(column.name);
@@ -228,9 +237,8 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
     >
       <DialogContent className="w-[1000px] rounded-xl p-5 shadow-none">
         <DialogTitle className="text-sm font-medium">从表/视图导入字段</DialogTitle>
-        <p className="mt-2 text-xs leading-5 text-[#667475]">
-          只读取当前工作空间内的数据源。系统只自动映射语义明确的物理类型；标红的行会保留在字段列表里，
-          保存前必须为它选定类型或删除。
+        <p className="mt-2 text-xs leading-5 text-[var(--yak-color-text-secondary)]">
+          标红的行未识别类型，保存前需为其选定类型或删除。
         </p>
         <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
           <label className="grid gap-1 text-xs">
@@ -306,7 +314,7 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
           )}
         </div>
         {nonProduction && (
-          <div className="mt-3 flex items-start gap-2 rounded-lg border border-[#fecdca] bg-[#fffbfa] px-3 py-2 text-xs text-[#93370d]">
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-[var(--yak-color-border-danger-subtle)] bg-[var(--yak-color-surface-danger-subtle)] px-3 py-2 text-xs text-[var(--yak-color-text-danger)]">
             <Checkbox
               aria-label="确认非生产环境"
               checked={envConfirmed}
@@ -376,7 +384,9 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
                       ? "请先确认非生产环境"
                       : failures.tables
                         ? "表列表读取失败，请重试"
-                        : "未查询到表或视图"
+                        : tablesLoaded
+                          ? "未查询到表或视图"
+                          : "请先选择数据源与库表并查询"
                   }
                   pagination={false}
                   scroll={{ x: 560 }}
@@ -425,7 +435,7 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
           </section>
         </div>
         <div className="mt-4 flex items-center justify-between">
-          <span className="text-xs text-[#667475]">
+          <span className="text-xs text-[var(--yak-color-text-secondary)]">
             已选 {selected.length} 个字段
             {grouped > 0 && `，其中 ${grouped} 个需要选定类型`}
           </span>

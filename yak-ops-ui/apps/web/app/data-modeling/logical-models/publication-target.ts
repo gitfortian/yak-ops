@@ -49,3 +49,4 @@ export function validatePublicationTarget(
   }
   return null;
 }
+

@@ -61,10 +61,10 @@ export default function ModelDeleteDialog({ model, onClose, onDeleted }: Props) 
     >
       <DialogContent className="w-[480px] rounded-xl p-5 shadow-none">
         <DialogTitle className="text-sm font-medium">删除逻辑模型</DialogTitle>
-        <DialogDescription className="mt-3 text-sm text-[#475467]">
+        <DialogDescription className="mt-3 text-sm text-[var(--yak-color-text-secondary)]">
           确认删除「{model.cnName}（{model.name}）」？该表的字段定义会一并删除，且无法恢复。
         </DialogDescription>
-        <p className="mt-2 text-xs leading-5 text-[#b54708]">
+        <p className="mt-2 text-xs leading-5 text-[var(--yak-components-badge-warning-text)]">
           已发布的物理表不会被删除，也不会被回滚；如果这张表已经被发布过，请在目标库中手工处理，
           发布记录与元数据快照会保留。
         </p>

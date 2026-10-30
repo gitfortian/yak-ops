@@ -15,22 +15,22 @@ export default function MetricsPage() {
   const [deleting, setDeleting] = useState<MetricDeleteTarget | null>(null);
   const changed = () => setVersion((value) => value + 1);
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--yak-color-background)]">
       <PageHeader
         title="数据指标"
-        bordered
-        className="bg-white px-6 max-md:px-4"
+        description="定义业务指标及其计算口径与来源字段。"
+        className="px-6 pb-5 pt-5 max-md:px-4"
         extra={
           <Button size="small" onClick={changed}>
             刷新
           </Button>
         }
       />
-      <div className="flex min-h-0 flex-1 flex-col gap-3 px-6 pb-4 pt-5 max-md:px-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 px-6 pb-6 max-md:px-4">
         <div
           role="tablist"
           aria-label="指标种类"
-          className="flex flex-wrap items-center gap-1 border-b border-[var(--yak-components-panel-border)]"
+          className="flex flex-wrap items-center gap-1 border-b border-[var(--yak-color-border)]"
         >
           {METRIC_KIND_ORDER.map((item) => (
             <button
@@ -39,10 +39,10 @@ export default function MetricsPage() {
               role="tab"
               aria-selected={kind === item}
               className={
-                "relative -mb-px border-b-2 px-3 py-2 text-sm transition-colors " +
+                "relative -mb-px border-b-2 px-3 py-2 text-[13px] transition-colors " +
                 (kind === item
                   ? "border-[var(--yak-color-primary)] font-medium [color:var(--yak-color-primary)]"
-                  : "border-transparent text-[#667085] hover:text-[#344054]")
+                  : "border-transparent text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-field-label)]")
               }
               onClick={() => setKind(item)}
             >
@@ -50,46 +50,48 @@ export default function MetricsPage() {
             </button>
           ))}
         </div>
-        {kind === "period" && (
-          <TimePeriodSection
-            unavailable={false}
-            version={version}
-            onChanged={changed}
-            onDelete={setDeleting}
-          />
-        )}
-        {kind === "modifier" && (
-          <ModifierSection
-            unavailable={false}
-            version={version}
-            onChanged={changed}
-            onDelete={setDeleting}
-          />
-        )}
-        {kind === "atomic" && (
-          <AtomicSection
-            unavailable={false}
-            version={version}
-            onChanged={changed}
-            onDelete={setDeleting}
-          />
-        )}
-        {kind === "derived" && (
-          <DerivedSection
-            unavailable={false}
-            version={version}
-            onChanged={changed}
-            onDelete={setDeleting}
-          />
-        )}
-        {kind === "composite" && (
-          <CompositeSection
-            unavailable={false}
-            version={version}
-            onChanged={changed}
-            onDelete={setDeleting}
-          />
-        )}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[var(--yak-color-border)] bg-[var(--yak-components-panel-bg)] shadow-[0_1px_2px_0_rgb(16_24_40/4%)]">
+          {kind === "period" && (
+            <TimePeriodSection
+              unavailable={false}
+              version={version}
+              onChanged={changed}
+              onDelete={setDeleting}
+            />
+          )}
+          {kind === "modifier" && (
+            <ModifierSection
+              unavailable={false}
+              version={version}
+              onChanged={changed}
+              onDelete={setDeleting}
+            />
+          )}
+          {kind === "atomic" && (
+            <AtomicSection
+              unavailable={false}
+              version={version}
+              onChanged={changed}
+              onDelete={setDeleting}
+            />
+          )}
+          {kind === "derived" && (
+            <DerivedSection
+              unavailable={false}
+              version={version}
+              onChanged={changed}
+              onDelete={setDeleting}
+            />
+          )}
+          {kind === "composite" && (
+            <CompositeSection
+              unavailable={false}
+              version={version}
+              onChanged={changed}
+              onDelete={setDeleting}
+            />
+          )}
+        </div>
       </div>
       {deleting && (
         <MetricDeleteDialog

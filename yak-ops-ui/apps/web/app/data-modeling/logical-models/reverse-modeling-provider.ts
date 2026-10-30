@@ -22,6 +22,7 @@ import type {
   ReverseModelingProvider,
 } from "@/service/data-modeling/dimension-modeling/reverse-modeling";
 import type { FieldDraft } from "./fields";
+import { qualifiedTableName } from "./field-mapping";
 import { isJdbcReverseModelingEngine } from "./reverse-modeling-engine";
 import { describeFieldDrafts, toModelField } from "./reverse-modeling-draft";
 
@@ -30,17 +31,18 @@ export const DISCOVER_LIMIT = 200;
 
 // One reference for both projections: a method calling `this` would break as soon as a caller
 // destructures the provider, which is exactly how a React component would consume it.
-const describeDrafts = (columns: readonly DataSourceCatalogColumn[]) =>
-  describeFieldDrafts(columns);
+const describeDrafts = (columns: readonly DataSourceCatalogColumn[], sourceTable?: string) =>
+  describeFieldDrafts(columns, sourceTable ?? null);
 
 export interface JdbcReverseModelingProvider extends ReverseModelingProvider {
   /**
    * Physical columns to editable drafts, without dropping the rows the type matrix cannot map.
    *
    * <p>This is the projection the wizard renders: a dropped column would silently produce a model
-   * that does not match the table it was reversed from.
+   * that does not match the table it was reversed from. Passing the table name keeps that origin on
+   * the draft so a later standard binding can warn before the code leaves the physical column.
    */
-  describeDrafts(columns: readonly DataSourceCatalogColumn[]): FieldDraft[];
+  describeDrafts(columns: readonly DataSourceCatalogColumn[], sourceTable?: string): FieldDraft[];
 }
 
 export const jdbcReverseModelingProvider: JdbcReverseModelingProvider = {
@@ -63,13 +65,13 @@ export const jdbcReverseModelingProvider: JdbcReverseModelingProvider = {
       schema: schema || undefined,
       table,
     });
-    return describeDrafts(columns)
+    return describeDrafts(columns, qualifiedTableName({ schema, name: table }))
       .map(toModelField)
       .filter((field): field is ModelField => field !== null);
   },
 
-  describeDrafts(columns) {
-    return describeDrafts(columns);
+  describeDrafts(columns, sourceTable) {
+    return describeDrafts(columns, sourceTable);
   },
 };
 

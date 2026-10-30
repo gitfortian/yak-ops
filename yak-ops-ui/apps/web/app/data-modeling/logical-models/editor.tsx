@@ -2,6 +2,13 @@ import {
   Alert,
   Badge,
   Button,
+  Card,
+  CardContent,
+  CardHeader,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
   Field,
   FieldError,
   FieldLabel,
@@ -39,7 +46,6 @@ import {
   AGGREGATE_MODEL_TYPES,
   aggregateSupports,
   MODEL_TYPES,
-  MODEL_TYPE_HINT,
   MODEL_TYPE_LABEL,
   STORAGE_POLICIES,
   STORAGE_POLICY_LABEL,
@@ -66,6 +72,7 @@ import {
   layerMatchesType,
   layersForType,
   MODEL_LAYER_CODE,
+  modelTypeFromCode,
 } from "./layer-binding";
 import {
   composeSuffix,
@@ -142,6 +149,7 @@ type FormErrors = Partial<
     | "lifecycle"
     | "ownerId"
     | "ownership"
+    | "fields"
     | "physicalProperties",
     string
   >
@@ -179,6 +187,14 @@ function physicalPropertiesInput(raw: string, fields: PhysicalPropertyField[]): 
   return Object.keys(kept).length ? JSON.stringify(kept) : null;
 }
 
+/**
+ * Everything a save would send, in a comparable form. Editor-only field decorations (client keys,
+ * import notes) stay out, so restyling a row is not mistaken for an edit worth warning about.
+ */
+function formSnapshot(form: FormState, rows: FieldDraft[]): string {
+  return JSON.stringify([form, rows.map(toModelFieldInput)]);
+}
+
 interface DimensionState {
   items: ConceptDimension[];
   loading: boolean;
@@ -195,13 +211,10 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-[var(--yak-components-panel-border)] bg-white">
-      <header className="flex items-center justify-between border-b border-[#eaecf0] px-4 py-2.5">
-        <h2 className="text-sm font-medium">{title}</h2>
-        {extra}
-      </header>
-      <div className="px-4 py-4">{children}</div>
-    </section>
+    <Card>
+      <CardHeader title={title} extra={extra} />
+      <CardContent>{children}</CardContent>
+    </Card>
   );
 }
 
@@ -210,7 +223,7 @@ export default function LogicalModelEditorPage() {
   const editing = Boolean(id);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const { currentUser, loading: authLoading } = useAuth();
   const options = useModelOptions();
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [rows, setRows] = useState<FieldDraft[]>([]);
@@ -230,6 +243,10 @@ export default function LogicalModelEditorPage() {
   const [failure, setFailure] = useState("");
   const [attempted, setAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
+  /** Snapshot of the state the page opened or last saved with; null until one is known. */
+  const [baseline, setBaseline] = useState<string | null>(null);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const baselineKnown = useRef(false);
   const [nameState, setNameState] = useState<NameState>("idle");
   const [suffixMismatch, setSuffixMismatch] = useState(false);
   const [rootId, setRootId] = useState("");
@@ -264,12 +281,9 @@ export default function LogicalModelEditorPage() {
   // A tree node opens the editor with its ownership already decided; the flag also locks it.
   const prefill = useMemo(
     () => ({
-      type:
-        searchParams.get("type") === "DIM"
-          ? ("DIM" as const)
-          : searchParams.get("type") === "DWD"
-            ? ("DWD" as const)
-            : null,
+      // Every kind a tree node can name must decode, not only the first two: an undecoded DWS or
+      // ADS link silently left the form on its default detail table.
+      type: modelTypeFromCode(searchParams.get("type")),
       scope:
         searchParams.get("scope") === "APPLICATION"
           ? ("APPLICATION" as const)
@@ -286,11 +300,23 @@ export default function LogicalModelEditorPage() {
     [searchParams],
   );
   const ownershipLocked = !editing && prefill.locked;
+  /**
+   * A link that names no kind this build can bind — `type=ODS`, a typo, a removed kind. The form
+   * still opens on its default, but the kind field states which value it refused instead of
+   * silently presenting a detail table as if that is what was asked for.
+   */
+  const rejectedEntryType =
+    !editing && prefill.type === null && searchParams.get("type")
+      ? `链接指定的类型「${searchParams.get("type")}」不被支持，已按默认类型打开，请确认模型类型`
+      : "";
 
   // Navigating between models must not inherit the previous model's composer state.
   useEffect(() => {
     savedSuffixRef.current = "";
     decomposedFor.current = null;
+    baselineKnown.current = false;
+    setBaseline(null);
+    setConfirmLeave(false);
     setRootId("");
     setQualifier("");
     setModelRootId(null);
@@ -317,7 +343,7 @@ export default function LogicalModelEditorPage() {
         setSuffixMismatch(Boolean(prefix) && !suffix);
         savedSuffixRef.current = suffix;
         setModelRootId(model.namingRootWordId);
-        setForm({
+        const loadedForm: FormState = {
           type: model.type ?? "DWD",
           scope: model.datamartId ? "APPLICATION" : "PUBLIC",
           layerId: model.layerId,
@@ -333,8 +359,17 @@ export default function LogicalModelEditorPage() {
           ownerId: model.ownerId,
           description: model.description ?? "",
           physicalProperties: model.physicalProperties ?? "",
-        });
-        setRows((model.fields ?? []).map(fromModelField));
+        };
+        setForm(loadedForm);
+        const loaded = (model.fields ?? []).map(fromModelField);
+        setRows(loaded);
+        // The just-loaded model is the state to compare later edits against.
+        baselineKnown.current = true;
+        setBaseline(formSnapshot(loadedForm, loaded));
+        // A model can already be persisted in a shape publication will refuse. Its rows came from the
+        // server rather than from the user's keystrokes, so show the violations at once; rows still
+        // being written stay quiet until the first save attempt.
+        setAttempted(validateFieldRows(loaded).length > 0);
         setLoading(false);
       })
       .catch(() => {
@@ -350,27 +385,47 @@ export default function LogicalModelEditorPage() {
 
   useEffect(() => {
     if (editing || options.status !== "ready") return;
-    setForm((previous) => {
-      // The kind fixes which layer is legal, so the default layer follows the prefilled kind.
-      const type = prefill.type ?? previous.type;
-      return {
-        ...previous,
-        type,
-        scope: prefill.scope ?? previous.scope,
-        layerId: previous.layerId || defaultLayerForType(options.layers, type)?.id || "",
-        categoryId:
-          previous.categoryId || prefill.categoryId || options.tree.categories[0]?.id || "",
-        domainId: previous.domainId || prefill.domainId,
-        datamartId: previous.datamartId || prefill.datamartId,
-        processId: previous.processId || prefill.processId,
-        dimensionId: previous.dimensionId || prefill.dimensionId,
-        ownerId: previous.ownerId || currentUser?.id || "",
-      };
-    });
-  }, [editing, options.status, options.layers, options.tree, currentUser?.id, prefill]);
+    const previous = formRef.current;
+    // The kind fixes which layer is legal, so the default layer follows the prefilled kind.
+    const type = prefill.type ?? previous.type;
+    const next: FormState = {
+      ...previous,
+      type,
+      scope: prefill.scope ?? previous.scope,
+      layerId: previous.layerId || defaultLayerForType(options.layers, type)?.id || "",
+      categoryId: previous.categoryId || prefill.categoryId || options.tree.categories[0]?.id || "",
+      domainId: previous.domainId || prefill.domainId,
+      datamartId: previous.datamartId || prefill.datamartId,
+      processId: previous.processId || prefill.processId,
+      dimensionId: previous.dimensionId || prefill.dimensionId,
+      ownerId: previous.ownerId || currentUser?.id || "",
+    };
+    setForm(next);
+    // A create page is clean once its defaults settle; later arrivals of the same options must not
+    // re-baseline a form the user has already started filling in. The owner default comes from the
+    // session, so waiting for auth keeps that late arrival from marking an untouched page dirty.
+    if (!baselineKnown.current && !authLoading) {
+      baselineKnown.current = true;
+      setBaseline(formSnapshot(next, []));
+    }
+  }, [
+    editing,
+    options.status,
+    options.layers,
+    options.tree,
+    currentUser?.id,
+    authLoading,
+    prefill,
+  ]);
 
+  /**
+   * A public-layer dimension is the only kind whose ownership is chosen by scope; every other kind
+   * is owned through its own type. Reading scope directly made an application table inherit the
+   * public default and then be asked for a concept dimension its form never renders.
+   */
+  const publicDimension = form.type === "DIM" && form.scope === "PUBLIC";
   const dimensionScopeId =
-    form.type === "DIM" ? (form.scope === "PUBLIC" ? form.domainId : form.datamartId) : "";
+    form.type === "DIM" ? (publicDimension ? form.domainId : form.datamartId) : "";
   useEffect(() => {
     if (form.type !== "DIM" || !dimensionScopeId) {
       setDimensions({ items: [], loading: false, failed: false });
@@ -649,12 +704,13 @@ export default function LogicalModelEditorPage() {
       }
     }
     if (!form.ownerId) next.ownerId = "请选择负责人";
+    if (rows.length === 0) next.fields = "请至少添加一个字段，模型发布时字段决定物理表结构";
     if (!form.categoryId) next.ownership = "请选择业务分类";
     // DWD and DWS both hang below a business process; DIM and ADS split on their own scope.
     else if (form.type === "DWD" || form.type === "DWS") {
       if (!form.domainId) next.ownership = "请选择数据域";
       else if (!form.processId) next.ownership = "请选择业务过程";
-    } else if (form.scope === "PUBLIC") {
+    } else if (publicDimension) {
       if (!form.domainId) next.ownership = "请选择数据域";
       else if (!form.dimensionId) next.ownership = "公有层维度表必须绑定一个概念维度";
     } else if (!form.datamartId) next.ownership = "请选择数据集市";
@@ -691,7 +747,7 @@ export default function LogicalModelEditorPage() {
       categoryId: form.categoryId,
       processId: form.type === "DWD" || form.type === "DWS" ? form.processId || null : null,
       domainId:
-        form.type === "DWD" || form.type === "DWS" || form.scope === "PUBLIC"
+        form.type === "DWD" || form.type === "DWS" || publicDimension
           ? form.domainId || null
           : null,
       datamartId:
@@ -717,8 +773,18 @@ export default function LogicalModelEditorPage() {
       if (editing) {
         setSavedModel(saved);
         setRevision(saved.revision);
-        setRows((saved.fields ?? []).map(fromModelField));
+        const savedRows = (saved.fields ?? []).map(fromModelField);
+        // Mirror what the server stored, including the trimmed Chinese name, so the page is not
+        // left comparing itself against its own save and warning about edits nobody made.
+        const savedForm: FormState = {
+          ...formRef.current,
+          cnName: saved.cnName,
+          description: saved.description ?? "",
+        };
+        setForm(savedForm);
+        setRows(savedRows);
         setSuffixMismatch(false);
+        setBaseline(formSnapshot(savedForm, savedRows));
       } else
         navigate(`/data-modeling/logical-models/${encodeURIComponent(saved.id)}`, {
           replace: true,
@@ -781,6 +847,24 @@ export default function LogicalModelEditorPage() {
   const processMissing = (form.type === "DWD" || form.type === "DWS") && !form.processId;
   const processBlocked = processMissing && !editing;
   const disabled = saving || loading || unknownType || stale;
+  /**
+   * Leaving with unsaved edits throws them away, so both the in-app back buttons and the browser's
+   * own close/reload ask first. A save resets the baseline, so a just-saved page leaves silently.
+   */
+  const dirty = baseline !== null && formSnapshot(form, rows) !== baseline;
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+  const requestLeave = () => {
+    if (dirty) setConfirmLeave(true);
+    else navigate("/data-modeling/dimension-modeling");
+  };
 
   /**
    * Re-reads the saved model after a publication. The model itself did not change, but its latest
@@ -799,7 +883,7 @@ export default function LogicalModelEditorPage() {
   if (loadFailed)
     return (
       <div className="flex h-full flex-col">
-        <PageHeader title="逻辑模型" bordered className="bg-white px-6" />
+        <PageHeader title="逻辑模型" className="px-6 pb-5 pt-5" />
         <div className="p-6">
           <Alert>
             模型加载失败，可能已被删除。
@@ -815,8 +899,7 @@ export default function LogicalModelEditorPage() {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title={editing ? "编辑逻辑模型" : "新建逻辑模型"}
-        bordered
-        className="bg-white px-6 max-md:px-4"
+        className="px-6 pb-5 pt-5 max-md:px-4"
         extra={
           <div className="flex items-center gap-2">
             {editing && savedModel && !unknownType && (
@@ -827,7 +910,7 @@ export default function LogicalModelEditorPage() {
                 </Button>
               </>
             )}
-            <Button size="small" onClick={() => navigate("/data-modeling/dimension-modeling")}>
+            <Button size="small" onClick={requestLeave}>
               返回列表
             </Button>
           </div>
@@ -865,8 +948,7 @@ export default function LogicalModelEditorPage() {
             <Alert>当前工作空间还没有业务分类，请先到「数仓规划」创建业务分类与数据域。</Alert>
           )}
           {options.status === "ready" &&
-            form.type === "DIM" &&
-            form.scope === "APPLICATION" &&
+            (form.type === "ADS" || (form.type === "DIM" && !publicDimension)) &&
             datamarts.length === 0 && (
               <Alert>当前工作空间还没有数据集市，请先到「数仓规划」创建应用层数据集市。</Alert>
             )}
@@ -891,9 +973,8 @@ export default function LogicalModelEditorPage() {
                   hint={
                     editing
                       ? "类型创建后不可变更"
-                      : ownershipLocked
-                        ? "从概念维度进入，类型与归属已锁定"
-                        : MODEL_TYPE_HINT[form.type]
+                      : rejectedEntryType ||
+                        (ownershipLocked ? "从概念维度进入，类型与归属已锁定" : undefined)
                   }
                   items={MODEL_TYPES.map((value) => ({ value, label: MODEL_TYPE_LABEL[value] }))}
                   onChange={(value) => {
@@ -916,7 +997,7 @@ export default function LogicalModelEditorPage() {
                     ? `${layerRuleMessage}，请重新选择`
                     : selectedLayer
                       ? `表名前缀 ${prefix}_`
-                      : "分层决定表名前缀"
+                      : undefined
                 }
                 items={layerItems}
                 onChange={(value) => patch({ layerId: value })}
@@ -933,7 +1014,7 @@ export default function LogicalModelEditorPage() {
                   />
                 </Field>
               )}
-              {form.type === "DWD" || form.type === "DWS" || form.scope === "PUBLIC" ? (
+              {form.type === "DWD" || form.type === "DWS" || publicDimension ? (
                 <>
                   <SelectField
                     id="model-category"
@@ -994,14 +1075,14 @@ export default function LogicalModelEditorPage() {
                   id="model-dimension"
                   label="概念维度"
                   value={form.dimensionId}
-                  required={form.scope === "PUBLIC"}
+                  required={publicDimension}
                   disabled={disabled || !dimensionScopeId || ownershipLocked}
                   hint={
                     dimensions.failed
                       ? "概念维度加载失败"
                       : dimensionScopeId && dimensions.loading
                         ? "概念维度加载中"
-                        : form.scope === "PUBLIC" && dimensions.items.length === 0
+                        : publicDimension && dimensions.items.length === 0
                           ? "该数据域下还没有概念维度，请先到「概念维度」创建"
                           : undefined
                   }
@@ -1039,7 +1120,7 @@ export default function LogicalModelEditorPage() {
                   {composerActive ? (
                     <>
                       <div className="flex flex-wrap items-center gap-1">
-                        <span className="shrink-0 font-mono text-xs text-[#667475]">
+                        <span className="shrink-0 font-mono text-xs text-[var(--yak-color-text-secondary)]">
                           {prefix ? `${prefix}_` : "—"}
                         </span>
                         <Select
@@ -1080,7 +1161,7 @@ export default function LogicalModelEditorPage() {
                           </SelectContent>
                         </Select>
                         <span
-                          className="shrink-0 font-mono text-xs text-[#667475]"
+                          className="shrink-0 font-mono text-xs text-[var(--yak-color-text-secondary)]"
                           title="业务过程编码"
                         >
                           _{processCode || "过程编码"}
@@ -1112,24 +1193,23 @@ export default function LogicalModelEditorPage() {
                       <FieldError match={Boolean(errors.nameSuffix)}>
                         {errors.nameSuffix}
                       </FieldError>
-                      <p className="mt-1 text-[11px] leading-4 text-[#667085]">
-                        {prefix && suffix
-                          ? `完整表名：${prefix}_${suffix}`
-                          : "表名 = 分层前缀 + 词根 + 业务过程编码 + 可选限定词"}
+                      <p className="mt-1 text-xs leading-4 text-[var(--yak-color-text-secondary)]">
+                        {prefix && suffix ? `完整表名：${prefix}_${suffix}` : null}
                         {nameState === "checking" && " · 校验中"}
                         {nameState === "available" && " · 可用"}
-                        {nameState === "taken" && <span className="text-[#b42318]"> · 已存在</span>}
+                        {nameState === "taken" && (
+                          <span className="text-[var(--yak-components-badge-danger-text)]">
+                            {" "}
+                            · 已存在
+                          </span>
+                        )}
                         {nameState === "error" && " · 名称校验失败"}
-                      </p>
-                      <p className="mt-1 text-[11px] leading-4 text-[#667085]">
-                        该分层已启用命名规则：后缀须以「词根_业务过程编码」开头，可再跟一个「_限定词」，
-                        总长不超过 41 个字符；词根在「数据标准 · 命名词典」维护
                       </p>
                     </>
                   ) : (
                     <>
                       <div className="flex items-center gap-1">
-                        <span className="shrink-0 font-mono text-xs text-[#667475]">
+                        <span className="shrink-0 font-mono text-xs text-[var(--yak-color-text-secondary)]">
                           {prefix ? `${prefix}_` : "—"}
                         </span>
                         <Input
@@ -1152,13 +1232,16 @@ export default function LogicalModelEditorPage() {
                       <FieldError match={Boolean(errors.nameSuffix)}>
                         {errors.nameSuffix}
                       </FieldError>
-                      <p className="mt-1 text-[11px] leading-4 text-[#667085]">
-                        {prefix && suffix
-                          ? `完整表名：${prefix}_${suffix}`
-                          : "表名由分层前缀与后缀拼成"}
+                      <p className="mt-1 text-xs leading-4 text-[var(--yak-color-text-secondary)]">
+                        {prefix && suffix ? `完整表名：${prefix}_${suffix}` : null}
                         {nameState === "checking" && " · 校验中"}
                         {nameState === "available" && " · 可用"}
-                        {nameState === "taken" && <span className="text-[#b42318]"> · 已存在</span>}
+                        {nameState === "taken" && (
+                          <span className="text-[var(--yak-components-badge-danger-text)]">
+                            {" "}
+                            · 已存在
+                          </span>
+                        )}
                         {nameState === "error" && " · 名称校验失败"}
                       </p>
                     </>
@@ -1202,14 +1285,14 @@ export default function LogicalModelEditorPage() {
                 onChange={(value) => patch({ lifecycleDays: value.replace(/[^\d]/g, "") })}
               />
               {propertyFields.length > 0 && (
-                <div className="rounded-lg border border-[#e4e7ec] p-3 md:col-span-2">
+                <div className="rounded-lg border border-[var(--yak-components-panel-border)] p-3 md:col-span-2">
                   <div className="flex items-baseline justify-between gap-2">
                     <p className="text-xs font-medium">物理表属性（{layerDbType}）</p>
                     {errors.physicalProperties && (
-                      <span className="text-xs text-[#b42318]">{errors.physicalProperties}</span>
+                      <span className="text-xs text-[var(--yak-components-badge-danger-text)]">{errors.physicalProperties}</span>
                     )}
                   </div>
-                  <p className="mt-0.5 text-xs text-[#667475]">
+                  <p className="mt-0.5 text-xs text-[var(--yak-color-text-secondary)]">
                     按目标引擎透传给 DDL 生成；发布到其他引擎时会被拒绝。
                   </p>
                   <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -1269,12 +1352,30 @@ export default function LogicalModelEditorPage() {
                 />
               </div>
             </div>
-            {errors.ownership && <p className="mt-2 text-xs text-[#b42318]">{errors.ownership}</p>}
+            {errors.ownership && (
+              <p className="mt-2 text-xs text-[var(--yak-components-badge-danger-text)]">
+                {errors.ownership}
+              </p>
+            )}
           </Section>
           <Section
             title="字段定义"
-            extra={<span className="text-xs text-[#667475]">整表保存，字段顺序即写入顺序</span>}
+            extra={
+              <span className="flex items-center gap-3 text-xs text-[var(--yak-color-text-secondary)]">
+                整表保存，字段顺序即写入顺序
+                {rows.length > 0 && !rows.some((row) => row.isPrimaryKey) && (
+                  <span className="text-[var(--yak-components-badge-warning-text)]">
+                    未设置主键，发布生成的表将不含主键
+                  </span>
+                )}
+              </span>
+            }
           >
+            {errors.fields && rows.length === 0 && (
+              <p className="mb-2 text-xs text-[var(--yak-components-badge-danger-text)]">
+                {errors.fields}
+              </p>
+            )}
             <FieldEditor
               rows={rows}
               onChange={setRows}
@@ -1288,11 +1389,13 @@ export default function LogicalModelEditorPage() {
       </div>
       {/* Pinned to the bottom of the viewport: a long field table scrolls behind it instead of
           pushing the actions out of reach. */}
-      <div className="sticky bottom-0 z-10 flex items-center justify-end gap-2 border-t border-[#eaecf0] bg-white px-6 py-3">
+      <div className="sticky bottom-0 z-10 flex items-center justify-end gap-2 border-t border-[var(--yak-components-panel-border)] bg-[var(--yak-components-panel-bg)] px-6 py-3">
         {processBlocked && (
-          <span className="mr-auto text-xs text-[#667475]">请先选择「业务过程」后再保存</span>
+          <span className="mr-auto text-xs text-[var(--yak-color-text-secondary)]">
+            请先选择「业务过程」后再保存
+          </span>
         )}
-        <Button size="small" onClick={() => navigate("/data-modeling/dimension-modeling")}>
+        <Button size="small" onClick={requestLeave}>
           取消
         </Button>
         <Button
@@ -1305,6 +1408,31 @@ export default function LogicalModelEditorPage() {
           保存
         </Button>
       </div>
+      {confirmLeave && (
+        <Dialog open onOpenChange={(open) => !open && setConfirmLeave(false)}>
+          <DialogContent className="w-[480px] rounded-xl p-5 shadow-none">
+            <DialogTitle className="text-sm font-medium">放弃未保存的改动？</DialogTitle>
+            <DialogDescription className="mt-3 text-sm text-[var(--yak-color-text-secondary)]">
+              当前页面还有未保存的修改，返回列表后这些修改会丢失。
+            </DialogDescription>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button size="small" onClick={() => setConfirmLeave(false)}>
+                继续编辑
+              </Button>
+              <Button
+                size="small"
+                variant="danger"
+                onClick={() => {
+                  setConfirmLeave(false);
+                  navigate("/data-modeling/dimension-modeling");
+                }}
+              >
+                放弃并返回
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
       {publishing && savedModel && (
         <PublishDialog
           model={savedModel}

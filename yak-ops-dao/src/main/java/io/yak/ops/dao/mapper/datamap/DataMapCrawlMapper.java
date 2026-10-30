@@ -20,22 +20,30 @@ import org.apache.ibatis.annotations.Update;
 @Mapper
 public interface DataMapCrawlMapper {
 
-    String COLUMNS = "id,workspace_id,datasource_id,datasource_revision,database_name,schema_name,status,"
-            + "active_scope,table_count,column_count,added_count,updated_count,removed_count,failed_count,"
-            + "filtered_count,trigger_type,exclude_pattern,retry_of,error,"
+    String SELECT_COLUMNS = "c.id,c.workspace_id,c.task_id,c.datasource_id,c.datasource_revision,"
+            + "c.database_name,c.schema_name,c.status,c.active_scope,c.table_count,c.column_count,"
+            + "c.added_count,c.updated_count,c.removed_count,c.failed_count,c.filtered_count,"
+            + "c.trigger_type,c.exclude_pattern,c.exclude_tables,c.retry_of,c.error,"
+            + "c.created_time,c.started_time,c.finished_time,c.create_by,"
+            + "(SELECT t.name FROM yak_ops_data_map_crawl_task t WHERE t.id=c.task_id) AS task_name";
+
+    String INSERT_COLUMNS = "id,workspace_id,task_id,datasource_id,datasource_revision,database_name,schema_name,"
+            + "status,active_scope,table_count,column_count,added_count,updated_count,removed_count,failed_count,"
+            + "filtered_count,trigger_type,exclude_pattern,exclude_tables,retry_of,error,"
             + "created_time,started_time,finished_time,create_by";
 
-    @Insert("INSERT INTO yak_ops_data_map_crawl (" + COLUMNS + ") VALUES "
-            + "(#{id},#{workspaceId},#{datasourceId},#{datasourceRevision},#{databaseName},#{schemaName},#{status},"
-            + "#{activeScope},#{tableCount},#{columnCount},#{addedCount},#{updatedCount},#{removedCount},"
-            + "#{failedCount},#{filteredCount},#{triggerType},#{excludePattern},#{retryOf},"
+    @Insert("INSERT INTO yak_ops_data_map_crawl (" + INSERT_COLUMNS + ") VALUES "
+            + "(#{id},#{workspaceId},#{taskId},#{datasourceId},#{datasourceRevision},#{databaseName},#{schemaName},"
+            + "#{status},#{activeScope},#{tableCount},#{columnCount},#{addedCount},#{updatedCount},#{removedCount},"
+            + "#{failedCount},#{filteredCount},#{triggerType},#{excludePattern},#{excludeTables},#{retryOf},"
             + "#{error},#{createdTime},#{startedTime},#{finishedTime},#{createBy})")
     int insert(DataMapCrawlEntity row);
 
-    @Select("SELECT " + COLUMNS + " FROM yak_ops_data_map_crawl WHERE id=#{id}")
+    @Select("SELECT " + SELECT_COLUMNS + " FROM yak_ops_data_map_crawl c WHERE c.id=#{id}")
     DataMapCrawlEntity findById(@Param("id") String id);
 
-    @Select("SELECT " + COLUMNS + " FROM yak_ops_data_map_crawl WHERE workspace_id=#{workspaceId} AND id=#{id}")
+    @Select("SELECT " + SELECT_COLUMNS + " FROM yak_ops_data_map_crawl c "
+            + "WHERE c.workspace_id=#{workspaceId} AND c.id=#{id}")
     DataMapCrawlEntity findByIdForWorkspace(@Param("workspaceId") String workspaceId, @Param("id") String id);
 
     @Update("UPDATE yak_ops_data_map_crawl SET status='RUNNING',started_time=#{startedTime} "
@@ -93,16 +101,44 @@ public interface DataMapCrawlMapper {
             + "WHERE crawl_id=#{crawlId} ORDER BY created_time, id LIMIT #{limit}")
     List<DataMapCrawlFailureEntity> listFailures(@Param("crawlId") String crawlId, @Param("limit") int limit);
 
-    @Select("<script>SELECT " + COLUMNS + " FROM yak_ops_data_map_crawl WHERE workspace_id=#{workspaceId}"
-            + "<if test=\"datasourceId != null\"> AND datasource_id=#{datasourceId}</if>"
-            + " ORDER BY created_time DESC, id DESC LIMIT #{limit} OFFSET #{offset}</script>")
+    @Select("<script>SELECT " + SELECT_COLUMNS + " FROM yak_ops_data_map_crawl c "
+            + "WHERE c.workspace_id=#{workspaceId}"
+            + "<if test=\"datasourceId != null\"> AND c.datasource_id=#{datasourceId}</if>"
+            + "<if test=\"taskId != null\"> AND c.task_id=#{taskId}</if>"
+            + " ORDER BY c.created_time DESC, c.id DESC LIMIT #{limit} OFFSET #{offset}</script>")
     List<DataMapCrawlEntity> listPage(
             @Param("workspaceId") String workspaceId,
             @Param("datasourceId") String datasourceId,
+            @Param("taskId") String taskId,
             @Param("limit") int limit,
             @Param("offset") int offset);
 
     @Select("<script>SELECT COUNT(*) FROM yak_ops_data_map_crawl WHERE workspace_id=#{workspaceId}"
-            + "<if test=\"datasourceId != null\"> AND datasource_id=#{datasourceId}</if></script>")
-    long count(@Param("workspaceId") String workspaceId, @Param("datasourceId") String datasourceId);
+            + "<if test=\"datasourceId != null\"> AND datasource_id=#{datasourceId}</if>"
+            + "<if test=\"taskId != null\"> AND task_id=#{taskId}</if></script>")
+    long count(
+            @Param("workspaceId") String workspaceId,
+            @Param("datasourceId") String datasourceId,
+            @Param("taskId") String taskId);
+
+    /**
+     * Reads the newest run of each requested task, so a task list shows one status per task without
+     * loading run history.
+     *
+     * @param workspaceId owning Workspace
+     * @param taskIds task identities to resolve
+     * @return the newest run of each task that has one
+     */
+    @Select("<script>SELECT " + SELECT_COLUMNS + " FROM yak_ops_data_map_crawl c "
+            + "WHERE c.workspace_id=#{workspaceId} AND c.task_id IN "
+            + "<foreach collection=\"taskIds\" item=\"taskId\" open=\"(\" separator=\",\" close=\")\">#{taskId}</foreach> "
+            + "AND NOT EXISTS (SELECT 1 FROM yak_ops_data_map_crawl n WHERE n.task_id=c.task_id "
+            + "AND (n.created_time > c.created_time OR (n.created_time = c.created_time AND n.id > c.id)))</script>")
+    List<DataMapCrawlEntity> listLatestByTaskIds(
+            @Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
+
+    /** Counts runs of a task that still hold the scope lock, so a task cannot be deleted mid-run. */
+    @Select("SELECT COUNT(*) FROM yak_ops_data_map_crawl WHERE workspace_id=#{workspaceId} "
+            + "AND task_id=#{taskId} AND active_scope IS NOT NULL")
+    long countActiveByTask(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
 }

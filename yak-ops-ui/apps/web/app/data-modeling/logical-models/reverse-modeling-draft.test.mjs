@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { FIELD_DESCRIPTION_MAX } from "./field-mapping.ts";
 import {
   CN_NAME_MAX,
-  DESCRIPTION_MAX,
   describeFieldDrafts,
   draftTableCnName,
   draftTableName,
@@ -42,7 +42,7 @@ test("truncates long comments to the server limits", () => {
   const long = "订".repeat(600);
   const [draft] = describeFieldDrafts([column("order_no", { remarks: long })]);
   assert.equal(draft.cnName.length, CN_NAME_MAX);
-  assert.equal(draft.description.length, DESCRIPTION_MAX);
+  assert.equal(draft.description.length, FIELD_DESCRIPTION_MAX);
 });
 
 test("keeps unmapped columns with a reason instead of dropping them", () => {
@@ -61,6 +61,16 @@ test("reports duplicate derived codes without renaming them", () => {
   const drafts = describeFieldDrafts([column("order-no"), column("order_no")]);
   assert.equal(drafts[0].enCode, drafts[1].enCode);
   assert.equal(drafts[1].importNote, "编码与第 1 行重复");
+});
+
+test("keeps the physical origin on each draft when the source table is known", () => {
+  const [draft] = describeFieldDrafts([column("Amount")], "ods.trade_order_detail");
+  assert.equal(draft.enCode, "amount");
+  assert.deepEqual(draft.source, { table: "ods.trade_order_detail", column: "Amount" });
+});
+
+test("leaves the origin empty when no source table is known", () => {
+  assert.equal(describeFieldDrafts([column("amount")])[0].source, null);
 });
 
 test("narrows only complete drafts to the declared seam field shape", () => {

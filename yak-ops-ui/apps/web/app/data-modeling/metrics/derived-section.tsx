@@ -7,7 +7,6 @@ import {
   Field,
   FieldError,
   FieldLabel,
-  Form,
   Select,
   SelectContent,
   SelectItem,
@@ -102,7 +101,7 @@ function ModifierPicker(props: {
                     variant="ghost"
                     aria-label={"移除" + (item?.label ?? "")}
                     disabled={props.disabled}
-                    className="px-1 text-[#667085] hover:text-[#d92d20]"
+                    className="px-1 text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-danger-text)]"
                     onClick={() => props.onRemove(index)}
                   >
                     <X size={12} />
@@ -113,9 +112,6 @@ function ModifierPicker(props: {
           })}
         </ul>
       )}
-      <p className="text-[11px] leading-4 text-[#667085]">
-        修饰词按提交顺序拼入编码与名称；相同的组成必然得到相同的派生指标。
-      </p>
     </div>
   );
 }
@@ -262,7 +258,7 @@ function DerivedDialog(props: {
             </Button>
           </Alert>
         )}
-        <Form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
+        <form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
           <Field className={FIELD_CLASS} invalid={Boolean(errors.atomicMetricId)}>
             <FieldLabel htmlFor={id + "-atomic"} className="pt-1" required>
               原子指标
@@ -360,7 +356,9 @@ function DerivedDialog(props: {
               {preview ? (
                 <div className="space-y-1">
                   <p className="break-all font-mono text-xs">{preview.composed.enCode}</p>
-                  <p className="text-xs text-[#475467]">{preview.composed.cnName}</p>
+                  <p className="text-xs text-[var(--yak-components-field-label)]">
+                    {preview.composed.cnName}
+                  </p>
                   {!preview.fits && (
                     <FieldError match>
                       组合编码或名称超出长度限制（编码最多64位、名称最多128位）
@@ -371,7 +369,9 @@ function DerivedDialog(props: {
                   )}
                 </div>
               ) : (
-                <p className="text-xs text-[#667085]">选择时间周期与原子指标后生成</p>
+                <p className="text-xs text-[var(--yak-color-text-secondary)]">
+                  选择时间周期与原子指标后生成
+                </p>
               )}
               <FieldError match={Boolean(errors.composition)}>{errors.composition}</FieldError>
             </div>
@@ -410,7 +410,7 @@ function DerivedDialog(props: {
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );
@@ -470,7 +470,7 @@ export default function DerivedSection(props: Props) {
             size="small"
             variant="ghost"
             disabled={props.unavailable}
-            className="px-0.5 font-normal text-[#667085] hover:text-[#d92d20]"
+            className="px-0.5 font-normal text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-danger-text)]"
             onClick={() => props.onDelete({ kind: "derived", node: row })}
           >
             删除

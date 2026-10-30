@@ -26,6 +26,9 @@ test("covers every data map route the router registers", () => {
     "/data-governance/data-map",
     "/data-governance/data-map/overview",
     "/data-governance/data-map/catalog",
+    "/data-governance/data-map/tasks",
+    "/data-governance/data-map/tasks/new",
+    "/data-governance/data-map/tasks/42/edit",
     "/data-governance/data-map/crawls",
     "/data-governance/data-map/personal",
   ]) {

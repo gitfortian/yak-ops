@@ -7,7 +7,6 @@ import {
   Field,
   FieldError,
   FieldLabel,
-  Form,
   Input,
   Select,
   SelectContent,
@@ -280,7 +279,7 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
         <DialogTitle className="mb-5 text-sm font-medium">
           {layer ? "编辑分层" : "新建分层"}
         </DialogTitle>
-        <Form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
+        <form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
           <Field className={FIELD_CLASS} invalid={Boolean(errors.cnName)}>
             <FieldLabel htmlFor={id + "-cn-name"} required className="pt-1">
               分层中文名
@@ -356,11 +355,13 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
               </Select>
               <FieldError match={Boolean(errors.dataSourceId)}>{errors.dataSourceId}</FieldError>
               {selectedUnavailable ? (
-                <p className="mt-1 text-xs text-[#b54708]">
+                <p className="mt-1 text-xs text-[var(--yak-components-badge-warning-text)]">
                   该数据源连接不可用，启用后发布将无法执行，请先到数据源页测试连接。
                 </p>
               ) : (
-                <p className="mt-1 text-xs text-[#667085]">启用前必须绑定；停用状态可暂不绑定。</p>
+                <p className="mt-1 text-xs text-[var(--yak-color-text-secondary)]">
+                  启用前必须绑定；停用状态可暂不绑定。
+                </p>
               )}
             </div>
           </Field>
@@ -392,17 +393,19 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
                 disabled={saving}
                 onCheckedChange={(checked) => change("enabled", checked)}
               />
-              <span className="text-xs text-[#667085]">{input.enabled ? "启用" : "禁用"}</span>
+              <span className="text-xs text-[var(--yak-color-text-secondary)]">
+                {input.enabled ? "启用" : "禁用"}
+              </span>
             </div>
           </Field>
           {builtin && (
-            <p className="pl-[116px] text-xs text-[#667085]">
+            <p className="pl-[116px] text-xs text-[var(--yak-color-text-secondary)]">
               默认分层只能调整绑定的物理数据源和启用状态。
             </p>
           )}
-          <div className="rounded-lg border border-[#e4e7ec] p-3">
+          <div className="rounded-lg border border-[var(--yak-components-panel-border)] p-3">
             <p className="text-xs font-medium">发布目标（按环境绑定）</p>
-            <p className="mt-0.5 text-xs text-[#667085]">
+            <p className="mt-0.5 text-xs text-[var(--yak-color-text-secondary)]">
               逻辑模型发布时选择环境即可自动定位目标库，无需每次手动选择。
             </p>
             <div className="mt-2 grid gap-3">
@@ -412,7 +415,7 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
                 const databaseKey = `${environment}:${draft.dataSourceId}`;
                 const schemaKey = `${databaseKey}:${draft.database}`;
                 return (
-                  <div key={environment} className="grid gap-2 rounded-md bg-[#f9fafb] p-2">
+                  <div key={environment} className="grid gap-2 rounded-md bg-[var(--yak-color-surface-muted)] p-2">
                     <p className="text-xs font-medium">{ENVIRONMENT_LABEL[environment]}环境</p>
                     <div className="grid gap-2 md:grid-cols-2">
                       <Field>
@@ -543,7 +546,7 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );

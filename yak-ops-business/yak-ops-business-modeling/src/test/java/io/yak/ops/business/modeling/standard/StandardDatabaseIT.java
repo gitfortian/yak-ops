@@ -97,6 +97,7 @@ class StandardDatabaseIT {
     @AfterAll
     static void close() {
         if (context != null) context.close();
+        if (jdbc != null) deleteStandardRows();
     }
 
     @BeforeEach
@@ -107,8 +108,7 @@ class StandardDatabaseIT {
         member.setUserId("owner");
         when(WORKSPACES.queryWorkspaceMembers(anyString(), anyString())).thenReturn(List.of(member));
         when(USERS.queryByIds(anyList())).thenReturn(List.of(user("owner")));
-        for (String table : List.of("field", "category", "catalog"))
-            jdbc.update("DELETE FROM yak_ops_standard_" + table);
+        deleteStandardRows();
         // Layer presets hold a Workspace foreign key, so they must go before the Workspace row.
         // Models reference layers and standards with RESTRICT, so they go first.
         jdbc.update("DELETE FROM yak_ops_modeling_model_field");
@@ -336,6 +336,12 @@ class StandardDatabaseIT {
         user.setUserName(id + "-" + UUID.randomUUID().toString().substring(0, 8));
         user.setStatus(UserStatus.ACTIVE);
         return user;
+    }
+
+    /** Standard rows restate a Workspace foreign key, so later classes could not drop theirs. */
+    private static void deleteStandardRows() {
+        for (String table : List.of("field", "category", "catalog"))
+            jdbc.update("DELETE FROM yak_ops_standard_" + table);
     }
 
     private static int count(String table) {

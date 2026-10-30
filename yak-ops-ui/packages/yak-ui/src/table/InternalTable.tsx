@@ -24,8 +24,8 @@ import { getTableColumnKey, resolveTableRowKey } from "./utils";
 
 const sizeClasses: Record<TableSize, { header: string; cell: string }> = {
   small: {
-    header: "h-8 px-3 text-xs",
-    cell: "px-3 py-1.5 text-xs",
+    header: "h-10 px-4 text-xs font-medium",
+    cell: "px-4 py-3 text-sm",
   },
   medium: {
     header: "h-10 px-3 text-xs",
@@ -263,7 +263,7 @@ export function InternalTable<RecordType extends object>({
           <table
             aria-busy={loading || undefined}
             className={cn(
-              "text-[var(--yak-components-table-text)]",
+              "text-[var(--yak-components-table-text)] tabular-nums",
               bordered ? "border-separate border-spacing-0" : "border-collapse",
               layout.widths != null ? "table-fixed" : "w-full table-auto",
             )}
@@ -290,7 +290,10 @@ export function InternalTable<RecordType extends object>({
                       scope="col"
                       style={getCellStyle(column, index, mergedColumns, layout.widths)}
                       className={cn(
-                        "bg-[var(--yak-components-table-header-bg)] font-medium text-[var(--yak-components-table-header-text)]",
+                        "border-b border-[var(--yak-color-border)] font-medium text-[var(--yak-components-table-header-text)]",
+                        stickyHeader
+                          ? "bg-[var(--yak-components-panel-bg)]"
+                          : "bg-[var(--yak-components-table-bg)]",
                         sizeClass.header,
                         alignClasses[align],
                         (stickyHeader || fixed) && "sticky",
@@ -321,8 +324,9 @@ export function InternalTable<RecordType extends object>({
                     data-selected={selected ? "true" : undefined}
                     className={cn(
                       "bg-[var(--yak-components-table-row-bg)]",
-                      "data-[selected=true]:bg-[var(--yak-color-hover)]",
-                      rowHoverable && "transition-colors hover:bg-[var(--yak-color-hover)]",
+                      "data-[selected=true]:bg-[var(--yak-color-surface-muted)]",
+                      rowHoverable && "transition-colors hover:bg-[var(--yak-color-surface-muted)]",
+                      "[&:last-child>td]:border-b-0",
                       rowClassName,
                     )}
                   >

@@ -27,7 +27,7 @@ export function DimensionScopeRadio(props: {
             onChange={() => props.onChange(scope)}
           />
           {DIMENSION_SCOPE_LABEL[scope]}
-          <span className="text-[11px] text-[#98a2b3]">
+          <span className="text-xs text-[var(--yak-components-muted-text)]">
             {scope === "PUBLIC" ? "挂数据域" : "挂数据集市"}
           </span>
         </label>

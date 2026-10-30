@@ -8,7 +8,6 @@ import {
   FieldError,
   FieldLabel,
   FieldRequiredMark,
-  Form,
   Input,
   Select,
   SelectContent,
@@ -25,6 +24,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import {
   checkCodeUnique,
+  checkReferences,
   classifyStandardFailure,
   getLookups,
   getMeasureUnits,
@@ -105,6 +105,12 @@ export default function StandardDialog(props: {
   const [failure, setFailure] = useState("");
   const [stale, setStale] = useState(false);
   const [checkingCode, setCheckingCode] = useState(false);
+  const [references, setReferences] = useState<{ total: number; modelFields: number } | null>(null);
+  const [referenceState, setReferenceState] = useState<"loading" | "ready" | "error" | "disabled">(
+    edited ? "loading" : "disabled",
+  );
+  const [referenceVersion, setReferenceVersion] = useState(0);
+  const [confirmingRename, setConfirmingRename] = useState(false);
   const active = useRef(true),
     busy = useRef(false),
     ownerTouched = useRef(false);
@@ -139,6 +145,35 @@ export default function StandardDialog(props: {
       controller.abort();
     };
   }, [ownerVersion]);
+  useEffect(() => {
+    if (!edited) return;
+    const controller = new AbortController();
+    let current = true;
+    setReferenceState("loading");
+    void checkReferences("field", edited.id, controller.signal)
+      .then((result) => {
+        if (!current) return;
+        if (result.availability === "AVAILABLE") {
+          setReferences({
+            total: result.count,
+            modelFields: result.items.filter((item) => item.kind === "MODEL_FIELD").length,
+          });
+          setReferenceState("ready");
+        } else {
+          setReferences(null);
+          setReferenceState("disabled");
+        }
+      })
+      .catch(() => {
+        if (!current) return;
+        setReferences(null);
+        setReferenceState("error");
+      });
+    return () => {
+      current = false;
+      controller.abort();
+    };
+  }, [edited, referenceVersion]);
   useEffect(() => {
     // The session profile resolves asynchronously; fill the default only while the user has not chosen an owner.
     if (edited || ownerTouched.current || !currentUser?.id) return;
@@ -218,18 +253,15 @@ export default function StandardDialog(props: {
       if (active.current && !controller.signal.aborted) setCheckingCode(false);
     }
   };
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (busy.current || conflict || stale || ownerState !== "ready") return;
-    setFailure("");
-    const next = validateStandard(input, owners);
-    setErrors(next);
-    if (Object.keys(next).length) {
-      requestAnimationFrame(() =>
-        form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(),
-      );
-      return;
-    }
+  const renameChanged =
+    edited !== undefined &&
+    (input.cnName.trim() !== edited.cnName || input.enCode !== edited.enCode);
+  // An unreadable reference list cannot rule out bound fields, so it prompts instead of saving silently.
+  const renameNeedsConfirmation =
+    edited !== undefined && renameChanged && (references === null || references.total > 0);
+  const persist = async () => {
+    if (busy.current) return;
+    setConfirmingRename(false);
     codeRequest.current?.abort();
     setCheckingCode(false);
     busy.current = true;
@@ -279,6 +311,24 @@ export default function StandardDialog(props: {
       busy.current = false;
       if (active.current) setSaving(false);
     }
+  };
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (busy.current || conflict || stale || ownerState !== "ready") return;
+    setFailure("");
+    const next = validateStandard(input, owners);
+    setErrors(next);
+    if (Object.keys(next).length) {
+      requestAnimationFrame(() =>
+        form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(),
+      );
+      return;
+    }
+    if (renameNeedsConfirmation) {
+      setConfirmingRename(true);
+      return;
+    }
+    await persist();
   };
   const ownerItems = owners.map((owner) => ({
     value: owner.userId,
@@ -347,7 +397,7 @@ export default function StandardDialog(props: {
         <DialogTitle className="mb-5 text-sm font-medium">
           {edited ? "编辑标准" : "新建标准"}
         </DialogTitle>
-        <Form ref={form} noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
+        <form ref={form} noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
           <InputField id={id + "-category"} label="所属分类" value={category} required disabled />
           <InputField
             id={id + "-name"}
@@ -371,8 +421,37 @@ export default function StandardDialog(props: {
             onBlur={() => void validateCode()}
           />
           {checkingCode && (
-            <p role="status" className="pl-[116px] text-xs text-[#667085]">
+            <p role="status" className="pl-[116px] text-xs text-[var(--yak-color-text-secondary)]">
               编码校验中
+            </p>
+          )}
+          {edited && (
+            <p className="pl-[116px] text-xs text-[var(--yak-color-text-secondary)]">
+              {referenceState === "loading"
+                ? "引用数读取中…"
+                : referenceState === "error"
+                  ? "引用数读取失败"
+                  : referenceState === "disabled"
+                    ? "引用检查未启用，改名将提示确认"
+                    : references && references.total > 0
+                      ? references.modelFields > 0
+                        ? `被 ${references.modelFields} 个模型字段引用${
+                            references.total > references.modelFields
+                              ? `，共 ${references.total} 处引用`
+                              : ""
+                          }`
+                        : `被 ${references.total} 处引用`
+                      : "暂无引用"}
+              {referenceState === "error" && (
+                <Button
+                  size="small"
+                  variant="ghost"
+                  className="ml-1 px-0.5 font-normal"
+                  onClick={() => setReferenceVersion((value) => value + 1)}
+                >
+                  重试
+                </Button>
+              )}
             </p>
           )}
           <SelectField
@@ -426,9 +505,13 @@ export default function StandardDialog(props: {
                 </div>
               </div>
               {errors.lengthPrecision ? (
-                <p className="pl-[116px] text-xs text-[#d92d20]">{errors.lengthPrecision}</p>
+                <p className="pl-[116px] text-xs text-[var(--yak-components-danger-text)]">
+                  {errors.lengthPrecision}
+                </p>
               ) : integerDigits === null ? null : (
-                <p className="pl-[116px] text-[11px] text-[#667085]">整数位 {integerDigits} 位</p>
+                <p className="pl-[116px] text-xs text-[var(--yak-color-text-secondary)]">
+                  整数位 {integerDigits} 位
+                </p>
               )}
             </>
           ) : (
@@ -547,8 +630,10 @@ export default function StandardDialog(props: {
                     parentStatus ? (
                       <SelectFooter
                         className={
-                          "min-h-0 px-3 py-1.5 text-[11px] " +
-                          (parentState === "error" ? "text-[#d92d20]" : "text-[#667085]")
+                          "min-h-0 px-3 py-1.5 text-xs " +
+                          (parentState === "error"
+                            ? "text-[var(--yak-components-danger-text)]"
+                            : "text-[var(--yak-color-text-secondary)]")
                         }
                       >
                         {parentStatus}
@@ -627,6 +712,38 @@ export default function StandardDialog(props: {
           </Field>
           {conflict && <Alert>数据已变更，请关闭弹窗并刷新后重试。</Alert>}
           {failure && <Alert>{failure}</Alert>}
+          {confirmingRename && (
+            <Alert>
+              <div>
+                标准「{edited?.cnName}（{edited?.enCode}）」将改名为「
+                {input.cnName.trim()}（{input.enCode}）」。
+                {references && references.total > 0
+                  ? `改名不会自动传播：${
+                      references.modelFields > 0
+                        ? `${references.modelFields} 个模型字段`
+                        : `${references.total} 处引用`
+                    }仍保留旧名称。`
+                  : "引用数未能读取，改名仍可能影响已引用方。"}
+                <ul className="mt-1 list-disc pl-4">
+                  <li>已保存的模型字段需重新保存对应模型，才会同步新名称；</li>
+                  <li>已发布物理表的列注释不会自动更新，需重新发布或手工变更。</li>
+                </ul>
+              </div>
+              <div className="mt-2 flex justify-end gap-2">
+                <Button size="small" disabled={saving} onClick={() => setConfirmingRename(false)}>
+                  返回修改
+                </Button>
+                <Button
+                  size="small"
+                  variant="primary"
+                  loading={saving}
+                  onClick={() => void persist()}
+                >
+                  确认保存
+                </Button>
+              </div>
+            </Alert>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button size="small" disabled={saving} onClick={props.onClose}>
               取消
@@ -636,12 +753,12 @@ export default function StandardDialog(props: {
               variant="primary"
               type="submit"
               loading={saving}
-              disabled={conflict || stale || ownerState !== "ready"}
+              disabled={conflict || stale || ownerState !== "ready" || confirmingRename}
             >
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );

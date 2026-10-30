@@ -1,11 +1,12 @@
 import { Alert, Button, Empty, PageHeader, Spinner } from "@yak-ops/yak-ui";
-import { Plus } from "lucide-react";
+import { Box, Folder, Layers, Plus, Table2, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { getModels } from "@/service/data-modeling/dimension-modeling";
-import type {
-  ConceptDimension,
-  LogicalModel,
+import {
+  MODEL_TYPE_LABEL,
+  type ConceptDimension,
+  type LogicalModel,
 } from "@/service/data-modeling/dimension-modeling/types";
 import { getOwners } from "@/service/data-modeling/warehouse-planning";
 import { getLayers, type Layer } from "@/service/data-modeling/warehouse-planning/layers";
@@ -60,28 +61,61 @@ function sameNode(left: Selection, right: Selection) {
   }
 }
 
+/**
+ * One type label for every tree leaf.
+ *
+ * The service reports an unrecognized type as null; a newer server that sends an unknown code keeps
+ * showing that code instead of being silently relabelled as a known kind.
+ */
+function modelTypeLabel(type: LogicalModel["type"]): string {
+  if (!type) return "未知类型";
+  return (MODEL_TYPE_LABEL as Record<string, string>)[type] ?? type;
+}
+
+type TreeIcon = "root" | "folder" | "dimension" | "process" | "model";
+
+const TREE_ICONS = {
+  root: Layers,
+  folder: Folder,
+  dimension: Box,
+  process: Workflow,
+  model: Table2,
+} as const;
+
 function TreeItem(props: {
   label: string;
   meta?: string;
   level: number;
   active?: boolean;
+  icon?: TreeIcon;
   onClick: () => void;
 }) {
+  const Icon = TREE_ICONS[props.icon ?? "folder"];
   return (
     <button
       type="button"
       onClick={props.onClick}
-      style={{ paddingLeft: 8 + props.level * 12 }}
+      style={{ paddingLeft: 8 + props.level * 10 }}
       className={[
-        "flex w-full items-center gap-2 rounded-md py-1 pr-2 text-left text-[13px] transition-colors",
+        "mx-1 flex h-8 w-[calc(100%-0.5rem)] items-center gap-2 rounded-lg pr-2 text-left text-[13px] transition-colors duration-150",
         props.active
-          ? "bg-[var(--yak-color-primary-subtle)] font-semibold text-[var(--yak-color-primary)]"
-          : "text-[#26282c] hover:bg-[#f2f2f2]",
+          ? "bg-[var(--yak-color-primary-subtle)] font-medium text-[var(--yak-color-primary)]"
+          : "text-[var(--yak-color-text-primary)] hover:bg-[var(--yak-color-surface-muted)]",
       ].join(" ")}
     >
+      <Icon
+        size={15}
+        strokeWidth={1.75}
+        className={
+          "shrink-0 " +
+          (props.active
+            ? "text-[var(--yak-color-primary)]"
+            : "text-[var(--yak-components-muted-text)]")
+        }
+      />
       <span className="truncate">{props.label}</span>
       {props.meta && (
-        <span className="ml-auto shrink-0 text-[11px] font-normal text-[#98a2b3]">
+        <span className="ml-auto shrink-0 text-xs font-normal text-[var(--yak-components-muted-text)]">
           {props.meta}
         </span>
       )}
@@ -92,7 +126,7 @@ function TreeItem(props: {
 function GroupLabel({ children, level }: { children: ReactNode; level: number }) {
   return (
     <div
-      className="pb-0.5 pt-2 text-[11px] font-medium text-[#8b929e]"
+      className="pb-1 pt-2.5 text-[11px] font-medium tracking-[0.04em] text-[var(--yak-components-muted-text)]"
       style={{ paddingLeft: 8 + level * 12 }}
     >
       {children}
@@ -147,7 +181,8 @@ interface PanelContent {
   title: string;
   /** Owner labels the header shows as tags; only the dimension node has any. */
   tags?: string[];
-  description: string;
+  /** The node's own business description. Scope nodes omit it: the title already names the scope. */
+  description?: string;
   models: LogicalModel[];
 }
 
@@ -260,6 +295,15 @@ export default function DimensionModelingPage() {
     }
     return grouped;
   }, [catalog.models]);
+  /** Every model filed under a data mart; the panel counts the same set, dimension or not. */
+  const modelsByDatamart = useMemo(() => {
+    const grouped = new Map<string, LogicalModel[]>();
+    for (const model of catalog.models) {
+      if (!model.datamartId) continue;
+      grouped.set(model.datamartId, [...(grouped.get(model.datamartId) ?? []), model]);
+    }
+    return grouped;
+  }, [catalog.models]);
 
   const openEditor = (params: Record<string, string>) => {
     const query = new URLSearchParams(params);
@@ -274,19 +318,16 @@ export default function DimensionModelingPage() {
       case "ROOT":
         return {
           title: "全部逻辑模型",
-          description: `当前工作空间共 ${all.length} 个逻辑模型，选择左侧节点可按归属查看。`,
           models: all,
         };
       case "CATEGORY":
         return {
           title: selected.category.name,
-          description: "该业务分类下的全部逻辑模型",
           models: all.filter((model) => model.categoryId === selected.category.id),
         };
       case "DOMAIN":
         return {
           title: `${selected.category.name} / ${selected.domain.name}`,
-          description: "该数据域下的明细表、汇总表与维度表",
           models: all.filter((model) => model.domainId === selected.domain.id),
         };
       case "DIMENSION": {
@@ -296,20 +337,18 @@ export default function DimensionModelingPage() {
           tags: [dimension.domainName ?? dimension.datamartName, dimension.code].filter(
             (tag): tag is string => Boolean(tag),
           ),
-          description: dimension.description ?? "",
+          description: dimension.description ?? undefined,
           models: all.filter((model) => model.dimensionId === dimension.id),
         };
       }
       case "PROCESS":
         return {
           title: `${selected.domain.name} / ${selected.process.name}`,
-          description: "该业务过程下的明细表与汇总表",
           models: all.filter((model) => model.processId === selected.process.id),
         };
       case "DATAMART":
         return {
           title: selected.datamart.name,
-          description: "该数据集市下的维度表与应用表",
           models: all.filter((model) => model.datamartId === selected.datamart.id),
         };
     }
@@ -461,26 +500,58 @@ export default function DimensionModelingPage() {
         );
       case "DOMAIN":
         return (
-          <Button
-            size="small"
-            onClick={() =>
-              setDimensionDraft({
-                mode: "create",
-                scope: "PUBLIC",
-                scopeId: selected.domain.id,
-              })
-            }
-          >
-            <Plus size={14} />
-            新建维度
-          </Button>
+          <>
+            <Button
+              size="small"
+              variant="primary"
+              onClick={() =>
+                openEditor({
+                  type: "DWD",
+                  categoryId: selected.category.id,
+                  domainId: selected.domain.id,
+                })
+              }
+            >
+              <Plus size={14} />
+              新建明细表
+            </Button>
+            <Button
+              size="small"
+              onClick={() =>
+                openEditor({
+                  type: "DWS",
+                  categoryId: selected.category.id,
+                  domainId: selected.domain.id,
+                })
+              }
+            >
+              <Plus size={14} />
+              新建汇总表
+            </Button>
+            <Button
+              size="small"
+              onClick={() =>
+                setDimensionDraft({
+                  mode: "create",
+                  scope: "PUBLIC",
+                  scopeId: selected.domain.id,
+                })
+              }
+            >
+              新建维度
+            </Button>
+          </>
         );
       default:
         return (
           <Button
             size="small"
             variant="primary"
-            onClick={() => navigate("/data-modeling/logical-models/new")}
+            onClick={() =>
+              selected.kind === "CATEGORY"
+                ? openEditor({ categoryId: selected.category.id })
+                : navigate("/data-modeling/logical-models/new")
+            }
           >
             <Plus size={14} />
             新建模型
@@ -499,11 +570,11 @@ export default function DimensionModelingPage() {
     catalog.tree.datamarts.length === 0;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--yak-color-background)]">
       <PageHeader
         title="维度建模"
-        bordered
-        className="bg-white px-6 max-md:px-4"
+        description="设计维度模型与事实表，并维护字段映射关系。"
+        className="px-6 pb-5 pt-5 max-md:px-4"
         extra={
           <div className="flex items-center gap-2">
             <Button
@@ -528,8 +599,8 @@ export default function DimensionModelingPage() {
           </Alert>
         </div>
       )}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 px-6 pb-4 pt-5 max-md:px-4 md:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="min-h-0 overflow-auto border-r border-[var(--yak-components-panel-border)] pr-3">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 px-6 pb-6 max-md:px-4 md:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="min-h-0 overflow-auto rounded-xl border border-[var(--yak-color-border)] bg-[var(--yak-components-panel-bg)] p-2 shadow-[0_1px_2px_0_rgb(16_24_40/4%)]">
           {catalog.status === "loading" ? (
             <div className="flex h-32 items-center justify-center">
               <Spinner />
@@ -541,6 +612,7 @@ export default function DimensionModelingPage() {
               {/* The root is the only scope that lets the filter bar query the whole Workspace. */}
               <TreeItem
                 label="全部逻辑模型"
+                icon="root"
                 level={0}
                 active={selected.kind === "ROOT"}
                 onClick={() => select({ kind: "ROOT" })}
@@ -573,6 +645,7 @@ export default function DimensionModelingPage() {
                                   ? `${modelsByDimension.get(dimension.id)?.length} 表`
                                   : undefined
                               }
+                              icon="dimension"
                               level={2}
                               active={sameNode(selected, { kind: "DIMENSION", dimension })}
                               onClick={() => select({ kind: "DIMENSION", dimension })}
@@ -580,7 +653,8 @@ export default function DimensionModelingPage() {
                             {(modelsByDimension.get(dimension.id) ?? []).map((model) => (
                               <TreeItem
                                 key={model.id}
-                                label={`${model.name}（${model.type === "DIM" ? "维度表" : "未知"}）`}
+                                label={`${model.name}（${modelTypeLabel(model.type)}）`}
+                                icon="model"
                                 level={3}
                                 onClick={() => editModel(model)}
                               />
@@ -589,7 +663,7 @@ export default function DimensionModelingPage() {
                         ))}
                         {(dimensionsByOwner.get(domain.id) ?? []).length === 0 && (
                           <p
-                            className="pb-1 text-[11px] text-[#98a2b3]"
+                            className="pb-1 text-xs text-[var(--yak-components-muted-text)]"
                             style={{ paddingLeft: 8 + 2 * 12 }}
                           >
                             暂无维度
@@ -605,6 +679,7 @@ export default function DimensionModelingPage() {
                                   ? `${modelsByProcess.get(process.id)?.length} 表`
                                   : undefined
                               }
+                              icon="process"
                               level={2}
                               active={sameNode(selected, {
                                 kind: "PROCESS",
@@ -617,7 +692,8 @@ export default function DimensionModelingPage() {
                             {(modelsByProcess.get(process.id) ?? []).map((model) => (
                               <TreeItem
                                 key={model.id}
-                                label={`${model.name}（明细表）`}
+                                label={`${model.name}（${modelTypeLabel(model.type)}）`}
+                                icon="model"
                                 level={3}
                                 onClick={() => editModel(model)}
                               />
@@ -634,6 +710,11 @@ export default function DimensionModelingPage() {
                 <div key={datamart.id}>
                   <TreeItem
                     label={datamart.name}
+                    meta={
+                      modelsByDatamart.get(datamart.id)?.length
+                        ? `${modelsByDatamart.get(datamart.id)?.length} 表`
+                        : undefined
+                    }
                     level={0}
                     active={sameNode(selected, { kind: "DATAMART", datamart })}
                     onClick={() => select({ kind: "DATAMART", datamart })}
@@ -648,6 +729,7 @@ export default function DimensionModelingPage() {
                             ? `${modelsByDimension.get(dimension.id)?.length} 表`
                             : undefined
                         }
+                        icon="dimension"
                         level={1}
                         active={sameNode(selected, { kind: "DIMENSION", dimension })}
                         onClick={() => select({ kind: "DIMENSION", dimension })}
@@ -655,7 +737,8 @@ export default function DimensionModelingPage() {
                       {(modelsByDimension.get(dimension.id) ?? []).map((model) => (
                         <TreeItem
                           key={model.id}
-                          label={`${model.name}（维度表）`}
+                          label={`${model.name}（${modelTypeLabel(model.type)}）`}
+                          icon="model"
                           level={2}
                           onClick={() => editModel(model)}
                         />
@@ -663,10 +746,27 @@ export default function DimensionModelingPage() {
                     </div>
                   ))}
                   {(dimensionsByOwner.get(datamart.id) ?? []).length === 0 && (
-                    <p className="pb-1 text-[11px] text-[#98a2b3]" style={{ paddingLeft: 8 + 12 }}>
+                    <p
+                      className="pb-1 text-xs text-[var(--yak-components-muted-text)]"
+                      style={{ paddingLeft: 8 + 12 }}
+                    >
                       暂无维度
                     </p>
                   )}
+                  {(modelsByDatamart.get(datamart.id) ?? []).some(
+                    (model) => model.type === "ADS",
+                  ) && <GroupLabel level={1}>应用表</GroupLabel>}
+                  {(modelsByDatamart.get(datamart.id) ?? [])
+                    .filter((model) => model.type === "ADS")
+                    .map((model) => (
+                      <TreeItem
+                        key={model.id}
+                        label={`${model.name}（${modelTypeLabel(model.type)}）`}
+                        icon="model"
+                        level={1}
+                        onClick={() => editModel(model)}
+                      />
+                    ))}
                 </div>
               ))}
             </nav>
@@ -682,11 +782,11 @@ export default function DimensionModelingPage() {
             pinnedDatamart={pinned.datamart}
             optionsFailed={searchOptions.status === "failed"}
             onChange={changeFilters}
+            onResetNode={() => select({ kind: "ROOT" })}
           />
           {searching ? (
             <ModelPanel
               title="检索结果"
-              description={`匹配 ${searchResult?.total ?? 0} 个逻辑模型`}
               models={searchResult?.items ?? []}
               loading={searchStatus === "loading"}
               emptyText="没有匹配的逻辑模型"

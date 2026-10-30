@@ -7,7 +7,6 @@ import {
   Field,
   FieldError,
   FieldLabel,
-  Form,
   Table,
   Textarea,
   toast,
@@ -124,7 +123,7 @@ function PeriodDialog(props: {
         <DialogTitle className="mb-5 text-sm font-medium">
           {edited ? "编辑时间周期" : "新建时间周期"}
         </DialogTitle>
-        <Form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
+        <form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
           <InputField
             id={id + "-name"}
             label="中文名称"
@@ -180,7 +179,7 @@ function PeriodDialog(props: {
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );
@@ -232,7 +231,7 @@ export default function TimePeriodSection(props: Props) {
             size="small"
             variant="ghost"
             disabled={props.unavailable}
-            className="px-0.5 font-normal text-[#667085] hover:text-[#d92d20]"
+            className="px-0.5 font-normal text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-danger-text)]"
             onClick={() => props.onDelete({ kind: "period", node: row })}
           >
             删除

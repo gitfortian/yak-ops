@@ -141,11 +141,27 @@ export function findDuplicateFieldCodes(columns: readonly Pick<DataSourceCatalog
   return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([code]) => code));
 }
 
+/** Server limit for a field description; every import path that copies a comment respects it. */
+export const FIELD_DESCRIPTION_MAX = 500;
+
+/**
+ * Turns a physical column comment into the field description.
+ *
+ * <p>All three import paths (catalog table, reverse-modeling wizard, DDL paste) call this, so the
+ * same physical column cannot import with a description through one entry point and without one
+ * through another. A column without a comment stays undescribed.
+ */
+export function commentDescription(remarks: string | null | undefined): string | null {
+  const comment = remarks?.trim() ?? "";
+  return comment ? comment.slice(0, FIELD_DESCRIPTION_MAX) : null;
+}
+
 /** Builds one editable row; unmapped columns keep an empty type and their reason. */
 export function columnToField(
   column: DataSourceCatalogColumn,
   mapping: PhysicalMapping,
   key: string,
+  sourceTable: string | null = null,
 ): FieldDraft {
   return {
     key,
@@ -164,7 +180,14 @@ export function columnToField(
     measureUnitId: null,
     measureUnitEnCode: null,
     metricId: null,
-    description: null,
+    description: commentDescription(column.remarks),
     importNote: mapping.note,
+    source: sourceTable ? { table: sourceTable, column: column.name } : null,
   };
+}
+
+/** Schema-qualified table name for messages; the schema wins because it is the narrower scope. */
+export function qualifiedTableName(table: { database?: string; schema?: string; name: string }) {
+  const qualifier = table.schema ?? table.database;
+  return qualifier ? `${qualifier}.${table.name}` : table.name;
 }

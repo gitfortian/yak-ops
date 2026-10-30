@@ -1,15 +1,23 @@
-import {
-  DATA_TYPES,
-  type DataType,
-  type StandardField,
-} from "@/service/data-modeling/data-standards/types";
+import { DATA_TYPES, type DataType } from "@/service/data-modeling/data-standards/types";
 import type {
   AggregateType,
   ModelField,
   ModelFieldInput,
 } from "@/service/data-modeling/dimension-modeling/types";
 import { parseCreateTable, type DdlField, typeSize } from "./ddl-parser";
-import { mapPhysicalColumn, normalizeFieldCode, type PhysicalMapping } from "./field-mapping";
+import { newFieldKey } from "./field-key";
+import {
+  commentDescription,
+  mapPhysicalColumn,
+  normalizeFieldCode,
+  type PhysicalMapping,
+} from "./field-mapping";
+
+/** Physical origin of a row imported from a catalog table; session-only and never submitted. */
+export interface FieldSource {
+  table: string;
+  column: string;
+}
 
 /** One editable field row; {@code key} keeps React identity stable across reorders. */
 export interface FieldDraft {
@@ -34,9 +42,14 @@ export interface FieldDraft {
   description: string | null;
   /** Why an imported column still has no logical type; shown beside the row and never submitted. */
   importNote: string | null;
+  /**
+   * Catalog table and column this row was imported from; loaded from catalog metadata only, never
+   * submitted, so the session can tell when a standard binding detaches the code from its source.
+   */
+  source: FieldSource | null;
 }
 
-export type FieldIssueField = "cnName" | "enCode" | "dataType" | "partition";
+export type FieldIssueField = "cnName" | "enCode" | "dataType" | "lengthPrecision" | "partition";
 
 export interface FieldIssue {
   index: number;
@@ -60,15 +73,9 @@ export function isValidModelSuffix(value: string): boolean {
   return FIELD_CODE.test(value) && value.length <= MODEL_SUFFIX_MAX;
 }
 
-let fieldSequence = 0;
-const nextKey = () => `field-${(fieldSequence += 1)}`;
-
-/** Identity for a row created outside this module, such as an imported column. */
-export const newFieldKey = () => nextKey();
-
 export function emptyField(): FieldDraft {
   return {
-    key: nextKey(),
+    key: newFieldKey(),
     cnName: "",
     enCode: "",
     dataType: "STRING",
@@ -86,12 +93,13 @@ export function emptyField(): FieldDraft {
     metricId: null,
     description: null,
     importNote: null,
+    source: null,
   };
 }
 
 export function fromModelField(field: ModelField): FieldDraft {
   return {
-    key: nextKey(),
+    key: newFieldKey(),
     cnName: field.cnName,
     enCode: field.enCode,
     dataType: field.dataType,
@@ -109,29 +117,7 @@ export function fromModelField(field: ModelField): FieldDraft {
     metricId: field.metricId ?? null,
     description: field.description,
     importNote: null,
-  };
-}
-
-export function fromStandard(standard: StandardField): FieldDraft {
-  return {
-    key: nextKey(),
-    cnName: standard.cnName,
-    enCode: standard.enCode,
-    dataType: standard.dataType,
-    lengthPrecision: standard.lengthPrecision ?? "",
-    isPrimaryKey: false,
-    isNotNull: standard.isNotNull,
-    isPartition: false,
-    aggregateType: null,
-    standardId: standard.id,
-    standardEnCode: standard.enCode,
-    lookupId: null,
-    lookupEnCode: null,
-    measureUnitId: null,
-    measureUnitEnCode: null,
-    metricId: null,
-    description: null,
-    importNote: null,
+    source: null,
   };
 }
 
@@ -171,6 +157,10 @@ export function validateFieldRows(rows: FieldDraft[]): FieldIssue[] {
       });
     if (!row.standardId && !row.dataType)
       issues.push({ index, field: "dataType", message: "请选择数据类型" });
+    // Same wording as the publication-time rule, so the design view and the generated script never
+    // state two different requirements for one column.
+    if (row.dataType === "STRING" && !row.lengthPrecision.trim())
+      issues.push({ index, field: "lengthPrecision", message: "STRING 字段必须填写长度" });
     if (code) {
       const first = firstByCode.get(code);
       if (first === undefined) firstByCode.set(code, index);
@@ -261,7 +251,7 @@ function parseDdl(text: string, existing: FieldDraft[]): ParsedFields {
       lengthPrecision: mapping.kind === "MAPPED" ? (mapping.lengthPrecision ?? "") : "",
       isPrimaryKey: field.primaryKey,
       isNotNull: field.notNull,
-      description: field.comment,
+      description: commentDescription(field.comment),
       importNote: notes.length ? notes.join("；") : null,
     });
   }

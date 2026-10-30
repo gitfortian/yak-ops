@@ -1,4 +1,4 @@
-import { Alert, Button, PageHeader } from "@yak-ops/yak-ui";
+import { Alert, Button, Card, PageHeader } from "@yak-ops/yak-ui";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -109,29 +109,31 @@ export default function CatalogPage() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--yak-color-background)]">
       <PageHeader
         title="资产目录"
-        bordered
-        className="bg-white px-6 max-md:px-4"
+        description="按业务域浏览和检索已登记的数据资产。"
+        className="px-6 pb-5 pt-5 max-md:px-4"
         extra={
-          <Button size="small" onClick={() => navigate(`${DATA_MAP_BASE}/crawls?create=1`)}>
+          <Button size="small" onClick={() => navigate(`${DATA_MAP_BASE}/tasks/new`)}>
             发起采集
           </Button>
         }
       />
 
       <div className="flex min-h-0 flex-1 gap-4 px-6 pb-4 pt-5 max-md:px-4">
-        <aside className="hidden w-56 shrink-0 overflow-auto border border-[var(--yak-components-panel-border)] bg-white p-3 lg:block">
-          <DomainTree
-            categories={taxonomy.categories}
-            loading={taxonomy.isPending}
-            selected={selectionOf(query.domainId, query.unclassified)}
-            onSelect={selectDomain}
-          />
-        </aside>
+        <Card className="hidden w-56 shrink-0 lg:block">
+          <div className="overflow-auto p-3">
+            <DomainTree
+              categories={taxonomy.categories}
+              loading={taxonomy.isPending}
+              selected={selectionOf(query.domainId, query.unclassified)}
+              onSelect={selectDomain}
+            />
+          </div>
+        </Card>
 
-        <section className="flex min-h-0 flex-1 flex-col bg-white p-4">
+        <Card className="flex min-h-0 flex-1 flex-col p-4">
           <CatalogFilters
             keyword={draft}
             datasourceId={query.datasourceId}
@@ -190,7 +192,7 @@ export default function CatalogPage() {
                     <Button
                       size="small"
                       variant="primary"
-                      onClick={() => navigate(`${DATA_MAP_BASE}/crawls?create=1`)}
+                      onClick={() => navigate(`${DATA_MAP_BASE}/tasks/new`)}
                     >
                       发起采集
                     </Button>
@@ -210,7 +212,7 @@ export default function CatalogPage() {
               />
             )}
           </div>
-        </section>
+        </Card>
       </div>
     </div>
   );

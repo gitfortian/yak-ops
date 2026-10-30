@@ -7,12 +7,21 @@ import io.yak.ops.business.datamap.crawl.DataMapCrawlService;
 import io.yak.ops.business.datamap.personal.DataMapPersonalService;
 import io.yak.ops.business.datamap.preview.DataMapPreviewService;
 import io.yak.ops.business.datamap.tagging.DataMapTagService;
+import io.yak.ops.business.datamap.task.DataMapCrawlTaskService;
+import io.yak.ops.business.datamap.task.DataMapExcludePreviewService;
+import io.yak.ops.common.bean.dto.datamap.DataMapCrawlExcludePreviewDTO;
+import io.yak.ops.common.bean.dto.datamap.DataMapCrawlSchedulePreviewDTO;
 import io.yak.ops.common.bean.dto.datamap.DataMapCrawlSubmitDTO;
+import io.yak.ops.common.bean.dto.datamap.DataMapCrawlTaskSaveDTO;
+import io.yak.ops.common.bean.dto.datamap.DataMapCrawlTaskStatusDTO;
 import io.yak.ops.common.bean.dto.datamap.DataMapCuratedUpdateDTO;
 import io.yak.ops.common.bean.dto.datamap.DataMapTableQueryDTO;
 import io.yak.ops.common.bean.dto.datamap.DataMapTagAssignmentDTO;
 import io.yak.ops.common.bean.dto.datamap.DataMapTagInputDTO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlDetailVO;
+import io.yak.ops.common.bean.vo.datamap.DataMapCrawlExcludePreviewVO;
+import io.yak.ops.common.bean.vo.datamap.DataMapCrawlSchedulePreviewVO;
+import io.yak.ops.common.bean.vo.datamap.DataMapCrawlTaskVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapOverviewVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapPreviewVO;
@@ -54,6 +63,12 @@ public class DataMapController {
 
     @Resource
     private DataMapCrawlService crawlService;
+
+    @Resource
+    private DataMapCrawlTaskService taskService;
+
+    @Resource
+    private DataMapExcludePreviewService excludePreviewService;
 
     @Resource
     private DataMapPreviewService previewService;
@@ -174,13 +189,84 @@ public class DataMapController {
         return Result.success(true);
     }
 
-    @Operation(summary = "查询采集任务")
+    @Operation(summary = "查询采集实例")
     @GetMapping("/crawls")
     public Result<PagingData<DataMapCrawlVO>> crawls(
             @RequestParam(required = false) String datasourceId,
+            @RequestParam(required = false) String taskId,
             @RequestParam(defaultValue = "1") @Min(1) int pageNo,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
-        return Result.success(crawlService.list(WorkspaceContext.requireWorkspaceId(), datasourceId, pageNo, pageSize));
+        return Result.success(
+                crawlService.list(WorkspaceContext.requireWorkspaceId(), datasourceId, taskId, pageNo, pageSize));
+    }
+
+    @Operation(summary = "查询采集任务列表")
+    @GetMapping("/tasks")
+    public Result<PagingData<DataMapCrawlTaskVO>> tasks(
+            @RequestParam(defaultValue = "1") @Min(1) int pageNo,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
+        return Result.success(taskService.list(WorkspaceContext.requireWorkspaceId(), pageNo, pageSize));
+    }
+
+    @Operation(summary = "采集任务详情")
+    @GetMapping("/tasks/{taskId}")
+    public Result<DataMapCrawlTaskVO> task(@PathVariable String taskId) {
+        return Result.success(taskService.detail(WorkspaceContext.requireWorkspaceId(), taskId));
+    }
+
+    @Operation(summary = "预览排除规则命中的表")
+    @PostMapping("/tasks/preview-exclude")
+    public Result<DataMapCrawlExcludePreviewVO> previewExclude(
+            @Valid @RequestBody DataMapCrawlExcludePreviewDTO input) {
+        return Result.success(excludePreviewService.preview(WorkspaceContext.requireWorkspaceId(), input));
+    }
+
+    @Operation(summary = "预览 Cron 的未来触发时间")
+    @PostMapping("/tasks/preview-schedule")
+    public Result<DataMapCrawlSchedulePreviewVO> previewSchedule(
+            @Valid @RequestBody DataMapCrawlSchedulePreviewDTO input) {
+        return Result.success(
+                new DataMapCrawlSchedulePreviewVO(taskService.previewSchedule(input.getCronExpression())));
+    }
+
+    @Operation(summary = "创建采集任务")
+    @PostMapping("/tasks")
+    public Result<DataMapCrawlTaskVO> createTask(@Valid @RequestBody DataMapCrawlTaskSaveDTO input) {
+        return Result.success(taskService.create(WorkspaceContext.requireWorkspaceId(), actor(), input));
+    }
+
+    @Operation(summary = "更新采集任务")
+    @PutMapping("/tasks/{taskId}")
+    public Result<DataMapCrawlTaskVO> updateTask(
+            @PathVariable String taskId, @Valid @RequestBody DataMapCrawlTaskSaveDTO input) {
+        return Result.success(taskService.update(WorkspaceContext.requireWorkspaceId(), actor(), taskId, input));
+    }
+
+    @Operation(summary = "上线或下线采集任务")
+    @PutMapping("/tasks/{taskId}/status")
+    public Result<DataMapCrawlTaskVO> changeTaskStatus(
+            @PathVariable String taskId, @Valid @RequestBody DataMapCrawlTaskStatusDTO input) {
+        return Result.success(
+                taskService.changeStatus(WorkspaceContext.requireWorkspaceId(), actor(), taskId, input.getStatus()));
+    }
+
+    @Operation(summary = "删除采集任务")
+    @DeleteMapping("/tasks/{taskId}")
+    public Result<Boolean> deleteTask(@PathVariable String taskId) {
+        taskService.delete(WorkspaceContext.requireWorkspaceId(), taskId);
+        return Result.success(true);
+    }
+
+    @Operation(summary = "手动执行采集任务")
+    @PostMapping("/tasks/{taskId}/run")
+    public Result<DataMapCrawlVO> runTask(@PathVariable String taskId) {
+        return Result.success(taskService.run(WorkspaceContext.requireWorkspaceId(), actor(), taskId));
+    }
+
+    @Operation(summary = "重试采集任务实例的失败表")
+    @PostMapping("/tasks/{taskId}/runs/{crawlId}/retry")
+    public Result<DataMapCrawlVO> retryTaskRun(@PathVariable String taskId, @PathVariable String crawlId) {
+        return Result.success(taskService.retry(WorkspaceContext.requireWorkspaceId(), actor(), taskId, crawlId));
     }
 
     @Operation(summary = "提交采集任务")

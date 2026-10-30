@@ -7,7 +7,6 @@ import {
   Field,
   FieldError,
   FieldLabel,
-  Form,
   Table,
   Textarea,
   toast,
@@ -136,7 +135,7 @@ function CompositeDialog(props: {
         <DialogTitle className="mb-5 text-sm font-medium">
           {edited ? "编辑复合指标" : "新建复合指标"}
         </DialogTitle>
-        <Form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
+        <form noValidate onSubmit={(event) => void submit(event)} className="space-y-3">
           <InputField
             id={id + "-name"}
             label="中文名称"
@@ -174,9 +173,6 @@ function CompositeDialog(props: {
                 onValueChange={(value) => change({ expression: String(value ?? "") })}
               />
               <FieldError match={Boolean(errors.expression)}>{errors.expression}</FieldError>
-              <p className="mt-1 text-[11px] leading-4 text-[#667085]">
-                支持四则运算、括号与数字；引用的派生指标编码是否存在由服务端保存时校验。
-              </p>
             </div>
           </Field>
           {references !== null && (
@@ -184,12 +180,14 @@ function CompositeDialog(props: {
               <FieldLabel className="pt-1">引用解析</FieldLabel>
               <div className="flex flex-wrap gap-1">
                 {references.length === 0 && (
-                  <p className="text-xs text-[#667085]">未引用任何派生指标</p>
+                  <p className="text-xs text-[var(--yak-color-text-secondary)]">
+                    未引用任何派生指标
+                  </p>
                 )}
                 {references.map((code) => (
                   <span
                     key={code}
-                    className="rounded bg-[#f2f4f7] px-1.5 py-0.5 font-mono text-xs text-[#475467]"
+                    className="rounded bg-[var(--yak-components-badge-neutral-bg)] px-1.5 py-0.5 font-mono text-xs text-[var(--yak-components-field-label)]"
                   >
                     {code}
                   </span>
@@ -231,7 +229,7 @@ function CompositeDialog(props: {
               保存
             </Button>
           </div>
-        </Form>
+        </form>
       </DialogContent>
     </Dialog>
   );
@@ -296,7 +294,7 @@ export default function CompositeSection(props: Props) {
             size="small"
             variant="ghost"
             disabled={props.unavailable}
-            className="px-0.5 font-normal text-[#667085] hover:text-[#d92d20]"
+            className="px-0.5 font-normal text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-danger-text)]"
             onClick={() => props.onDelete({ kind: "composite", node: row })}
           >
             删除

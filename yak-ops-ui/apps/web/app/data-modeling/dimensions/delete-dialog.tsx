@@ -77,7 +77,7 @@ export default function DimensionDeleteDialog({
     >
       <DialogContent className="w-[480px] rounded-xl p-5 shadow-none">
         <DialogTitle className="text-sm font-medium">删除概念维度</DialogTitle>
-        <DialogDescription className="mt-3 text-sm text-[#475467]">
+        <DialogDescription className="mt-3 text-sm text-[var(--yak-color-text-secondary)]">
           {blocked
             ? `「${dimension.name}（${dimension.code}）」暂时无法删除。`
             : `确认删除「${dimension.name}（${dimension.code}）」？`}
@@ -89,7 +89,9 @@ export default function DimensionDeleteDialog({
               : "该维度仍被逻辑表引用，请先删除或解绑关联的维度表。"}
           </Alert>
         ) : (
-          <p className="mt-1 text-xs text-[#667475]">删除维度概念不会自动删除已发布的物理表。</p>
+          <p className="mt-1 text-xs text-[var(--yak-color-text-secondary)]">
+            删除维度概念不会自动删除已发布的物理表。
+          </p>
         )}
         {conflict && <Alert>数据已变更，请关闭弹窗并刷新后重试。</Alert>}
         {failure && <Alert>{failure}</Alert>}

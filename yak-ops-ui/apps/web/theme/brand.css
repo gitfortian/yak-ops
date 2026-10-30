@@ -1,0 +1,49 @@
+/*
+ * Theme-independent primitives: typography, radii, elevation.
+ *
+ * Shared by both colour schemes, so they live outside the light/dark blocks.
+ * Radii and shadows follow the OpenMetadata (Untitled UI) foundation scale.
+ */
+:root {
+  /* System UI stack, no bundled brand face. */
+  --yak-font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans",
+    "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+
+  /* Containers: tags 4, popovers 8, cards and dialogs 12. */
+  --yak-radius-sm: 4px;
+  --yak-radius-md: 8px;
+  --yak-radius-lg: 12px;
+
+  /* Controls: buttons, inputs, selects. `small` carries the app's normal
+   * buttons because page call sites all pass size="small". */
+  --yak-radius-control-small: 8px;
+  --yak-radius-control-medium: 8px;
+  --yak-radius-control-large: 8px;
+
+  /* Untitled UI body text is 14px. */
+  --yak-font-size-control-small: 14px;
+  --yak-font-size-control-medium: 14px;
+  --yak-font-size-control-large: 16px;
+
+  /* xs / md / overlay, straight from the token sheet. */
+  --yak-shadow-sm: 0 1px 2px 0 rgb(10 13 18 / 5%);
+  --yak-shadow-md: 0 4px 6px -1px rgb(10 13 18 / 10%), 0 2px 4px -2px rgb(10 13 18 / 6%);
+  --yak-shadow-lg: 0 20px 24px -4px rgb(10 13 18 / 8%), 0 8px 8px -4px rgb(10 13 18 / 3%);
+
+  /* Inverted chrome: the product launcher is a dark flyout in both schemes, so
+   * its surface scale is theme-independent by design. */
+  --yak-color-surface-inverse: #15181c;
+  --yak-color-surface-inverse-raised: #1c1e21;
+  --yak-color-surface-inverse-hover: #282b2e;
+  --yak-color-text-inverse-primary: #f4f4f4;
+  --yak-color-text-inverse-secondary: #cbced3;
+  --yak-color-text-inverse-muted: #5d6064;
+  --yak-color-border-inverse: #242629;
+
+  /* Accent used by the favourite star, which is intentionally not a status colour. */
+  --yak-color-accent-favorite: #f5a623;
+
+  /* Mix anchor for deriving darker ramp steps; not a UI colour of its own. */
+  --yak-color-mix-dark: #000;
+}

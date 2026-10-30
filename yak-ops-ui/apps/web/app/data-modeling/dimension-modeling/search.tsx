@@ -39,6 +39,11 @@ interface Props {
   /** Set when layers or owners could not be read, so the bar can say so instead of hiding it. */
   optionsFailed?: boolean;
   onChange: (next: ModelSearchFilters) => void;
+  /**
+   * Clears the tree node that pins a scope. Without it the bar's reset could clear every filter and
+   * still show one node's models, which reads as the full list.
+   */
+  onResetNode?: () => void;
 }
 
 function FilterSelect(props: {
@@ -49,24 +54,26 @@ function FilterSelect(props: {
   onChange: (value: string) => void;
 }) {
   return (
-    <Select
-      value={props.value}
-      size="small"
-      items={props.items}
-      disabled={props.disabled}
-      onValueChange={(value) => props.onChange(value ?? ALL)}
-    >
-      <SelectTrigger variant="outlined" aria-label={props.label} className="w-36">
-        <SelectValue placeholder={props.label} />
-      </SelectTrigger>
-      <SelectContent>
-        {props.items.map((item) => (
-          <SelectItem key={item.value} value={item.value}>
-            <SelectItemText>{item.label}</SelectItemText>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="w-36 shrink-0">
+      <Select
+        value={props.value}
+        size="small"
+        items={props.items}
+        disabled={props.disabled}
+        onValueChange={(value) => props.onChange(value ?? ALL)}
+      >
+        <SelectTrigger variant="outlined" aria-label={props.label} className="w-full">
+          <SelectValue placeholder={props.label} />
+        </SelectTrigger>
+        <SelectContent>
+          {props.items.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
+              <SelectItemText>{item.label}</SelectItemText>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 
@@ -96,9 +103,13 @@ export default function ModelSearchBar(props: Props) {
   }, [keyword]);
 
   const update = (patch: Partial<ModelSearchFilters>) => onChange({ ...filters, ...patch });
+  const pinned = Boolean(props.pinnedDomain || props.pinnedDatamart);
   const reset = () => {
     setKeyword("");
     onChange(EMPTY_MODEL_SEARCH);
+    // Resetting while a node pins the scope must also leave that node, otherwise "清空" restores
+    // the same one-node list the user is trying to get out of.
+    if (pinned) props.onResetNode?.();
   };
   const domains = props.tree.categories.flatMap((category) =>
     category.children.map((domain) => ({
@@ -108,16 +119,18 @@ export default function ModelSearchBar(props: Props) {
   );
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--yak-components-panel-border)] bg-white px-3 py-2">
-      <Input
-        size="small"
-        variant="outlined"
-        className="w-56"
-        placeholder="搜索表名或中文名"
-        aria-label="搜索表名或中文名"
-        value={keyword}
-        onChange={(event) => setKeyword(event.target.value)}
-      />
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--yak-color-border)] bg-[var(--yak-components-panel-bg)] px-3 py-2.5 shadow-[0_1px_2px_0_rgb(16_24_40/4%)]">
+      <div className="w-56 shrink-0">
+        <Input
+          size="small"
+          variant="outlined"
+          className="w-full"
+          placeholder="搜索表名或中文名"
+          aria-label="搜索表名或中文名"
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
+        />
+      </div>
       <FilterSelect
         label="全部类型"
         value={filters.type}
@@ -177,11 +190,19 @@ export default function ModelSearchBar(props: Props) {
           onChange={(value) => update({ datamartId: value === ALL ? "" : value })}
         />
       )}
-      <Button size="small" onClick={reset} disabled={!isModelSearching(filters) && !keyword.trim()}>
+      <Button
+        size="small"
+        variant="ghost"
+        className="ml-auto"
+        onClick={reset}
+        disabled={!isModelSearching(filters) && !keyword.trim() && !pinned}
+      >
         清空
       </Button>
       {props.optionsFailed && (
-        <span className="text-[11px] text-[#b54708]">分层或负责人加载失败，其余筛选条件仍可用</span>
+        <span className="text-xs text-[var(--yak-components-badge-warning-text)]">
+          分层或负责人加载失败，其余筛选条件仍可用
+        </span>
       )}
     </div>
   );

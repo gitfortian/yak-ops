@@ -12,6 +12,12 @@ public class DataMapCrawlVO {
     /** Run identity. */
     private String id;
 
+    /** Task that produced the run; null for legacy standalone runs. */
+    private String taskId;
+
+    /** Name of the producing task, resolved at read time. */
+    private String taskName;
+
     /** Datasource whose namespace was enumerated. */
     private String datasourceId;
 

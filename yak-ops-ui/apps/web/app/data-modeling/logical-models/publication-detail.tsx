@@ -13,9 +13,9 @@ const STATUS_TONE: Record<string, "info" | "success" | "danger" | "warning" | "n
 };
 
 const CHANGE_COLOR: Record<string, string> = {
-  ADD: "text-[#067647]",
-  CHANGE: "text-[#b54708]",
-  DROP: "text-[#b42318]",
+  ADD: "text-[var(--yak-components-badge-success-text)]",
+  CHANGE: "text-[var(--yak-components-badge-warning-text)]",
+  DROP: "text-[var(--yak-components-badge-danger-text)]",
 };
 
 const formatTime = (value: string | null) => (value ? value.replace("T", " ").slice(0, 23) : "-");
@@ -48,34 +48,34 @@ export default function PublicationDetailDialog({ record, onClose }: Props) {
           </div>
           <div className="grid gap-1">
             <span className="font-medium">变更类型</span>
-            <span className="text-[#475467]">
+            <span className="text-[var(--yak-components-field-label)]">
               {record.operation ? PUBLICATION_OPERATION_LABEL[record.operation] : "-"}
             </span>
           </div>
           <div className="grid gap-1">
             <span className="font-medium">目标地址</span>
-            <span className="text-[#475467]">
+            <span className="text-[var(--yak-components-field-label)]">
               {[record.database, record.schema].filter(Boolean).join(".")}.{record.table}
             </span>
           </div>
           <div className="grid gap-1">
             <span className="font-medium">执行耗时</span>
-            <span className="text-[#475467]">
+            <span className="text-[var(--yak-components-field-label)]">
               {record.durationMs === null ? "-" : `${record.durationMs} ms`}
             </span>
           </div>
           <div className="grid gap-1">
             <span className="font-medium">发起时间</span>
-            <span className="text-[#475467]">{formatTime(record.createdTime)}</span>
+            <span className="text-[var(--yak-components-field-label)]">{formatTime(record.createdTime)}</span>
           </div>
           <div className="grid gap-1">
             <span className="font-medium">结束时间</span>
-            <span className="text-[#475467]">{formatTime(record.finishedTime)}</span>
+            <span className="text-[var(--yak-components-field-label)]">{formatTime(record.finishedTime)}</span>
           </div>
         </div>
 
         {record.error && (
-          <div className="mt-3 rounded-lg border border-[#f04438] bg-[#fef3f2] px-3 py-2 text-xs text-[#b42318]">
+          <div className="mt-3 rounded-lg border border-[var(--yak-color-border-danger-subtle)] bg-[var(--yak-components-badge-danger-bg)] px-3 py-2 text-xs text-[var(--yak-components-badge-danger-text)]">
             {record.error}
           </div>
         )}
@@ -99,7 +99,7 @@ export default function PublicationDetailDialog({ record, onClose }: Props) {
         {record.ddl && (
           <div className="mt-3">
             <h4 className="text-xs font-medium">执行的 DDL</h4>
-            <pre className="mt-1 max-h-44 overflow-auto rounded-lg border border-[#e4e7ec] bg-[#f9fafb] p-3 text-xs leading-5 whitespace-pre-wrap text-[#344054]">
+            <pre className="mt-1 max-h-44 overflow-auto rounded-lg border border-[var(--yak-components-panel-border)] bg-[var(--yak-color-surface)] p-3 text-xs leading-5 whitespace-pre-wrap text-[var(--yak-components-field-label)]">
               {record.ddl}
             </pre>
           </div>
@@ -108,11 +108,11 @@ export default function PublicationDetailDialog({ record, onClose }: Props) {
         <div className="mt-3">
           <h4 className="text-xs font-medium">执行日志</h4>
           {record.executionLog ? (
-            <pre className="mt-1 max-h-56 overflow-auto rounded-lg border border-[#e4e7ec] bg-[#f9fafb] p-3 text-xs leading-5 whitespace-pre-wrap text-[#344054]">
+            <pre className="mt-1 max-h-56 overflow-auto rounded-lg border border-[var(--yak-components-panel-border)] bg-[var(--yak-color-surface)] p-3 text-xs leading-5 whitespace-pre-wrap text-[var(--yak-components-field-label)]">
               {record.executionLog}
             </pre>
           ) : (
-            <p className="mt-1 text-xs text-[#98a2b3]">该记录没有执行日志。</p>
+            <p className="mt-1 text-xs text-[var(--yak-components-muted-text)]">该记录没有执行日志。</p>
           )}
         </div>
 

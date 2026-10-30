@@ -6,7 +6,7 @@
  * that produced them, a stale response never overwrites a newer selection, and revoking the
  * non-production confirmation invalidates the table and the columns as well as the confirmation.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   listDataSourceColumns,
   listDataSourceDatabases,
@@ -17,6 +17,7 @@ import {
   type DataSourceCatalogTable,
   type DataSourceRecord,
 } from "@/service/datasource";
+import { resolveDefaultDatabase } from "./catalog-default";
 
 type LoadArea = "datasources" | "databases" | "schemas" | "tables" | "columns";
 
@@ -66,6 +67,8 @@ export interface CatalogPicker {
   setTableKeyword: (value: string) => void;
   searchTables: () => void;
   tables: DataSourceCatalogTable[];
+  /** True once a table query for the current selection has returned, so an empty list is a result. */
+  tablesLoaded: boolean;
   selectedTable: DataSourceCatalogTable | null;
   selectTable: (table: DataSourceCatalogTable) => void;
   columns: DataSourceCatalogColumn[];
@@ -97,13 +100,17 @@ export function useCatalogPicker(): CatalogPicker {
   const [retry, setRetry] = useState(0);
 
   const datasource = datasources.find((item) => item.id === datasourceId);
+  // The database effect may not depend on the current choice, or picking one would refetch the list.
+  // A retry therefore reads the live value through this ref and keeps it instead of resetting.
+  const databaseRef = useRef(database);
+  databaseRef.current = database;
   const nonProduction = Boolean(datasource && datasource.environment !== "PROD");
   const blocked = nonProduction && !envConfirmed;
   const tableRequestKey = JSON.stringify([datasourceId, database, schema, tableSearch]);
   const activeSelection =
     !blocked && selectedTable?.requestKey === tableRequestKey ? selectedTable : null;
-  const tables =
-    !blocked && tableResult?.requestKey === tableRequestKey ? tableResult.values : NO_TABLES;
+  const tablesLoaded = !blocked && tableResult?.requestKey === tableRequestKey;
+  const tables = tablesLoaded ? tableResult.values : NO_TABLES;
   const columns =
     activeSelection && columnResult?.selectionKey === activeSelection.selectionKey
       ? columnResult.values
@@ -167,9 +174,12 @@ export function useCatalogPicker(): CatalogPicker {
       .then((values) => {
         if (!active) return;
         setDatabases(values);
-        setDatabase((previous) =>
-          previous && values.includes(previous) ? previous : (values[0] ?? ""),
-        );
+        if (databaseRef.current && values.includes(databaseRef.current)) return;
+        const resolved = resolveDefaultDatabase(datasource?.database, values);
+        setDatabase(resolved.database);
+        // A registered database the instance does not offer is not a load failure, but it is the one
+        // thing this picker must not guess around, so it travels over the channel both dialogs show.
+        setFailures((previous) => ({ ...previous, databases: resolved.hint }));
       })
       .catch(() => {
         if (!active) return;
@@ -186,7 +196,7 @@ export function useCatalogPicker(): CatalogPicker {
     return () => {
       active = false;
     };
-  }, [datasourceId, retry]);
+  }, [datasourceId, datasource?.database, retry]);
 
   useEffect(() => {
     if (!datasourceId) {
@@ -351,6 +361,7 @@ export function useCatalogPicker(): CatalogPicker {
     setTableKeyword,
     searchTables: () => setTableSearch(tableKeyword.trim()),
     tables,
+    tablesLoaded,
     selectedTable: activeSelection?.table ?? null,
     selectTable,
     columns,

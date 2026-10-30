@@ -1,0 +1,14 @@
+/*
+ * Structural overrides that design tokens alone cannot express.
+ *
+ * Deliberately unlayered: unlayered CSS outranks Tailwind's `utilities` layer,
+ * so these rules win without `!important`. The `:not()` guards keep the
+ * focus / invalid / hover utilities in control of their own states.
+ */
+
+/* The default `filled` input ships `border-transparent`, which makes an
+ * outlined field impossible. Give it the gray.300 outline at rest. */
+input[data-yak-size]:not(:focus):not(:hover):not([aria-invalid="true"]):not([data-invalid]) {
+  border-color: var(--yak-components-input-border);
+  background-color: var(--yak-components-input-bg);
+}

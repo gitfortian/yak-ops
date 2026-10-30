@@ -30,8 +30,8 @@ const STORAGE_LABEL: Record<StoragePolicy, string> = {
 
 interface Props {
   title: string;
-  /** Line under the title; an empty value is stated instead of rendered as a blank row. */
-  description: string;
+  /** The node's own business description. Scope nodes leave it out; the title already names the scope. */
+  description?: string;
   /** Scope labels the header shows next to the title, such as the owning domain and code. */
   tags?: string[];
   models: LogicalModel[];
@@ -100,7 +100,7 @@ export default function ModelPanel(props: Props) {
             {PUBLICATION_STATUS_LABEL[row.latestPublicationStatus]}
           </Badge>
         ) : (
-          <span className="text-xs text-[#98a2b3]">未发布</span>
+          <span className="text-xs text-[var(--yak-components-muted-text)]">未发布</span>
         ),
     },
     {
@@ -130,7 +130,7 @@ export default function ModelPanel(props: Props) {
           <Button
             size="small"
             variant="ghost"
-            className="px-0.5 font-normal text-[#667085] hover:text-[#d92d20]"
+            className="px-0.5 font-normal text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-danger-text)]"
             onClick={() => props.onDelete(row)}
           >
             删除
@@ -139,32 +139,41 @@ export default function ModelPanel(props: Props) {
       ),
     },
   ];
-  const description = props.description.trim();
+  const description = props.description?.trim();
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-[var(--yak-color-border)] bg-[var(--yak-components-panel-bg)] shadow-[0_1px_2px_0_rgb(16_24_40/4%)]">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--yak-components-control-border)] px-4 py-3">
         <div className="min-w-0">
-          <h2 className="truncate text-sm font-medium">{props.title}</h2>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-            {props.tags?.map((tag) => (
-              <Badge key={tag} tone="neutral">
-                {tag}
-              </Badge>
-            ))}
-            <p
-              title={description || undefined}
-              className={`line-clamp-2 min-w-0 text-xs ${
-                description ? "text-[#667475]" : "text-[#98a2b3]"
-              }`}
-            >
-              {description || "暂无描述"}
-            </p>
+          <div className="flex min-w-0 items-baseline gap-2">
+            <h2 className="truncate text-[15px] font-semibold tracking-[-0.01em]">{props.title}</h2>
+            {!props.loading && (
+              <span className="shrink-0 text-xs text-[var(--yak-components-muted-text)]">
+                {total} 个
+              </span>
+            )}
           </div>
+          {Boolean(props.tags?.length) || description ? (
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+              {props.tags?.map((tag) => (
+                <Badge key={tag} tone="neutral">
+                  {tag}
+                </Badge>
+              ))}
+              {description && (
+                <p
+                  title={description}
+                  className="line-clamp-2 min-w-0 text-xs text-[var(--yak-color-text-secondary)]"
+                >
+                  {description}
+                </p>
+              )}
+            </div>
+          ) : null}
         </div>
         {props.actions && <div className="flex flex-wrap items-center gap-2">{props.actions}</div>}
       </header>
       {props.truncated && (
-        <p className="text-xs text-[#b54708]">
+        <p className="text-xs text-[var(--yak-components-badge-warning-text)]">
           模型数量超过单次加载上限，树中只显示最近 1000 个；右侧列表同样基于这批数据。
         </p>
       )}
