@@ -299,8 +299,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
       <div className="min-h-full bg-[var(--yak-color-hover)] text-[var(--yak-components-panel-text)]">
         <PageHeader
           title={pageTitle}
-          bordered
-          className="bg-white px-6 max-md:px-4"
+          className="px-6 pb-5 pt-5 max-md:px-4"
           extra={
             <Button size="small" onClick={() => navigate(basePath)}>
               返回任务列表
@@ -318,8 +317,7 @@ export function TaskEditor({ draft, task: initialTask, connections = [] }: TaskE
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--yak-color-hover)] text-[var(--yak-components-panel-text)]">
       <PageHeader
         title={pageTitle}
-        bordered
-        className="shrink-0 bg-white px-6 max-md:px-4"
+        className="shrink-0 px-6 pb-5 pt-5 max-md:px-4"
         extra={
           <>
             <Button size="small" disabled={saving} onClick={() => navigate(basePath)}>

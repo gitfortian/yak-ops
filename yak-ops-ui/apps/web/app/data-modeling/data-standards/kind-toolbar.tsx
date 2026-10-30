@@ -17,7 +17,7 @@ interface Props {
 /** Search and create controls shared by the four standard kinds. */
 export default function KindToolbar(props: Props) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--yak-components-control-border)] px-4 py-3">
       <Form
         className="flex max-w-full items-center gap-2"
         onSubmit={(event) => {

@@ -1,7 +1,5 @@
 import {
-  Button,
-  Card,
-  Input,
+  Button,  Input,
   Select,
   SelectContent,
   SelectItem,
@@ -50,6 +48,7 @@ function FilterSelect(props: {
   onChange: (value: string) => void;
 }) {
   return (
+    <div className="w-36 shrink-0">
     <Select
       value={props.value}
       size="small"
@@ -57,7 +56,7 @@ function FilterSelect(props: {
       disabled={props.disabled}
       onValueChange={(value) => props.onChange(value ?? ALL)}
     >
-      <SelectTrigger variant="outlined" aria-label={props.label} className="w-36">
+        <SelectTrigger variant="outlined" aria-label={props.label} className="w-full">
         <SelectValue placeholder={props.label} />
       </SelectTrigger>
       <SelectContent>
@@ -68,6 +67,7 @@ function FilterSelect(props: {
         ))}
       </SelectContent>
     </Select>
+    </div>
   );
 }
 
@@ -109,16 +109,18 @@ export default function ModelSearchBar(props: Props) {
   );
 
   return (
-    <Card className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] items-center gap-2 p-3">
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--yak-color-border)] bg-[var(--yak-components-panel-bg)] px-3 py-2.5 shadow-[0_1px_2px_0_rgb(16_24_40/4%)]">
+      <div className="w-56 shrink-0">
       <Input
         size="small"
         variant="outlined"
-        className="w-56"
+          className="w-full"
         placeholder="搜索表名或中文名"
         aria-label="搜索表名或中文名"
         value={keyword}
         onChange={(event) => setKeyword(event.target.value)}
       />
+      </div>
       <FilterSelect
         label="全部类型"
         value={filters.type}
@@ -180,7 +182,8 @@ export default function ModelSearchBar(props: Props) {
       )}
       <Button
         size="small"
-        className="justify-self-start"
+        variant="ghost"
+        className="ml-auto"
         onClick={reset}
         disabled={!isModelSearching(filters) && !keyword.trim()}
       >
@@ -191,6 +194,5 @@ export default function ModelSearchBar(props: Props) {
           分层或负责人加载失败，其余筛选条件仍可用
         </span>
       )}
-    </Card>
-  );
+    </div>  );
 }

@@ -37,11 +37,11 @@ export default function OverviewPage() {
   const hotTablesEmpty = overview.isSuccess && hotTables.length === 0;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--yak-color-background)]">
       <PageHeader
         title="数据地图概述"
-        bordered
-        className="bg-[var(--yak-color-background)] px-6 max-md:px-4"
+        description="汇总数据资产的规模、分布与接入情况。"
+        className="px-6 pb-5 pt-5 max-md:px-4"
         extra={
           <Button size="small" onClick={() => navigate(`${DATA_MAP_BASE}/tasks`)}>
             采集任务
@@ -49,7 +49,7 @@ export default function OverviewPage() {
         }
       />
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-6 pb-4 pt-5 max-md:px-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-6 pb-4 max-md:px-4">
         {overview.isError && (
           <Alert>
             {dataMapFailureMessage(overview.error, "总览加载失败，请稍后重试。")}

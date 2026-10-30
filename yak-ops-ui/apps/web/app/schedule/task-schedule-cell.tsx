@@ -65,8 +65,8 @@ export function TaskScheduleCell({
           role="status"
           className={
             schedule?.registrationStatus === "ERROR"
-              ? "text-xs text-[#d92d20]"
-              : "text-xs text-[#98a2b3]"
+              ? "text-xs text-[var(--yak-components-danger-text)]"
+              : "text-xs text-[var(--yak-components-muted-text)]"
           }
         >
           {observation}

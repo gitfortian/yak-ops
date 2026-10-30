@@ -26,5 +26,5 @@ export function DataSyncInstanceRedirect() {
   }, [id]);
   if (!id) return <Navigate replace to="/data-sync" />;
   if (destination?.id === id) return <Navigate replace to={destination.path} />;
-  return <div className="p-6 text-sm text-[#667085]">加载中...</div>;
+  return <div className="p-6 text-sm text-[var(--yak-color-text-secondary)]">加载中...</div>;
 }

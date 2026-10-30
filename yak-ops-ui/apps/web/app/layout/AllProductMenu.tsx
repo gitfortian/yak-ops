@@ -24,7 +24,7 @@ export default function AllProductMenu({
       aria-label="全部产品二级菜单"
       aria-hidden={!open}
       className={[
-        "absolute inset-y-0 left-full max-w-[calc(100vw-220px)] overflow-hidden bg-[#1c1e21] text-xs text-[#cbced3]",
+        "absolute inset-y-0 left-full max-w-[calc(100vw-220px)] overflow-hidden bg-[var(--yak-color-surface-inverse-raised)] text-xs text-[var(--yak-color-text-inverse-secondary)]",
         "transition-[width] ease-in-out motion-reduce:transition-none",
         open ? "w-[765px] duration-[240ms]" : "w-0 duration-[170ms] pointer-events-none",
       ].join(" ")}
@@ -32,8 +32,8 @@ export default function AllProductMenu({
       <div className="h-full w-[765px] max-w-[calc(100vw-220px)] overflow-y-auto">
         <div className="min-h-full px-12 pt-4">
           {ALL_PRODUCT_GROUPS.map((group) => (
-            <section key={group.id} className="flex min-h-12 border-b border-[#242629] py-2">
-              <h3 className="m-0 w-40 shrink-0 py-2 text-xs font-normal leading-8 text-[#f4f4f4]">
+            <section key={group.id} className="flex min-h-12 border-b border-[var(--yak-color-border-inverse)] py-2">
+              <h3 className="m-0 w-40 shrink-0 py-2 text-xs font-normal leading-8 text-[var(--yak-color-text-inverse-primary)]">
                 {group.label}
               </h3>
 
@@ -46,7 +46,7 @@ export default function AllProductMenu({
                   return (
                     <div
                       key={product.id}
-                      className="group my-0.5 flex h-8 w-60 items-center rounded px-2 text-[#cbced3] transition-colors hover:bg-[#282b2e] hover:text-[#f4f4f4]"
+                      className="group my-0.5 flex h-8 w-60 items-center rounded px-2 text-[var(--yak-color-text-inverse-secondary)] transition-colors hover:bg-[var(--yak-color-surface-inverse-hover)] hover:text-[var(--yak-color-text-inverse-primary)]"
                     >
                       <Link
                         to={product.path}
@@ -55,7 +55,7 @@ export default function AllProductMenu({
                         onClick={onNavigate}
                       >
                         <Icon
-                          className="h-3.5 w-3.5 shrink-0 text-[#5d6064] transition-colors group-hover:text-[#f4f4f4]"
+                          className="h-3.5 w-3.5 shrink-0 text-[var(--yak-color-text-inverse-muted)] transition-colors group-hover:text-[var(--yak-color-text-inverse-primary)]"
                           strokeWidth={1.8}
                         />
                         <span className="ml-2 min-w-0 flex-1 truncate">{product.label}</span>
@@ -71,7 +71,7 @@ export default function AllProductMenu({
                           "ml-1 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded transition-[background-color,color,opacity]",
                           "hover:bg-white/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 disabled:cursor-default disabled:opacity-45",
                           favorite
-                            ? "text-[#f5a623] opacity-100"
+                            ? "text-[var(--yak-color-accent-favorite)] opacity-100"
                             : "text-white/40 opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
                         ].join(" ")}
                         onClick={() => onToggleFavorite(product.id)}

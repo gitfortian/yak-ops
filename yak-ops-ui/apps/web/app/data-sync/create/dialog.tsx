@@ -167,7 +167,7 @@ export function CreateSyncTaskDialog({ onClose }: { onClose: () => void }) {
                     <label
                       key={step}
                       id={`${stepLabelId}-${step}`}
-                      className="flex items-center gap-2 text-xs text-[#344054]"
+                      className="flex items-center gap-2 text-xs text-[var(--yak-color-text-primary)]"
                     >
                       <Checkbox
                         id={`${stepLabelId}-${step}-control`}
@@ -217,7 +217,7 @@ export function CreateSyncTaskDialog({ onClose }: { onClose: () => void }) {
             </>
           }
         >
-          <p className="text-sm text-[#475467]">更改方案将清除草稿中已填写的连接与表映射。</p>
+          <p className="text-sm text-[var(--yak-color-text-secondary)]">更改方案将清除草稿中已填写的连接与表映射。</p>
         </Modal>
       ) : null}
     </>

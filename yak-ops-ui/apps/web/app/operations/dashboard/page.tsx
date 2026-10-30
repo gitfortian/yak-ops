@@ -43,8 +43,7 @@ export function OperationsDashboardPage({ syncType }: { syncType: DataSyncType }
     <div className="min-h-full bg-[var(--yak-color-hover)] text-[var(--yak-components-panel-text)]">
       <PageHeader
         title={syncType === "REALTIME" ? "实时同步运维" : "离线同步运维"}
-        bordered
-        className="bg-white px-6 max-md:px-4"
+        className="px-6 pb-5 pt-5 max-md:px-4"
         extra={
           <Select<DataSyncOperationsRange>
             size="small"

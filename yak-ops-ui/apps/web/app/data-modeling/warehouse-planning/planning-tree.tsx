@@ -1,5 +1,5 @@
-import { Button, Input } from "@yak-ops/yak-ui";
-import { ChevronDown, ChevronRight, FileText, Folder, Plus, Search, X } from "lucide-react";
+import { Input } from "@yak-ops/yak-ui";
+import { ChevronRight, FileText, Folder, FolderOpen, FolderPlus, Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   NodeKey,
@@ -87,60 +87,98 @@ export default function PlanningTree(props: Props) {
     });
 
   const renderNodes = (nodes: readonly PlanningNode[]): ReactNode => (
-    <ul className="space-y-1">
+    <ul className="space-y-0.5">
       {nodes.map((node) => {
         const key = nodeKey(node);
         if (filtering && !hits.has(key)) return null;
         const expanded = filtering || !collapsed.has(key);
         const selected = props.selectedKey === key;
         const child = CHILD[node.kind];
+        const leaf = isLeaf(node.kind);
+        const open = !leaf && expanded && node.children.length > 0;
         return (
           <li key={key}>
-            <div className="group/row flex min-w-0 items-center gap-1">
+            <div
+              className={
+                "group/row mx-1 flex min-w-0 items-center gap-0.5 rounded-lg pr-1 transition-colors duration-150 " +
+                (selected
+                  ? "bg-[var(--yak-color-primary-subtle)]"
+                  : "hover:bg-[var(--yak-color-surface-muted)]")
+              }
+            >
               {node.children.length > 0 ? (
-                <Button
-                  size="small"
-                  variant="ghost"
+                <button
+                  type="button"
                   disabled={props.disabled}
                   aria-label={`${expanded ? "折叠" : "展开"}${node.name}`}
                   aria-expanded={expanded}
+                  className="grid h-8 w-6 shrink-0 place-items-center rounded-md text-[var(--yak-components-muted-text)] transition-colors hover:bg-[var(--yak-color-hover)] hover:text-[var(--yak-color-text-primary)] disabled:opacity-45"
                   onClick={() => toggle(key)}
                 >
-                  {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </Button>
+                  <ChevronRight
+                    size={13}
+                    strokeWidth={1.75}
+                    className={"transition-transform duration-150 " + (expanded ? "rotate-90" : "")}
+                  />
+                </button>
               ) : (
-                <span className="w-7 shrink-0" />
+                <span className="w-6 shrink-0" />
               )}
-              <Button
-                size="small"
+              <button
+                type="button"
                 disabled={props.disabled}
-                variant="ghost"
-                className="min-w-0 flex-1 justify-start font-normal"
-                style={{
-                  backgroundColor: selected ? "var(--yak-color-primary-subtle)" : undefined,
-                  color: selected ? "var(--yak-color-primary)" : "var(--yak-color-text-primary)",
-                }}
                 aria-current={selected ? true : undefined}
+                className={
+                  "flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-1 text-left text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-45 " +
+                  (selected
+                    ? "font-medium text-[var(--yak-color-primary)]"
+                    : "text-[var(--yak-color-text-primary)]")
+                }
                 onClick={() => props.onSelect(key)}
               >
-                {isLeaf(node.kind) ? <FileText size={14} /> : <Folder size={14} />}
+                {leaf ? (
+                  <FileText
+                    size={15}
+                    strokeWidth={1.75}
+                    className={
+                      "shrink-0 " +
+                      (selected
+                        ? "text-[var(--yak-color-primary)]"
+                        : "text-[var(--yak-components-muted-text)]")
+                    }
+                  />
+                ) : open ? (
+                  <FolderOpen size={15} strokeWidth={1.75} className="shrink-0 text-[var(--yak-color-primary)]" />
+                ) : (
+                  <Folder
+                    size={15}
+                    strokeWidth={1.75}
+                    className={
+                      "shrink-0 " +
+                      (selected
+                        ? "text-[var(--yak-color-primary)]"
+                        : "text-[var(--yak-components-muted-text)]")
+                    }
+                  />
+                )}
                 <span className="truncate">{node.name}</span>
-              </Button>
+              </button>
               {child && (
-                <Button
-                  size="small"
-                  variant="ghost"
+                <button
+                  type="button"
                   disabled={props.disabled}
-                  className="opacity-100 md:opacity-0 md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100"
                   aria-label={`在${node.name}下新建${child.label}`}
+                  className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-[var(--yak-components-muted-text)] opacity-0 transition-all hover:bg-[var(--yak-color-hover)] hover:text-[var(--yak-color-primary)] focus-visible:opacity-100 disabled:opacity-0 md:group-hover/row:opacity-100"
                   onClick={() => props.onCreateChild(node)}
                 >
-                  <Plus size={14} />
-                </Button>
+                  <Plus size={13} />
+                </button>
               )}
             </div>
             {expanded && node.children.length > 0 && (
-              <div className="ml-5">{renderNodes(node.children)}</div>
+              <div className="ml-[13px] space-y-0.5 border-l border-[var(--yak-components-control-border)] pl-[7px]">
+                {renderNodes(node.children)}
+              </div>
             )}
           </li>
         );
@@ -154,12 +192,12 @@ export default function PlanningTree(props: Props) {
     return (
       <section
         aria-label={label}
-        className="mt-4 border-t border-[var(--yak-components-panel-border)] pt-4 first:mt-0 first:border-t-0 first:pt-0"
+        className="mt-4 border-t border-[var(--yak-components-control-border)] pt-3 first:mt-0 first:border-t-0 first:pt-0"
       >
-        <p className="flex h-5 items-center px-1.5 text-xs font-semibold text-[var(--yak-color-text-secondary)]">
+        <p className="flex h-5 items-center px-2 text-[11px] font-medium tracking-[0.04em] text-[var(--yak-components-muted-text)]">
           {label}
         </p>
-        {visible.length > 0 ? renderNodes(visible) : empty}
+        <div className="mt-1.5">{visible.length > 0 ? renderNodes(visible) : empty}</div>
       </section>
     );
   };
@@ -174,14 +212,13 @@ export default function PlanningTree(props: Props) {
     >
       {props.filterable && (
         <>
-          <div className="relative mt-3">
+          <div className="relative mt-3 [&_input]:h-8 [&_input]:text-[13px]">
             <Search
               size={14}
               aria-hidden="true"
               className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--yak-components-muted-text)]"
             />
             <Input
-              size="small"
               variant="outlined"
               value={keyword}
               className="pl-8 pr-8"
@@ -225,34 +262,51 @@ export default function PlanningTree(props: Props) {
         {group(
           "公共层 · 业务分类",
           props.tree.categories,
-          <p className="px-1.5 text-xs leading-7 text-[var(--yak-components-muted-text)]">
-            暂无业务分类
-          </p>,
+          <div className="mx-1 flex flex-col items-center gap-2 rounded-lg bg-[var(--yak-color-surface-muted)] px-3 py-5 text-center">
+            <FolderPlus
+              size={16}
+              strokeWidth={1.6}
+              className="text-[var(--yak-components-muted-text)]"
+            />
+            <p className="text-[12px] leading-4 text-[var(--yak-components-muted-text)]">
+              暂无业务分类
+            </p>
+          </div>,
         )}
         {group(
           "应用层 · 数据集市",
           props.tree.datamarts,
-          <p className="flex items-center gap-2 px-1.5 text-xs leading-7 text-[var(--yak-color-text-secondary)]">
-            暂无数据集市
-            <Button
-              size="small"
-              variant="ghost"
-              className="h-auto px-0 text-xs font-normal"
-              style={{ color: "var(--yak-color-primary)" }}
+          <div className="mx-1 flex flex-col items-center gap-2 rounded-lg bg-[var(--yak-color-surface-muted)] px-3 py-5 text-center">
+            <FolderPlus
+              size={16}
+              strokeWidth={1.6}
+              className="text-[var(--yak-components-muted-text)]"
+            />
+            <p className="text-[12px] leading-4 text-[var(--yak-components-muted-text)]">
+              暂无数据集市
+            </p>
+            <button
+              type="button"
+              className="text-[12px] font-medium text-[var(--yak-color-primary)] transition-opacity hover:opacity-70"
               onClick={props.onCreateDatamart}
             >
               新建数据集市
-            </Button>
-          </p>,
+            </button>
+          </div>,
         )}
         {zero && (
-          <div className="mt-4 px-1.5">
-            <p className="text-xs text-[var(--yak-color-text-secondary)]">
+          <div className="mx-1 mt-3 flex flex-col items-center gap-2 rounded-lg bg-[var(--yak-color-surface-muted)] px-3 py-5 text-center">
+            <Search size={16} strokeWidth={1.6} className="text-[var(--yak-components-muted-text)]" />
+            <p className="text-[12px] leading-4 text-[var(--yak-components-muted-text)]">
               没有匹配「{keyword.trim()}」的节点
             </p>
-            <Button size="small" className="mt-2" onClick={() => setKeyword("")}>
+            <button
+              type="button"
+              className="text-[12px] font-medium text-[var(--yak-color-primary)] transition-opacity hover:opacity-70"
+              onClick={() => setKeyword("")}
+            >
               清除筛选
-            </Button>
+            </button>
           </div>
         )}
       </div>

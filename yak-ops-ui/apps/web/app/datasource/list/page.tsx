@@ -186,8 +186,7 @@ export function DataSourcePage() {
               </Button>
             ) : undefined
           }
-          bordered
-          className="bg-white px-6 max-md:px-4"
+          className="px-6 pb-5 pt-5 max-md:px-4"
         />
 
         <div className="flex min-h-0 flex-1 px-6 pb-4 pt-5 max-md:px-4">

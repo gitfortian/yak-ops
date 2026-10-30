@@ -1,5 +1,5 @@
 import { Alert, Button, PageHeader } from "@yak-ops/yak-ui";
-import { Plus } from "lucide-react";
+import { FolderPlus, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import type {
   CategoryDraft,
@@ -69,11 +69,11 @@ export default function DataStandardsPage() {
     setDeleting(null);
   };
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--yak-color-background)]">
       <PageHeader
         title="数据标准"
-        bordered
-        className="bg-[var(--yak-color-background)] px-6 max-md:px-4"
+        description="维护标准分类、字段标准、命名规范与计量单位。"
+        className="px-6 pb-5 pt-5 max-md:px-4"
         extra={
           <Button size="small" disabled={catalog.loading} onClick={changed}>
             刷新
@@ -88,13 +88,13 @@ export default function DataStandardsPage() {
           </Button>
         </Alert>
       )}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 px-6 pb-4 pt-5 max-md:px-4 md:grid-cols-[250px_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 px-6 pb-6 max-md:px-4 md:grid-cols-[280px_minmax(0,1fr)]">
         <aside
-          className="min-h-0 overflow-auto border-r border-[var(--yak-components-panel-border)] pr-3"
+          className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-[var(--yak-color-border)] bg-[var(--yak-components-panel-bg)] shadow-[0_1px_2px_0_rgb(16_24_40/4%)]"
           aria-busy={catalog.loading}
         >
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-medium">标准分类</h2>
+          <div className="flex min-h-11 items-center justify-between gap-2 border-b border-[var(--yak-components-control-border)] px-3">
+            <h2 className="text-[13px] font-medium text-[var(--yak-color-text-primary)]">标准分类</h2>
             <Button
               size="small"
               variant="ghost"
@@ -106,6 +106,7 @@ export default function DataStandardsPage() {
               新建目录
             </Button>
           </div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-auto px-3 pb-3 pt-2">
           <CategoryTree
             nodes={catalog.roots}
             selectedId={catalog.selectedId}
@@ -123,14 +124,31 @@ export default function DataStandardsPage() {
             onDelete={(node) => setDeleting({ kind: "category", node })}
           />
           {!catalog.loading && !catalog.failed && catalog.roots.length === 0 && (
-            <p className="p-3 text-sm text-[var(--yak-color-text-secondary)]">暂无分类</p>
+              <div className="mx-1 mt-2 flex flex-col items-center gap-2 rounded-lg bg-[var(--yak-color-surface-muted)] px-3 py-5 text-center">
+                <FolderPlus
+                  size={16}
+                  strokeWidth={1.6}
+                  className="text-[var(--yak-components-muted-text)]"
+                />
+                <p className="text-[12px] leading-4 text-[var(--yak-components-muted-text)]">
+                  暂无分类
+                </p>
+                <button
+                  type="button"
+                  className="text-[12px] font-medium text-[var(--yak-color-primary)] transition-opacity hover:opacity-70"
+                  onClick={() => createCategory(null)}
+                >
+                  新建目录
+                </button>
+              </div>
           )}
+          </div>
         </aside>
-        <section className="flex min-h-0 min-w-0 flex-col gap-3">
+        <section className="flex min-h-0 min-w-0 flex-col gap-4">
           <div
             role="tablist"
             aria-label="标准种类"
-            className="flex flex-wrap items-center gap-1 border-b border-[var(--yak-components-panel-border)]"
+            className="flex flex-wrap items-center gap-1 border-b border-[var(--yak-color-border)]"
           >
             {TABS.map((item) => (
               <button
@@ -139,7 +157,7 @@ export default function DataStandardsPage() {
                 role="tab"
                 aria-selected={tab === item.key}
                 className={
-                  "relative -mb-px border-b-2 px-3 py-2 text-sm transition-colors " +
+                  "relative -mb-px border-b-2 px-3 py-2 text-[13px] transition-colors " +
                   (tab === item.key
                     ? "border-[var(--yak-color-primary)] font-medium [color:var(--yak-color-primary)]"
                     : "border-transparent text-[var(--yak-color-text-secondary)] hover:text-[var(--yak-components-field-label)]")
@@ -150,6 +168,7 @@ export default function DataStandardsPage() {
               </button>
             ))}
           </div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[var(--yak-color-border)] bg-[var(--yak-components-panel-bg)] shadow-[0_1px_2px_0_rgb(16_24_40/4%)]">
           {tab === "field" && (
             <FieldSection
               selectedId={catalog.selectedId}
@@ -189,6 +208,7 @@ export default function DataStandardsPage() {
               onDelete={setDeleting}
             />
           )}
+          </div>
         </section>
       </div>
       {categoryDraft && (

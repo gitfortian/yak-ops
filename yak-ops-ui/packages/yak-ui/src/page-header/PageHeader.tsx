@@ -20,17 +20,17 @@ export function PageHeader({
   return (
     <header
       className={cn(
-        "flex w-full flex-wrap items-start justify-between gap-x-6 gap-y-3 py-4",
+        "flex w-full flex-wrap items-start justify-between gap-x-6 gap-y-3 pb-5 pt-4",
         bordered && "border-b border-[var(--yak-components-page-header-border)]",
         className,
       )}
     >
       <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
-        <h1 className="text-lg leading-7 font-semibold text-[var(--yak-components-page-header-title)]">
+        <h1 className="text-xl leading-7 font-semibold tracking-[-0.01em] text-[var(--yak-components-page-header-title)]">
           {title}
         </h1>
         {description != null ? (
-          <div className="mt-1 text-sm leading-5 text-[var(--yak-components-page-header-description)]">
+          <div className="mt-1.5 text-[13px] leading-5 text-[var(--yak-components-page-header-description)]">
             {description}
           </div>
         ) : null}

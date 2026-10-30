@@ -1,5 +1,5 @@
 import { Alert, Button, Empty, PageHeader, Spinner } from "@yak-ops/yak-ui";
-import { Plus } from "lucide-react";
+import { Box, Folder, Layers, Plus, Table2, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { getModels } from "@/service/data-modeling/dimension-modeling";
@@ -60,25 +60,47 @@ function sameNode(left: Selection, right: Selection) {
   }
 }
 
+type TreeIcon = "root" | "folder" | "dimension" | "process" | "model";
+
+const TREE_ICONS = {
+  root: Layers,
+  folder: Folder,
+  dimension: Box,
+  process: Workflow,
+  model: Table2,
+} as const;
+
 function TreeItem(props: {
   label: string;
   meta?: string;
   level: number;
   active?: boolean;
+  icon?: TreeIcon;
   onClick: () => void;
 }) {
+  const Icon = TREE_ICONS[props.icon ?? "folder"];
   return (
     <button
       type="button"
       onClick={props.onClick}
-      style={{ paddingLeft: 8 + props.level * 12 }}
+      style={{ paddingLeft: 8 + props.level * 10 }}
       className={[
-        "flex w-full items-center gap-2 rounded-md py-1 pr-2 text-left text-sm transition-colors",
+        "mx-1 flex h-8 w-[calc(100%-0.5rem)] items-center gap-2 rounded-lg pr-2 text-left text-[13px] transition-colors duration-150",
         props.active
-          ? "bg-[var(--yak-color-primary-subtle)] font-semibold text-[var(--yak-color-primary)]"
-          : "text-[var(--yak-components-panel-text)] hover:bg-[var(--yak-color-hover)]",
+          ? "bg-[var(--yak-color-primary-subtle)] font-medium text-[var(--yak-color-primary)]"
+          : "text-[var(--yak-color-text-primary)] hover:bg-[var(--yak-color-surface-muted)]",
       ].join(" ")}
     >
+      <Icon
+        size={15}
+        strokeWidth={1.75}
+        className={
+          "shrink-0 " +
+          (props.active
+            ? "text-[var(--yak-color-primary)]"
+            : "text-[var(--yak-components-muted-text)]")
+        }
+      />
       <span className="truncate">{props.label}</span>
       {props.meta && (
         <span className="ml-auto shrink-0 text-xs font-normal text-[var(--yak-components-muted-text)]">
@@ -92,7 +114,7 @@ function TreeItem(props: {
 function GroupLabel({ children, level }: { children: ReactNode; level: number }) {
   return (
     <div
-      className="pb-0.5 pt-2 text-xs font-medium text-[var(--yak-components-muted-text)]"
+      className="pb-1 pt-2.5 text-[11px] font-medium tracking-[0.04em] text-[var(--yak-components-muted-text)]"
       style={{ paddingLeft: 8 + level * 12 }}
     >
       {children}
@@ -499,11 +521,11 @@ export default function DimensionModelingPage() {
     catalog.tree.datamarts.length === 0;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--yak-color-background)]">
       <PageHeader
         title="维度建模"
-        bordered
-        className="bg-[var(--yak-color-background)] px-6 max-md:px-4"
+        description="设计维度模型与事实表，并维护字段映射关系。"
+        className="px-6 pb-5 pt-5 max-md:px-4"
         extra={
           <div className="flex items-center gap-2">
             <Button
@@ -528,8 +550,8 @@ export default function DimensionModelingPage() {
           </Alert>
         </div>
       )}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 px-6 pb-4 pt-5 max-md:px-4 md:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="min-h-0 overflow-auto border-r border-[var(--yak-components-panel-border)] pr-3">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 px-6 pb-6 max-md:px-4 md:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="min-h-0 overflow-auto rounded-xl border border-[var(--yak-color-border)] bg-[var(--yak-components-panel-bg)] p-2 shadow-[0_1px_2px_0_rgb(16_24_40/4%)]">
           {catalog.status === "loading" ? (
             <div className="flex h-32 items-center justify-center">
               <Spinner />
@@ -541,6 +563,7 @@ export default function DimensionModelingPage() {
               {/* The root is the only scope that lets the filter bar query the whole Workspace. */}
               <TreeItem
                 label="全部逻辑模型"
+                icon="root"
                 level={0}
                 active={selected.kind === "ROOT"}
                 onClick={() => select({ kind: "ROOT" })}
@@ -573,6 +596,7 @@ export default function DimensionModelingPage() {
                                   ? `${modelsByDimension.get(dimension.id)?.length} 表`
                                   : undefined
                               }
+                              icon="dimension"
                               level={2}
                               active={sameNode(selected, { kind: "DIMENSION", dimension })}
                               onClick={() => select({ kind: "DIMENSION", dimension })}
@@ -581,6 +605,7 @@ export default function DimensionModelingPage() {
                               <TreeItem
                                 key={model.id}
                                 label={`${model.name}（${model.type === "DIM" ? "维度表" : "未知"}）`}
+                                icon="model"
                                 level={3}
                                 onClick={() => editModel(model)}
                               />
@@ -605,6 +630,7 @@ export default function DimensionModelingPage() {
                                   ? `${modelsByProcess.get(process.id)?.length} 表`
                                   : undefined
                               }
+                              icon="process"
                               level={2}
                               active={sameNode(selected, {
                                 kind: "PROCESS",
@@ -618,6 +644,7 @@ export default function DimensionModelingPage() {
                               <TreeItem
                                 key={model.id}
                                 label={`${model.name}（明细表）`}
+                                icon="model"
                                 level={3}
                                 onClick={() => editModel(model)}
                               />
@@ -648,6 +675,7 @@ export default function DimensionModelingPage() {
                             ? `${modelsByDimension.get(dimension.id)?.length} 表`
                             : undefined
                         }
+                        icon="dimension"
                         level={1}
                         active={sameNode(selected, { kind: "DIMENSION", dimension })}
                         onClick={() => select({ kind: "DIMENSION", dimension })}
@@ -656,6 +684,7 @@ export default function DimensionModelingPage() {
                         <TreeItem
                           key={model.id}
                           label={`${model.name}（维度表）`}
+                          icon="model"
                           level={2}
                           onClick={() => editModel(model)}
                         />
