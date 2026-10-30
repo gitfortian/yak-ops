@@ -140,7 +140,8 @@ public interface TagMapper {
             @Param("tableIds") List<String> tableIds,
             @Param("tagValueIds") List<String> tagValueIds);
 
-    @Select("SELECT tag_value_id,COUNT(*) AS usage_count FROM yak_ops_data_map_table_tag_value "
+    /** The column labels must spell the {@code TagValueUsageRow} properties, not the table columns. */
+    @Select("SELECT tag_value_id AS valueId,COUNT(*) AS usageCount FROM yak_ops_data_map_table_tag_value "
             + "WHERE workspace_id=#{workspaceId} GROUP BY tag_value_id")
     List<TagValueUsageRow> listUsageCounts(@Param("workspaceId") String workspaceId);
 

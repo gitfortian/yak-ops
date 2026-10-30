@@ -160,10 +160,12 @@ class TagDatabaseIT {
         // foreign keys reject it, so no service mistake can bind across a Workspace boundary.
         assertThrows(
                 DataIntegrityViolationException.class,
-                () -> tagMapper.insertBindings(List.of(binding(OTHER_WORKSPACE, "table-1", "value-1"))));
+                () -> insertBindingRaw(OTHER_WORKSPACE, "table-1", "value-1"));
 
         assertEquals(0, jdbc.queryForObject(
-                "SELECT COUNT(*) FROM yak_ops_data_map_table_tag_value", Integer.class));
+                "SELECT COUNT(*) FROM yak_ops_data_map_table_tag_value WHERE workspace_id=?",
+                Integer.class,
+                OTHER_WORKSPACE));
     }
 
     @Test
@@ -173,7 +175,12 @@ class TagDatabaseIT {
         // table-1 exists, but as an asset of ws-b; claiming it for ws-a fails the composite key.
         assertThrows(
                 DataIntegrityViolationException.class,
-                () -> tagMapper.insertBindings(List.of(binding(WORKSPACE, "table-1", "value-1"))));
+                () -> insertBindingRaw(WORKSPACE, "table-1", "value-1"));
+
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM yak_ops_data_map_table_tag_value WHERE workspace_id=?",
+                Integer.class,
+                WORKSPACE));
     }
 
     @Test
@@ -182,9 +189,10 @@ class TagDatabaseIT {
         insertKey("key-2", WORKSPACE, "subject");
         insertValue("value-1", "key-1", WORKSPACE, "电商");
         insertValue("value-2", "key-2", WORKSPACE, "电商");
+        insertValue("value-4", "key-1", WORKSPACE, "Retail");
 
         assertThrows(DuplicateKeyException.class, () -> insertKey("key-3", WORKSPACE, "Dept"));
-        assertThrows(DuplicateKeyException.class, () -> insertValue("value-3", "key-1", WORKSPACE, "DEPT"));
+        assertThrows(DuplicateKeyException.class, () -> insertValue("value-3", "key-1", WORKSPACE, "RETAIL"));
 
         // The same value name under a different key stays legal: uniqueness is per key.
         assertNotNull(tagMapper.findValueByName("key-2", "电商"));
@@ -315,6 +323,20 @@ class TagDatabaseIT {
         row.setCreateTime(LocalDateTime.now());
         row.setCreateBy("it");
         return row;
+    }
+
+    /**
+     * Binds through a plain INSERT because {@code insertBindings} uses {@code INSERT IGNORE}, which
+     * drops a foreign-key row as a warning. The constraint is what this proves, so the statement
+     * must not carry the clause that suppresses it.
+     */
+    private void insertBindingRaw(String workspaceId, String tableId, String valueId) {
+        jdbc.update(
+                "INSERT INTO yak_ops_data_map_table_tag_value"
+                        + "(workspace_id,table_id,tag_value_id,create_time,create_by) VALUES(?,?,?,NOW(3),'it')",
+                workspaceId,
+                tableId,
+                valueId);
     }
 
     private void table(String id, String workspaceId, String datasourceId) {

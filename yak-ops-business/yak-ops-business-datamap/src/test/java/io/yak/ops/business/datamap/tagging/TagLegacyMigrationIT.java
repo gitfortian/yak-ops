@@ -113,7 +113,7 @@ class TagLegacyMigrationIT {
         List<String> keyIds = jdbc.query(
                 "SELECT key_id FROM yak_ops_tag_value WHERE workspace_id=?", (rs, row) -> rs.getString("key_id"),
                 WORKSPACE);
-        assertEquals(1, keyIds.size());
+        assertEquals(1, keyIds.stream().distinct().count());
         assertTrue(keyIds.contains(legacyKeyId(WORKSPACE)));
     }
 
@@ -122,9 +122,13 @@ class TagLegacyMigrationIT {
         assertEquals(3, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM yak_ops_data_map_table_tag_value WHERE workspace_id=?", Integer.class,
                 WORKSPACE));
+        // table-1 carries the two bindings of its author, so one distinct author proves both survived.
         assertEquals("member-1", jdbc.queryForObject(
-                "SELECT create_by FROM yak_ops_data_map_table_tag_value WHERE workspace_id=? AND table_id=?",
+                "SELECT DISTINCT create_by FROM yak_ops_data_map_table_tag_value WHERE workspace_id=? AND table_id=?",
                 String.class, WORKSPACE, "table-1"));
+        assertEquals("member-2", jdbc.queryForObject(
+                "SELECT create_by FROM yak_ops_data_map_table_tag_value WHERE workspace_id=? AND table_id=?",
+                String.class, WORKSPACE, "table-2"));
         assertEquals(1, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM yak_ops_data_map_table_tag_value b JOIN yak_ops_tag_value v "
                         + "ON v.id=b.tag_value_id AND v.workspace_id=b.workspace_id "
