@@ -141,10 +141,10 @@ export default function ModelPanel(props: Props) {
   ];
   const description = props.description.trim();
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-[var(--yak-color-border)] bg-[var(--yak-components-panel-bg)] shadow-[0_1px_2px_0_rgb(16_24_40/4%)]">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--yak-components-control-border)] px-4 py-3">
         <div className="min-w-0">
-          <h2 className="truncate text-sm font-medium">{props.title}</h2>
+          <h2 className="truncate text-[15px] font-semibold tracking-[-0.01em]">{props.title}</h2>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             {props.tags?.map((tag) => (
               <Badge key={tag} tone="neutral">

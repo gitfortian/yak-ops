@@ -4,11 +4,11 @@
   --yak-components-button-primary-bg-hover: color-mix(
     in srgb,
     var(--yak-components-page-header-title) 90%,
-    #000
+    var(--yak-color-mix-dark)
   );
   --yak-components-button-primary-bg-active: color-mix(
     in srgb,
     var(--yak-components-page-header-title) 82%,
-    #000
+    var(--yak-color-mix-dark)
   );
 }

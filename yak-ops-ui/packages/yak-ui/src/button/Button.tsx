@@ -12,9 +12,9 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         primary:
-          "border border-[var(--yak-components-button-primary-bg)] bg-[var(--yak-components-button-primary-bg)] [color:var(--yak-components-button-primary-text)] hover:border-[var(--yak-components-button-primary-bg-hover)] hover:bg-[var(--yak-components-button-primary-bg-hover)] active:border-[var(--yak-components-button-primary-bg-active)] active:bg-[var(--yak-components-button-primary-bg-active)]",
+          "border border-[var(--yak-components-button-primary-bg)] bg-[var(--yak-components-button-primary-bg)] [color:var(--yak-components-button-primary-text)] shadow-xs hover:border-[var(--yak-components-button-primary-bg-hover)] hover:bg-[var(--yak-components-button-primary-bg-hover)] active:border-[var(--yak-components-button-primary-bg-active)] active:bg-[var(--yak-components-button-primary-bg-active)]",
         secondary:
-          "border border-transparent bg-[var(--yak-components-button-secondary-bg)] [color:var(--yak-components-button-secondary-text)] hover:bg-[var(--yak-components-button-secondary-bg-hover)] active:bg-[var(--yak-components-button-secondary-bg-active)]",
+          "border border-[var(--yak-color-border)] bg-[var(--yak-components-button-secondary-bg)] [color:var(--yak-components-button-secondary-text)] shadow-xs hover:bg-[var(--yak-components-button-secondary-bg-hover)] active:bg-[var(--yak-components-button-secondary-bg-active)]",
         ghost:
           "border border-transparent bg-transparent [color:var(--yak-components-button-ghost-text)] hover:bg-[var(--yak-components-button-ghost-bg-hover)] hover:[color:var(--yak-components-button-secondary-text)] active:bg-[var(--yak-components-button-secondary-bg-active)]",
         danger:
@@ -22,11 +22,11 @@ export const buttonVariants = cva(
       },
       size: {
         small:
-          "h-7 gap-1.5 rounded-[var(--yak-radius-control-small)] px-2.5 text-[length:var(--yak-font-size-control-small)]",
+          "h-8 gap-1 rounded-[var(--yak-radius-control-small)] px-3.5 text-[length:var(--yak-font-size-control-small)]",
         medium:
-          "h-[34px] gap-[7px] rounded-[var(--yak-radius-control-medium)] px-[13px] text-[length:var(--yak-font-size-control-medium)]",
+          "h-9 gap-1 rounded-[var(--yak-radius-control-medium)] px-4 text-[length:var(--yak-font-size-control-medium)]",
         large:
-          "h-10 gap-2 rounded-[var(--yak-radius-control-large)] px-4 text-[length:var(--yak-font-size-control-large)]",
+          "h-10 gap-1.5 rounded-[var(--yak-radius-control-large)] px-4 text-[length:var(--yak-font-size-control-large)]",
       },
     },
     defaultVariants: {

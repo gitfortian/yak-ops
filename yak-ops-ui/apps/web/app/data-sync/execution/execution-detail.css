@@ -2,15 +2,15 @@
   display: inline-flex;
   flex-shrink: 0;
   vertical-align: middle;
-  color: #667085;
+  color: var(--yak-color-text-secondary);
 }
 
 .sync-execution-status[data-status="FINISHED"] {
-  color: #32b52c;
+  color: var(--yak-color-status-success);
 }
 
 .sync-execution-status[data-status="FAILED"] {
-  color: #d92d20;
+  color: var(--yak-components-danger-text);
 }
 
 .sync-execution-status[data-status="RUNNING"] {
@@ -19,7 +19,7 @@
 
 .sync-execution-status[data-status="CANCELLING"],
 .sync-execution-status[data-status="RECONCILING"] {
-  color: #b54708;
+  color: var(--yak-color-status-warning);
 }
 
 .sync-execution-progress {
@@ -30,24 +30,24 @@
   justify-content: center;
   overflow: hidden;
   border-radius: 2px;
-  background: #f2f4f7;
-  color: #667085;
+  background: var(--yak-color-surface-muted);
+  color: var(--yak-color-text-secondary);
   font-size: 12px;
   line-height: 22px;
 }
 
 .sync-execution-progress[data-mode="success"] {
-  background: #32b52c;
-  color: white;
+  background: var(--yak-color-status-success);
+  color: var(--yak-components-button-primary-text);
 }
 
 .sync-execution-progress[data-mode="failure"] {
-  background: #fee4e2;
-  color: #b42318;
+  background: var(--yak-color-status-danger-surface);
+  color: var(--yak-color-text-danger);
 }
 
 .sync-execution-progress[data-mode="progress"] {
-  color: #344054;
+  color: var(--yak-color-text-primary);
 }
 
 .sync-execution-progress-fill {
@@ -57,7 +57,7 @@
 }
 
 .sync-execution-progress[data-mode="failure"] .sync-execution-progress-fill {
-  background: #fda29b;
+  background: var(--yak-color-status-danger-soft);
 }
 
 .sync-execution-progress-value {
@@ -67,7 +67,7 @@
 }
 
 .sync-execution-progress-value[data-light="true"] {
-  color: #fff;
+  color: var(--yak-components-button-primary-text);
 }
 
 .sync-execution-progress[data-mode="running"] {

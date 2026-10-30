@@ -66,14 +66,14 @@ export default function PersonalPage() {
   }, [page.isSuccess, page.isPlaceholderData, records.length, total, pageNo, tab, setSearchParams]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--yak-color-background)]">
       <PageHeader
         title="我的数据"
-        bordered
-        className="bg-[var(--yak-color-background)] px-6 max-md:px-4"
+        description="你收藏与最近访问过的数据资产。"
+        className="px-6 pb-5 pt-5 max-md:px-4"
       />
 
-      <div className="flex min-h-0 flex-1 flex-col px-6 pb-4 pt-5 max-md:px-4">
+      <div className="flex min-h-0 flex-1 flex-col px-6 pb-4 max-md:px-4">
         <Card className="flex min-h-0 flex-1 flex-col p-4">
           <Tabs
             value={tab}

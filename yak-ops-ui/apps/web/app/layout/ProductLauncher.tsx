@@ -52,7 +52,7 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
           aria-label="全局产品一级菜单"
           aria-hidden={!open}
           className={[
-            "user-menu flex h-full w-[220px] flex-col bg-[#15181c] text-xs text-white",
+            "user-menu flex h-full w-[220px] flex-col bg-[var(--yak-color-surface-inverse)] text-xs text-white",
             "box-border",
             firstLevelVisible ? "user-menu-active" : "",
           ].join(" ")}
@@ -63,9 +63,11 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
             aria-controls="all-product-menu"
             tabIndex={open ? 0 : -1}
             className={[
-              "view-all mb-[7px] flex h-10 w-full shrink-0 cursor-pointer items-center border-0 px-0 text-left text-[#d3d3d3] transition-colors",
-              "hover:bg-[#282b2e] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/20",
-              secondLevelOpen ? "bg-[#1c1e21] text-white" : "bg-transparent",
+              "view-all mb-[7px] flex h-10 w-full shrink-0 cursor-pointer items-center border-0 px-0 text-left text-[var(--yak-color-text-inverse-secondary)] transition-colors",
+              "hover:bg-[var(--yak-color-surface-inverse-hover)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/20",
+              secondLevelOpen
+                ? "bg-[var(--yak-color-surface-inverse-raised)] text-white"
+                : "bg-transparent",
             ].join(" ")}
             onClick={() => setAllProductsOpen((value) => !value)}
           >
@@ -87,7 +89,7 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
                 return (
                   <div
                     key={item.id}
-                    className="item group my-0.5 flex h-8 w-full items-center rounded px-1.5 text-[#cbced3] transition-colors hover:bg-[#282b2e] hover:text-white"
+                    className="item group my-0.5 flex h-8 w-full items-center rounded px-1.5 text-[var(--yak-color-text-inverse-secondary)] transition-colors hover:bg-[var(--yak-color-surface-inverse-hover)] hover:text-white"
                   >
                     <Link
                       to={item.path}
@@ -96,7 +98,7 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
                       onClick={onClose}
                     >
                       <Icon
-                        className="h-3.5 w-3.5 shrink-0 text-[#5d6064] transition-colors group-hover:text-white"
+                        className="h-3.5 w-3.5 shrink-0 text-[var(--yak-color-text-inverse-muted)] transition-colors group-hover:text-white"
                         strokeWidth={1.8}
                       />
                       <span className="product-name ml-2 min-w-0 flex-1 truncate">
