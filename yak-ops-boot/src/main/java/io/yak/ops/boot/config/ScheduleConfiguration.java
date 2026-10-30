@@ -17,6 +17,15 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class ScheduleConfiguration {
     @Bean
+    static org.springframework.beans.factory.config.BeanFactoryPostProcessor registryMigrationOrder() {
+        return factory -> {
+            if (factory.containsBeanDefinition("jdbcRegistry")) {
+                factory.getBeanDefinition("jdbcRegistry").setDependsOn("yakOpsFlyway");
+            }
+        };
+    }
+
+    @Bean
     Clock scheduleClock() {
         return Clock.systemUTC();
     }

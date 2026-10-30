@@ -9,13 +9,14 @@ import io.yak.ops.plugin.task.api.execution.TaskHandle;
 import io.yak.ops.plugin.task.api.execution.TaskOutcome;
 import io.yak.ops.plugin.task.api.execution.TaskRuntimeReference;
 import io.yak.ops.plugin.task.api.execution.TaskStartRejectedException;
+import io.yak.ops.worker.executor.PhysicalTaskEngineDelegator;
 import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Resource;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.slf4j.Logger;
@@ -35,7 +36,9 @@ public class TaskExecutionObserver implements AutoCloseable {
     @Resource
     private InstanceService instances;
 
-    private final ConcurrentHashMap<String, TaskHandle> active = new ConcurrentHashMap<>();
+    @Resource
+    private PhysicalTaskEngineDelegator worker;
+
     private final ExecutorService callbacks = Executors.newVirtualThreadPerTaskExecutor();
 
     /**
@@ -45,13 +48,22 @@ public class TaskExecutionObserver implements AutoCloseable {
      * @param submission pending physical execution handle
      */
     public void observe(DispatchTicket ticket, CompletionStage<TaskHandle> submission) {
+        observeTracked(ticket, submission);
+    }
+
+    /** Completes only after terminal business persistence has been attempted. */
+    public CompletionStage<TaskOutcome> observeTracked(DispatchTicket ticket, CompletionStage<TaskHandle> submission) {
+        CompletableFuture<TaskOutcome> observed = new CompletableFuture<>();
         submission.whenCompleteAsync(
                 (handle, failure) -> {
                     try (MDC.MDCCloseable ignored = MDC.putCloseable("taskLogId", ticket.instanceId())) {
-                        observeSubmission(ticket, handle, failure);
+                        observeSubmission(ticket, handle, failure, observed);
+                    } catch (RuntimeException error) {
+                        observed.completeExceptionally(error);
                     }
                 },
                 callbacks);
+        return observed;
     }
 
     /**
@@ -60,7 +72,7 @@ public class TaskExecutionObserver implements AutoCloseable {
      * @param instanceId active Task Instance identity
      */
     public void cancel(String instanceId) {
-        TaskHandle handle = active.get(instanceId);
+        TaskHandle handle = worker.taskHandle(instanceId).orElse(null);
         if (handle != null) {
             handle.cancel();
         }
@@ -68,20 +80,20 @@ public class TaskExecutionObserver implements AutoCloseable {
 
     /** Returns process-local progress for the physical Job currently owned by this Instance. */
     public OptionalInt progressPercent(String instanceId) {
-        TaskHandle handle = active.get(instanceId);
+        TaskHandle handle = worker.taskHandle(instanceId).orElse(null);
         return handle == null ? OptionalInt.empty() : handle.progressPercent();
     }
 
     /** Returns a process-owned observation only; terminal reads use the persisted Instance report. */
     public java.util.Optional<String> executionReport(String instanceId) {
-        TaskHandle handle = active.get(instanceId);
+        TaskHandle handle = worker.taskHandle(instanceId).orElse(null);
         if (handle == null) return java.util.Optional.empty();
         return publicObservation(instanceId, handle, false);
     }
 
     /** Returns a compact observation for an owned active Instance without table detail. */
     public Optional<String> executionSummary(String instanceId) {
-        TaskHandle handle = active.get(instanceId);
+        TaskHandle handle = worker.taskHandle(instanceId).orElse(null);
         if (handle == null) return Optional.empty();
         return publicObservation(instanceId, handle, true);
     }
@@ -107,9 +119,10 @@ public class TaskExecutionObserver implements AutoCloseable {
 
     /** Requests cancellation for all active physical executions during process shutdown. */
     public void cancelActive() {
-        active.forEach((instanceId, handle) -> {
+        worker.queryTaskExecutors().forEach(executor -> {
+            String instanceId = executor.getId();
             try {
-                handle.cancel();
+                executor.kill();
             } catch (RuntimeException failure) {
                 LOG.warn(
                         "Unable to request Task shutdown cancellation, instanceId={}, exceptionType={}",
@@ -120,6 +133,11 @@ public class TaskExecutionObserver implements AutoCloseable {
     }
 
     private void observeSubmission(DispatchTicket ticket, TaskHandle handle, Throwable failure) {
+        observeSubmission(ticket, handle, failure, null);
+    }
+
+    private void observeSubmission(
+            DispatchTicket ticket, TaskHandle handle, Throwable failure, CompletableFuture<TaskOutcome> observed) {
         if (failure != null) {
             Throwable cause = failure;
             if (cause instanceof CompletionException && cause.getCause() != null) {
@@ -136,12 +154,18 @@ public class TaskExecutionObserver implements AutoCloseable {
                         "Task submission result could not be persisted, instanceId={}, exceptionType={}",
                         ticket.instanceId(),
                         persistFailure.getClass().getSimpleName());
+                if (observed != null) observed.completeExceptionally(persistFailure);
+                return;
+            }
+            if (observed != null) {
+                if (cause instanceof TaskStartRejectedException) observed.complete(TaskOutcome.FAILED);
+                else observed.completeExceptionally(cause);
             }
             return;
         }
         String instanceId = ticket.instanceId();
-        active.put(instanceId, handle);
         try {
+            worker.registerTaskHandle(instanceId, handle);
             TaskRuntimeReference reference = handle.runtimeReference().orElse(null);
             lifecycle.started(ticket, reference);
             LOG.info("Task Instance started, instanceId={}", instanceId);
@@ -171,7 +195,18 @@ public class TaskExecutionObserver implements AutoCloseable {
                     .whenCompleteAsync(
                             (outcome, error) -> {
                                 try (MDC.MDCCloseable ignored = MDC.putCloseable("taskLogId", ticket.instanceId())) {
-                                    observeTerminal(ticket, handle, outcome, error);
+                                    boolean persisted = observeTerminal(ticket, handle, outcome, error);
+                                    if (observed != null) {
+                                        if (!persisted)
+                                            observed.completeExceptionally(
+                                                    new IllegalStateException("Task outcome could not be persisted"));
+                                        else if (error == null && outcome != null) observed.complete(outcome);
+                                        else
+                                            observed.completeExceptionally(
+                                                    error == null
+                                                            ? new IllegalStateException("Unknown Task outcome")
+                                                            : error);
+                                    }
                                 }
                             },
                             callbacks);
@@ -183,15 +218,16 @@ public class TaskExecutionObserver implements AutoCloseable {
                 observationFailure.addSuppressed(cancellationFailure);
             }
             lifecycle.uncertain(ticket);
-            active.remove(instanceId, handle);
             LOG.error(
                     "Unable to observe Task execution, instanceId={}, exceptionType={}",
                     instanceId,
                     observationFailure.getClass().getSimpleName());
+            if (observed != null) observed.completeExceptionally(observationFailure);
         }
     }
 
-    private void observeTerminal(DispatchTicket ticket, TaskHandle handle, TaskOutcome outcome, Throwable failure) {
+    private boolean observeTerminal(DispatchTicket ticket, TaskHandle handle, TaskOutcome outcome, Throwable failure) {
+        boolean persisted = false;
         try {
             if (failure == null && outcome != null) {
                 handle.runtimeReference().ifPresent(reference -> lifecycle.runtimeReference(ticket, reference));
@@ -210,10 +246,24 @@ public class TaskExecutionObserver implements AutoCloseable {
                 if (report.isPresent()) lifecycle.complete(ticket, outcome, report.get());
                 else lifecycle.complete(ticket, outcome);
                 LOG.info("Task Instance completed, instanceId={}, outcome={}", ticket.instanceId(), outcome);
+                // complete() is intentionally idempotent. Never ACK a stale
+                // dispatch or a terminal outcome skipped due to RECONCILING.
+                TaskInstanceStatus expectedStatus =
+                        switch (outcome) {
+                            case FINISHED -> TaskInstanceStatus.FINISHED;
+                            case FAILED -> TaskInstanceStatus.FAILED;
+                            case CANCELED -> TaskInstanceStatus.CANCELED;
+                        };
+                io.yak.ops.dao.entity.task.InstanceEntity actual =
+                        instances.instance(ticket.workspaceId(), ticket.instanceId());
+                persisted = actual != null
+                        && actual.getStatus() == expectedStatus
+                        && ticket.dispatchToken().equals(actual.getDispatchToken());
             } else {
                 var report = publicObservation(ticket.instanceId(), handle, false);
                 if (report.isPresent()) lifecycle.uncertain(ticket, report.get());
                 else lifecycle.uncertain(ticket);
+                persisted = true;
             }
         } catch (RuntimeException persistenceFailure) {
             LOG.error(
@@ -222,15 +272,16 @@ public class TaskExecutionObserver implements AutoCloseable {
                     persistenceFailure.getClass().getSimpleName());
             try {
                 lifecycle.uncertain(ticket);
+                // Reconciling is not a confirmed physical SUCCESS/FAILED ACK.
+                persisted = false;
             } catch (RuntimeException reconciliationFailure) {
                 LOG.error(
                         "Unable to protect uncertain Task execution, instanceId={}, exceptionType={}",
                         ticket.instanceId(),
                         reconciliationFailure.getClass().getSimpleName());
             }
-        } finally {
-            active.remove(ticket.instanceId(), handle);
         }
+        return persisted;
     }
 
     @PreDestroy

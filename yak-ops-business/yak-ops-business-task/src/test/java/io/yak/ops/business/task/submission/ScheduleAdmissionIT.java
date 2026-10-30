@@ -10,11 +10,11 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
-import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
+import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
-import io.yak.ops.business.task.submission.impl.AdmissionServiceImpl;
 import io.yak.ops.business.task.submission.impl.SubmissionServiceImpl;
+import io.yak.ops.business.task.submission.impl.TaskSubmissionTransactionServiceImpl;
 import io.yak.ops.common.enums.schedule.ScheduleFireOutcome;
 import io.yak.ops.common.enums.schedule.ScheduleFireReason;
 import io.yak.ops.common.enums.schedule.ScheduleTargetType;
@@ -22,32 +22,37 @@ import io.yak.ops.common.enums.task.DefinitionStatus;
 import io.yak.ops.configuration.ReadonlyConfig;
 import io.yak.ops.configuration.rule.OptionRule;
 import io.yak.ops.dao.entity.task.DefinitionEntity;
-import io.yak.ops.dao.repository.schedule.ScheduleFireRepository;
-import io.yak.ops.dao.repository.schedule.ScheduleRepository;
+import io.yak.ops.dao.repository.task.TaskGroupQueueRepository;
+import io.yak.ops.dao.repository.task.InstanceRepository;
+import io.yak.ops.dao.entity.task.TaskGroupQueueEntity;
+import io.yak.ops.common.enums.task.TaskTriggerType;
+import io.yak.ops.common.enums.task.TaskInstanceStatus;
 import io.yak.ops.dao.repository.schedule.impl.ScheduleFireRepositoryImpl;
 import io.yak.ops.dao.repository.schedule.impl.ScheduleRepositoryImpl;
+import io.yak.ops.dao.repository.schedule.ScheduleFireRepository;
+import io.yak.ops.dao.repository.schedule.ScheduleRepository;
 import io.yak.ops.dao.repository.task.DefinitionRepository;
 import io.yak.ops.dao.repository.task.impl.DefinitionRepositoryImpl;
 import io.yak.ops.dao.repository.task.impl.DefinitionVersionRepositoryImpl;
-import io.yak.ops.dao.repository.task.impl.ExecutionClaimRepositoryImpl;
-import io.yak.ops.dao.repository.task.impl.ExecutionOwnerRepositoryImpl;
+import io.yak.ops.dao.repository.task.impl.TaskGroupQueueRepositoryImpl;
 import io.yak.ops.dao.repository.task.impl.InstanceRepositoryImpl;
 import io.yak.ops.plugin.scheduler.api.CronService;
 import io.yak.ops.plugin.scheduler.api.ScheduleRegistration;
 import io.yak.ops.plugin.scheduler.api.ScheduleTrigger;
 import io.yak.ops.plugin.scheduler.quartz.QuartzCronService;
 import io.yak.ops.plugin.scheduler.quartz.QuartzScheduler;
-import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.execution.ExecutableTaskPlugin;
 import io.yak.ops.plugin.task.api.execution.ExecutionResource;
-import io.yak.ops.plugin.task.api.execution.TaskAdmissionPlan;
 import io.yak.ops.plugin.task.api.execution.TaskExecutionIdentity;
+import io.yak.ops.plugin.task.api.execution.TaskExecutionResources;
 import io.yak.ops.plugin.task.api.execution.TaskHandle;
+import io.yak.ops.plugin.task.api.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContext;
 import io.yak.ops.plugin.task.api.validation.TaskValidationContextFactory;
 import io.yak.ops.testutils.MySqlDatabase;
 import io.yak.ops.workspace.WorkspaceService;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -58,36 +63,43 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.List;
+import java.util.Map;
 import javax.sql.DataSource;
+import org.apache.dolphinscheduler.registry.api.Registry;
+import org.apache.dolphinscheduler.plugin.registry.jdbc.JdbcRegistryProperties;
+import org.apache.dolphinscheduler.plugin.registry.jdbc.server.JdbcRegistryServer;
+import org.apache.dolphinscheduler.plugin.registry.jdbc.repository.JdbcRegistryClientRepository;
+import org.apache.dolphinscheduler.plugin.registry.jdbc.repository.JdbcRegistryDataRepository;
+import org.apache.dolphinscheduler.plugin.registry.jdbc.repository.JdbcRegistryDataChangeEventRepository;
+import org.apache.dolphinscheduler.plugin.registry.jdbc.repository.JdbcRegistryLockRepository;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.extension.RegisterExtension;
-import org.mybatis.spring.SqlSessionTemplate;
 import org.mybatis.spring.annotation.MapperScan;
+import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.support.JdbcTransactionManager;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** Real MySQL savepoint, race, commit-uncertainty, retention, and Quartz JDBC JobStore contracts. */
@@ -104,6 +116,7 @@ class ScheduleAdmissionIT {
     private static ScheduleAdmissionController admissionController;
     private static SubmissionService submissions;
     private static DataSource dataSource;
+    private static final Registry REGISTRY = mock(Registry.class);
 
     @RegisterExtension
     static final MySqlDatabase MYSQL = new MySqlDatabase("mysql-admission", false, false);
@@ -156,12 +169,15 @@ class ScheduleAdmissionIT {
                 DefinitionRepositoryImpl.class,
                 DefinitionVersionRepositoryImpl.class,
                 InstanceRepositoryImpl.class,
-                ExecutionClaimRepositoryImpl.class,
-                ExecutionOwnerRepositoryImpl.class,
+                TaskGroupQueueRepositoryImpl.class,
                 ScheduleRepositoryImpl.class,
                 ScheduleFireRepositoryImpl.class,
                 SubmissionServiceImpl.class,
-                AdmissionServiceImpl.class);
+                TaskSubmissionTransactionServiceImpl.class,
+                JdbcRegistryClientRepository.class,
+                JdbcRegistryDataRepository.class,
+                JdbcRegistryDataChangeEventRepository.class,
+                JdbcRegistryLockRepository.class);
         context.refresh();
         admissionController = context.getBean(ScheduleAdmissionController.class);
         submissions = context.getBean(SubmissionService.class);
@@ -183,14 +199,17 @@ class ScheduleAdmissionIT {
         admissionController.stop();
         admissionController.awaitQuiescence();
         LOSE_COMMIT_RESPONSE.set(false);
+        reset(REGISTRY);
+        when(REGISTRY.isConnected()).thenReturn(true);
+        when(REGISTRY.get("/yak-ops/masters/embedded")).thenReturn("test-owner");
         for (String table : List.of(
-                "yak_ops_task_execution_claim",
+                "yak_ops_task_group_queue",
+                "yak_ops_task_group",
                 "yak_ops_task_instance",
                 "yak_ops_schedule_fire",
                 "yak_ops_schedule",
                 "yak_ops_task_definition_version",
-                "yak_ops_task_definition",
-                "yak_ops_task_execution_owner")) {
+                "yak_ops_task_definition")) {
             jdbc.update("DELETE FROM " + table);
         }
         for (String table : List.of(
@@ -211,8 +230,6 @@ class ScheduleAdmissionIT {
         when(AUTHORITY.isActiveMember("ws", "actor")).thenReturn(true);
         PLUGIN.reset();
         insertDefinition();
-        jdbc.update(
-                "INSERT INTO yak_ops_task_execution_owner (id,host_id,state_root,owner_incarnation,last_seen_time,create_time,update_time) VALUES ('embedded','test-host','/test-state','test-owner',UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))");
         jdbc.update(
                 "INSERT INTO yak_ops_schedule (id,workspace_id,target_type,target_id,cron_expression,time_zone,enabled,revision,enabled_at,enabled_by,create_time,update_time,create_by,update_by) VALUES ('schedule','ws','TASK','task','0 * * * * ?','UTC',1,2,'2026-10-13 00:00:00','actor',UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),'actor','actor')");
         NOW.set(BASE);
@@ -263,9 +280,10 @@ class ScheduleAdmissionIT {
         assertEquals(ScheduleFireOutcome.SKIPPED, first.outcome());
         assertEquals(ScheduleFireReason.RESOURCE_BUSY, first.reason());
         assertEquals(0, count("yak_ops_task_instance"));
-        assertEquals(1, count("yak_ops_task_execution_claim"));
+        assertEquals(1, count("yak_ops_task_group_queue"));
         assertEquals(1, count("yak_ops_schedule_fire"));
-        jdbc.update("DELETE FROM yak_ops_task_execution_claim");
+        jdbc.update("DELETE FROM yak_ops_task_group_queue");
+        jdbc.update("UPDATE yak_ops_task_group SET use_size = 0");
         ScheduleFireResult replay = submissions.submitScheduled(trigger());
         assertTrue(replay.replayed());
         assertEquals(ScheduleFireOutcome.SKIPPED, replay.outcome());
@@ -305,7 +323,7 @@ class ScheduleAdmissionIT {
             stop.get(15, TimeUnit.SECONDS);
             assertEquals("SUBMITTED", jdbc.queryForObject("SELECT status FROM yak_ops_task_instance", String.class));
             assertEquals(0, jdbc.queryForObject("SELECT enabled FROM yak_ops_schedule", Integer.class));
-            assertEquals(1, count("yak_ops_task_execution_claim"));
+            assertEquals(1, count("yak_ops_task_group_queue"));
         }
     }
 
@@ -388,7 +406,8 @@ class ScheduleAdmissionIT {
         assertEquals(
                 ScheduleFireOutcome.SKIPPED,
                 submissions.submitScheduled(trigger()).outcome());
-        jdbc.update("DELETE FROM yak_ops_task_execution_claim");
+        jdbc.update("DELETE FROM yak_ops_task_group_queue");
+        jdbc.update("UPDATE yak_ops_task_group SET use_size = 0");
         context.getBean(ScheduleFireRepository.class)
                 .retire("ws", "schedule", LocalDateTime.ofInstant(BASE.plusSeconds(61), ZoneOffset.UTC));
         assertEquals(0, count("yak_ops_schedule_fire"));
@@ -416,8 +435,8 @@ class ScheduleAdmissionIT {
     void databaseOwnerChangeAndMissingPermitFailClosed() {
         assertThrows(
                 IllegalStateException.class,
-                () -> context.getBean(AdmissionService.class).admitScheduled(trigger(), null, null));
-        jdbc.update("UPDATE yak_ops_task_execution_owner SET owner_incarnation='other-owner'");
+                () -> context.getBean(TaskSubmissionTransactionService.class).admitScheduled(trigger(), null, null));
+        when(REGISTRY.get("/yak-ops/masters/embedded")).thenReturn("other-owner");
         assertThrows(IllegalStateException.class, () -> submissions.submitScheduled(trigger()));
         assertFalse(admissionController.isOpen());
         assertEquals(0, count("yak_ops_task_instance"));
@@ -502,10 +521,191 @@ class ScheduleAdmissionIT {
                 "INSERT INTO yak_ops_task_definition_version (id,workspace_id,definition_id,version,parameters,create_time,update_time,create_by,update_by) VALUES ('version','ws','task',1,'{}',UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),'actor','actor')");
     }
 
+    @Test
+    void manualConflictWaitsUntilReleasedAndNeverDispatchesEarly() {
+        PLUGIN.resources = List.of(new ExecutionResource("TEST", "shared"));
+        occupy("shared");
+        SubmissionResult submitted = submissions.submit(new TaskSubmissionCommand(
+                "ws", "task", TaskTriggerType.MANUAL, "manual-wait-01", "actor", null, null, null));
+        assertEquals(TaskInstanceStatus.SUBMITTED, submitted.status());
+        assertEquals(-1, jdbc.queryForObject(
+                "SELECT status FROM yak_ops_task_group_queue WHERE task_id = ?",
+                Integer.class,
+                submitted.instanceId()));
+        InstanceRepository instances = context.getBean(InstanceRepository.class);
+        assertFalse(instances.pending().stream().anyMatch(row -> submitted.instanceId().equals(row.getId())));
+
+        TaskGroupQueueRepository groups = context.getBean(TaskGroupQueueRepository.class);
+        assertFalse(groups.tryAcquire("ws", submitted.instanceId()));
+        groups.releaseOwned("ws", "other-instance");
+        assertTrue(groups.tryAcquire("ws", submitted.instanceId()));
+        assertTrue(groups.allAcquired("ws", submitted.instanceId()));
+        assertTrue(instances.pending().stream().anyMatch(row -> submitted.instanceId().equals(row.getId())));
+    }
+
+    @Test
+    void waitingQueuesHonorPriorityAndThenFifo() {
+        occupy("shared");
+        enqueue("low", "shared", 1);
+        enqueue("high", "shared", 10);
+        TaskGroupQueueRepository groups = context.getBean(TaskGroupQueueRepository.class);
+        assertEquals("high", groups.waiting(10, null).get(0).getInstanceId());
+
+        groups.releaseOwned("ws", "other-instance");
+        assertFalse(groups.tryAcquire("ws", "low"));
+        assertTrue(groups.tryAcquire("ws", "high"));
+        assertFalse(groups.tryAcquire("ws", "low"));
+        groups.releaseOwned("ws", "high");
+        assertTrue(groups.tryAcquire("ws", "low"));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT use_size FROM yak_ops_task_group WHERE resource_key = 'shared'", Integer.class));
+    }
+
+    @Test
+    void multiResourceWaitingNeverOccupiesOnlyTheFreeGroup() {
+        occupy("z-busy");
+        enqueue("multi", "a-free", 0);
+        TaskGroupQueueEntity second = new TaskGroupQueueEntity();
+        second.setWorkspaceId("ws");
+        second.setResourceType("TEST");
+        second.setResourceKey("z-busy");
+        second.setInstanceId("multi");
+        second.initCreate("actor");
+        TaskGroupQueueRepository groups = context.getBean(TaskGroupQueueRepository.class);
+        new TransactionTemplate(context.getBean(PlatformTransactionManager.class))
+                .executeWithoutResult(status -> groups.add(second));
+
+        assertFalse(groups.tryAcquire("ws", "multi"));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT use_size FROM yak_ops_task_group WHERE resource_key = 'a-free'", Integer.class));
+        assertEquals(2, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM yak_ops_task_group_queue WHERE task_id = 'multi' AND status = -1",
+                Integer.class));
+        groups.releaseOwned("ws", "other-instance");
+        assertTrue(groups.tryAcquire("ws", "multi"));
+        assertEquals(2, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM yak_ops_task_group_queue WHERE task_id = 'multi' AND status = 1",
+                Integer.class));
+    }
+
+    @Test
+    void waitingQueueKeysetPagesPastThousandBlockedTasksToFreeResources() {
+        occupy("blocked");
+        for (int i = 0; i < 1000; i++) {
+            enqueue("blocked-" + i, "blocked", 10);
+        }
+        enqueue("free-resource", "free", 0);
+        TaskGroupQueueRepository groups = context.getBean(TaskGroupQueueRepository.class);
+        List<TaskGroupQueueEntity> firstPage = groups.waiting(1000, null);
+        assertEquals(1000, firstPage.size());
+        assertTrue(firstPage.stream().noneMatch(row -> "free-resource".equals(row.getInstanceId())));
+
+        List<TaskGroupQueueEntity> secondPage = groups.waiting(1000, firstPage.get(firstPage.size() - 1));
+        assertEquals(1, secondPage.size());
+        assertEquals("free-resource", secondPage.get(0).getInstanceId());
+        assertTrue(groups.tryAcquire("ws", "free-resource"));
+        assertFalse(groups.tryAcquire("ws", "blocked-0"));
+    }
+
+    @Test
+    void registryPurgePreservesClientRegisteredAfterHeartbeatSnapshot() throws Exception {
+        JdbcRegistryClientRepository clients = context.getBean(JdbcRegistryClientRepository.class);
+        JdbcRegistryClientRepository snapshotClients = org.mockito.Mockito.spy(clients);
+        JdbcRegistryDataRepository data = context.getBean(JdbcRegistryDataRepository.class);
+        JdbcRegistryDataChangeEventRepository events =
+                context.getBean(JdbcRegistryDataChangeEventRepository.class);
+        JdbcRegistryLockRepository locks = context.getBean(JdbcRegistryLockRepository.class);
+        JdbcRegistryProperties properties = new JdbcRegistryProperties();
+        properties.setSessionTimeout(Duration.ofSeconds(60));
+        JdbcRegistryServer server = new JdbcRegistryServer(
+                data, locks, snapshotClients, events, properties,
+                new TransactionTemplate(context.getBean(PlatformTransactionManager.class)));
+        try {
+            jdbc.update(
+                    "INSERT INTO yak_ops_jdbc_registry_data (data_key,data_value,data_type,client_id)"
+                            + " VALUES ('/test/orphan','orphan','EPHEMERAL',70001)");
+            jdbc.update(
+                    "INSERT INTO yak_ops_jdbc_registry_lock (lock_key,lock_owner,client_id)"
+                            + " VALUES ('/test/orphan-lock','orphan',70001)");
+            // Simulate the exact race: B registers AFTER the purge reads its
+            // heartbeat snapshot, but BEFORE it reads metadata and locks.
+            org.mockito.Mockito.doAnswer(invocation -> {
+                Object heartbeatSnapshot = invocation.callRealMethod();
+                jdbc.update(
+                        "INSERT INTO yak_ops_jdbc_registry_client_heartbeat"
+                                + " (id,client_name,last_heartbeat_time,connection_config)"
+                                + " VALUES (70002,'new-client',?,'{}')",
+                        System.currentTimeMillis());
+                jdbc.update(
+                        "INSERT INTO yak_ops_jdbc_registry_data (data_key,data_value,data_type,client_id)"
+                                + " VALUES ('/test/live','live','EPHEMERAL',70002)");
+                jdbc.update(
+                        "INSERT INTO yak_ops_jdbc_registry_lock (lock_key,lock_owner,client_id)"
+                                + " VALUES ('/test/live-lock','live',70002)");
+                return heartbeatSnapshot;
+            }).when(snapshotClients).queryAll();
+
+            Method purge = JdbcRegistryServer.class.getDeclaredMethod("purgeInvalidJdbcRegistryMetadata");
+            purge.setAccessible(true);
+            purge.invoke(server);
+
+            assertEquals(1, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM yak_ops_jdbc_registry_data WHERE data_key='/test/live'", Integer.class));
+            assertEquals(1, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM yak_ops_jdbc_registry_lock WHERE lock_key='/test/live-lock'", Integer.class));
+            assertEquals(0, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM yak_ops_jdbc_registry_data WHERE data_key='/test/orphan'", Integer.class));
+            assertEquals(0, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM yak_ops_jdbc_registry_lock WHERE lock_key='/test/orphan-lock'", Integer.class));
+            assertTrue(jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM yak_ops_jdbc_registry_data_change_event WHERE event_type='DELETE'",
+                    Integer.class) >= 1);
+        } finally {
+            server.close();
+            jdbc.update("DELETE FROM yak_ops_jdbc_registry_data_change_event");
+            jdbc.update("DELETE FROM yak_ops_jdbc_registry_lock");
+            jdbc.update("DELETE FROM yak_ops_jdbc_registry_data");
+            jdbc.update("DELETE FROM yak_ops_jdbc_registry_client_heartbeat");
+        }
+    }
+
+    private static void enqueue(String instanceId, String resource, int priority) {
+        jdbc.update(
+                "INSERT INTO yak_ops_task_instance"
+                        + " (id,workspace_id,definition_id,definition_version,task_type,trigger_type,"
+                        + " request_id,request_fingerprint,resource_revision,status,state_version,"
+                        + " create_time,update_time,create_by,update_by)"
+                        + " VALUES (?, 'ws', 'task', 1, 'SCHEDULE_TEST', 'MANUAL', ?, 'MANUAL:task', 'v1',"
+                        + " 'SUBMITTED', 0, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3), 'actor', 'actor')",
+                instanceId,
+                "request-" + instanceId);
+        TaskGroupQueueEntity queue = new TaskGroupQueueEntity();
+        queue.setWorkspaceId("ws");
+        queue.setResourceType("TEST");
+        queue.setResourceKey(resource);
+        queue.setInstanceId(instanceId);
+        queue.setPriority(priority);
+        queue.initCreate("actor");
+        TaskGroupQueueRepository groups = context.getBean(TaskGroupQueueRepository.class);
+        new TransactionTemplate(context.getBean(PlatformTransactionManager.class))
+                .executeWithoutResult(status -> groups.add(queue));
+    }
+
     private static void occupy(String resource) {
         jdbc.update(
-                "INSERT INTO yak_ops_task_execution_claim (id,workspace_id,resource_type,resource_key,instance_id,create_time,update_time,create_by,update_by) VALUES ('occupied','ws','TEST',?,'other-instance',UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),'actor','actor')",
+                "INSERT INTO yak_ops_task_group"
+                        + " (name,workspace_id,resource_type,resource_key,group_size,use_size,status,create_time,update_time)"
+                        + " VALUES ('TEST','ws','TEST',?,1,1,1,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))",
                 resource);
+        Long groupId = jdbc.queryForObject(
+                "SELECT id FROM yak_ops_task_group WHERE workspace_id='ws' AND resource_type='TEST' AND resource_key=?",
+                Long.class,
+                resource);
+        jdbc.update(
+                "INSERT INTO yak_ops_task_group_queue"
+                        + " (id,task_id,group_id,priority,status,force_start,in_queue,create_time,update_time)"
+                        + " VALUES ('occupied','other-instance',?,0,1,0,1,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))",
+                groupId);
     }
 
     private static void stop(boolean unpublish) {
@@ -525,7 +725,7 @@ class ScheduleAdmissionIT {
 
     @Configuration(proxyBeanMethods = false)
     @EnableTransactionManagement
-    @MapperScan("io.yak.ops.dao.mapper")
+    @MapperScan({"io.yak.ops.dao.mapper", "org.apache.dolphinscheduler.plugin.registry.jdbc.mapper"})
     static class Beans {
         @Bean
         DataSource dataSource() {
@@ -565,6 +765,11 @@ class ScheduleAdmissionIT {
         @Bean
         ScheduleAdmissionController scheduleAdmissionController(Clock scheduleClock) {
             return new ScheduleAdmissionController(scheduleClock, Duration.ofSeconds(60));
+        }
+
+        @Bean
+        Registry registry() {
+            return REGISTRY;
         }
 
         @Bean
@@ -656,7 +861,7 @@ class ScheduleAdmissionIT {
         }
 
         @Override
-        public TaskAdmissionPlan plan(ReadonlyConfig parameters, TaskExecutionIdentity identity) {
+        public TaskExecutionResources plan(ReadonlyConfig parameters, TaskExecutionIdentity identity) {
             int call = plans.incrementAndGet();
             if (call == blockCall) {
                 entered.countDown();
@@ -671,12 +876,12 @@ class ScheduleAdmissionIT {
             if (changeBinding && call > 1) {
                 revision = "binding-v2";
             }
-            return new TaskAdmissionPlan(resources, revision);
+            return new TaskExecutionResources(resources, revision);
         }
 
         @Override
         public CompletionStage<TaskHandle> start(
-                ReadonlyConfig parameters, TaskAdmissionPlan plan, TaskExecutionIdentity identity, boolean debug) {
+                ReadonlyConfig parameters, TaskExecutionResources plan, TaskExecutionIdentity identity, boolean debug) {
             throw new AssertionError("Admission must not start physical execution");
         }
     }
