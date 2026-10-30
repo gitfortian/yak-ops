@@ -44,7 +44,6 @@ import {
   PUBLISH_ENVIRONMENT_LABEL,
   type PublishEnvironment,
 } from "./publication-target";
-import PublicationHistory from "./publication-history";
 
 const ENV_LABEL: Record<string, string> = { PROD: "生产", TEST: "测试", DEVELOP: "开发" };
 
@@ -80,12 +79,14 @@ interface Props {
  * <p>The user picks 开发 or 生产 and the dialog resolves the datasource and the target database from
  * the layer's per-environment binding — there is no database picker. 「生成变更对比」 fetches the live
  * table structure and renders the diff (add / change / drop) plus the exact DDL; dropping columns
- * needs a separate「我已知晓数据将丢失」acknowledgement before the publish button unlocks.
+ * needs a separate「我已知晓数据将丢失」acknowledgement before the publish button unlocks. Publication
+ * history lives on the model page's 发布 tab, so the dialog stays focused on one execution.
  */
 export default function PublishDialog({ model, onClose, onPublished }: Props) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [loadFailure, setLoadFailure] = useState("");
+  const [reload, setReload] = useState(0);
   const [layerName, setLayerName] = useState("");
   const [sources, setSources] = useState<Record<string, LayerDataSource>>({});
   const [targets, setTargets] = useState<
@@ -106,7 +107,6 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
   const [publishFailure, setPublishFailure] = useState("");
   const [result, setResult] = useState<PublicationRecord | null>(null);
   const [snapshot, setSnapshot] = useState<MetadataSnapshot | null>(null);
-  const [historyKey, setHistoryKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -152,7 +152,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
       active = false;
       controller.abort();
     };
-  }, [model.layerId]);
+  }, [model.layerId, reload]);
 
   // Any change of environment invalidates the script, the diff, the acknowledgements and the
   // previous result: none of them describe the target that would be touched now.
@@ -201,7 +201,6 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
         acknowledgeDataLoss: preview.requiresDataLossAck,
       });
       setResult(record);
-      setHistoryKey((value) => value + 1);
       onPublished?.();
       if (record.status === "SUCCEEDED") {
         toast.success("发布成功");
@@ -254,7 +253,12 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
           </div>
         ) : loadFailure ? (
           <div className="mt-4">
-            <Alert>{loadFailure}</Alert>
+            <Alert>
+              {loadFailure}
+              <Button size="small" onClick={() => setReload((value) => value + 1)}>
+                重试
+              </Button>
+            </Alert>
           </div>
         ) : (
           <>
@@ -292,6 +296,20 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
                 <span className="text-[var(--yak-components-field-label)]">{model.name}</span>
               </div>
             </div>
+
+            {!targets.DEVELOP && !targets.PROD && (
+              <div className="mt-3">
+                <Alert>
+                  分层「{layerName}」还没有绑定任何环境的发布目标，无法定位物理表。
+                  <Button
+                    size="small"
+                    onClick={() => navigate("/data-modeling/warehouse-planning")}
+                  >
+                    去数仓规划配置
+                  </Button>
+                </Alert>
+              </div>
+            )}
 
             {environment && !bound && (
               <div className="mt-3">
@@ -457,22 +475,11 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
                 )}
                 {result.status === "UNKNOWN" && (
                   <div className="mt-1">
-                    DDL 已提交但连接中断，无法确认引擎结果。请在下方发布历史中对账，不会重跑脚本。
+                    DDL 已提交但连接中断，无法确认引擎结果。请到发布记录中对账，不会重跑脚本。
                   </div>
                 )}
               </div>
             )}
-
-            <div className="mt-4">
-              <h3 className="text-sm font-medium">发布历史</h3>
-              <p className="mt-1 text-xs text-[var(--yak-color-text-secondary)]">
-                最近 50 次发布记录。失败记录不会自动重试，「结果未知」只能对账；点击「详情」可查看
-                DDL、耗时与执行日志。
-              </p>
-              <div className="mt-2">
-                <PublicationHistory modelId={model.id} refreshKey={historyKey} />
-              </div>
-            </div>
 
             <div className="mt-4 flex justify-end gap-2">
               <Button size="small" disabled={publishing} onClick={onClose}>
