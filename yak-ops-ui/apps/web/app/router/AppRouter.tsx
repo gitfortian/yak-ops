@@ -8,6 +8,7 @@ import { DataSyncPage } from "@/app/data-sync/list/page";
 import DataMapOverviewPage from "@/app/data-map/overview/page";
 import DataMapCatalogPage from "@/app/data-map/catalog/page";
 import DataMapTableDetailPage from "@/app/data-map/tables/detail/page";
+import DataMapCrawlRunsPage from "@/app/data-map/crawls/page";
 import DataMapTasksPage from "@/app/data-map/tasks/page";
 import DataMapTaskEditorPage from "@/app/data-map/tasks/editor/page";
 import DataMapPersonalPage from "@/app/data-map/personal/page";
@@ -159,10 +160,7 @@ export default function AppRouter() {
             path="/data-governance/data-map/tasks/:taskId/edit"
             element={<DataMapTaskEditorPage />}
           />
-          <Route
-            path="/data-governance/data-map/crawls"
-            element={<Navigate replace to="/data-governance/data-map/tasks" />}
-          />
+          <Route path="/data-governance/data-map/crawls" element={<DataMapCrawlRunsPage />} />
           <Route path="/data-governance/data-map/personal" element={<DataMapPersonalPage />} />
         </Route>
 

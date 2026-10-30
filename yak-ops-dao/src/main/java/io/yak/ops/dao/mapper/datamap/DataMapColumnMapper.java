@@ -27,6 +27,23 @@ public interface DataMapColumnMapper {
     @Delete("DELETE FROM yak_ops_data_map_column WHERE workspace_id=#{workspaceId} AND table_id=#{tableId}")
     int deleteByTable(@Param("workspaceId") String workspaceId, @Param("tableId") String tableId);
 
+    /**
+     * Counts how many columns of the active assets carry a comment.
+     *
+     * <p>Missing assets are excluded by joining their table row: their columns are kept in storage
+     * after the table disappears, and counting them would make the ratio drift with history
+     * instead of describing the catalog an operator is looking at.
+     *
+     * @param workspaceId owning Workspace
+     * @return column total and commented column count
+     */
+    @Select("SELECT COUNT(*) AS column_total,"
+            + "COUNT(CASE WHEN c.remarks IS NOT NULL AND TRIM(c.remarks) <> '' THEN 1 END) AS described_columns "
+            + "FROM yak_ops_data_map_column c "
+            + "JOIN yak_ops_data_map_table t ON t.id=c.table_id AND t.workspace_id=c.workspace_id "
+            + "WHERE c.workspace_id=#{workspaceId} AND t.status='ACTIVE'")
+    DataMapColumnCoverageRow summarizeCoverage(@Param("workspaceId") String workspaceId);
+
     /** Column names that matched a keyword, so a result row can say why it matched. */
     @Select("SELECT name FROM yak_ops_data_map_column WHERE workspace_id=#{workspaceId} "
             + "AND table_id=#{tableId} AND (name LIKE #{pattern} ESCAPE '!' OR remarks LIKE #{pattern} ESCAPE '!') "

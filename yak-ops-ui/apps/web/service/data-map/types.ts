@@ -81,6 +81,29 @@ export interface TableQuery {
   pageSize: number;
 }
 
+export interface TaskQuery {
+  keyword?: string;
+  status?: CrawlTaskStatus;
+  datasourceId?: string;
+  /** True keeps only tasks whose newest run failed or left failed tables. */
+  abnormal?: boolean;
+  pageNo: number;
+  pageSize: number;
+}
+
+export interface CrawlQuery {
+  datasourceId?: string;
+  taskId?: string;
+  status?: CrawlStatus;
+  /** True for runs that failed on some tables, false for clean runs; absent means both. */
+  failed?: boolean;
+  /** MANUAL for hand-triggered runs, SCHEDULED for the scheduler's; absent means both. */
+  triggerType?: CrawlTrigger;
+  days?: number;
+  pageNo: number;
+  pageSize: number;
+}
+
 export interface CuratedUpdate {
   description: string | null;
   ownerId: string | null;
@@ -140,6 +163,27 @@ export interface CrawlFailure {
   createdTime: string;
 }
 
+/**
+ * Workspace-wide collection health for the band above the task table. Everything is counted across
+ * the whole Workspace; run counts are limited to a rolling window of `windowHours`.
+ */
+export interface CrawlSummary {
+  taskTotal: number;
+  onlineTaskCount: number;
+  windowHours: number;
+  runTotal: number;
+  runSucceeded: number;
+  runPartial: number;
+  runFailed: number;
+  runInterrupted: number;
+  runRunning: number;
+  runPending: number;
+  failedTableCount: number;
+  abnormalTaskCount: number;
+  columnTotal: number;
+  describedColumnCount: number;
+}
+
 export interface CrawlDetail {
   crawl: Crawl;
   failures: CrawlFailure[];
@@ -183,6 +227,12 @@ export interface CrawlExcludePreview {
   matchedCount: number;
   tables: string[];
   truncated: boolean;
+}
+
+export interface CrawlScopePreview {
+  tableCount: number;
+  limit: number;
+  exceeded: boolean;
 }
 
 export interface CrawlSchedulePreview {

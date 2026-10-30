@@ -20,11 +20,22 @@ public interface DataMapCrawlTaskService {
      * Lists tasks of the Workspace with the newest run summary of each.
      *
      * @param workspaceId current Workspace
+     * @param keyword matches task name, datasource name, database or schema, or null
+     * @param status lifecycle filter, or null for every status
+     * @param datasourceId datasource filter, or null for every datasource
+     * @param abnormal true to keep only tasks whose newest run failed or left failed tables
      * @param pageNo one-based page number
      * @param pageSize page size
      * @return one page of tasks, newest first
      */
-    PagingData<DataMapCrawlTaskVO> list(String workspaceId, int pageNo, int pageSize);
+    PagingData<DataMapCrawlTaskVO> list(
+            String workspaceId,
+            String keyword,
+            DataMapCrawlTaskStatus status,
+            String datasourceId,
+            Boolean abnormal,
+            int pageNo,
+            int pageSize);
 
     /**
      * Reads one task with its newest run summary.

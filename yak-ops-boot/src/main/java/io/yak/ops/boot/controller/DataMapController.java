@@ -11,6 +11,7 @@ import io.yak.ops.business.datamap.task.DataMapCrawlTaskService;
 import io.yak.ops.business.datamap.task.DataMapExcludePreviewService;
 import io.yak.ops.common.bean.dto.datamap.DataMapCrawlExcludePreviewDTO;
 import io.yak.ops.common.bean.dto.datamap.DataMapCrawlSchedulePreviewDTO;
+import io.yak.ops.common.bean.dto.datamap.DataMapCrawlScopePreviewDTO;
 import io.yak.ops.common.bean.dto.datamap.DataMapCrawlSubmitDTO;
 import io.yak.ops.common.bean.dto.datamap.DataMapCrawlTaskSaveDTO;
 import io.yak.ops.common.bean.dto.datamap.DataMapCrawlTaskStatusDTO;
@@ -21,6 +22,8 @@ import io.yak.ops.common.bean.dto.datamap.DataMapTagInputDTO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlDetailVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlExcludePreviewVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlSchedulePreviewVO;
+import io.yak.ops.common.bean.vo.datamap.DataMapCrawlScopePreviewVO;
+import io.yak.ops.common.bean.vo.datamap.DataMapCrawlSummaryVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlTaskVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapOverviewVO;
@@ -31,6 +34,9 @@ import io.yak.ops.common.bean.vo.datamap.DataMapTableSummaryVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapTagVO;
 import io.yak.ops.common.constant.CommonConstants;
 import io.yak.ops.common.context.WorkspaceContext;
+import io.yak.ops.common.enums.datamap.DataMapCrawlStatus;
+import io.yak.ops.common.enums.datamap.DataMapCrawlTaskStatus;
+import io.yak.ops.common.enums.datamap.DataMapCrawlTriggerType;
 import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.result.Result;
 import io.yak.ops.security.authentication.AuthenticationManager;
@@ -194,18 +200,42 @@ public class DataMapController {
     public Result<PagingData<DataMapCrawlVO>> crawls(
             @RequestParam(required = false) String datasourceId,
             @RequestParam(required = false) String taskId,
+            @RequestParam(required = false) DataMapCrawlStatus status,
+            @RequestParam(required = false) DataMapCrawlTriggerType triggerType,
+            @RequestParam(required = false) Boolean failed,
+            @RequestParam(required = false) @Min(1) @Max(365) Integer days,
             @RequestParam(defaultValue = "1") @Min(1) int pageNo,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
-        return Result.success(
-                crawlService.list(WorkspaceContext.requireWorkspaceId(), datasourceId, taskId, pageNo, pageSize));
+        return Result.success(crawlService.list(
+                WorkspaceContext.requireWorkspaceId(),
+                datasourceId,
+                taskId,
+                status,
+                triggerType,
+                failed,
+                days,
+                pageNo,
+                pageSize));
+    }
+
+    @Operation(summary = "采集健康汇总")
+    @GetMapping("/crawls/summary")
+    public Result<DataMapCrawlSummaryVO> crawlSummary(
+            @RequestParam(defaultValue = "24") @Min(1) @Max(168) Integer hours) {
+        return Result.success(crawlService.summary(WorkspaceContext.requireWorkspaceId(), hours));
     }
 
     @Operation(summary = "查询采集任务列表")
     @GetMapping("/tasks")
     public Result<PagingData<DataMapCrawlTaskVO>> tasks(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) DataMapCrawlTaskStatus status,
+            @RequestParam(required = false) String datasourceId,
+            @RequestParam(required = false) Boolean abnormal,
             @RequestParam(defaultValue = "1") @Min(1) int pageNo,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
-        return Result.success(taskService.list(WorkspaceContext.requireWorkspaceId(), pageNo, pageSize));
+        return Result.success(taskService.list(
+                WorkspaceContext.requireWorkspaceId(), keyword, status, datasourceId, abnormal, pageNo, pageSize));
     }
 
     @Operation(summary = "采集任务详情")
@@ -219,6 +249,12 @@ public class DataMapController {
     public Result<DataMapCrawlExcludePreviewVO> previewExclude(
             @Valid @RequestBody DataMapCrawlExcludePreviewDTO input) {
         return Result.success(excludePreviewService.preview(WorkspaceContext.requireWorkspaceId(), input));
+    }
+
+    @Operation(summary = "预览采集范围的表数量")
+    @PostMapping("/tasks/preview-scope")
+    public Result<DataMapCrawlScopePreviewVO> previewScope(@Valid @RequestBody DataMapCrawlScopePreviewDTO input) {
+        return Result.success(excludePreviewService.previewScope(WorkspaceContext.requireWorkspaceId(), input));
     }
 
     @Operation(summary = "预览 Cron 的未来触发时间")

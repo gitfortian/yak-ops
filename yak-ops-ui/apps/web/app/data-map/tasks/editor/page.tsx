@@ -59,6 +59,7 @@ export default function CrawlTaskEditorPage() {
   const [baseline, setBaseline] = useState(() => draftSignature(newDraft(currentUser?.id ?? "")));
   const [loaded, setLoaded] = useState(!taskId);
   const [cronInvalid, setCronInvalid] = useState(false);
+  const [scopeBlocked, setScopeBlocked] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
 
   const taskQuery = useQuery({
@@ -79,7 +80,7 @@ export default function CrawlTaskEditorPage() {
   const errors = useMemo(() => validateDraft(draft), [draft]);
   const dirty = draftSignature(draft) !== baseline;
   const cronBlocked = draft.scheduleType === "CRON" && cronInvalid;
-  const canSave = Object.keys(errors).length === 0 && !cronBlocked;
+  const canSave = Object.keys(errors).length === 0 && !cronBlocked && !scopeBlocked;
 
   const save = useMutation({
     mutationFn: (status: CrawlTaskStatus) => {
@@ -106,12 +107,22 @@ export default function CrawlTaskEditorPage() {
 
   const back = () => navigate(tasksPath);
 
+  /**
+   * Saving keeps the lifecycle the task already had. A paused task therefore stays offline unless
+   * the user picks the explicit "save and bring online" action, and a draft is only scheduled when
+   * the primary action says so.
+   */
   const currentStatus = task?.status;
-  const primaryStatus: CrawlTaskStatus = "RUNNING";
-  const secondaryStatus: CrawlTaskStatus | null =
-    !task || currentStatus === "DRAFT" ? "DRAFT" : currentStatus === "OFFLINE" ? "OFFLINE" : null;
-  const primaryLabel = currentStatus === "RUNNING" ? "保存" : "保存并上线";
-  const secondaryLabel = currentStatus === "OFFLINE" ? "保存" : "保存为草稿";
+  const primary: { status: CrawlTaskStatus; label: string } =
+    currentStatus === "OFFLINE"
+      ? { status: "OFFLINE", label: "保存" }
+      : { status: "RUNNING", label: currentStatus === "RUNNING" ? "保存" : "保存并上线" };
+  const secondary: { status: CrawlTaskStatus; label: string } | null =
+    currentStatus === "OFFLINE"
+      ? { status: "RUNNING", label: "保存并上线" }
+      : currentStatus === "RUNNING"
+        ? null
+        : { status: "DRAFT", label: "保存为草稿" };
 
   // Cached task data may predate the latest save; render only after the mount fetch settles.
   if (taskId && (taskQuery.isPending || !taskQuery.isFetchedAfterMount)) {
@@ -172,28 +183,33 @@ export default function CrawlTaskEditorPage() {
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          {scopeBlocked && (
+            <span className="hidden text-xs text-[var(--yak-components-badge-danger-text)] sm:inline">
+              采集范围超过上限
+            </span>
+          )}
           <Button size="small" disabled={save.isPending} onClick={back}>
             取消
           </Button>
-          {secondaryStatus && (
+          {secondary && (
             <Button
               size="small"
-              loading={save.isPending && save.variables === secondaryStatus}
+              loading={save.isPending && save.variables === secondary.status}
               disabled={!canSave}
-              onClick={() => save.mutate(secondaryStatus)}
+              onClick={() => save.mutate(secondary.status)}
             >
-              {secondaryLabel}
+              {secondary.label}
             </Button>
           )}
           <Button
             size="small"
             variant="primary"
-            loading={save.isPending && save.variables === primaryStatus}
+            loading={save.isPending && save.variables === primary.status}
             disabled={!canSave}
-            onClick={() => save.mutate(primaryStatus)}
+            onClick={() => save.mutate(primary.status)}
           >
             <Check size={14} aria-hidden="true" />
-            {primaryLabel}
+            {primary.label}
           </Button>
         </div>
       </header>
@@ -211,7 +227,12 @@ export default function CrawlTaskEditorPage() {
 
           <div className="space-y-4">
             <StepSection step={1} title="基本信息" description="任务身份、采集范围与负责人。">
-              <BasicFields draft={draft} errors={showErrors ? errors : {}} onChange={change} />
+              <BasicFields
+                draft={draft}
+                errors={showErrors ? errors : {}}
+                onChange={change}
+                onScopeBlockedChange={setScopeBlocked}
+              />
             </StepSection>
 
             <StepSection step={2} title="调度设置" description="手动触发，或按 Cron 周期自动执行。">

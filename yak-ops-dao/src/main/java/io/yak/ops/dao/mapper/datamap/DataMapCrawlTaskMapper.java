@@ -35,14 +35,52 @@ public interface DataMapCrawlTaskMapper {
             + "WHERE workspace_id=#{workspaceId} AND id=#{id}")
     DataMapCrawlTaskEntity findByIdForWorkspace(@Param("workspaceId") String workspaceId, @Param("id") String id);
 
-    @Select("<script>SELECT " + COLUMNS + " FROM yak_ops_data_map_crawl_task "
-            + "WHERE workspace_id=#{workspaceId} ORDER BY create_time DESC, id DESC "
-            + "LIMIT #{limit} OFFSET #{offset}</script>")
-    List<DataMapCrawlTaskEntity> listPage(
-            @Param("workspaceId") String workspaceId, @Param("limit") int limit, @Param("offset") int offset);
+    /**
+     * Builds the task filter shared by the page and the count.
+     *
+     * <p>The keyword is already LIKE-escaped by the service, so every fragment below is either a
+     * fixed clause or a bound placeholder.
+     *
+     * <p>{@code abnormal} reads the newest run of the task rather than any run: a task that failed
+     * last week and succeeded today is healthy, so only the current attempt may make it abnormal.
+     * The same predicate decides the health band's abnormal count, which keeps the number and the
+     * filter it links to in agreement.
+     */
+    String FILTER = "<if test=\"status != null\"> AND t.status=#{status}</if>"
+            + "<if test=\"datasourceId != null\"> AND t.datasource_id=#{datasourceId}</if>"
+            + "<if test=\"keywordPattern != null\"> AND (t.name LIKE #{keywordPattern} ESCAPE '!'"
+            + " OR t.database_name LIKE #{keywordPattern} ESCAPE '!'"
+            + " OR t.schema_name LIKE #{keywordPattern} ESCAPE '!'"
+            + " OR EXISTS (SELECT 1 FROM yak_ops_data_source ds WHERE ds.id=t.datasource_id"
+            + " AND ds.name LIKE #{keywordPattern} ESCAPE '!'))</if>"
+            + "<if test=\"abnormal != null and abnormal\"> AND EXISTS (SELECT 1 FROM yak_ops_data_map_crawl c"
+            + " WHERE c.task_id=t.id AND (c.status='FAILED' OR (c.status='SUCCEEDED' AND c.failed_count &gt; 0))"
+            + " AND NOT EXISTS (SELECT 1 FROM yak_ops_data_map_crawl n WHERE n.task_id=c.task_id"
+            + " AND (n.created_time &gt; c.created_time"
+            + " OR (n.created_time = c.created_time AND n.id &gt; c.id))))</if>";
 
-    @Select("SELECT COUNT(*) FROM yak_ops_data_map_crawl_task WHERE workspace_id=#{workspaceId}")
-    long count(@Param("workspaceId") String workspaceId);
+    @Select("<script>SELECT t.id,t.workspace_id,t.name,t.datasource_id,t.database_name,t.schema_name,"
+            + "t.owner_id,t.status,t.schedule_type,t.cron_expression,t.next_fire_time,t.exclude_pattern,"
+            + "t.exclude_tables,t.create_time,t.update_time,t.create_by,t.update_by "
+            + "FROM yak_ops_data_map_crawl_task t WHERE t.workspace_id=#{workspaceId}" + FILTER
+            + " ORDER BY t.create_time DESC, t.id DESC LIMIT #{limit} OFFSET #{offset}</script>")
+    List<DataMapCrawlTaskEntity> listPage(
+            @Param("workspaceId") String workspaceId,
+            @Param("keywordPattern") String keywordPattern,
+            @Param("status") String status,
+            @Param("datasourceId") String datasourceId,
+            @Param("abnormal") Boolean abnormal,
+            @Param("limit") int limit,
+            @Param("offset") int offset);
+
+    @Select("<script>SELECT COUNT(*) FROM yak_ops_data_map_crawl_task t " + "WHERE t.workspace_id=#{workspaceId}"
+            + FILTER + "</script>")
+    long count(
+            @Param("workspaceId") String workspaceId,
+            @Param("keywordPattern") String keywordPattern,
+            @Param("status") String status,
+            @Param("datasourceId") String datasourceId,
+            @Param("abnormal") Boolean abnormal);
 
     @Update("UPDATE yak_ops_data_map_crawl_task SET name=#{name},datasource_id=#{datasourceId},"
             + "database_name=#{databaseName},schema_name=#{schemaName},owner_id=#{ownerId},status=#{status},"

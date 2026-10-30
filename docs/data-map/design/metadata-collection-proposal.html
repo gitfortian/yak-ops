@@ -1,0 +1,1601 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>元数据采集页 · 设计提案 v0.2</title>
+<style>
+  *{box-sizing:border-box}
+  :root{
+    --primary:#0033ff;--primary-subtle:#eaeeff;--primary-hover:#0029cc;
+    --ink:#252832;--ink2:#343841;--muted:#8f949e;--muted2:#667085;
+    --line:#e7e9ed;--line2:#eceef2;--bg:#f4f5f7;--panel:#fff;--hover:#f6f7f9;
+    --ok:#027a48;--ok-bg:#ecfdf3;--warn:#b54708;--warn-bg:#fffaeb;
+    --err:#b42318;--err-bg:#fef3f2;--info:#3538cd;--info-bg:#eef4ff;
+    --neutral:#667085;--neutral-bg:#f2f4f7;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.7;-webkit-font-smoothing:antialiased}
+  a{color:inherit}
+  h1,h2,h3,h4,p,ul,ol{margin:0}
+  ul,ol{padding:0;list-style:none}
+  button{font-family:inherit}
+
+  /* ---------- top bar ---------- */
+  .topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.88);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+  .topbar-in{max-width:1180px;margin:0 auto;padding:0 24px;height:52px;display:flex;align-items:center;gap:18px}
+  .brand{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;letter-spacing:.01em;white-space:nowrap}
+  .brand i{width:9px;height:9px;border-radius:2px;background:var(--primary);display:block}
+  .brand span{color:var(--muted);font-weight:400}
+  .navpills{display:flex;gap:2px;margin-left:auto;overflow-x:auto;scrollbar-width:none}
+  .navpills::-webkit-scrollbar{display:none}
+  .navpills a{font-size:12.5px;color:var(--muted2);text-decoration:none;padding:5px 9px;border-radius:6px;white-space:nowrap}
+  .navpills a:hover{background:#f2f3f5;color:var(--ink)}
+  .topmeta{font-size:11.5px;color:var(--muted);font-family:var(--mono);white-space:nowrap;padding-left:14px;border-left:1px solid var(--line)}
+
+  main{max-width:1180px;margin:0 auto;padding:0 24px 90px}
+
+  /* ---------- hero ---------- */
+  .hero{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:38px 40px 34px;margin-top:24px;position:relative;overflow:hidden}
+  .hero::after{content:"";position:absolute;right:-90px;top:-90px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle at 30% 30%,rgba(0,51,255,.10),rgba(0,51,255,0) 65%);pointer-events:none}
+  .eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--primary);background:var(--primary-subtle);border-radius:999px;padding:3px 10px 3px 8px;font-weight:500}
+  .eyebrow b{width:5px;height:5px;border-radius:50%;background:var(--primary)}
+  .hero h1{font-size:29px;line-height:1.35;letter-spacing:-.01em;margin-top:16px;font-weight:600;max-width:820px}
+  .hero .lede{margin-top:12px;color:var(--muted2);font-size:14px;max-width:780px;line-height:1.85}
+  .herometa{display:flex;flex-wrap:wrap;gap:10px 26px;margin-top:22px;padding-top:18px;border-top:1px dashed var(--line);font-size:12px;color:var(--muted)}
+  .herometa b{color:var(--ink2);font-weight:500}
+  .decisions{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:26px}
+  .decision{border:1px solid var(--line);border-radius:11px;padding:14px 15px;background:#fcfcfd}
+  .decision em{font-style:normal;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--muted)}
+  .decision h4{font-size:13px;margin:7px 0 5px;font-weight:600}
+  .decision p{font-size:12px;color:var(--muted2);line-height:1.65}
+
+  /* ---------- sections ---------- */
+  section{padding:46px 0 6px;border-top:1px solid #e9eaee;margin-top:40px}
+  section:first-of-type{border-top:0}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+  .sec-num{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;color:var(--primary);padding-top:4px}
+  .sec-head h2{font-size:21px;font-weight:600;letter-spacing:-.005em}
+  .sec-sub{color:var(--muted2);font-size:13.5px;margin:2px 0 24px 40px;max-width:820px}
+  h3{font-size:14.5px;font-weight:600;margin:26px 0 12px}
+  p.body{font-size:13.5px;line-height:1.9;color:var(--ink2);margin:10px 0}
+  p.body + p.body{margin-top:8px}
+  code{font-family:var(--mono);font-size:12px;background:#f2f3f5;border:1px solid var(--line2);border-radius:4px;padding:1px 5px;color:#3b3f4a}
+  .muted{color:var(--muted2)}
+  .small{font-size:12px}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+  .card h4{font-size:13px;font-weight:600;margin-bottom:8px}
+  .card p{font-size:12.5px;color:var(--muted2);line-height:1.75}
+
+  /* flow */
+  .flow{display:flex;align-items:stretch;gap:0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;overflow-x:auto}
+  .fnode{flex:1;min-width:132px;border:1px solid var(--line);border-radius:9px;padding:11px 12px;background:#fcfcfd}
+  .fnode em{font-style:normal;font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--muted)}
+  .fnode strong{display:block;font-size:12.5px;font-weight:600;margin:4px 0 3px}
+  .fnode span{font-size:11px;color:var(--muted2);line-height:1.55;display:block}
+  .farrow{display:flex;align-items:center;justify-content:center;width:34px;color:#c3c8d2;font-size:16px;flex:none}
+  .flow-note{margin-top:10px;font-size:11.5px;color:var(--muted)}
+
+  /* problem list */
+  .probs{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+  .prob{display:grid;grid-template-columns:30px 1fr;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:14px 16px}
+  .prob-n{font-family:var(--mono);font-size:11px;color:var(--muted);padding-top:3px}
+  .prob h4{font-size:13px;font-weight:600;margin-bottom:4px}
+  .prob p{font-size:12.5px;color:var(--muted2);line-height:1.75}
+  .prob p b{color:var(--ink2);font-weight:500}
+  .tag{display:inline-block;font-size:10.5px;line-height:1.6;padding:0 6px;border-radius:4px;background:var(--neutral-bg);color:var(--neutral);margin-left:6px;vertical-align:1px}
+  .tag.src{background:#fff4ed;color:#b93815}
+
+  /* before mock */
+  .mock{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;position:relative}
+  .mock-label{position:absolute;top:-9px;left:14px;background:var(--panel);padding:0 7px;font-size:10.5px;color:var(--muted);font-family:var(--mono);letter-spacing:.06em}
+  .mcard{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#fff}
+  .mcard:last-child{margin-bottom:0}
+  .mdot{width:8px;height:8px;border-radius:50%;background:#c9cdd4;flex:none}
+  .mdot.on{background:var(--primary)}
+  .mname{font-size:12px;font-weight:500}
+  .mmeta{font-size:10.5px;color:var(--muted);margin-top:2px}
+  .mtools{margin-left:auto;display:flex;gap:6px}
+  .mtool{width:20px;height:20px;border-radius:4px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:#b4b9c2}
+  .mtool svg{width:9px;height:9px}
+  .callout{border-left:2px solid #f79009;background:#fffbf2;padding:9px 12px;border-radius:0 6px 6px 0;font-size:11.5px;color:#7a4f0e;margin-top:8px;line-height:1.65}
+
+  /* options table */
+  table.cmp{width:100%;border-collapse:separate;border-spacing:0;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  table.cmp th{font-size:11.5px;font-weight:500;color:var(--muted);text-align:left;padding:10px 14px;background:#fafbfc;border-bottom:1px solid var(--line)}
+  table.cmp td{font-size:12.5px;padding:12px 14px;border-bottom:1px solid var(--line2);vertical-align:top;color:var(--ink2);line-height:1.7}
+  table.cmp tr:last-child td{border-bottom:0}
+  table.cmp td b{font-weight:600}
+  .pick{background:#f5f8ff}
+  .pick-flag{font-size:10.5px;color:var(--primary);background:var(--primary-subtle);border-radius:4px;padding:1px 6px;margin-left:6px;white-space:nowrap}
+  .reject{color:var(--err)}
+
+  /* IA */
+  .ia{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .ia-col{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .ia-col > h4{font-size:12px;color:var(--muted);font-family:var(--mono);letter-spacing:.06em;font-weight:400;margin-bottom:12px}
+  .tree{font-size:12.5px;line-height:2.05}
+  .tree li{position:relative;padding-left:16px;color:var(--ink2)}
+  .tree li::before{content:"";position:absolute;left:3px;top:13px;width:5px;height:1px;background:#cfd4dc}
+  .tree li.root{padding-left:0;font-weight:600;color:var(--ink)}
+  .tree li.root::before{display:none}
+  .tree li.l2{padding-left:30px}
+  .tree li.l2::before{left:17px}
+  .tree .new{color:var(--primary);font-weight:500}
+  .tree .note{font-size:10.5px;color:var(--muted);margin-left:6px;font-weight:400}
+
+  /* ============ prototype ============ */
+  .proto{background:#e9ebef;border:1px solid #dcdfe6;border-radius:14px;padding:0;overflow:hidden;box-shadow:0 24px 60px -20px rgba(16,24,40,.22)}
+  .proto-chrome{height:36px;background:#f2f3f5;border-bottom:1px solid #dfe2e8;display:flex;align-items:center;gap:10px;padding:0 12px}
+  .dots{display:flex;gap:5px}
+  .dots i{width:9px;height:9px;border-radius:50%;background:#d5d8de;display:block}
+  .urlbar{flex:1;height:22px;border-radius:5px;background:#fff;border:1px solid #e3e6eb;display:flex;align-items:center;padding:0 9px;font-size:10.5px;color:#98a2b3;font-family:var(--mono);gap:6px;max-width:520px}
+  .proto-viewport{overflow-x:auto;background:var(--bg)}
+  .app{display:flex;width:100%;min-width:1010px;height:830px;background:var(--bg);font-size:12.5px;line-height:1.5;position:relative;overflow:hidden}
+
+  /* sidebar */
+  .side{width:196px;flex:none;background:#fff;border-right:1px solid var(--line);display:flex;flex-direction:column;padding:10px 8px}
+  .ws{display:flex;align-items:center;gap:8px;padding:7px 8px;border:1px solid var(--line);border-radius:7px;margin-bottom:10px}
+  .ws .av{width:18px;height:18px;border-radius:5px;background:var(--primary);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:600}
+  .ws .nm{font-size:11.5px;font-weight:500}
+  .ws .cv{margin-left:auto;color:#b8bdc6;font-size:9px}
+  .navgroup{font-size:10px;color:#b0b5bf;padding:8px 8px 4px;letter-spacing:.04em}
+  .navi{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;color:#4b5058;font-size:12px;cursor:default}
+  .navi:hover{background:#f6f7f9}
+  .navi.active{background:var(--primary-subtle);color:var(--primary);font-weight:500}
+  .navi svg{flex:none;opacity:.75}
+  .navi.active svg{opacity:1}
+  .subnav{margin:1px 0 3px 22px;border-left:1px solid var(--line);padding-left:9px}
+  .subnav a{display:block;font-size:11.5px;color:#5f6673;text-decoration:none;padding:4px 6px;border-radius:5px}
+  .subnav a:hover{background:#f6f7f9}
+  .subnav a.on{color:var(--primary);background:var(--primary-subtle);font-weight:500}
+
+  /* main area */
+  .workarea{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg)}
+  .phead{background:#fff;border-bottom:1px solid var(--line);padding:13px 18px 12px;display:flex;align-items:flex-start;gap:14px}
+  .phead h1{font-size:16px;font-weight:600;letter-spacing:-.01em}
+  .phead p{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .phead .acts{margin-left:auto;display:flex;align-items:center;gap:7px;flex:none}
+  .btn{height:26px;padding:0 10px;border-radius:6px;border:1px solid transparent;background:#f4f4f6;color:#292c35;font-size:11.5px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:#ededf0}
+  .btn.primary{background:var(--primary);color:#fff}
+  .btn.primary:hover{background:var(--primary-hover)}
+  .btn.ghost{background:transparent;color:var(--muted2)}
+  .btn.ghost:hover{background:#f4f4f6}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .switch{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--muted2);cursor:pointer;margin-right:4px;user-select:none}
+  .switch i{width:26px;height:15px;border-radius:999px;background:#d9dde3;position:relative;transition:background .15s;display:block}
+  .switch i::after{content:"";position:absolute;width:11px;height:11px;border-radius:50%;background:#fff;top:2px;left:2px;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+  .switch.on i{background:var(--primary)}
+  .switch.on i::after{left:13px}
+
+  /* kpi */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:12px 18px 0}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 11px;min-width:0;position:relative}
+  .kpi .k{font-size:10.5px;color:var(--muted);display:flex;align-items:center;gap:4px}
+  .kpi .v{font-size:18px;font-weight:600;letter-spacing:-.02em;margin-top:1px;font-variant-numeric:tabular-nums}
+  .kpi .v small{font-size:10.5px;font-weight:400;color:var(--muted);margin-left:3px;letter-spacing:0}
+  .kpi .d{font-size:10.5px;color:var(--muted);margin-top:1px}
+  .kpi .d .up{color:var(--ok)}
+  .kpi .d .dn{color:var(--err)}
+  .kpi.act{background:#fff;border-color:#f3c9c4;box-shadow:inset 2px 0 0 #f04438;cursor:pointer}
+  .kpi.act:hover{background:#fffafa}
+  .kpi.act .v{color:var(--err)}
+  .kpi .win{font-size:9.5px;color:#b0b5bf;font-weight:400;margin-left:auto;letter-spacing:.02em}
+  /* quiet 状态标记：只有运行态用徽章，上线态用点 + 文字，避免两枚徽章并排 */
+  .st{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#4b5058;white-space:nowrap}
+  .st i{width:5px;height:5px;border-radius:50%;background:#12b76a;flex:none}
+  .st.off i{background:#c9cdd4}
+  .st.draft i{background:#f79009}
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:#b54708;background:#fffbf2;border:1px dashed #f0dfbe;border-radius:999px;padding:1px 8px;white-space:nowrap}
+  .chip b{font-weight:600;color:#8a5a12}
+  .bar{height:3px;border-radius:2px;background:#eef0f3;margin-top:6px;overflow:hidden}
+  .bar > i{display:block;height:100%;background:var(--primary);border-radius:2px}
+
+  /* panel */
+  .panel{flex:1;min-height:0;background:#fff;border-top:1px solid var(--line);margin-top:12px;display:flex;flex-direction:column}
+  .tabs{display:flex;align-items:center;gap:16px;padding:0 18px;border-bottom:1px solid var(--line);flex:none;height:38px}
+  .tab{font-size:12px;color:var(--muted2);padding:11px 0 10px;border-bottom:2px solid transparent;cursor:pointer;display:flex;align-items:center;gap:5px;background:none;border-top:0;border-left:0;border-right:0}
+  .tab .cnt{font-size:10px;background:#f2f4f7;color:#667085;border-radius:999px;padding:0 5px;line-height:15px}
+  .tab.on{color:var(--primary);border-bottom-color:var(--primary);font-weight:500}
+  .tab.on .cnt{background:var(--primary-subtle);color:var(--primary)}
+  .tabs .right{margin-left:auto;display:flex;align-items:center;gap:6px}
+
+  .toolbar{display:flex;align-items:center;gap:7px;padding:9px 18px;border-bottom:1px solid var(--line2);flex:none}
+  .search{display:flex;align-items:center;gap:6px;height:26px;border:1px solid #dfe2e8;border-radius:6px;padding:0 8px;background:#f8f9fb;width:200px}
+  .search input{border:0;background:transparent;outline:none;font-size:11.5px;width:100%;color:var(--ink)}
+  .search input::placeholder{color:#a3a9b3}
+  .sel{height:26px;border:1px solid #dfe2e8;border-radius:6px;background:#fff;font-size:11.5px;color:#4b5058;padding:0 8px;display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+  .sel:hover{border-color:#cfd4dc}
+  .toolbar .meta{font-size:10.5px;color:var(--muted);margin-left:auto}
+
+  /* task table */
+  .scroll{flex:1;min-height:0;overflow:auto}
+  table.tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;table-layout:fixed}
+  table.tbl thead th{position:sticky;top:0;z-index:2;background:#fafbfc;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:500;color:var(--muted);text-align:left;padding:7px 10px;white-space:nowrap}
+  table.tbl thead th:first-child{padding-left:18px}
+  table.tbl thead th:last-child{padding-right:18px;text-align:right}
+  table.tbl tbody td{padding:9px 10px;border-bottom:1px solid var(--line2);vertical-align:middle}
+  table.tbl tbody td:first-child{padding-left:18px}
+  table.tbl tbody td:last-child{padding-right:18px}
+  table.tbl tbody tr{cursor:pointer}
+  table.tbl tbody tr:nth-child(even){background:#fcfcfd}
+  table.tbl tbody tr:hover{background:#f7f8fa}
+  table.tbl tbody tr.bad td:first-child{box-shadow:inset 2px 0 0 #f04438}
+  .c-task{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .c-task .nm{font-size:12px;font-weight:500;color:var(--ink);display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .c-task .sub{font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .c-range{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .c-range b{font-weight:500;font-size:11.5px;color:#3b3f4a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .c-range span{font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sch{display:flex;flex-direction:column;gap:1px;min-width:0}
+  .sch b{font-weight:400;font-size:11.5px;color:#3b3f4a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sch span{font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .run-cell{display:flex;flex-direction:column;gap:3px;align-items:flex-start;min-width:0;max-width:100%}
+  .run-cell .sub{font-size:10.5px;color:var(--muted);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .run-cell .sub em{font-style:normal;color:var(--err)}
+  .prod{font-family:var(--mono);font-size:11.5px;color:#3b3f4a;white-space:nowrap}
+  .prod .z{color:var(--muted)}
+  .opcell{display:flex;align-items:center;gap:2px;justify-content:flex-end}
+  .lnk{background:none;border:0;padding:2px 5px;border-radius:4px;font-size:11px;color:var(--primary);cursor:pointer;white-space:nowrap}
+  .lnk:hover{background:var(--primary-subtle)}
+  .lnk.mute{color:var(--muted2)}
+  .lnk.mute:hover{background:#f2f3f5}
+  .lnk:disabled{color:#b8bdc6;cursor:not-allowed;background:none}
+  .ico{width:22px;height:22px;border-radius:4px;border:0;background:none;display:inline-flex;align-items:center;justify-content:center;color:#98a2b3;cursor:pointer}
+  .ico:hover{background:#f2f3f5;color:#5f6673}
+
+  .badge{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;line-height:17px;padding:0 6px;border-radius:4px;white-space:nowrap;font-weight:500}
+  .b-ok{background:var(--ok-bg);color:var(--ok)}
+  .b-err{background:var(--err-bg);color:var(--err)}
+  .b-warn{background:var(--warn-bg);color:var(--warn)}
+  .b-info{background:var(--info-bg);color:var(--info)}
+  .b-mute{background:var(--neutral-bg);color:var(--neutral)}
+  .b-run{background:var(--primary-subtle);color:var(--primary)}
+  .b-run .pd{width:5px;height:5px;border-radius:50%;background:var(--primary);animation:pulse 1.4s infinite}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
+  .b-out{background:#fff;color:var(--muted);border:1px solid var(--line)}
+
+  .tfoot{flex:none;height:36px;display:flex;align-items:center;padding:0 18px;border-top:1px solid var(--line);font-size:10.5px;color:var(--muted)}
+  .pg{margin-left:auto;display:flex;align-items:center;gap:4px}
+  .pg b{width:20px;height:20px;border-radius:4px;border:1px solid var(--primary);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:500;font-size:10.5px;background:#fff}
+  .pg i{width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#98a2b3;font-style:normal;font-size:10.5px}
+  .pg span{color:#b8bdc6;padding:0 2px}
+
+  /* drawer */
+  .scrim{position:absolute;inset:0;background:rgba(16,24,40,.18);opacity:0;pointer-events:none;transition:opacity .18s;z-index:8}
+  .app.open .scrim{opacity:1;pointer-events:auto}
+  .drawer{position:absolute;top:0;right:0;bottom:0;width:600px;background:#fff;box-shadow:-16px 0 40px rgba(16,24,40,.14);transform:translateX(102%);transition:transform .22s cubic-bezier(.4,0,.2,1);z-index:9;display:flex;flex-direction:column}
+  .app.open .drawer{transform:none}
+  .dhead{padding:14px 16px 12px;border-bottom:1px solid var(--line);flex:none}
+  .dhead .row1{display:flex;align-items:flex-start;gap:8px}
+  .dhead h3{font-size:14px;font-weight:600;margin:0;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .dhead .meta{font-size:10.5px;color:var(--muted);margin-top:4px;font-family:var(--mono)}
+  .dhead .acts{display:flex;gap:6px;margin-top:10px;position:relative}
+  .dmenu{position:absolute;right:0;top:30px;width:186px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 12px 28px rgba(16,24,40,.14);padding:4px;display:none;z-index:12}
+  .dmenu.on{display:block}
+  .dmenu button{display:block;width:100%;text-align:left;background:none;border:0;font-size:11.5px;padding:6px 8px;border-radius:5px;cursor:pointer;color:#292c35;font-family:inherit}
+  .dmenu button:hover{background:#f6f7f9}
+  .dmenu button.danger{color:var(--err)}
+  .dmenu button:disabled{color:#b8bdc6;cursor:not-allowed;background:none}
+  .dmenu .hint{font-size:10px;color:var(--muted);padding:3px 8px 4px;line-height:1.5;border-top:1px dashed var(--line2);margin-top:3px}
+  .dclose{margin-left:auto;flex:none}
+  .dtabs{display:flex;gap:14px;padding:0 16px;border-bottom:1px solid var(--line);flex:none}
+  .dtab{background:none;border:0;border-bottom:2px solid transparent;font-size:11.5px;color:var(--muted2);padding:9px 0 8px;cursor:pointer;display:flex;align-items:center;gap:4px}
+  .dtab.on{color:var(--primary);border-bottom-color:var(--primary);font-weight:500}
+  .dbody{flex:1;min-height:0;overflow:auto;padding:14px 16px 22px;background:#fcfcfd}
+  .dsec{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 13px;margin-bottom:10px}
+  .dsec h5{font-size:11px;font-weight:600;color:#4b5058;margin:0 0 9px;display:flex;align-items:center;gap:6px}
+  .dsec h5 .r{margin-left:auto;font-weight:400;font-size:10.5px;color:var(--muted);font-family:var(--mono)}
+  .dsum{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .dsum .nums{display:flex;gap:11px;font-family:var(--mono);font-size:11px;color:#3b3f4a}
+  .dsum .nums b{font-weight:600}
+  .dsum .act{margin-left:auto}
+  .kv{display:grid;grid-template-columns:74px 1fr;gap:6px 10px;font-size:11.5px}
+  .kv dt{color:var(--muted);font-size:11px}
+  .kv dd{margin:0;color:#3b3f4a;min-width:0;word-break:break-all}
+  .dgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .spark{display:flex;align-items:flex-end;gap:3px;height:34px;margin-top:2px}
+  .spark i{flex:1;border-radius:2px 2px 0 0;background:var(--ok-bg);border:1px solid #cdeedd;border-bottom:0;min-height:6px;position:relative}
+  .spark i.f{background:var(--err-bg);border-color:#f9d4d1}
+  .spark i.p{background:var(--warn-bg);border-color:#f3e0bd}
+  .spark i.r{background:var(--primary-subtle);border-color:#c9d3ff}
+  .spark-x{display:flex;gap:3px;margin-top:4px}
+  .spark-x span{flex:1;text-align:center;font-size:8.5px;color:#b8bdc6;font-family:var(--mono)}
+  .legend{display:flex;gap:12px;font-size:10px;color:var(--muted);margin-top:8px}
+  .legend b{width:6px;height:6px;border-radius:2px;display:inline-block;margin-right:3px}
+
+  .run-item{border:1px solid var(--line);border-radius:8px;background:#fff;margin-bottom:6px;overflow:hidden}
+  .run-item .rl{display:flex;align-items:center;gap:9px;padding:7px 10px;font-size:11px}
+  .run-item .rl .when{font-family:var(--mono);font-size:10.5px;color:#4b5058}
+  .run-item .rl .tg{font-size:10px;color:var(--muted);background:#f6f7f9;border-radius:3px;padding:0 4px}
+  .run-item .rl .du{font-size:10.5px;color:var(--muted)}
+  .run-item .rl .pr{font-family:var(--mono);font-size:10.5px;color:#3b3f4a;margin-left:auto;white-space:nowrap}
+  .run-item .rl .pr .e{color:var(--err)}
+  .run-fail{background:#fffafa;border-top:1px solid #fbe9e7;padding:8px 10px 9px}
+  .run-fail .ft{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);margin-bottom:5px}
+  .frow{display:flex;gap:8px;font-size:10.5px;padding:3px 0;align-items:baseline}
+  .frow .fn{font-family:var(--mono);color:#3b3f4a;flex:none;min-width:170px}
+  .frow .fe{color:var(--err);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* placeholder / sample */
+  .sample{position:relative;border-style:dashed !important;border-color:#e6d6b4 !important;background:linear-gradient(180deg,#fffdf8,#fff) !important}
+  .sample::after{content:"示例";position:absolute;top:-1px;right:-1px;font-size:9px;line-height:15px;padding:0 5px;border-radius:0 8px 0 6px;background:#fff4e0;color:#b54708;border-left:1px solid #f0dfbe;border-bottom:1px solid #f0dfbe;letter-spacing:.02em}
+  .ph-off{display:none}
+  .hide-ph .ph{display:none !important}
+  .hide-ph .ph-off{display:block}
+  .ph-off-box{border:1px dashed #d9dde3;border-radius:9px;background:#fafbfc;padding:14px;text-align:center;color:var(--muted);font-size:11px;line-height:1.7;margin-bottom:10px}
+  .ph-off-box b{display:block;color:#5f6673;font-size:11.5px;font-weight:500;margin-bottom:3px}
+
+  .qrow{display:flex;justify-content:space-between;font-size:11px;padding:3px 0;color:#4b5058}
+  .qbar{height:4px;border-radius:2px;background:#f0f2f5;overflow:hidden;margin-top:3px}
+  .qbar > i{display:block;height:100%;border-radius:2px;background:var(--primary)}
+  .qbar > i.w{background:#f79009}
+  .qbar > i.g{background:#12b76a}
+
+  /* annotation list */
+  .annos{display:grid;grid-template-columns:1fr 1fr;gap:8px 22px;margin-top:16px}
+  .anno{display:flex;gap:9px;font-size:12px;color:var(--muted2);line-height:1.7}
+  .anno b{flex:none;width:17px;height:17px;border-radius:50%;background:var(--primary-subtle);color:var(--primary);font-size:9.5px;display:flex;align-items:center;justify-content:center;margin-top:3px;font-weight:600}
+  .anno strong{color:var(--ink);font-weight:500}
+
+  /* matrix */
+  table.mx{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;font-size:12px}
+  table.mx th,table.mx td{padding:9px 12px;border-bottom:1px solid var(--line2);text-align:left;vertical-align:top}
+  table.mx th{background:#fafbfc;font-size:11px;font-weight:500;color:var(--muted)}
+  table.mx tr:last-child td{border-bottom:0}
+  table.mx td:first-child{font-weight:500;white-space:nowrap;color:var(--ink)}
+
+  .rules{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .rule{background:#fff;border:1px solid var(--line);border-radius:10px;padding:13px 15px}
+  .rule h4{font-size:12px;font-weight:600;margin-bottom:5px;display:flex;align-items:center;gap:6px}
+  .rule p{font-size:11.5px;color:var(--muted2);line-height:1.75}
+  .rule p code{font-size:10.5px}
+
+  .phase{display:grid;grid-template-columns:96px 1fr 190px;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+  .phase > div{padding:13px 15px;border-bottom:1px solid var(--line2);font-size:12px}
+  .phase > div:nth-child(3n+1){font-family:var(--mono);font-size:11px;color:var(--muted);background:#fafbfc;border-right:1px solid var(--line2)}
+  .phase > div:nth-child(3n+3){color:var(--muted2);font-size:11px;border-left:1px solid var(--line2);background:#fcfcfd}
+  .phase > div:nth-last-child(-n+3){border-bottom:0}
+  .phase b{font-weight:600;color:var(--ink)}
+  .phase ul li{position:relative;padding-left:11px;line-height:1.8;color:#4b5058;font-size:11.5px}
+  .phase ul li::before{content:"";position:absolute;left:2px;top:11px;width:4px;height:1px;background:#c9cdd4}
+
+  .open-list{counter-reset:o;display:flex;flex-direction:column;gap:8px}
+  .openq{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 15px 12px 44px;position:relative;font-size:12.5px;color:var(--ink2);line-height:1.75}
+  .openq::before{counter-increment:o;content:"Q" counter(o);position:absolute;left:14px;top:12px;font-family:var(--mono);font-size:10.5px;color:var(--primary);background:var(--primary-subtle);border-radius:4px;padding:0 4px}
+  .openq b{font-weight:600}
+
+  .diff{width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .diff th{background:#fafbfc;font-size:11px;font-weight:500;color:var(--muted);text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+  .diff td{padding:10px 12px;border-bottom:1px solid var(--line2);vertical-align:top;line-height:1.7;color:var(--ink2)}
+  .diff tr:last-child td{border-bottom:0}
+  .diff .old{color:var(--muted2)}
+  .diff .new{color:var(--ink)}
+  .diff .why{color:var(--muted2);font-size:11.5px}
+
+  footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap}
+
+  @media (max-width:1100px){
+    .decisions,.grid3{grid-template-columns:1fr}
+    .grid2,.ia,.rules,.annos{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <div class="brand"><i></i>元数据采集 · 设计提案<span>/ 数据治理 · 数据地图</span></div>
+    <nav class="navpills">
+      <a href="#context">业务现状</a>
+      <a href="#problems">现版问题</a>
+      <a href="#options">方案选择</a>
+      <a href="#ia">信息架构</a>
+      <a href="#prototype">高保真原型</a>
+      <a href="#layout">版式与内容</a>
+      <a href="#states">状态与边界</a>
+      <a href="#placeholder">占位能力</a>
+      <a href="#delivery">分期</a>
+      <a href="#open">待确认</a>
+    </nav>
+    <div class="topmeta">v0.2 / 2026-10-30</div>
+  </div>
+</div>
+
+<main>
+
+  <div class="hero">
+    <div class="eyebrow"><b></b>Design Proposal · 待评审</div>
+    <h1>把「元数据采集」从任务列表，做成可观测的数据接入控制台</h1>
+    <p class="lede">
+      现在的采集页只回答「有哪些任务」，不回答「接到了什么、上次为什么失败、这次变了什么」。
+      本提案把页面重排为「健康带 + 任务表 + 任务详情抽屉 + 实例记录」四层，绝大部分由现有接口拼出；
+      唯一需要后端配合的是给任务列表补三个查询参数，健康带聚合与质量血缘分列后续阶段。
+    </p>
+
+    <div class="decisions">
+      <div class="decision">
+        <em>DECISION 01</em>
+        <h4>布局：卡片列表 → 表格 + 抽屉</h4>
+        <p>列表承担横向比较（范围、调度、最近实例、产出），详情抽屉承担纵向追溯（运行历史、失败表、范围）。</p>
+      </div>
+      <div class="decision">
+        <em>DECISION 02</em>
+        <h4>状态：上线态与实例态分列</h4>
+        <p>「已上线」不再显示为「运行中」。并新增派生态「部分成功」——采集完成但仍有失败表，此时不做缺失判定。</p>
+      </div>
+      <div class="decision">
+        <em>DECISION 03</em>
+        <h4>未来能力：以示例位分阶段接入</h4>
+        <p>质量、血缘不阻塞本期。页面上以「示例」标注呈现，可一键关闭，避免被误读为已交付能力。</p>
+      </div>
+    </div>
+
+    <div class="herometa">
+      <div>改动范围 <b>yak-ops-ui/apps/web/app/data-map/tasks/**</b></div>
+      <div>现有接口 <b>GET /tasks · GET /crawls · GET /crawls/{id} · POST run · POST retry</b></div>
+      <div>后端改动 <b>P0 无 · P0.5 三个查询参数</b></div>
+      <div>依赖提案 <b>FYOIP-16 / FYOIP-17（仅占位）</b></div>
+    </div>
+  </div>
+
+  <!-- ================= 01 业务现状 ================= -->
+  <section id="context">
+    <div class="sec-head"><div class="sec-num">01</div><h2>业务现状：一个任务 = 一个命名空间的一次枚举</h2></div>
+    <p class="sec-sub">先对齐事实。下面六条决定了页面能展示什么、不能展示什么，后续所有设计都在这个边界内。</p>
+
+    <div class="flow">
+      <div class="fnode"><em>STEP 1</em><strong>数据源</strong><span>MySQL / PostgreSQL / Oracle / ClickHouse，凭据由数据源模块托管</span></div>
+      <div class="farrow">›</div>
+      <div class="fnode"><em>STEP 2</em><strong>采集任务</strong><span>数据源 + 库（+ schema）、调度、排除规则、负责人</span></div>
+      <div class="farrow">›</div>
+      <div class="fnode"><em>STEP 3</em><strong>采集实例</strong><span>PENDING → RUNNING → SUCCEEDED / FAILED，后台 worker 执行</span></div>
+      <div class="farrow">›</div>
+      <div class="fnode"><em>STEP 4</em><strong>资产目录</strong><span>表与字段写入数据地图，记录新增 / 更新 / 缺失 / 失败</span></div>
+      <div class="farrow">›</div>
+      <div class="fnode"><em>STEP 5</em><strong>下游消费</strong><span>资产详情、搜索、我的数据、后续的治理与血缘</span></div>
+    </div>
+    <div class="flow-note">失败分支：实例 → 逐表失败清单（最多 200 条）→ 仅重试失败表；命名空间 ≥2000 表在读取任何列之前即拒绝，单次执行另有 30 分钟预算。</div>
+
+    <div class="grid3" style="margin-top:16px">
+      <div class="card">
+        <h4>触发只有两种</h4>
+        <p>手动执行，或 Quartz Cron 周期调度。没有依赖触发、没有事件触发，也没有跨任务编排。</p>
+      </div>
+      <div class="card">
+        <h4>并发由唯一索引兜底</h4>
+        <p>同一<b>数据源</b>同时只允许一个 PENDING / RUNNING 实例，冲突返回 <code>CRAWL_BUSY</code>。一个数据源可以挂多个任务，只要不同时跑。</p>
+      </div>
+      <div class="card">
+        <h4>「成功」不等于「干净」</h4>
+        <p>SUCCEEDED 表示枚举完成，但可能有失败表；只有<b>零失败</b>的那次才判定缺失（MISSING）。</p>
+      </div>
+      <div class="card">
+        <h4>排除规则是「不采也不判缺失」</h4>
+        <p>正则或精确表名命中的表保持存活但跳过采集，因此它们既不会刷新，也不会被标记缺失。</p>
+      </div>
+      <div class="card">
+        <h4>元数据是当前态，不是快照</h4>
+        <p>资产保留同一身份跨多次采集，人工维护的描述、负责人、数据域、标签不会被采集覆盖。</p>
+      </div>
+      <div class="card">
+        <h4>没有的：质量与血缘</h4>
+        <p>治理规则扫描（FYOIP-16）与资产关系注册（FYOIP-17）都尚未实现，页面不能凭空造数据。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 02 现版问题 ================= -->
+  <section id="problems">
+    <div class="sec-head"><div class="sec-num">02</div><h2>现版问题：信息都在，但落不到页面上</h2></div>
+    <p class="sec-sub">左侧是现版列表的还原。七个问题按「影响判断」排序，前三个直接导致用户无法完成日常运维动作。</p>
+
+    <div class="grid2" style="align-items:start">
+      <div class="mock">
+        <span class="mock-label">CURRENT · 现版列表</span>
+        <div class="mcard">
+          <span class="mdot on"></span>
+          <div>
+            <div class="mname">订单库 · 全库采集 <span class="badge b-info" style="margin-left:4px">运行中</span></div>
+            <div class="mmeta">MySQL-订单库 · shop_order　每天 02:00　最近运行 · 尚未运行</div>
+          </div>
+          <div class="mtools">
+            <span class="mtool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span><span class="mtool"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l12 8-12 8V4z"/></svg></span><span class="mtool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg></span><span class="mtool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></span>
+          </div>
+        </div>
+        <div class="mcard">
+          <span class="mdot"></span>
+          <div>
+            <div class="mname">用户中心 · 核心表 <span class="badge b-mute" style="margin-left:4px">已下线</span></div>
+            <div class="mmeta">MySQL-用户中心 · user_center　手动执行　最近运行 · 失败 · 10-30 11:58</div>
+          </div>
+          <div class="mtools">
+            <span class="mtool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span><span class="mtool"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l12 8-12 8V4z"/></svg></span><span class="mtool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg></span><span class="mtool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></span>
+          </div>
+        </div>
+        <div class="mcard">
+          <span class="mdot on"></span>
+          <div>
+            <div class="mname">数仓 DWD · 明细层 <span class="badge b-info" style="margin-left:4px">运行中</span></div>
+            <div class="mmeta">PostgreSQL-数仓 · warehouse / dwd　每天 03:30　最近运行 · 已完成 · 昨天 03:31</div>
+          </div>
+          <div class="mtools">
+            <span class="mtool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span><span class="mtool"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l12 8-12 8V4z"/></svg></span><span class="mtool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg></span><span class="mtool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></span>
+          </div>
+        </div>
+        <div class="callout">同屏出现两种「运行中」：徽章指的是<b>任务已上线</b>，文案指的是<b>实例在执行</b>。失败实例只留一句话，点不进去。</div>
+      </div>
+
+      <div class="probs">
+        <div class="prob">
+          <div class="prob-n">01</div>
+          <div>
+            <h4>状态语义混叠<span class="tag src">ticket 05</span></h4>
+            <p><b>任务状态</b> RUNNING 渲染成「运行中」，与<b>实例状态</b>「采集中」同屏并存。用户无法判断是「配置生效了」还是「正在跑」。</p>
+          </div>
+        </div>
+        <div class="prob">
+          <div class="prob-n">02</div>
+          <div>
+            <h4>运行不可追溯</h4>
+            <p>列表只有一行 lastRun 摘要。接口其实已具备 <code>GET /crawls?taskId=</code>、<code>GET /crawls/{id}</code>（含逐表失败）与重试端点，但 <b>UI 没有任何入口</b>，<code>/crawls</code> 路由直接重定向回任务页。</p>
+          </div>
+        </div>
+        <div class="prob">
+          <div class="prob-n">03</div>
+          <div>
+            <h4>「部分成功」被涂成绿色</h4>
+            <p>实例 SUCCEEDED 且 <code>failedCount &gt; 0</code> 时，界面只显示「已完成」。这正是<b>不做缺失判定</b>的那一类，语义上最需要提醒，却最容易被当成健康。</p>
+          </div>
+        </div>
+        <div class="prob">
+          <div class="prob-n">04</div>
+          <div>
+            <h4>范围与产出不可见</h4>
+            <p>采集范围只在编辑页可见；实例的 added / updated / removed / failed / filtered 五个计数从不展示。采完之后「发生了什么」没有落点。</p>
+          </div>
+        </div>
+        <div class="prob">
+          <div class="prob-n">05</div>
+          <div>
+            <h4>操作不可读<span class="tag src">ticket 04</span></h4>
+            <p>四个纯图标按钮，hover 才浮现；最常用的「立即采集」是播放图标，紧邻电源图标，误触成本高。</p>
+          </div>
+        </div>
+        <div class="prob">
+          <div class="prob-n">06</div>
+          <div>
+            <h4>无搜索、无筛选、无批量采集</h4>
+            <p>任务多时只能翻页；批量操作只支持「下线 / 删除」，最需要批量化的「立即采集」缺席。</p>
+          </div>
+        </div>
+        <div class="prob">
+          <div class="prob-n">07</div>
+          <div>
+            <h4>只有任务视角，没有数据源视角</h4>
+            <p>用户的心智是「这个库接进来了吗」。未接入的数据源在采集页完全不可见，也无从判断覆盖率。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 03 方案选择 ================= -->
+  <section id="options">
+    <div class="sec-head"><div class="sec-num">03</div><h2>三个方向，选 B</h2></div>
+    <p class="sec-sub">约束是：本期不动后端契约、不改任务模型。在这个前提下比较三种信息组织方式。</p>
+
+    <table class="cmp">
+      <thead>
+        <tr>
+          <th style="width:150px">方案</th>
+          <th style="width:250px">形态</th>
+          <th>优势</th>
+          <th style="width:210px">代价 / 风险</th>
+          <th style="width:90px">结论</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>A · 增强现有卡片</b></td>
+          <td>保留卡片列表，补齐范围、产出、失败数与文字操作</td>
+          <td>改动最小，一天可上</td>
+          <td>卡片天然不适合横向比较；任务变多后仍需逐张阅读，且放不下运行历史</td>
+          <td class="reject">不选</td>
+        </tr>
+        <tr class="pick">
+          <td><b>B · 采集控制台</b><span class="pick-flag">推荐</span></td>
+          <td>健康带 + 任务表（可搜可筛）+ 行内详情抽屉 + 全局实例记录</td>
+          <td>横向比较与纵向追溯各归其位；抽屉复用列表上下文，不丢筛选；主体能力可由现有接口拼出</td>
+          <td>需要新增抽屉与实例记录两套视图；健康带部分指标需聚合接口（P1）</td>
+          <td><b style="color:var(--primary)">采用</b></td>
+        </tr>
+        <tr>
+          <td><b>C · 以数据源为中心</b></td>
+          <td>首屏是数据源卡片，展开后看库 / schema / 任务</td>
+          <td>最贴合「库有没有接进来」的心智，覆盖率天然可算</td>
+          <td>与「一个任务 = 一个命名空间」的模型冲突；一个数据源可挂多任务，需要重构导航与权限；改动越界到数据源模块</td>
+          <td class="reject">列为演进</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p class="body" style="margin-top:14px">选 B 的核心理由是<b>抽屉</b>：它让「列表负责扫视、详情负责排查」成立，且关闭后回到原筛选位置。C 的信息价值更高，但需要先回答「一个数据源多个任务如何合并展示」，不适合与本期同时做——本提案把 C 作为 P2 的演进方向记录在案。</p>
+  </section>
+
+  <!-- ================= 04 信息架构 ================= -->
+  <section id="ia">
+    <div class="sec-head"><div class="sec-num">04</div><h2>信息架构：一个入口，两个视图，三层详情</h2></div>
+    <p class="sec-sub">导航层级不变（仍在「数据地图」下），避免与 FYOIP-15 已定的五项导航冲突；变化发生在页面内部。</p>
+
+    <div class="ia">
+      <div class="ia-col">
+        <h4>BEFORE</h4>
+        <ul class="tree">
+          <li class="root">数据地图</li>
+          <li class="l2">数据地图概述</li>
+          <li class="l2">资产目录</li>
+          <li class="l2 new">元数据采集<span class="note">单页 · 卡片列表</span></li>
+          <li class="l2" style="padding-left:46px">新建 / 编辑<span class="note">全屏页</span></li>
+          <li class="l2">我的数据</li>
+        </ul>
+        <p class="small muted" style="margin-top:14px">页面只有一层：任务列表。实例、失败、范围、产出都没有归属位置。</p>
+      </div>
+      <div class="ia-col">
+        <h4>AFTER</h4>
+        <ul class="tree">
+          <li class="root">元数据采集 <span class="note">/data-governance/data-map/tasks</span></li>
+          <li class="l2">① 健康带<span class="note">4 真实 + 1 示例</span></li>
+          <li class="l2">② 采集任务<span class="note">表格 · 搜索 · 筛选 · 批量采集</span></li>
+          <li class="l2" style="padding-left:46px">任务详情抽屉<span class="note">概览 / 运行历史 / 质量与血缘</span></li>
+          <li class="l2" style="padding-left:72px">实例详情<span class="note">展开失败表 · 重试</span></li>
+          <li class="l2">③ 实例记录<span class="note">全局实例视图 · 按任务/数据源/状态筛</span></li>
+          <li class="l2">④ 新建 / 编辑<span class="note">保留全屏页，仅调整范围预览</span></li>
+        </ul>
+        <p class="small muted" style="margin-top:14px">关键：<b>任务 → 实例 → 失败表</b>三级下钻，每级都能原路返回，且不丢失筛选条件。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 05 原型 ================= -->
+  <section id="prototype">
+    <div class="sec-head"><div class="sec-num">05</div><h2>高保真原型</h2></div>
+    <p class="sec-sub">可直接操作：切换「采集任务 / 实例记录」、搜索与三个筛选、点失败表卡只看异常、点行打开详情抽屉、在抽屉内切换「概览 / 运行历史 / 质量与血缘」、展开失败表、切上线态。右上角开关可关闭全部占位能力。</p>
+
+    <div class="proto">
+      <div class="proto-chrome">
+        <div class="dots"><i></i><i></i><i></i></div>
+        <div class="urlbar">yak-ops / data-governance / data-map / tasks</div>
+      </div>
+      <div class="proto-viewport">
+        <div class="app" id="app">
+
+          <aside class="side">
+            <div class="ws">
+              <div class="av">数</div>
+              <div class="nm">数字中台</div>
+              <div class="cv">⌄</div>
+            </div>
+            <div class="navgroup">数据集成</div>
+            <div class="navi"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>数据源管理</div>
+            <div class="navi"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h13l-3-3"/><path d="M20 17H7l3 3"/></svg>数据同步</div>
+            <div class="navgroup">数据建模</div>
+            <div class="navi"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M10 6h4a4 4 0 0 1 4 4v4"/></svg>数仓规划</div>
+            <div class="navi"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v18"/><path d="M3 8h18"/></svg>数据标准</div>
+            <div class="navgroup">数据治理</div>
+            <div class="navi active"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 4 3 7v13l6-3 6 3 6-3V4l-6 3-6-3Z"/><path d="M9 4v13"/><path d="M15 7v13"/></svg>数据地图</div>
+            <div class="subnav">
+              <a href="#prototype" onclick="return false">数据地图概述</a>
+              <a href="#prototype" onclick="return false">资产目录</a>
+              <a class="on" href="#prototype" onclick="return false">元数据采集</a>
+              <a href="#prototype" onclick="return false">我的数据</a>
+            </div>
+            <div class="navgroup" style="margin-top:auto">运维 / 管理</div>
+            <div class="navi"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>离线任务</div>
+            <div class="navi"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>管理中心</div>
+          </aside>
+
+          <div class="workarea">
+            <div class="phead">
+              <div>
+                <h1>元数据采集</h1>
+                <p>看三件事：哪些库还没接进来、昨晚谁失败了、这次结构变了什么。</p>
+              </div>
+              <div class="acts">
+                <span class="switch on" id="phSwitch" title="查看质量与血缘的占位形态"><i></i>占位能力</span>
+                <button class="btn" onclick="return false">实例记录</button>
+                <button class="btn primary" onclick="return false">＋ 新建采集任务</button>
+              </div>
+            </div>
+
+            <div class="kpis">
+              <div class="kpi">
+                <div class="k"><span>已接入数据源</span><span class="win">当前</span></div>
+                <div class="v">7 <small>/ 8</small></div>
+                <div class="d">未接入：Oracle-财务（草稿）</div>
+                <div class="bar"><i style="width:87.5%"></i></div>
+              </div>
+              <div class="kpi">
+                <div class="k"><span>目录资产</span><span class="win">当前</span></div>
+                <div class="v">1,528 <small>表</small></div>
+                <div class="d">15,240 字段 · 近 7 天 <span class="up">+52</span></div>
+              </div>
+              <div class="kpi">
+                <div class="k"><span>采集实例</span><span class="win">近 24h</span></div>
+                <div class="v">7</div>
+                <div class="d">4 成功 · 1 部分成功 · <span class="dn">1 失败</span> · 1 采集中</div>
+              </div>
+              <div class="kpi act" id="kpiFail" title="只看有失败表的任务">
+                <div class="k"><span>待处理失败表</span><span class="win">当前</span></div>
+                <div class="v">12</div>
+                <div class="d">集中在 1 个任务 · 点击筛选</div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="tabs">
+                <button class="tab on" data-view="tasks">采集任务<span class="cnt">9</span></button>
+                <button class="tab" data-view="runs">实例记录<span class="cnt">128</span></button>
+                <div class="right" id="tasksTools">
+                  <span class="chip ph" style="margin-right:10px">治理健康分 <b>82</b> · 示例</span>
+                  <span class="meta" style="font-size:10.5px;color:var(--muted)">最近同步 12 分钟前</span>
+                </div>
+              </div>
+
+              <div class="toolbar" id="taskBar">
+                <div class="search">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9aa0aa" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                  <input id="q" placeholder="搜索任务名或数据源" />
+                </div>
+                <select class="sel" id="fStatus">
+                  <option value="">全部状态</option>
+                  <option value="RUNNING">已上线</option>
+                  <option value="OFFLINE">已下线</option>
+                  <option value="DRAFT">草稿</option>
+                </select>
+                <select class="sel" id="fDs">
+                  <option value="">全部数据源</option>
+                  <option>MySQL-订单库</option>
+                  <option>MySQL-用户中心</option>
+                  <option>PostgreSQL-数仓</option>
+                  <option>ClickHouse-日志</option>
+                  <option>Oracle-财务</option>
+                  <option>MySQL-营销</option>
+                  <option>MySQL-物流</option>
+                  <option>PostgreSQL-商品</option>
+                </select>
+                <select class="sel" id="fOwner">
+                  <option value="">全部负责人</option>
+                  <option>王磊</option>
+                  <option>李静</option>
+                  <option>陈默</option>
+                  <option>张倩</option>
+                  <option>赵鹏</option>
+                </select>
+                <span class="meta" id="count">共 9 个任务 · 2 个有异常</span>
+              </div>
+
+              <div class="toolbar" id="runBar" style="display:none">
+                <div class="search">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9aa0aa" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                  <input placeholder="搜索任务或范围" />
+                </div>
+                <select class="sel"><option>全部状态</option><option>成功</option><option>部分成功</option><option>失败</option><option>采集中</option></select>
+                <select class="sel"><option>全部数据源</option><option>MySQL-订单库</option><option>MySQL-用户中心</option></select>
+                <span class="meta">近 7 天共 128 次实例</span>
+              </div>
+
+              <div class="scroll" id="viewTasks">
+                <table class="tbl">
+                  <thead>
+                    <tr>
+                      <th style="width:23%">任务</th>
+                      <th style="width:17%">采集范围</th>
+                      <th style="width:12%">调度</th>
+                      <th style="width:9%">上线</th>
+                      <th style="width:21%">最近采集</th>
+                      <th style="width:8%">新增</th>
+                      <th style="width:10%"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="taskRows"></tbody>
+                </table>
+              </div>
+
+              <div class="scroll" id="viewRuns" style="display:none">
+                <table class="tbl">
+                  <thead>
+                    <tr>
+                      <th style="width:132px">实例 / 时间</th>
+                      <th style="width:210px">任务 · 范围</th>
+                      <th style="width:74px">触发</th>
+                      <th style="width:96px">状态</th>
+                      <th style="width:140px">产出 增/更/缺/败</th>
+                      <th style="width:78px">耗时</th>
+                      <th style="width:120px">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="runRows"></tbody>
+                </table>
+              </div>
+
+              <div class="tfoot">
+                <span id="footNote">第 1–6 条，共 6 条</span>
+                <div class="pg"><i>‹</i><b>1</b><i>2</i><i>3</i><span>…</span><i>›</i></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="scrim" id="scrim"></div>
+
+          <aside class="drawer" id="drawer">
+            <div class="dhead">
+              <div class="row1">
+                <h3 id="dTitle">任务详情</h3>
+                <button class="ico dclose" id="dClose">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>
+              </div>
+              <div class="meta" id="dMeta"></div>
+              <div class="acts">
+                <button class="btn primary" id="dRun">立即采集</button>
+                <button class="btn" onclick="return false">编辑配置</button>
+                <button class="btn ghost" id="dToggle">下线</button>
+                <button class="ico" id="dMore" style="margin-left:auto" title="更多操作">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+                </button>
+                <div class="dmenu" id="dMenu">
+                  <button onclick="return false">复制为新任务</button>
+                  <button class="danger" id="dDel">删除任务</button>
+                  <div class="hint" id="dDelHint">已上线任务需先下线才能删除</div>
+                </div>
+              </div>
+            </div>
+            <div class="dtabs">
+              <button class="dtab on" data-dtab="overview">概览</button>
+              <button class="dtab" data-dtab="runs">运行历史<span style="color:var(--muted);font-size:10px">8</span></button>
+              <button class="dtab ph" data-dtab="gov">质量与血缘<span style="color:#b54708;font-size:10px">示例</span></button>
+            </div>
+            <div class="dbody">
+              <div id="dOverview"></div>
+              <div id="dRuns" style="display:none"></div>
+              <div id="dGov" style="display:none"></div>
+            </div>
+          </aside>
+
+        </div>
+      </div>
+    </div>
+
+    <p class="small muted" style="margin-top:16px">按区域说明（原型内未标注编号，避免遮挡内容）：</p>
+    <div class="annos">
+      <div class="anno"><b>1</b><div><strong>页头副行</strong>：改成「看三件事」，一句话说明这页的用途；功能描述下放到文档，不再占用首屏。</div></div>
+      <div class="anno"><b>2</b><div><strong>健康带</strong>：四张等高卡，右上角标时间窗（当前 / 近 24h），避免「7 天」与「24 小时」混用；只有失败表卡是强调态且可点筛选。</div></div>
+      <div class="anno"><b>3</b><div><strong>任务表</strong>：六列决策信息 + 操作。上线态用圆点 + 文字，运行态才用彩色徽章，一列只有一个视觉重点。</div></div>
+      <div class="anno"><b>4</b><div><strong>最近采集</strong>：徽章 + 相对时间 + 失败表数；失败整行加左侧红条，扫视时不必逐行读字。</div></div>
+      <div class="anno"><b>5</b><div><strong>详情抽屉</strong>：结论优先——「本次采集」在第一屏，配置在后，趋势垫底；失败表就地展开，不跳页。</div></div>
+      <div class="anno"><b>6</b><div><strong>占位能力</strong>：示例从首屏 KPI 挪到页签旁的 chip 与抽屉页签，关闭时连页签一起收起，不留空壳。</div></div>
+    </div>
+
+    <h3>相对现版的改动清单</h3>
+    <table class="diff">
+      <thead><tr><th style="width:170px">位置</th><th style="width:250px">现版</th><th>提案</th><th style="width:240px">理由</th></tr></thead>
+      <tbody>
+        <tr><td>主视图</td><td class="old">卡片列表，每卡两行文字</td><td class="new">七列表格，列可比较、头可吸顶</td><td class="why">任务的本质是一组可比属性，不是内容卡片</td></tr>
+        <tr><td>状态</td><td class="old">一个「运行中」徽章混指上线态</td><td class="new">上线态降为圆点 + 文字，运行态独占徽章，另加派生态「部分成功」</td><td class="why">先消除 ticket 05 的语义冲突，再解决两枚徽章并排的扫视成本</td></tr>
+        <tr><td>行操作</td><td class="old">四个纯图标，hover 才出现</td><td class="new">行内只留「采集」与「⋯」，编辑/上下线/删除进抽屉，删除再降级到溢出菜单</td><td class="why">误触成本高；破坏性操作不该和主操作并排</td></tr>
+        <tr><td>详情</td><td class="old">无。失败后只能重进编辑页</td><td class="new">右侧抽屉，三个页签，失败表就地展开并可重试</td><td class="why">复用已有 API，不改页面上下文</td></tr>
+        <tr><td>运行历史</td><td class="old">无入口，<code>/crawls</code> 重定向</td><td class="new">全局「实例记录」页签 + 任务内「运行历史」</td><td class="why">API 已支持 taskId 过滤与失败明细，纯前端可交付</td></tr>
+        <tr><td>产出</td><td class="old">不展示计数</td><td class="new">列表给「上次新增」单值，抽屉给增/更/缺/败四元组</td><td class="why">列表只承担横向比较，明细留给抽屉</td></tr>
+        <tr><td>未来能力</td><td class="old">不存在</td><td class="new">示例位 + 可关闭开关</td><td class="why">先对齐形态，不假装已交付</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ================= 06 版式与内容 ================= -->
+  <section id="layout">
+    <div class="sec-head"><div class="sec-num">06</div><h2>版式与内容规则</h2></div>
+    <p class="sec-sub">这一版把「好看」拆成可执行的规则：字阶六档、间距三档、列宽按内容分配；内容按「结论 → 配置 → 趋势」排序，每个区域只回答一个问题。</p>
+
+    <h3>字阶与用途</h3>
+    <table class="mx">
+      <thead><tr><th style="width:96px">字号</th><th style="width:170px">用途</th><th>约束</th></tr></thead>
+      <tbody>
+        <tr><td>26px</td><td>抽屉结论数字</td><td>只给「一个结论」用（如健康分）；同屏不出现第二个</td></tr>
+        <tr><td>18px</td><td>KPI 数值</td><td>tabular-nums 等宽对齐；单位小两号并降一级色</td></tr>
+        <tr><td>16px</td><td>页面标题</td><td>比 KPI 数值小一号，靠字重与位置建立层级，不靠字号</td></tr>
+        <tr><td>13 / 12px</td><td>说明段落 / 表格</td><td>12px 是表格基准，13px 只用于成段说明</td></tr>
+        <tr><td>11 / 10.5px</td><td>副行、标签 / 时间、口径</td><td>10.5px 仅限元信息，不承载任何结论</td></tr>
+      </tbody>
+    </table>
+
+    <h3>间距与列宽</h3>
+    <div class="grid3">
+      <div class="card">
+        <h4>横向 18 一条线</h4>
+        <p>页头、KPI、筛选条、表格首列、抽屉内边距统一 18，形成一条看不见的左边线。所有区块左边缘对齐，是这版最容易被感知的秩序感来源。</p>
+      </div>
+      <div class="card">
+        <h4>纵向 8 / 12 / 18</h4>
+        <p>同类元素 8，区块之间 12，区块与标题 18 或 24。收敛掉原先 9、10、11 混用的随手值。</p>
+      </div>
+      <div class="card">
+        <h4>列宽按内容，不等分</h4>
+        <p>任务 23% · 范围 17% · 调度 12% · 上线 9% · 最近采集 21% · 新增 8% · 操作 10%。用百分比而非像素，窄屏按比例压缩不塌。</p>
+      </div>
+    </div>
+
+    <h3>内容分区：每格只回答一个问题</h3>
+    <table class="mx">
+      <thead><tr><th style="width:150px">区域</th><th style="width:240px">它回答的问题</th><th>因此不放在这里</th></tr></thead>
+      <tbody>
+        <tr><td>页头副行</td><td>这页能帮我做什么</td><td>功能描述（「同步库表结构」），那是产品文档的事</td></tr>
+        <tr><td>健康带</td><td>整体是否健康、哪里需要立刻动手</td><td>趋势图、需要下钻才能解释的指标</td></tr>
+        <tr><td>任务表</td><td>哪个任务有问题、范围多大、最近跑成什么样</td><td>产出四元组、失败表清单、排除规则——都在抽屉</td></tr>
+        <tr><td>抽屉 · 概览</td><td>这次采到了什么、变了什么</td><td>逐次实例的成败（交给运行历史）</td></tr>
+        <tr><td>抽屉 · 运行历史</td><td>哪一次失败、为什么失败</td><td>配置项（交给概览第一屏）</td></tr>
+        <tr><td>实例记录</td><td>昨晚整体谁失败了</td><td>单个任务的长历史（点回任务抽屉）</td></tr>
+      </tbody>
+    </table>
+
+    <h3>视觉权重：一屏只有一个「要动手」</h3>
+    <p class="body">四个 KPI 里只有「待处理失败表」是可点击的强调卡（左侧红条 + 红色数字），点一下就把表格筛成仅看异常；其余三张是观察指标，保持中性。同理，表格里只有<b>运行态</b>用彩色徽章，<b>上线态</b>降级为圆点 + 文字——两枚徽章并排是上一版最难扫视的地方。</p>
+
+    <h3>命名与文案改动</h3>
+    <table class="diff">
+      <thead><tr><th style="width:210px">现版文案</th><th style="width:210px">本版文案</th><th>原因</th></tr></thead>
+      <tbody>
+        <tr><td class="old">运行记录（全局页签）</td><td class="new">实例记录</td><td>与抽屉内的「运行历史」同名不同范围，改名后不再互相指错</td></tr>
+        <tr><td class="old">运行记录（抽屉页签）</td><td class="new">运行历史</td><td>限定在单个任务的上下文内</td></tr>
+        <tr><td class="old">已完成</td><td class="new">成功 / 部分成功</td><td>「已完成」把 failedCount &gt; 0 的那一类也涂成了绿色</td></tr>
+        <tr><td class="old">运行中（任务状态）</td><td class="new">已上线</td><td>枚举值仍是 RUNNING，只改展示文案，避免与实例「采集中」混淆</td></tr>
+        <tr><td class="old">上线状态</td><td class="new">上线</td><td>列名统一不超过 4 字，七列才排得下</td></tr>
+        <tr><td class="old">近 7 天产出</td><td class="new">新增</td><td>列表只给一个可比较的数，四元组进抽屉；也避开「7 天」这个容易被误解的口径</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ================= 07 状态与边界 ================= -->
+  <section id="states">
+    <div class="sec-head"><div class="sec-num">07</div><h2>状态矩阵与边界规则</h2></div>
+    <p class="sec-sub">两套状态必须正交表达。下表是渲染规则，「部分成功」由前端派生，不新增后端枚举。</p>
+
+    <table class="mx">
+      <thead><tr><th style="width:104px">上线</th><th style="width:150px">最近实例</th><th>列表呈现</th><th style="width:176px">允许的操作</th><th style="width:88px">判缺失</th></tr></thead>
+      <tbody>
+        <tr><td>草稿</td><td>尚未运行</td><td><span class="st draft"><i></i>草稿</span> <span class="badge b-out">未运行</span> 副行「上线后才会按调度执行」</td><td>编辑 / 上线 / 删除</td><td>否</td></tr>
+        <tr><td>已上线</td><td>未运行</td><td><span class="st"><i></i>已上线</span> <span class="badge b-out">未运行</span></td><td>采集 / 编辑 / 下线</td><td>否</td></tr>
+        <tr><td>已上线</td><td>排队中 / 采集中</td><td><span class="badge b-run"><i class="pd"></i>采集中</span> 副行「已运行 42 秒」，5 秒轮询</td><td>编辑禁用 · 下线禁用 · 删除禁用</td><td>否（未结束）</td></tr>
+        <tr><td>已上线</td><td>成功（0 失败）</td><td><span class="badge b-ok">成功</span> 副行「3 小时前 · 1分20秒」</td><td>采集 / 编辑 / 下线</td><td><b>是</b></td></tr>
+        <tr><td>已上线</td><td>部分成功（failedCount &gt; 0）</td><td><span class="badge b-warn">部分成功</span> 副行「12 张表失败」</td><td>采集 / 仅重试失败表 / 编辑 / 下线</td><td>否</td></tr>
+        <tr><td>已上线</td><td>实例级失败</td><td><span class="badge b-err">失败</span> 副行给原因摘要，左侧红条</td><td>重新采集 / 编辑 / 下线</td><td>否</td></tr>
+        <tr><td>已上线</td><td>重试实例</td><td><span class="badge b-warn">部分成功</span> 副行标注「重试」</td><td>同对应终态</td><td>否（重试恒不判）</td></tr>
+        <tr><td>已下线</td><td>任意终态</td><td><span class="st off"><i></i>已下线</span> 保留最近结果，调度列显示「已停止」</td><td>上线 / 编辑 / 删除；采集禁用</td><td>否</td></tr>
+      </tbody>
+    </table>
+
+    <p class="body">两处容易写错的操作约束：<b>实例级失败不能「重试」</b>——重试接口要求源实例存在失败表，没有失败表时直接被拒，只能重新发起一次采集；<b>已上线任务不能直接删除</b>——只能下线后再删。矩阵里的「允许的操作」按这两条收紧。</p>
+
+    <h3>必须处理的边界</h3>
+    <div class="rules">
+      <div class="rule">
+        <h4>并发：同数据源只允许一个活跃实例</h4>
+        <p>点击「采集」前先判断该数据源是否有排队中/采集中实例。有则置灰并提示「数据源正在采集（任务：订单库 · 全库采集）」，而不是等接口返回「该数据源已有进行中的采集任务，或采集队列已满」再报错。</p>
+      </div>
+      <div class="rule">
+        <h4>规模：≥2000 表直接拒绝</h4>
+        <p>拒绝发生在读取任何列之前，因此很快。前端要给出可执行的原因（缩小 schema 或加排除规则），不能只显示「采集失败」。排除表本身另有 500 张上限。</p>
+      </div>
+      <div class="rule">
+        <h4>时长：30 分钟预算</h4>
+        <p>预算按墙钟时间在两次元数据调用之间检查，超时即以失败结束。运行中的实例显示已运行时长；超过约 25 分钟时在抽屉内提示「接近单次预算，可能被中断」。</p>
+      </div>
+      <div class="rule">
+        <h4>失败表上限 200 条</h4>
+        <p>详情接口只返回前 200 条失败表并标注「仅显示前 200 张」。重试作用于该实例的<b>全部</b>失败表，不支持单表勾选重试。</p>
+      </div>
+      <div class="rule">
+        <h4>三种空态要分开</h4>
+        <p>①没有任务 → 引导新建并说明「一个任务对应一个库」；②有任务但从未运行 → 行内「未运行」，不弹空页；③筛选无结果 → 保留筛选条并提供「清除筛选」。三种都在原位置解决，不跳页。</p>
+      </div>
+      <div class="rule">
+        <h4>权限与删除</h4>
+        <p>本版本所有空间成员可浏览、采集、编辑。删除任务只删配置、保留已采集资产；删除数据源会级联删资产——两处文案必须说清差别，且删除入口不在主操作旁边。</p>
+      </div>
+    </div>
+
+    <h3>新建 / 编辑页只改三处</h3>
+    <div class="rules">
+      <div class="rule">
+        <h4>范围预览提前</h4>
+        <p>选完库 / schema 立即显示「预计 452 张表 · 已排除 12 张」，而不是保存后才知道规模。超过 2000 张在这一步就拦下，并提示改选 schema 或加排除规则。</p>
+      </div>
+      <div class="rule">
+        <h4>排除规则实时命中</h4>
+        <p>正则输入后 400ms 防抖预览命中表名（复用 <code>POST /tasks/preview-exclude</code>），让「排除」从盲写正则变成可见结果。</p>
+      </div>
+      <div class="rule">
+        <h4>保存语义与列表对齐</h4>
+        <p>主按钮「保存并上线」、次按钮「保存为草稿」；已下线任务保存后仍为已下线，不会被隐式上线。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 08 占位能力 ================= -->
+  <section id="placeholder">
+    <div class="sec-head"><div class="sec-num">08</div><h2>占位能力：说清「现在没有，未来从哪来」</h2></div>
+    <p class="sec-sub">数据质量与血缘当前没有后端支撑。提案保留形态，但用四件事保证不被误读：<b>不进首屏 KPI 网格</b>（只留一枚 chip）、虚线卡片、<b>示例</b>角标、可整块关闭的开关。</p>
+
+    <table class="mx">
+      <thead><tr><th style="width:150px">占位项</th><th style="width:210px">示例值（假数据）</th><th style="width:300px">未来数据来源</th><th>接入前提</th></tr></thead>
+      <tbody>
+        <tr><td>治理健康分</td><td>82 / 较上周 +3</td><td>FYOIP-16 每日健康快照（<code>GO / DEV / COMPUTE</code> 维度）</td><td>治理扫描上线且存在 ≥1 次完整扫描</td></tr>
+        <tr><td>质量规则命中</td><td>5 条（空值率 2 / 主键重复 1 / 枚举越界 2）</td><td>FYOIP-16 Issue 列表，按 <code>targetType=DATA_MAP_TABLE</code> 过滤</td><td>同资产绑定可用的 Issue 关联键</td></tr>
+        <tr><td>字段描述完整率</td><td>62%</td><td>数据地图自身字段：<code>remarks</code> 是否为空（源库注释，仅统计 ACTIVE 资产）</td><td><b>已真实计算</b>——由 <code>GET /crawls/summary</code> 返回，显示在「目录资产」卡明细</td></tr>
+        <tr><td>血缘上下游</td><td>上游 2 · 下游 3 个节点</td><td>FYOIP-17 资产实体关系（<code>PhysicalTableAssetKey</code> 归一）</td><td>关系注册落地；禁止另立字符串键</td></tr>
+        <tr><td>影响提示</td><td>「本任务失败将影响 3 个下游任务」</td><td>关系图 + 任务-资产写入关系</td><td>同上；且需先有「任务写了哪张表」的记录</td></tr>
+      </tbody>
+    </table>
+
+    <p class="body">其中<b>字段描述完整率</b>已在 P1 做真：口径为 ACTIVE 资产的列中 <code>remarks</code> 非空的比例，由 summary 端点一次返回；其余三项在依赖提案通过前保持示例态，且示例数值固定，不随真实数据变化——避免形成「数字在动所以是真的」的错觉。</p>
+    <p class="body">关闭开关后，页签旁的 chip 消失，抽屉里的「质量与血缘」页签整块收起——而不是留一个点进去只有一句话的空页签；若当时正停在该页签，自动退回概览。评审与客户演示时可直接切到该形态。</p>
+  </section>
+
+  <!-- ================= 09 分期 ================= -->
+  <section id="delivery">
+    <div class="sec-head"><div class="sec-num">09</div><h2>分期：版面先落地，聚合随后补</h2></div>
+    <p class="sec-sub">P0 只做版面与内容重排，用现有端点即可支撑「任务表 + 抽屉 + 运行历史 + 重试」；跨页搜索与筛选需要给任务列表补三个查询参数，单独列为 P0.5。</p>
+
+    <div class="phase">
+      <div>P0</div>
+      <div>
+        <b>版面与内容重排（纯前端）</b>
+        <ul>
+          <li>任务表替换卡片列表：六列决策信息 + 操作，列宽按百分比</li>
+          <li>上线态圆点化、运行态徽章化、派生「部分成功」</li>
+          <li>健康带四卡 + 口径标注 + 失败表卡可点筛选</li>
+          <li>任务抽屉：本次采集 → 配置 → 趋势；失败表就展开</li>
+          <li>实例记录页签、空态三态、5 秒轮询（仅有活跃实例时）</li>
+        </ul>
+      </div>
+      <div>接口：<code>GET /tasks</code>、<code>GET /crawls</code>、<code>GET /crawls/{id}</code>、<code>POST /tasks/{id}/run</code>、<code>POST /tasks/{id}/runs/{crawlId}/retry</code><br><br>附带依赖：数据源名称与负责人姓名需 join 数据源列表与空间成员，现版列表未做。</div>
+
+      <div>P0.5</div>
+      <div>
+        <b>列表查询参数（后端小改）</b>
+        <ul>
+          <li><code>GET /tasks</code> 增加 <code>keyword</code> / <code>status</code> / <code>datasourceId</code></li>
+          <li><code>GET /crawls</code> 增加 <code>status</code> 与时间范围</li>
+          <li>不加参数时，搜索与筛选只能作用于当前页，会让用户以为「搜不到」</li>
+        </ul>
+      </div>
+      <div>改动：三到五个查询条件 + 一段动态 SQL。<br><br>风险：低。需与分页语义一起回归，避免总数与筛选不一致。</div>
+
+      <div>P1</div>
+      <div>
+        <b>健康带聚合与真实指标</b>
+        <ul>
+          <li>已接入数据源数 = 有 ≥1 个成功实例的数据源</li>
+          <li>近 24 小时实例结果分布（建议 <code>GET /crawls/summary</code>）</li>
+          <li>待处理失败表汇总、字段描述完整率（可复用 <code>GET /tables</code>）</li>
+          <li>采集覆盖率：需数据源侧命名空间表数，成本最高，暂缓</li>
+        </ul>
+      </div>
+      <div>接口：新增 summary 聚合端点<br><br>风险：覆盖率口径未定（见 Q1），先不做分子/分母。</div>
+
+      <div>P2</div>
+      <div>
+        <b>治理与血缘接入</b>
+        <ul>
+          <li>健康分、质量规则命中接入 FYOIP-16</li>
+          <li>血缘上下游接入 FYOIP-17，资产详情新增血缘页签</li>
+          <li>评估方案 C：以数据源为中心重组采集入口</li>
+        </ul>
+      </div>
+      <div>前置：FYOIP-16 已实现并跑满一个扫描周期；FYOIP-17 关系注册可用。</div>
+    </div>
+
+    <p class="body"><b>落地状态（10-30）</b>：P0 版面与抽屉、P0.5 查询参数（<code>keyword</code> / <code>status</code> / <code>datasourceId</code>；实例侧 <code>status</code> / <code>failed</code> / <code>days</code>）、全局实例记录页、编辑页三处调整均已实现；新增 <code>POST /tasks/preview-scope</code> 支撑范围预估。</p>
+    <p class="body"><b>P1 已落地（10-30）</b>：新增 <code>GET /crawls/summary</code>（<code>hours</code> 1–168，默认 24），一次返回任务总数、上线数、窗口内实例结果分布（含派生「部分成功」）、按任务最新实例汇总的待处理失败表与异常任务数、ACTIVE 资产字段描述覆盖。健康带四卡全部换成全工作区真值，卡下加一条「近 24 小时 N 次采集」分段条；「只看异常」从客户端翻页内过滤升级为 <code>GET /tasks?abnormal=true</code> 服务端过滤（口径与异常任务数一致：任务最新实例失败或部分成功）。采集覆盖率仍按 Q1 暂缓；P2 治理血缘未开始。</p>
+  </section>
+
+  <!-- ================= 10 待确认 ================= -->
+  <section id="open">
+    <div class="sec-head"><div class="sec-num">10</div><h2>待确认</h2></div>
+    <p class="sec-sub">以下五点会改变设计，需要评审时给出结论；未定之前按括号内的默认假设推进。</p>
+    <div class="open-list">
+      <div class="openq"><b>覆盖率的口径</b>是「已采集表 / 数据源内全部表」，还是「已接入库数 / 可接入库数」？前者需要逐库枚举表数，成本高且会与采集并发冲突。（默认：P0 不做覆盖率，只展示绝对量）</div>
+      <div class="openq"><b>任务的负责人是否等同于资产责任人</b>？当前 ownerId 只挂在任务上，若治理 Issue 要指派给责任人，两者需要打通还是各自独立？（默认：独立，抽屉内只做展示）</div>
+      <div class="openq"><b>是否允许一个数据源挂多个任务覆盖不同 schema</b>？若允许，批量采集必须按数据源串行；若不允许，应在创建时校验。（默认：允许，串行提交）</div>
+      <div class="openq"><b>实例保留多久</b>？目前没有任何清理任务，实例与失败表是永久保留的；一旦要加保留策略，列表必须显式标注时间范围，否则用户会把「历史变短」当成 bug。（默认：按现状不标注，只在页签写「近 7 天」）</div>
+      <div class="openq"><b>「立即采集」是否对已下线任务开放</b>？现版要求先上线才能运行。建议允许下线任务手动跑一次，语义更接近「调试」。（默认：保持现版约束，按钮置灰并说明）</div>
+    </div>
+  </section>
+
+  <!-- ================= 本轮修订 ================= -->
+  <section id="changelog" style="padding-top:36px">
+    <div class="sec-head"><div class="sec-num">v0.2</div><h2>本轮 review 改了什么</h2></div>
+    <p class="sec-sub">上一版的问题集中在「信息都画上去了，但主次没排开」。下面八条是本次主要调整，都可在原型里直接看到。</p>
+    <div class="rules">
+      <div class="rule"><h4>01 · 首屏减负</h4><p>KPI 由五张等宽卡收为四张，示例健康分降为页签旁一枚 chip。首屏只剩真实指标，且只有失败表卡是可点的强调态。</p></div>
+      <div class="rule"><h4>02 · 一列一个重点</h4><p>上线态从彩色徽章改为圆点 + 文字，运行态独占徽章。原先两枚徽章并排，扫视时无法区分「配置生效」与「正在跑」。</p></div>
+      <div class="rule"><h4>03 · 列表减列</h4><p>「近 7 天产出」四元组下移到抽屉，列表只留一个「新增」。六列决策信息 + 操作，横向比较不再被数字串打断。</p></div>
+      <div class="rule"><h4>04 · 抽屉结论前置</h4><p>概览第一块改为「本次采集」：状态、耗时、四个计数、失败表入口。配置与排除规则后移，趋势垫底。</p></div>
+      <div class="rule"><h4>05 · 命名去歧义</h4><p>全局叫「实例记录」，抽屉内叫「运行历史」。原先两处都叫「运行记录」，范围不同却同名。</p></div>
+      <div class="rule"><h4>06 · 破坏性操作下沉</h4><p>行内只留「采集」与「⋯」；删除再降级到抽屉的溢出菜单，并对已上线任务禁用且给出原因。</p></div>
+      <div class="rule"><h4>07 · 不留空壳页签</h4><p>关闭占位能力时，「质量与血缘」页签整块收起，chip 同时消失；停在该页签时自动退回概览。</p></div>
+      <div class="rule"><h4>08 · 操作与状态对齐</h4><p>矩阵补上「判缺失」列与重试实例一行；实例级失败只能重新采集（无失败表可重试），已上线任务不可直接删除。</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <div>提案：元数据采集页 v0.2</div>
+    <div>依据：FYOIP-15 元数据目录 · FYOIP-16 数据治理 · FYOIP-17 资产关系</div>
+    <div>Ticket 关联：05 状态语义、04 行操作、03 采集反馈</div>
+    <div>示例数据仅用于形态评审，不代表真实业务数值</div>
+  </footer>
+
+</main>
+
+<script>
+(function () {
+  var TASKS = [
+    { id:'t1', name:'订单库 · 全库采集', ds:'MySQL-订单库', db:'shop_order', schema:'', sched:'每天 02:00', next:'明天 02:00', status:'RUNNING',
+      run:{status:'SUCCESS',rel:'3 小时前',dur:'1分20秒',failed:0}, tables:428, added:18, owner:'王磊', updated:'10-30 02:01', active:false },
+    { id:'t2', name:'用户中心 · 核心表', ds:'MySQL-用户中心', db:'user_center', schema:'', sched:'每 6 小时', next:'今天 18:00', status:'RUNNING',
+      run:{status:'SUCCESS',rel:'3 小时前',dur:'4分12秒',failed:12}, tables:96, added:3, owner:'李静', updated:'10-30 12:02', active:false },
+    { id:'t3', name:'数仓 DWD · 明细层', ds:'PostgreSQL-数仓', db:'warehouse', schema:'dwd', sched:'每天 03:30', next:'明天 03:30', status:'RUNNING',
+      run:{status:'RUNNING',rel:'已运行 42 秒',dur:'',failed:0}, tables:316, added:11, owner:'陈默', updated:'10-29 03:34', active:true },
+    { id:'t4', name:'行为日志 · 埋点事件', ds:'ClickHouse-日志', db:'analytics', schema:'', sched:'手动执行', next:'未调度', status:'OFFLINE',
+      run:{status:'SUCCESS',rel:'2 天前',dur:'2分04秒',failed:0}, tables:244, added:0, owner:'王磊', updated:'10-28 16:20', active:false },
+    { id:'t5', name:'财务 Oracle · 应付', ds:'Oracle-财务', db:'FIN', schema:'AP', sched:'每周一 01:00', next:'11-02 01:00', status:'DRAFT',
+      run:null, tables:0, added:null, owner:'张倩', updated:'10-29 09:15', active:false },
+    { id:'t6', name:'营销集市 · 活动域', ds:'MySQL-营销', db:'marketing', schema:'', sched:'每天 04:00', next:'明天 04:00', status:'RUNNING',
+      run:{status:'SUCCESS',rel:'昨天 04:01',dur:'48秒',failed:0}, tables:180, added:14, owner:'李静', updated:'10-29 04:01', active:false },
+    { id:'t7', name:'物流履约 · 运单库', ds:'MySQL-物流', db:'wms', schema:'', sched:'每天 05:00', next:'明天 05:00', status:'RUNNING',
+      run:{status:'SUCCESS',rel:'昨天 05:02',dur:'1分02秒',failed:0}, tables:132, added:6, owner:'赵鹏', updated:'10-29 05:02', active:false },
+    { id:'t8', name:'会员积分 · 历史归档', ds:'MySQL-用户中心', db:'user_center', schema:'archive', sched:'每月 1 日 02:00', next:'11-01 02:00', status:'OFFLINE',
+      run:{status:'SUCCESS',rel:'20 天前',dur:'3分41秒',failed:0}, tables:58, added:0, owner:'李静', updated:'10-10 02:14', active:false },
+    { id:'t9', name:'商品中心 · 主数据', ds:'PostgreSQL-商品', db:'product', schema:'', sched:'每 12 小时', next:'今天 20:00', status:'RUNNING',
+      run:{status:'FAILED',rel:'5 小时前',dur:'8秒',failed:0,reason:'读取 information_schema 超时'}, tables:74, added:null, owner:'陈默', updated:'10-30 10:06', active:false }
+  ];
+
+  var TASK_STATUS = {
+    RUNNING:{label:'已上线',cls:'on'},
+    OFFLINE:{label:'已下线',cls:'off'},
+    DRAFT:{label:'草稿',cls:'draft'}
+  };
+
+  function runBadge(run){
+    if(!run) return {label:'未运行',cls:'b-out'};
+    if(run.status==='RUNNING') return {label:'采集中',cls:'b-run'};
+    if(run.status==='PENDING') return {label:'排队中',cls:'b-mute'};
+    if(run.status==='FAILED') return {label:'失败',cls:'b-err'};
+    if(run.status==='INTERRUPTED') return {label:'异常中断',cls:'b-warn'};
+    if(run.failed>0) return {label:'部分成功',cls:'b-warn'};
+    return {label:'成功',cls:'b-ok'};
+  }
+
+  function badge(b){
+    var dot = b.cls==='b-run' ? '<i class="pd"></i>' : '';
+    return '<span class="badge '+b.cls+'">'+dot+b.label+'</span>';
+  }
+
+  function subRun(t){
+    var r = t.run;
+    if(!r) return '<span class="sub">保存后需上线才会按调度执行</span>';
+    if(r.status==='RUNNING') return '<span class="sub">'+r.rel+'</span>';
+    if(r.status==='FAILED') return '<span class="sub">'+r.rel+'<em> · '+(r.reason||'实例级失败')+'</em></span>';
+    if(r.failed>0) return '<span class="sub">'+r.rel+' · <em>'+r.failed+' 张表失败</em></span>';
+    return '<span class="sub">'+r.rel+(r.dur?' · '+r.dur:'')+'</span>';
+  }
+
+  function stMark(t){
+    var s = TASK_STATUS[t.status];
+    return '<span class="st '+s.cls+'"><i></i>'+s.label+'</span>';
+  }
+
+  var onlyBad = false;
+
+  function renderTasks(){
+    var q = (document.getElementById('q').value||'').trim().toLowerCase();
+    var fs = document.getElementById('fStatus').value;
+    var fd = document.getElementById('fDs').value;
+    var fo = document.getElementById('fOwner').value;
+    var body = document.getElementById('taskRows');
+    var rows = TASKS.filter(function(t){
+      if(fs && t.status!==fs) return false;
+      if(fd && t.ds!==fd) return false;
+      if(fo && t.owner!==fo) return false;
+      if(onlyBad && !(t.run && (t.run.failed>0 || t.run.status==='FAILED'))) return false;
+      if(q){
+        var hay = (t.name+' '+t.ds+' '+t.db+' '+t.schema).toLowerCase();
+        if(hay.indexOf(q)<0) return false;
+      }
+      return true;
+    });
+
+    if(!rows.length){
+      body.innerHTML = '<tr><td colspan="7" style="padding:56px 18px;text-align:center;color:#98a2b3;font-size:11.5px">没有符合条件的采集任务<br><span style="font-size:10.5px">试试清除搜索或筛选条件</span></td></tr>';
+    } else {
+      body.innerHTML = rows.map(function(t){
+        var rb = runBadge(t.run);
+        var bad = t.run && (t.run.failed>0 || t.run.status==='FAILED');
+        var added = t.added===null ? '<span class="prod z">—</span>'
+          : (t.added>0 ? '<span class="prod">+'+t.added+' <span class="z">表</span></span>' : '<span class="prod z">±0</span>');
+        var canRun = t.status==='RUNNING' && !t.active;
+        return '<tr data-id="'+t.id+'" class="'+(bad?'bad':'')+'">'
+          + '<td><div class="c-task"><div class="nm">'+t.name+'</div><div class="sub">'+t.owner+' · '+t.updated+' 更新</div></div></td>'
+          + '<td><div class="c-range"><b>'+t.ds+'</b><span>'+t.db+(t.schema?' / '+t.schema:'')+'</span></div></td>'
+          + '<td><div class="sch"><b>'+t.sched+'</b><span>'+(t.status==='OFFLINE'?'已停止':'下次 '+t.next)+'</span></div></td>'
+          + '<td>'+stMark(t)+'</td>'
+          + '<td><div class="run-cell">'+badge(rb)+subRun(t)+'</div></td>'
+          + '<td>'+added+'</td>'
+          + '<td><div class="opcell">'
+            + '<button class="lnk'+(canRun?'':' mute')+'" data-act="run" '+(canRun?'':'disabled')+'>'+(t.active?'采集中':'采集')+'</button>'
+            + '<button class="ico" data-act="more"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>'
+          + '</div></td>'
+          + '</tr>';
+      }).join('');
+    }
+    document.getElementById('count').textContent = '共 '+rows.length+' 个任务 · '+rows.filter(function(t){return t.run && (t.run.failed>0 || t.run.status==='FAILED');}).length+' 个有异常';
+    document.getElementById('footNote').textContent = '第 1–'+rows.length+' 条，共 '+rows.length+' 条';
+  }
+
+  /* ---------- drawer ---------- */
+  var current = null;
+
+  function openTask(id){
+    var t = TASKS.filter(function(x){return x.id===id;})[0];
+    if(!t) return;
+    current = t;
+    document.getElementById('dTitle').innerHTML = t.name + ' ' + stMark(t);
+    document.getElementById('dMeta').textContent = t.ds + ' · ' + t.db + (t.schema? ' / '+t.schema : '') + ' · 负责人 ' + t.owner;
+    var canRun = t.status==='RUNNING' && !t.active;
+    var runBtn = document.getElementById('dRun');
+    runBtn.disabled = !canRun;
+    runBtn.style.opacity = canRun ? 1 : .5;
+    runBtn.textContent = t.status==='RUNNING' ? '立即采集' : '需上线后运行';
+    var toggle = document.getElementById('dToggle');
+    toggle.textContent = t.status==='RUNNING' ? '下线' : '上线';
+    toggle.disabled = t.active;
+    toggle.style.opacity = t.active ? .5 : 1;
+    var del = document.getElementById('dDel');
+    del.disabled = t.status==='RUNNING';
+    document.getElementById('dDelHint').textContent = t.status==='RUNNING'
+      ? '已上线任务需先下线才能删除'
+      : '仅删除任务配置，已采集资产保留';
+    document.getElementById('dMenu').classList.remove('on');
+    document.getElementById('dOverview').innerHTML = overviewHtml(t);
+    document.getElementById('dRuns').innerHTML = runsHtml(t);
+    document.getElementById('dGov').innerHTML = govHtml(t);
+    setDTab('overview');
+    document.getElementById('app').classList.add('open');
+  }
+
+  function closeDrawer(){ document.getElementById('app').classList.remove('open'); }
+
+  function overviewHtml(t){
+    var r = t.run;
+    var rb = runBadge(r);
+    var sum;
+    if(!r){
+      sum = '<div class="dsec"><h5>本次采集</h5>'
+        + '<div style="font-size:11px;color:#98a2b3;line-height:1.7">尚未运行。上线后按调度执行，或点「立即采集」手动触发一次。</div></div>';
+    } else if(r.status==='RUNNING'){
+      sum = '<div class="dsec"><h5>本次采集 <span class="r">'+r.rel+'</span></h5>'
+        + '<div class="dsum">'+badge(rb)+'<span style="font-size:11px;color:#98a2b3">枚举中，产出待完成后统计</span></div></div>';
+    } else {
+      var updated = Math.max(2, Math.round(t.tables*0.02));
+      var nums = '<div class="nums">'
+        + '<span>新增 <b style="color:#027a48">+'+(t.added===null?0:t.added)+'</b></span>'
+        + '<span>更新 <b>~'+updated+'</b></span>'
+        + '<span>缺失 <b>-0</b></span>'
+        + '<span>失败 <b style="color:'+(r.failed?'#b42318':'#98a2b3')+'">'+(r.failed||0)+'</b></span></div>';
+      var act = r.failed>0 ? '<button class="lnk act" data-goruns="1">查看 '+r.failed+' 张失败表 ›</button>' : '';
+      var note = r.failed>0
+        ? '<div style="margin-top:7px;font-size:10.5px;color:#b54708">本次不做缺失判定：失败表的存活状态保持不变。</div>'
+        : (r.status==='FAILED' ? '<div style="margin-top:7px;font-size:10.5px;color:#b42318">'+(r.reason||'实例级失败')+' · 未产出任何资产变更</div>' : '');
+      sum = '<div class="dsec"><h5>本次采集 <span class="r">'+r.rel+(r.dur?' · '+r.dur:'')+'</span></h5>'
+        + '<div class="dsum">'+badge(rb)+nums+act+'</div>'+note+'</div>';
+    }
+
+    var spark = r
+      ? '<div class="dsec"><h5>最近 8 次采集 <span class="r">成功率 75%</span></h5>'
+        + '  <div class="spark">'
+        + '    <i style="height:62%"></i><i style="height:70%"></i><i class="p" style="height:48%"></i><i style="height:66%"></i>'
+        + '    <i class="f" style="height:38%"></i><i style="height:74%"></i><i style="height:58%"></i><i style="height:80%"></i>'
+        + '  </div>'
+        + '  <div class="spark-x"><span>10-23</span><span>10-24</span><span>10-25</span><span>10-26</span><span>10-27</span><span>10-28</span><span>10-29</span><span>10-30</span></div>'
+        + '  <div class="legend"><span><b style="background:#12b76a"></b>成功</span><span><b style="background:#f79009"></b>部分成功</span><span><b style="background:#f04438"></b>失败</span></div>'
+        + '</div>'
+      : '';
+
+    return ''
+      + sum
+      + '<div class="dgrid">'
+      + '  <div class="dsec"><h5>采集范围</h5><dl class="kv">'
+      + '    <dt>数据源</dt><dd>'+t.ds+'</dd>'
+      + '    <dt>库 / Schema</dt><dd>'+t.db+(t.schema?' / '+t.schema:' / —')+'</dd>'
+      + '    <dt>已采集</dt><dd>'+(t.tables? t.tables+' 张表':'尚未采集')+'</dd>'
+      + '    <dt>规则排除</dt><dd>'+(t.tables? '12 张 · 不刷新也不判缺失':'—')+'</dd>'
+      + '  </dl></div>'
+      + '  <div class="dsec"><h5>调度</h5><dl class="kv">'
+      + '    <dt>方式</dt><dd>'+(t.sched==='手动执行'?'手动':'Cron · '+t.sched)+'</dd>'
+      + '    <dt>下次运行</dt><dd>'+(t.status==='RUNNING'? t.next : '已停止')+'</dd>'
+      + '    <dt>时区</dt><dd>Asia/Shanghai</dd>'
+      + '    <dt>最近修改</dt><dd>'+t.updated+'</dd>'
+      + '  </dl></div>'
+      + '</div>'
+      + '<div class="dsec"><h5>排除规则 <span class="r">命中 12 张 · 不采也不判缺失</span></h5>'
+      + '  <code style="display:block;padding:6px 8px;background:#f8f9fb;border:1px solid #eceef2;border-radius:5px;color:#3b3f4a">^tmp_.*|.*_bak$|^test_</code>'
+      + '  <div style="margin-top:7px;font-size:10.5px;color:#98a2b3">被排除的表保持存活，但不会刷新字段，也不会因为本次缺失被标记 MISSING。</div>'
+      + '</div>'
+      + spark;
+  }
+
+  function runsHtml(t){
+    if(!t.run){
+      return '<div class="ph-off-box"><b>还没有采集实例</b>该任务处于草稿或从未运行。上线后按调度执行，或使用「立即采集」手动触发一次。</div>';
+    }
+    var st0 = t.run.status==='RUNNING' ? 'RUNNING' : (t.run.status==='FAILED' ? 'FAILED' : 'SUCCESS');
+    var f0 = t.run.failed||0;
+    var firstDur = t.run.status==='RUNNING' ? '运行中' : (t.run.dur || '1分20秒');
+    var base = [
+      {when:'10-30 '+ (t.sched==='手动执行'?'11:58':'02:00'), tg:t.sched==='手动执行'?'手动':'定时', st:st0, f:f0, du:firstDur,
+       a:st0==='FAILED'?0:(t.added||0), u:st0==='FAILED'?0:Math.max(2,Math.round(t.tables*0.02)), r:0,
+       err:t.run.reason||('连接失败：无法建立到 '+t.db+' 的连接（超时 30s）')},
+      {when:'10-29 02:00', tg:'定时', st:'SUCCESS', f:0, du:'1分14秒', a:2, u:9, r:1},
+      {when:'10-28 02:00', tg:'定时', st:'FAILED', f:0, du:'12秒', a:0, u:0, r:0, err:'连接池耗尽：无法建立到 '+t.db+' 的连接（超时 30s）'},
+      {when:'10-27 02:00', tg:'定时', st:'SUCCESS', f:0, du:'1分31秒', a:5, u:14, r:0},
+      {when:'10-26 02:00', tg:'定时', st:'SUCCESS', f:0, du:'1分08秒', a:0, u:6, r:2},
+      {when:'10-25 02:00', tg:'定时', st:'SUCCESS', f:3, du:'1分44秒', a:1, u:11, r:0},
+      {when:'10-24 02:00', tg:'手动', st:'SUCCESS', f:0, du:'1分22秒', a:9, u:22, r:0},
+      {when:'10-23 02:00', tg:'定时', st:'SUCCESS', f:0, du:'1分17秒', a:0, u:3, r:0}
+    ];
+
+    var fails = [
+      [t.db+'.tmp_merge_2024','表已被删除：table doesn\'t exist'],
+      [t.db+'.import_batch_stg','读取列元数据超时（statement timeout 30s）'],
+      [t.db+'.login_log','权限不足：SELECT 被拒绝（缺少该表授权）']
+    ];
+
+    return '<div style="font-size:10.5px;color:#98a2b3;margin-bottom:8px">产出顺序：新增 / 更新 / 缺失 / 失败。点「失败表」就地展开原因，重试按整次实例重跑失败表。</div>'
+      + base.map(function(r,i){
+        var b = r.st==='FAILED' ? {label:'失败',cls:'b-err'} : r.st==='RUNNING' ? {label:'采集中',cls:'b-run'} : (r.f>0 ? {label:'部分成功',cls:'b-warn'} : {label:'成功',cls:'b-ok'});
+        var failBtn = r.f>0 ? '<button class="lnk" data-fail="'+i+'">失败表 '+r.f+'</button>' : (r.st==='FAILED'?'<button class="lnk mute" data-fail="'+i+'">原因</button>':'');
+        var list = '';
+        if(r.f>0){
+          list = '<div class="run-fail" id="fl'+i+'" style="display:none"><div class="ft">仅显示前 200 张失败表 · 本次不做缺失判定</div>'
+            + fails.map(function(f){return '<div class="frow"><span class="fn">'+f[0]+'</span><span class="fe">'+f[1]+'</span></div>';}).join('')
+            + '<div style="margin-top:6px"><button class="btn" style="height:22px;font-size:10.5px" onclick="return false">仅重试这 '+r.f+' 张失败表</button></div></div>';
+        } else if(r.st==='FAILED'){
+          list = '<div class="run-fail" id="fl'+i+'" style="display:none"><div class="ft">实例级失败 · 未产出任何资产变更</div><div class="frow"><span class="fe" style="color:#b42318">'+r.err+'</span></div><div style="margin-top:6px"><button class="btn" style="height:22px;font-size:10.5px" onclick="return false">重新发起采集</button></div></div>';
+        }
+        var prod = r.st==='RUNNING'
+          ? '<span class="pr" style="color:#98a2b3">进行中</span>'
+          : (r.st==='FAILED' ? '<span class="pr" style="color:#98a2b3">未产出</span>'
+             : '<span class="pr">+'+r.a+' / ~'+r.u+' / -'+r.r+' / '+(r.f?'<span class="e">'+r.f+'</span>':'0')+'</span>');
+        return '<div class="run-item"><div class="rl">'
+          + badge(b)
+          + '<span class="when">'+r.when+'</span>'
+          + '<span class="tg">'+r.tg+'</span>'
+          + '<span class="du">'+r.du+'</span>'
+          + prod
+          + failBtn
+          + '</div>'+list+'</div>';
+      }).join('')
+      + '<div style="text-align:center;margin-top:10px"><button class="btn ghost" onclick="return false">加载更早的实例</button></div>';
+  }
+
+  function govHtml(t){
+    return ''
+      + '<div class="ph-off-box ph-off"><b>质量与血缘暂未接入</b>依赖数据治理（FYOIP-16）与资产关系（FYOIP-17），当前版本不提供。打开右上角「占位能力」可查看形态预览。</div>'
+      + '<div class="ph">'
+      + '  <div class="dsec sample"><h5>治理健康分 <span class="r">示例</span></h5>'
+      + '    <div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:26px;font-weight:600;letter-spacing:-.02em">82</span><span style="font-size:10.5px;color:#98a2b3">/ 100 · 较上周 +3</span></div>'
+      + '    <div class="qbar" style="margin-top:8px"><i class="g" style="width:82%"></i></div>'
+      + '    <div style="font-size:10px;color:#98a2b3;margin-top:6px">来源：每日健康快照（DEV 描述与责任人 · COMPUTE 任务稳定性）</div>'
+      + '  </div>'
+      + '  <div class="dgrid">'
+      + '    <div class="dsec sample"><h5>质量规则命中 <span class="r">示例</span></h5>'
+      + '      <div class="qrow"><span>空值率超阈值</span><b>2</b></div>'
+      + '      <div class="qrow"><span>主键重复</span><b>1</b></div>'
+      + '      <div class="qrow"><span>枚举值越界</span><b>2</b></div>'
+      + '      <div class="qrow" style="color:#b54708;border-top:1px dashed #f0e4c8;margin-top:4px;padding-top:5px"><span>未处理 Issue</span><b>5</b></div>'
+      + '    </div>'
+      + '    <div class="dsec sample"><h5>字段描述完整率 <span class="r">示例</span></h5>'
+      + '      <div style="font-size:20px;font-weight:600;letter-spacing:-.02em">62<span style="font-size:11px;font-weight:400;color:#98a2b3">%</span></div>'
+      + '      <div class="qbar" style="margin-top:7px"><i class="w" style="width:62%"></i></div>'
+      + '      <div style="font-size:10px;color:#98a2b3;margin-top:6px">'+Math.round(t.tables*0.62)+' / '+t.tables+' 张表有业务描述</div>'
+      + '      <div style="font-size:10px;color:#b54708;margin-top:3px">其中此指标本期可真实计算</div>'
+      + '    </div>'
+      + '  </div>'
+      + '  <div class="dsec sample"><h5>血缘影响 <span class="r">示例</span></h5>'
+      + '    <svg width="100%" height="132" viewBox="0 0 560 132" fill="none">'
+      + '      <rect x="0" y="42" width="112" height="34" rx="6" fill="#f6f7f9" stroke="#dfe2e8"/>'
+      + '      <text x="56" y="59" text-anchor="middle" font-size="9" fill="#667085">ods_order_info</text>'
+      + '      <text x="56" y="69" text-anchor="middle" font-size="8" fill="#98a2b3">上游 · 已采集</text>'
+      + '      <rect x="180" y="42" width="120" height="34" rx="6" fill="#eaeeff" stroke="#0033ff"/>'
+      + '      <text x="240" y="59" text-anchor="middle" font-size="9" fill="#0029cc">dwd_trade_order_di</text>'
+      + '      <text x="240" y="69" text-anchor="middle" font-size="8" fill="#4f63d6">当前资产</text>'
+      + '      <rect x="370" y="10" width="112" height="32" rx="6" fill="#f6f7f9" stroke="#dfe2e8"/>'
+      + '      <text x="426" y="26" text-anchor="middle" font-size="9" fill="#667085">dws_trade_1d</text>'
+      + '      <text x="426" y="35" text-anchor="middle" font-size="8" fill="#98a2b3">下游任务 2</text>'
+      + '      <rect x="370" y="74" width="112" height="32" rx="6" fill="#f6f7f9" stroke="#dfe2e8"/>'
+      + '      <text x="426" y="90" text-anchor="middle" font-size="9" fill="#667085">ads_gmv_day</text>'
+      + '      <text x="426" y="99" text-anchor="middle" font-size="8" fill="#98a2b3">下游任务 1</text>'
+      + '      <rect x="180" y="96" width="120" height="30" rx="6" fill="#fff" stroke="#e3e6eb" stroke-dasharray="3 3"/>'
+      + '      <text x="240" y="115" text-anchor="middle" font-size="8.5" fill="#98a2b3">dim_shop（仅字段级）</text>'
+      + '      <path d="M112 59h68" stroke="#c9cdd4" stroke-width="1.2" marker-end="url(#ar)"/>'
+      + '      <path d="M300 54c30 0 30-28 70-28" stroke="#c9cdd4" stroke-width="1.2" marker-end="url(#ar)"/>'
+      + '      <path d="M300 64c30 0 30 26 70 26" stroke="#c9cdd4" stroke-width="1.2" marker-end="url(#ar)"/>'
+      + '      <path d="M240 76v20" stroke="#c9cdd4" stroke-width="1.2" stroke-dasharray="3 3"/>'
+      + '      <defs><marker id="ar" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0l6 3-6 3z" fill="#c9cdd4"/></marker></defs>'
+      + '    </svg>'
+      + '    <div style="font-size:10.5px;color:#b54708;margin-top:4px">若本任务采集失败，3 个下游任务可能继续读到旧表结构</div>'
+      + '  </div>'
+      + '  <div class="dsec" style="background:#fafbfc"><h5 style="color:#98a2b3">接入方式</h5><div style="font-size:10.5px;color:#98a2b3;line-height:1.7">质量取自治理 Issue（按 <code>targetType=DATA_MAP_TABLE</code> 过滤）；血缘取自资产关系注册，键统一走 <code>PhysicalTableAssetKey</code>，不另立字符串键。</div></div>'
+      + '</div>';
+  }
+
+  function setDTab(name){
+    var tabs = document.querySelectorAll('[data-dtab]');
+    for(var i=0;i<tabs.length;i++) tabs[i].classList.toggle('on', tabs[i].getAttribute('data-dtab')===name);
+    document.getElementById('dOverview').style.display = name==='overview' ? 'block':'none';
+    document.getElementById('dRuns').style.display = name==='runs' ? 'block':'none';
+    document.getElementById('dGov').style.display = name==='gov' ? 'block':'none';
+  }
+
+  /* ---------- global runs ---------- */
+  function renderRuns(){
+    var rows = [
+      ['10-30 15:20','数仓 DWD · 明细层','PostgreSQL-数仓 · warehouse / dwd','手动','RUN',[0,0,0,0],'运行中',''],
+      ['10-30 12:02','用户中心 · 核心表','MySQL-用户中心 · user_center','定时','PARTIAL',[0,96,0,12],'4分12秒','失败表'],
+      ['10-30 11:58','订单库 · 全库采集','MySQL-订单库 · shop_order','手动','OK',[2,6,0,0],'1分06秒',''],
+      ['10-30 04:01','营销集市 · 活动域','MySQL-营销 · marketing','定时','OK',[14,180,0,0],'48秒',''],
+      ['10-30 03:30','数仓 DWD · 明细层','PostgreSQL-数仓 · warehouse / dwd','定时','OK',[11,48,0,0],'3分02秒',''],
+      ['10-30 02:01','订单库 · 全库采集','MySQL-订单库 · shop_order','定时','OK',[18,6,0,0],'1分20秒',''],
+      ['10-29 22:15','用户中心 · 核心表','MySQL-用户中心 · user_center','定时','FAIL',[0,0,0,0],'12秒','原因'],
+      ['10-29 04:00','营销集市 · 活动域','MySQL-营销 · marketing','定时','OK',[3,12,1,0],'51秒','']
+    ];
+    var map = {
+      OK:{label:'成功',cls:'b-ok'}, PARTIAL:{label:'部分成功',cls:'b-warn'}, FAIL:{label:'失败',cls:'b-err'},
+      RUN:{label:'采集中',cls:'b-run'}, PEND:{label:'排队中',cls:'b-mute'}
+    };
+    document.getElementById('runRows').innerHTML = rows.map(function(r, idx){
+      var b = map[r[4]];
+      var prod = r[4]==='RUN' ? '<span class="prod z">进行中</span>'
+        : '<span class="prod">+'+r[5][0]+' / ~'+r[5][1]+' / -'+r[5][2]+' / '+(r[5][3]?'<span style="color:#b42318">'+r[5][3]+'</span>':'0')+'</span>';
+      return '<tr data-task="'+r[1]+'"><td><div class="c-task"><div class="nm" style="font-family:var(--mono);font-size:11px;font-weight:400">'+r[0]+'</div><div class="sub">crawl_9f2'+(idx+1)+'</div></div></td>'
+        + '<td><div class="c-range"><b>'+r[1]+'</b><span>'+r[2]+'</span></div></td>'
+        + '<td><span style="font-size:10.5px;color:#667085">'+r[3]+'</span></td>'
+        + '<td>'+badge(b)+'</td>'
+        + '<td>'+prod+'</td>'
+        + '<td><span style="font-size:10.5px;color:#667085">'+r[6]+'</span></td>'
+        + '<td style="text-align:right">'+ (r[7] ? '<button class="lnk">'+r[7]+'</button>' : '<button class="lnk mute">详情</button>') +'</td></tr>';
+    }).join('');
+  }
+
+  /* ---------- events ---------- */
+  document.getElementById('q').addEventListener('input', renderTasks);
+  document.getElementById('fStatus').addEventListener('change', renderTasks);
+  document.getElementById('fDs').addEventListener('change', renderTasks);
+  document.getElementById('fOwner').addEventListener('change', renderTasks);
+
+  document.getElementById('kpiFail').addEventListener('click', function(){
+    onlyBad = !onlyBad;
+    this.classList.toggle('act', true);
+    this.style.boxShadow = onlyBad ? 'inset 2px 0 0 #f04438' : '';
+    this.style.background = onlyBad ? '#fff5f4' : '';
+    this.querySelector('.d').textContent = onlyBad ? '已筛选 · 再点取消' : '集中在 1 个任务 · 点击筛选';
+    renderTasks();
+  });
+
+  document.getElementById('taskRows').addEventListener('click', function(e){
+    var tr = e.target.closest('tr[data-id]');
+    if(!tr) return;
+    var act = e.target.getAttribute('data-act');
+    if(act==='run'){ e.stopPropagation(); if(!e.target.disabled){ openTask(tr.getAttribute('data-id')); setDTab('runs'); } return; }
+    if(act==='more'){ e.stopPropagation(); openTask(tr.getAttribute('data-id')); return; }
+    openTask(tr.getAttribute('data-id'));
+  });
+
+  document.getElementById('runRows').addEventListener('click', function(e){
+    var tr = e.target.closest('tr[data-task]');
+    if(!tr) return;
+    var name = tr.getAttribute('data-task');
+    var t = TASKS.filter(function(x){return x.name===name;})[0];
+    if(t){ openTask(t.id); setDTab('runs'); }
+  });
+
+  document.getElementById('dClose').addEventListener('click', closeDrawer);
+  document.getElementById('scrim').addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeDrawer(); });
+
+  document.getElementById('dRun').addEventListener('click', function(){
+    var btn = this;
+    if(btn.disabled) return;
+    var old = btn.textContent;
+    btn.textContent = '已提交 · 排队中';
+    btn.disabled = true;
+    setTimeout(function(){ btn.textContent = old; btn.disabled = false; }, 2200);
+  });
+
+  document.getElementById('dMore').addEventListener('click', function(e){
+    e.stopPropagation();
+    document.getElementById('dMenu').classList.toggle('on');
+  });
+  document.getElementById('dMenu').addEventListener('click', function(e){ e.stopPropagation(); });
+  document.addEventListener('click', function(){
+    var m = document.getElementById('dMenu');
+    if(m) m.classList.remove('on');
+  });
+
+  document.getElementById('dToggle').addEventListener('click', function(){
+    if(!current || this.disabled) return;
+    current.status = current.status==='RUNNING' ? 'OFFLINE' : 'RUNNING';
+    if(current.status==='OFFLINE') current.active = false;
+    openTask(current.id);
+    renderTasks();
+  });
+
+  // 「查看失败表」直接跳到抽屉的运行历史
+  document.getElementById('dOverview').addEventListener('click', function(e){
+    if(e.target.closest('[data-goruns]')) setDTab('runs');
+  });
+
+  document.querySelectorAll('.phead .btn')[0].addEventListener('click', function(){
+    var tab = document.querySelector('[data-view="runs"]');
+    if(tab) tab.click();
+  });
+
+  document.querySelectorAll('[data-dtab]').forEach(function(btn){
+    btn.addEventListener('click', function(){ setDTab(btn.getAttribute('data-dtab')); });
+  });
+
+  document.getElementById('dRuns').addEventListener('click', function(e){
+    var btn = e.target.closest('[data-fail]');
+    if(!btn) return;
+    var box = document.getElementById('fl'+btn.getAttribute('data-fail'));
+    if(box) box.style.display = box.style.display==='block' ? 'none' : 'block';
+  });
+
+  document.querySelectorAll('[data-view]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var v = btn.getAttribute('data-view');
+      document.querySelectorAll('[data-view]').forEach(function(b){ b.classList.toggle('on', b===btn); });
+      document.getElementById('viewTasks').style.display = v==='tasks'?'block':'none';
+      document.getElementById('viewRuns').style.display = v==='runs'?'block':'none';
+      document.getElementById('taskBar').style.display = v==='tasks'?'flex':'none';
+      document.getElementById('runBar').style.display = v==='runs'?'flex':'none';
+      document.getElementById('tasksTools').style.display = v==='tasks'?'flex':'none';
+      if(v==='tasks'){ renderTasks(); }
+      else { document.getElementById('footNote').textContent = '第 1–8 条，共 128 条'; }
+    });
+  });
+
+  document.getElementById('phSwitch').addEventListener('click', function(){
+    this.classList.toggle('on');
+    var on = this.classList.contains('on');
+    document.getElementById('app').classList.toggle('hide-ph', !on);
+    var govTab = document.querySelector('[data-dtab="gov"]');
+    if(govTab){
+      govTab.style.display = on ? 'flex' : 'none';
+      if(!on && govTab.classList.contains('on')) setDTab('overview');
+    }
+    if(current){ document.getElementById('dGov').innerHTML = govHtml(current); }
+  });
+
+  renderTasks();
+  renderRuns();
+})();
+</script>
+</body>
+</html>

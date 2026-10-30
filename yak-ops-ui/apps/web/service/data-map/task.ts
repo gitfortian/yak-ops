@@ -5,19 +5,25 @@ import type {
   CrawlExcludePreview,
   CrawlSchedulePreview,
   Crawl,
+  CrawlScopePreview,
   CrawlTask,
   CrawlTaskSave,
   CrawlTaskStatus,
   Paging,
+  TaskQuery,
 } from "./types";
 
 const API = "/api/v1/data-map";
 
-export const listTasks = (query: { pageNo: number; pageSize: number }, signal?: AbortSignal) => {
+export const listTasks = (query: TaskQuery, signal?: AbortSignal) => {
   const search = new URLSearchParams({
     pageNo: String(query.pageNo),
     pageSize: String(query.pageSize),
   });
+  if (query.keyword) search.set("keyword", query.keyword);
+  if (query.status) search.set("status", query.status);
+  if (query.datasourceId) search.set("datasourceId", query.datasourceId);
+  if (query.abnormal) search.set("abnormal", "true");
   return dataMapRequest(
     HttpUtils.getData<Paging<CrawlTask>>(`${API}/tasks?${search.toString()}`, {
       signal,
@@ -82,6 +88,18 @@ export const previewExclude = (
 ) =>
   dataMapRequest(
     HttpUtils.postData<CrawlExcludePreview>(`${API}/tasks/preview-exclude`, input, {
+      signal,
+      skipErrorHandler: true,
+    }),
+  );
+
+/** Counts the tables a task would enumerate, so the editor can show its size before saving. */
+export const previewScope = (
+  input: { datasourceId: string; database: string; schema?: string },
+  signal?: AbortSignal,
+) =>
+  dataMapRequest(
+    HttpUtils.postData<CrawlScopePreview>(`${API}/tasks/preview-scope`, input, {
       signal,
       skipErrorHandler: true,
     }),

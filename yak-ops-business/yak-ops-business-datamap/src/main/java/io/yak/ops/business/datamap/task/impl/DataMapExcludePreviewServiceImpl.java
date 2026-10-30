@@ -1,10 +1,13 @@
 package io.yak.ops.business.datamap.task.impl;
 
 import io.yak.ops.business.datamap.config.DataMapProperties;
+import io.yak.ops.business.datamap.support.DataMapLimits;
 import io.yak.ops.business.datamap.support.DataMapScope;
 import io.yak.ops.business.datamap.task.DataMapExcludePreviewService;
 import io.yak.ops.common.bean.dto.datamap.DataMapCrawlExcludePreviewDTO;
+import io.yak.ops.common.bean.dto.datamap.DataMapCrawlScopePreviewDTO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlExcludePreviewVO;
+import io.yak.ops.common.bean.vo.datamap.DataMapCrawlScopePreviewVO;
 import io.yak.ops.common.enums.datamap.DataMapErrorCode;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.util.StringUtils;
@@ -24,7 +27,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * Default exclude preview.
+ * Default exclude and scope preview.
  *
  * <p>Each supported engine receives a parameter-bound metadata query whose regular expression is
  * evaluated server-side, so a namespace of ten thousand tables costs one indexed metadata scan
@@ -60,12 +63,7 @@ public class DataMapExcludePreviewServiceImpl implements DataMapExcludePreviewSe
             throw new BusinessException(DataMapErrorCode.CRAWL_PATTERN_INVALID);
         }
         String datasourceId = StringUtils.trimToNull(input.getDatasourceId());
-        DataSourceInfo datasource;
-        try {
-            datasource = dataSourceLookup.dataSource(workspaceId, datasourceId);
-        } catch (RuntimeException failure) {
-            throw new BusinessException(DataMapErrorCode.CRAWL_SCOPE_INVALID);
-        }
+        DataSourceInfo datasource = resolve(workspaceId, datasourceId);
         String statement = statement(datasource.type());
         if (statement == null) throw new BusinessException(DataMapErrorCode.CRAWL_PREVIEW_UNSUPPORTED);
         DataMapScope scope = DataMapScope.resolve(input.getDatabase(), input.getSchema(), datasource);
@@ -95,30 +93,91 @@ public class DataMapExcludePreviewServiceImpl implements DataMapExcludePreviewSe
             throw new BusinessException(DataMapErrorCode.CRAWL_PREVIEW_FAILED, failure);
         }
         DataMapCrawlExcludePreviewVO preview = new DataMapCrawlExcludePreviewVO();
-        preview.setMatchedCount(tables.size());
+        // The page is capped at the preview limit, so a truncated match is counted separately rather
+        // than reported as a flat two hundred.
+        preview.setMatchedCount(
+                truncated
+                        ? count(
+                                workspaceId,
+                                datasourceId,
+                                datasource.type(),
+                                scope,
+                                matchedCountStatement(datasource.type()),
+                                regex)
+                        : tables.size());
         preview.setTables(tables);
         preview.setTruncated(truncated);
         return preview;
     }
 
-    private static void bind(PreparedStatement query, String type, DataMapScope scope, String regex)
-            throws SQLException {
+    @Override
+    public DataMapCrawlScopePreviewVO previewScope(String workspaceId, DataMapCrawlScopePreviewDTO input) {
+        String datasourceId = StringUtils.trimToNull(input.getDatasourceId());
+        DataSourceInfo datasource = resolve(workspaceId, datasourceId);
+        String statement = countStatement(datasource.type());
+        if (statement == null) throw new BusinessException(DataMapErrorCode.CRAWL_PREVIEW_UNSUPPORTED);
+        DataMapScope scope = DataMapScope.resolve(input.getDatabase(), input.getSchema(), datasource);
+        long tableCount = count(workspaceId, datasourceId, datasource.type(), scope, statement, null);
+        DataMapCrawlScopePreviewVO preview = new DataMapCrawlScopePreviewVO();
+        preview.setTableCount(tableCount);
+        preview.setLimit(DataMapLimits.TABLE_CEILING);
+        preview.setExceeded(tableCount >= DataMapLimits.TABLE_CEILING);
+        return preview;
+    }
+
+    /** Resolves the datasource, reporting an unknown identity as an invalid scope. */
+    private DataSourceInfo resolve(String workspaceId, String datasourceId) {
+        try {
+            return dataSourceLookup.dataSource(workspaceId, datasourceId);
+        } catch (RuntimeException failure) {
+            throw new BusinessException(DataMapErrorCode.CRAWL_SCOPE_INVALID);
+        }
+    }
+
+    /** Runs one counting statement; {@code regex} is bound only when the statement filters on it. */
+    private long count(
+            String workspaceId, String datasourceId, String type, DataMapScope scope, String statement, String regex) {
+        try {
+            JdbcConnectionOptions connection =
+                    new JdbcConnectionOptions(dataSourceLookup.connectionOptions(workspaceId, datasourceId));
+            try (Connection physical = new DefaultJdbcConnectionProvider(connection).getConnection();
+                    PreparedStatement query = physical.prepareStatement(statement)) {
+                query.setQueryTimeout(properties.getPreview().getTimeoutSeconds());
+                if (regex == null) bindScope(query, type, scope);
+                else bind(query, type, scope, regex);
+                try (ResultSet rows = query.executeQuery()) {
+                    return rows.next() ? rows.getLong(1) : 0L;
+                }
+            }
+        } catch (SQLException failure) {
+            LOG.warn("data-map scope preview failed datasource={}", datasourceId, failure);
+            throw new BusinessException(DataMapErrorCode.CRAWL_PREVIEW_FAILED, failure);
+        }
+    }
+
+    /** Binds the namespace parameters and returns the index the regular expression takes. */
+    private static int bindScope(PreparedStatement query, String type, DataMapScope scope) throws SQLException {
         switch (type) {
             case MYSQL -> {
                 query.setString(1, scope.databaseName());
-                query.setString(2, regex);
+                return 2;
             }
             case POSTGRESQL -> {
                 query.setString(1, scope.databaseName());
                 query.setString(2, emptyToNull(scope.schemaName()));
-                query.setString(3, regex);
+                return 3;
             }
             case ORACLE -> {
                 query.setString(1, emptyToNull(scope.schemaName()));
-                query.setString(2, regex);
+                return 2;
             }
             default -> throw new BusinessException(DataMapErrorCode.CRAWL_PREVIEW_UNSUPPORTED);
         }
+    }
+
+    private static void bind(PreparedStatement query, String type, DataMapScope scope, String regex)
+            throws SQLException {
+        query.setString(bindScope(query, type, scope), regex);
     }
 
     private static String statement(String type) {
@@ -137,6 +196,42 @@ public class DataMapExcludePreviewServiceImpl implements DataMapExcludePreviewSe
                         + "WHERE owner=COALESCE(?, SYS_CONTEXT('USERENV','CURRENT_SCHEMA')) "
                         + "AND object_type IN ('TABLE','VIEW') AND REGEXP_LIKE(object_name, ?) "
                         + "ORDER BY object_name FETCH FIRST " + (PREVIEW_LIMIT + 1) + " ROWS ONLY";
+            default -> null;
+        };
+    }
+
+    /** Counting statement of the same namespace and expression, capped by nothing. */
+    private static String matchedCountStatement(String type) {
+        return switch (type) {
+            case MYSQL ->
+                "SELECT COUNT(*) FROM information_schema.TABLES "
+                        + "WHERE TABLE_SCHEMA=? AND TABLE_TYPE IN ('BASE TABLE','VIEW') AND TABLE_NAME REGEXP ?";
+            case POSTGRESQL ->
+                "SELECT COUNT(*) FROM information_schema.tables "
+                        + "WHERE table_catalog=? AND table_schema=COALESCE(?, current_schema()) "
+                        + "AND table_type IN ('BASE TABLE','VIEW') AND table_name ~ ?";
+            case ORACLE ->
+                "SELECT COUNT(*) FROM all_objects "
+                        + "WHERE owner=COALESCE(?, SYS_CONTEXT('USERENV','CURRENT_SCHEMA')) "
+                        + "AND object_type IN ('TABLE','VIEW') AND REGEXP_LIKE(object_name, ?)";
+            default -> null;
+        };
+    }
+
+    /** Counting statement of the whole namespace, with no expression filter. */
+    private static String countStatement(String type) {
+        return switch (type) {
+            case MYSQL ->
+                "SELECT COUNT(*) FROM information_schema.TABLES "
+                        + "WHERE TABLE_SCHEMA=? AND TABLE_TYPE IN ('BASE TABLE','VIEW')";
+            case POSTGRESQL ->
+                "SELECT COUNT(*) FROM information_schema.tables "
+                        + "WHERE table_catalog=? AND table_schema=COALESCE(?, current_schema()) "
+                        + "AND table_type IN ('BASE TABLE','VIEW')";
+            case ORACLE ->
+                "SELECT COUNT(*) FROM all_objects "
+                        + "WHERE owner=COALESCE(?, SYS_CONTEXT('USERENV','CURRENT_SCHEMA')) "
+                        + "AND object_type IN ('TABLE','VIEW')";
             default -> null;
         };
     }
