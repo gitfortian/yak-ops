@@ -6,7 +6,7 @@ Discussion: https://github.com/gitfortian/yak-ops/pull/44
 
 Decision: [VOTE] Accepted — https://github.com/gitfortian/yak-ops/pull/44#issuecomment-6514062166
 
-Implementation: N/A until implementation opens (starts from migration `V10`)
+Implementation: Opens with migration `V11__v1_13_0.sql`. The proposal expected `V10`, but the v1.12.0 governance migration (FYOIP-16 implementation) took that number before implementation opened, so the first unused number at implementation time is `V11`.
 
 Release: N/A until released
 
@@ -126,7 +126,7 @@ Unknown keys, values and tables reuse `RESOURCE_NOT_EXISTS`. Blank or over-lengt
 
 ### Persisted formats
 
-The migration takes the first unused number at implementation. FYOIP-16 has since been accepted and shipped as `V9__v1_11_0.sql` (metadata collection tasks), with `V8__v1_10_0.sql` taken by the v1.10.0 crawl upgrade, so this proposal writes `V10`. The release segment is taken from `release.env` when the migration is written. Three tables are created and two are dropped; no other table is altered.
+The migration takes the first unused number at implementation. FYOIP-16 has since been accepted and shipped as `V9__v1_11_0.sql` (metadata collection tasks), with `V8__v1_10_0.sql` taken by the v1.10.0 crawl upgrade; the proposal therefore expected `V10`, but the v1.12.0 governance migration took that number first, so implementation writes `V11__v1_13_0.sql`. The release segment is taken from `release.env` when the migration is written. Three tables are created and two are dropped; no other table is altered.
 
 `yak_ops_tag_key`
 
@@ -267,7 +267,7 @@ The catalog filter becomes a multi-select grouped by key. The asset detail keeps
 
 ## Compatibility, Deprecation, and Migration Plan
 
-- **Migration order.** This proposal does not depend on FYOIP-16 and only needs the next unused migration number. FYOIP-16 is accepted and shipped as `V9__v1_11_0.sql`, with `V8__v1_10_0.sql` taken by v1.10.0, so this proposal takes `V10`. Two proposals must not both claim one number.
+- **Migration order.** This proposal does not depend on FYOIP-16 and only needs the next unused migration number. FYOIP-16 is accepted and shipped as `V9__v1_11_0.sql`, with `V8__v1_10_0.sql` taken by v1.10.0; the proposal therefore expected `V10`, but the v1.12.0 governance migration claimed it first, so implementation takes `V11`. Two proposals must not both claim one number.
 - **Data.** Every existing tag and binding survives as a value under the `legacy` key. No tag name is rewritten, no binding is dropped, and no asset is re-tagged.
 - **Removed endpoints.** `GET/POST /api/v1/data-map/tags`, `PUT/DELETE /api/v1/data-map/tags/{tagId}` and `PUT /api/v1/data-map/tables/{tableId}/tags` are deleted in the same release. The frontend is the only consumer and moves to `/api/v1/tags` in the same pull request. There is no alias endpoint and no dual-write window.
 - **Changed parameter.** `DataMapTableQueryDTO.tagId` becomes `tagValueIds`. An old client that still sends `tagId` is ignored by Spring, so its filter silently disappears rather than failing; this is acceptable only because the UI ships together. No compatibility parameter is added.

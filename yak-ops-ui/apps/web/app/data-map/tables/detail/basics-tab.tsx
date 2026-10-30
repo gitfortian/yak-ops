@@ -46,6 +46,17 @@ const Fact = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
+/** Groups the asset's tag values by their key, keeping the key order of the response. */
+function groupTagsByKey(tags: TableDetail["tags"]) {
+  const grouped = new Map<string, { keyName: string; values: string[] }>();
+  for (const tag of tags) {
+    const entry = grouped.get(tag.keyId) ?? { keyName: tag.keyName, values: [] };
+    entry.values.push(tag.valueName);
+    grouped.set(tag.keyId, entry);
+  }
+  return [...grouped].map(([keyId, entry]) => ({ keyId, ...entry }));
+}
+
 /**
  * Curated metadata of one asset.
  *
@@ -84,6 +95,7 @@ export default function BasicsTab({ detail, editing, onCancel, onSaved }: Props)
     ? ((owners.data ?? []).find((owner) => owner.userId === ownerId)?.displayName ?? ownerId)
     : null;
   const domainName = domainId ? taxonomy.domainNames.get(domainId) : null;
+  const tagGroups = groupTagsByKey(detail.tags);
 
   const ownerOptions = [
     { value: NO_OWNER, label: "未指定" },
@@ -180,24 +192,6 @@ export default function BasicsTab({ detail, editing, onCancel, onSaved }: Props)
             </Select>
           </Field>
 
-          <Field>
-            <FieldLabel>业务标签</FieldLabel>
-            <div className="flex flex-wrap items-center gap-2">
-              {detail.tags.length === 0 ? (
-                <span className="text-sm text-[var(--yak-components-muted-text)]">未打标签</span>
-              ) : (
-                detail.tags.map((tag) => (
-                  <Badge key={tag.id} tone="info">
-                    {tag.name}
-                  </Badge>
-                ))
-              )}
-              <Button size="small" variant="ghost" onClick={() => setTagsOpen(true)}>
-                管理标签
-              </Button>
-            </div>
-          </Field>
-
           {failure && <Alert>{failure}</Alert>}
 
           <div className="flex items-center gap-2 border-t border-[var(--yak-components-panel-border)] pt-4">
@@ -216,6 +210,31 @@ export default function BasicsTab({ detail, editing, onCancel, onSaved }: Props)
         </div>
       )}
 
+      <section>
+        <h2 className="text-xs font-medium text-[var(--yak-components-muted-text)]">业务标签</h2>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {tagGroups.length === 0 ? (
+            <span className="text-sm text-[var(--yak-components-muted-text)]">未打标签</span>
+          ) : (
+            tagGroups.map((group) => (
+              <span key={group.keyId} className="flex flex-wrap items-center gap-1">
+                <span className="text-xs text-[var(--yak-components-muted-text)]">
+                  {group.keyName}:
+                </span>
+                {group.values.map((value) => (
+                  <Badge key={value} tone="info">
+                    {value}
+                  </Badge>
+                ))}
+              </span>
+            ))
+          )}
+          <Button size="small" variant="ghost" onClick={() => setTagsOpen(true)}>
+            编辑标签
+          </Button>
+        </div>
+      </section>
+
       <dl className="grid grid-cols-2 gap-x-8 gap-y-4 border-t border-[var(--yak-components-panel-border)] pt-5 md:grid-cols-3">
         <Fact label="数据源" value={detail.datasourceName ?? detail.datasourceId} />
         <Fact label="位置" value={locationLabel(detail.database, detail.schema)} />
@@ -230,7 +249,7 @@ export default function BasicsTab({ detail, editing, onCancel, onSaved }: Props)
       {tagsOpen && (
         <TagDialog
           tableId={detail.id}
-          selectedTagIds={detail.tags.map((tag) => tag.id)}
+          selectedValueIds={detail.tags.map((tag) => tag.valueId)}
           onClose={() => setTagsOpen(false)}
           onSaved={() => {
             setTagsOpen(false);

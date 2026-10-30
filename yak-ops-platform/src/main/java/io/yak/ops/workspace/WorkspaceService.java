@@ -39,4 +39,12 @@ public interface WorkspaceService {
      * @return true only while both membership and account remain active
      */
     boolean isActiveMember(String workspaceId, String userId);
+
+    /**
+     * Checks whether the user manages the Workspace, i.e. holds the OWNER or ADMIN role.
+     * @param workspaceId target Workspace
+     * @param userId user whose role is checked
+     * @return true only for a live OWNER or ADMIN membership
+     */
+    boolean isManager(String workspaceId, String userId);
 }

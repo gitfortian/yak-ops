@@ -7,8 +7,9 @@ import lombok.RequiredArgsConstructor;
 /**
  * Localized failures owned by the data map.
  *
- * <p>Unknown assets, runs and tags reuse {@code RESOURCE_NOT_EXISTS}; field lengths are enforced
- * by Bean Validation instead of a coded error.
+ * <p>Unknown assets and runs reuse {@code RESOURCE_NOT_EXISTS}; field lengths are enforced by Bean
+ * Validation instead of a coded error. The tag dictionary owns its own block in
+ * {@link io.yak.ops.common.enums.tag.TagErrorCode}.
  */
 @Getter
 @RequiredArgsConstructor
@@ -27,10 +28,6 @@ public enum DataMapErrorCode implements ErrorCode {
     INVALID_DOMAIN(19706, "所选数据域不属于当前工作空间"),
     /** The chosen owner is not an active Workspace member. */
     INVALID_OWNER(19707, "所选负责人不是当前工作空间的有效成员"),
-    /** The tag name is blank or longer than the column allows. */
-    INVALID_TAG(19708, "标签名称不能为空且不能超过 64 个字符"),
-    /** The tag name already exists in this Workspace. */
-    DUPLICATE_TAG(19709, "标签名称已存在"),
     /** The caller exceeded the search rate limit. */
     SEARCH_TOO_FREQUENT(19710, "搜索过于频繁，请稍后再试"),
     /** The node already runs the maximum number of preview queries. */

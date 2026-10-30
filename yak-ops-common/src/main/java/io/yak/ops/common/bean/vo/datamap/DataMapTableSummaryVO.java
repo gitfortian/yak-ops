@@ -53,8 +53,8 @@ public class DataMapTableSummaryVO {
     /** Most recent run that observed the asset. */
     private LocalDateTime lastSeenTime;
 
-    /** Tags applied to the asset. */
-    private List<DataMapTagVO> tags = new ArrayList<>();
+    /** Tag values applied to the asset, grouped by their key. */
+    private List<DataMapTagRefVO> tags = new ArrayList<>();
 
     /** Column names that matched the keyword; empty when no keyword was given. */
     private List<String> matchedColumns = new ArrayList<>();

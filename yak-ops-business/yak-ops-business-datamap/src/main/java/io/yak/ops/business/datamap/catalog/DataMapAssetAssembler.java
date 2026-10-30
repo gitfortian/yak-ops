@@ -3,16 +3,15 @@ package io.yak.ops.business.datamap.catalog;
 import io.yak.ops.common.bean.vo.datamap.DataMapColumnVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapTableDetailVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapTableSummaryVO;
-import io.yak.ops.common.bean.vo.datamap.DataMapTagVO;
+import io.yak.ops.common.bean.vo.datamap.DataMapTagRefVO;
 import io.yak.ops.dao.entity.datamap.DataMapColumnEntity;
 import io.yak.ops.dao.entity.datamap.DataMapTableEntity;
-import io.yak.ops.dao.entity.datamap.DataMapTableTagEntity;
-import io.yak.ops.dao.entity.datamap.DataMapTagEntity;
 import io.yak.ops.dao.mapper.datamap.DataMapColumnMapper;
 import io.yak.ops.dao.mapper.datamap.DataMapMatchedColumnRow;
 import io.yak.ops.dao.mapper.datamap.DataMapPersonalMapper;
 import io.yak.ops.dao.mapper.datamap.DataMapTableMapper;
-import io.yak.ops.dao.mapper.datamap.DataMapTagMapper;
+import io.yak.ops.dao.mapper.tag.TableTagRefRow;
+import io.yak.ops.dao.mapper.tag.TagMapper;
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -32,7 +31,7 @@ public class DataMapAssetAssembler {
     private DataMapTableMapper tableMapper;
 
     @Resource
-    private DataMapTagMapper tagMapper;
+    private TagMapper tagMapper;
 
     @Resource
     private DataMapPersonalMapper personalMapper;
@@ -61,7 +60,7 @@ public class DataMapAssetAssembler {
     }
 
     /**
-     * Projects one page of assets, fetching tags and matched columns in single statements.
+     * Projects one page of assets, fetching tag values and matched columns in single statements.
      *
      * @param workspaceId current Workspace
      * @param rows assets of the page
@@ -72,7 +71,7 @@ public class DataMapAssetAssembler {
             String workspaceId, List<DataMapTableEntity> rows, String keywordPattern) {
         if (rows.isEmpty()) return List.of();
         List<String> tableIds = rows.stream().map(DataMapTableEntity::getId).toList();
-        Map<String, List<DataMapTagVO>> tags = loadTags(workspaceId, tagMapper.listAssignments(workspaceId, tableIds));
+        Map<String, List<DataMapTagRefVO>> tags = loadTagRefs(workspaceId, tableIds);
         Map<String, List<String>> matched = matchedColumns(workspaceId, tableIds, keywordPattern);
         List<DataMapTableSummaryVO> result = new ArrayList<>(rows.size());
         for (DataMapTableEntity row : rows) {
@@ -97,8 +96,7 @@ public class DataMapAssetAssembler {
         DataMapTableDetailVO detail = new DataMapTableDetailVO();
         copyObserved(row, detail);
         detail.setFavorited(personalMapper.favoriteExists(workspaceId, userId, row.getId()) > 0);
-        detail.setTags(loadTags(workspaceId, tagMapper.listAssignments(workspaceId, List.of(row.getId())))
-                .getOrDefault(row.getId(), List.of()));
+        detail.setTags(loadTagRefs(workspaceId, List.of(row.getId())).getOrDefault(row.getId(), List.of()));
         List<DataMapColumnEntity> columns = columnMapper.listByTable(workspaceId, row.getId());
         List<DataMapColumnVO> projected = new ArrayList<>(columns.size());
         for (DataMapColumnEntity column : columns) {
@@ -128,18 +126,17 @@ public class DataMapAssetAssembler {
         return matched;
     }
 
-    private Map<String, List<DataMapTagVO>> loadTags(String workspaceId, List<DataMapTableTagEntity> assignments) {
-        if (assignments.isEmpty()) return Map.of();
-        Map<String, DataMapTagVO> tags = new HashMap<>();
-        for (DataMapTagEntity tag : tagMapper.listAll(workspaceId)) {
-            tags.put(tag.getId(), new DataMapTagVO(tag.getId(), tag.getName()));
-        }
-        Map<String, List<DataMapTagVO>> result = new LinkedHashMap<>();
-        for (DataMapTableTagEntity assignment : assignments) {
-            DataMapTagVO tag = tags.get(assignment.getTagId());
-            if (tag == null) continue;
-            result.computeIfAbsent(assignment.getTableId(), key -> new ArrayList<>())
-                    .add(tag);
+    /**
+     * Projects the tag values of the listed assets, keeping the key then value order of the query.
+     *
+     * <p>Each row carries its key name, so the catalog list and the asset detail both render
+     * {@code key = value} without a second read of the dictionary.
+     */
+    private Map<String, List<DataMapTagRefVO>> loadTagRefs(String workspaceId, List<String> tableIds) {
+        Map<String, List<DataMapTagRefVO>> result = new LinkedHashMap<>();
+        for (TableTagRefRow row : tagMapper.listTagRefs(workspaceId, tableIds)) {
+            result.computeIfAbsent(row.getTableId(), key -> new ArrayList<>())
+                    .add(new DataMapTagRefVO(row.getKeyId(), row.getKeyName(), row.getValueId(), row.getValueName()));
         }
         return result;
     }

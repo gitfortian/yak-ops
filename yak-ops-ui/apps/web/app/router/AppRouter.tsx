@@ -11,6 +11,7 @@ import DataMapTableDetailPage from "@/app/data-map/tables/detail/page";
 import DataMapTasksPage from "@/app/data-map/tasks/page";
 import DataMapTaskEditorPage from "@/app/data-map/tasks/editor/page";
 import DataMapPersonalPage from "@/app/data-map/personal/page";
+import TagConsolePage from "@/app/data-governance/tags/page";
 import WarehousePlanningPage from "@/app/data-modeling/warehouse-planning";
 import DataStandardsPage from "@/app/data-modeling/data-standards";
 import MetricsPage from "@/app/data-modeling/metrics";
@@ -164,6 +165,7 @@ export default function AppRouter() {
             element={<Navigate replace to="/data-governance/data-map/tasks" />}
           />
           <Route path="/data-governance/data-map/personal" element={<DataMapPersonalPage />} />
+          <Route path="/data-governance/tags" element={<TagConsolePage />} />
         </Route>
 
         <Route

@@ -11,9 +11,12 @@ export type CrawlTaskStatus = "DRAFT" | "RUNNING" | "OFFLINE";
 export type CrawlScheduleType = "MANUAL" | "CRON";
 export type PreviewTruncation = "ROWS" | "SIZE";
 
-export interface Tag {
-  id: string;
-  name: string;
+/** One tag value shown on an asset, carrying its key beside the value. */
+export interface TagRef {
+  keyId: string;
+  keyName: string;
+  valueId: string;
+  valueName: string;
 }
 
 export interface TableSummary {
@@ -31,7 +34,7 @@ export interface TableSummary {
   domainId: string | null;
   firstSeenTime: string;
   lastSeenTime: string;
-  tags: Tag[];
+  tags: TagRef[];
   matchedColumns: string[];
 }
 
@@ -64,7 +67,7 @@ export interface TableDetail {
   firstSeenTime: string;
   lastSeenTime: string;
   favorited: boolean;
-  tags: Tag[];
+  tags: TagRef[];
   columns: TableColumn[];
 }
 
@@ -75,7 +78,7 @@ export interface TableQuery {
   schema?: string;
   domainId?: string;
   unclassified?: boolean;
-  tagId?: string;
+  tagValueIds?: string[];
   includeMissing?: boolean;
   pageNo: number;
   pageSize: number;

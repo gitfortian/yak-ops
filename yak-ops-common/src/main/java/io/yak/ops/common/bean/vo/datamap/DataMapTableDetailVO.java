@@ -56,8 +56,8 @@ public class DataMapTableDetailVO {
     /** Whether the caller has favourited the asset. */
     private boolean favorited;
 
-    /** Tags applied to the asset. */
-    private List<DataMapTagVO> tags = new ArrayList<>();
+    /** Tag values applied to the asset, grouped by their key. */
+    private List<DataMapTagRefVO> tags = new ArrayList<>();
 
     /** Collected columns, ordered by ordinal position. */
     private List<DataMapColumnVO> columns = new ArrayList<>();

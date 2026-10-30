@@ -23,13 +23,19 @@ import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.dao.entity.datamap.DataMapTableEntity;
+import io.yak.ops.dao.entity.tag.TagValueEntity;
 import io.yak.ops.dao.mapper.datamap.DataMapPersonalMapper;
 import io.yak.ops.dao.mapper.datamap.DataMapSearchCriteria;
 import io.yak.ops.dao.mapper.datamap.DataMapTableChangeMapper;
 import io.yak.ops.dao.mapper.datamap.DataMapTableMapper;
 import io.yak.ops.dao.mapper.datamap.DataMapViewTotalRow;
+import io.yak.ops.dao.mapper.tag.TagMapper;
 import jakarta.annotation.Resource;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -55,6 +61,9 @@ public class DataMapCatalogServiceImpl implements DataMapCatalogService {
 
     @Resource
     private DataMapPersonalMapper personalMapper;
+
+    @Resource
+    private TagMapper tagMapper;
 
     @Resource
     private DataMapAssetAssembler assembler;
@@ -83,7 +92,8 @@ public class DataMapCatalogServiceImpl implements DataMapCatalogService {
         int pageNo = query.getPageNo() == null ? 1 : query.getPageNo();
         int pageSize = query.getPageSize() == null ? 20 : query.getPageSize();
         String pattern = DataMapSearchText.containsPattern(StringUtils.trimToNull(query.getKeyword()));
-        DataMapSearchCriteria criteria = criteria(workspaceId, query, pattern, pageNo, pageSize);
+        List<List<String>> tagValueGroups = tagValueGroups(workspaceId, query.getTagValueIds());
+        DataMapSearchCriteria criteria = criteria(workspaceId, query, pattern, tagValueGroups, pageNo, pageSize);
         long total = tableMapper.count(criteria);
         List<DataMapTableEntity> rows = total == 0 ? List.of() : tableMapper.selectPage(criteria);
         return PagingData.from(PageData.of(assembler.summaries(workspaceId, rows, pattern), total, pageNo, pageSize));
@@ -148,7 +158,12 @@ public class DataMapCatalogServiceImpl implements DataMapCatalogService {
     }
 
     private static DataMapSearchCriteria criteria(
-            String workspaceId, DataMapTableQueryDTO query, String pattern, int pageNo, int pageSize) {
+            String workspaceId,
+            DataMapTableQueryDTO query,
+            String pattern,
+            List<List<String>> tagValueGroups,
+            int pageNo,
+            int pageSize) {
         DataMapSearchCriteria criteria = new DataMapSearchCriteria();
         criteria.setWorkspaceId(workspaceId);
         criteria.setKeywordPattern(pattern);
@@ -157,11 +172,32 @@ public class DataMapCatalogServiceImpl implements DataMapCatalogService {
         criteria.setSchemaName(StringUtils.trimToNull(query.getSchema()));
         criteria.setDomainId(StringUtils.trimToNull(query.getDomainId()));
         criteria.setUnclassified(Boolean.TRUE.equals(query.getUnclassified()));
-        criteria.setTagId(StringUtils.trimToNull(query.getTagId()));
+        criteria.setTagValueGroups(tagValueGroups);
         criteria.setIncludeMissing(Boolean.TRUE.equals(query.getIncludeMissing()));
         criteria.setIds(List.of());
         criteria.setLimit(pageSize);
         criteria.setOffset((pageNo - 1) * pageSize);
         return criteria;
+    }
+
+    /**
+     * Groups the requested tag values by their key.
+     *
+     * <p>The catalog filter ANDs keys and ORs the values of one key, so the criteria carries one
+     * group per key and the SQL builds one {@code EXISTS} clause per group. An unknown value id is
+     * rejected rather than silently dropped from the filter.
+     */
+    private List<List<String>> tagValueGroups(String workspaceId, List<String> tagValueIds) {
+        if (tagValueIds == null || tagValueIds.isEmpty()) return List.of();
+        List<String> requested = new LinkedHashSet<>(tagValueIds).stream().toList();
+        List<TagValueEntity> values = tagMapper.findValuesByIds(workspaceId, requested);
+        if (values.size() != requested.size()) {
+            throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
+        }
+        Map<String, List<String>> byKey = new LinkedHashMap<>();
+        for (TagValueEntity value : values) {
+            byKey.computeIfAbsent(value.getKeyId(), key -> new ArrayList<>()).add(value.getId());
+        }
+        return List.copyOf(byKey.values());
     }
 }

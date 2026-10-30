@@ -2,6 +2,9 @@ import {
   Button,
   Checkbox,
   Input,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Select,
   SelectContent,
   SelectItem,
@@ -10,27 +13,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@yak-ops/yak-ui";
-import { Search } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 
-import type { Tag } from "@/service/data-map/types";
+import type { TagKey } from "@/service/tags";
 
+import { tagFilterGroups, tagFilterLabel } from "@/app/data-governance/tags/tag-filter";
 import type { DatasourceOption } from "../shared/lookups";
 
 interface Props {
   keyword: string;
   datasourceId: string;
   database: string;
-  tagId: string;
+  tagValueIds: string[];
   includeMissing: boolean;
   datasources: DatasourceOption[];
   databases: string[];
-  tags: Tag[];
+  tagDictionary: TagKey[];
   hasActiveFilters: boolean;
   onKeywordChange: (value: string) => void;
   onKeywordCommit: () => void;
   onDatasourceChange: (value: string) => void;
   onDatabaseChange: (value: string) => void;
-  onTagChange: (value: string) => void;
+  onTagValuesChange: (valueIds: string[]) => void;
   onIncludeMissingChange: (value: boolean) => void;
   onReset: () => void;
 }
@@ -74,6 +78,87 @@ function FilterSelect({
   );
 }
 
+/**
+ * Multi-select tag filter grouped by key.
+ *
+ * <p>Values of one key are OR-ed and different keys are AND-ed on the server, so the trigger shows
+ * one `key: values` clause per selected key and the selection itself stays a flat id list.
+ */
+function TagFilter({
+  tagDictionary,
+  selectedValueIds,
+  onChange,
+}: {
+  tagDictionary: TagKey[];
+  selectedValueIds: string[];
+  onChange: (valueIds: string[]) => void;
+}) {
+  const groups = tagFilterGroups(tagDictionary, selectedValueIds);
+  const toggle = (valueId: string, checked: boolean) =>
+    onChange(
+      checked
+        ? [...new Set([...selectedValueIds, valueId])]
+        : selectedValueIds.filter((id) => id !== valueId),
+    );
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        className="flex h-7 w-[240px] items-center justify-between gap-1 rounded-[var(--yak-radius-control-small)] border border-[var(--yak-components-input-border)] bg-[var(--yak-components-input-bg-focus)] px-2.5 text-[length:var(--yak-font-size-control-small)] text-[var(--yak-components-input-text)] outline-none hover:border-[var(--yak-components-input-border-focus)]"
+        aria-label="标签筛选"
+      >
+        <span className="min-w-0 truncate">
+          <span className="mr-2 text-[var(--yak-components-muted-text)]">标签</span>
+          {tagFilterLabel(groups)}
+        </span>
+        <ChevronDown size={14} className="shrink-0 text-[var(--yak-components-muted-text)]" />
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[280px]">
+        {tagDictionary.length === 0 ? (
+          <p className="text-xs text-[var(--yak-components-muted-text)]">
+            还没有标签键，请先到标签管理创建。
+          </p>
+        ) : (
+          <div className="max-h-72 space-y-3 overflow-auto">
+            {tagDictionary.map((key) => (
+              <section key={key.id}>
+                <h3 className="text-xs font-medium text-[var(--yak-components-muted-text)]">
+                  {key.name}
+                </h3>
+                <div className="mt-1 space-y-1">
+                  {key.values.map((value) => (
+                    <label
+                      key={value.id}
+                      className="flex cursor-pointer items-center gap-2 text-sm text-[var(--yak-components-panel-text)]"
+                    >
+                      <Checkbox
+                        checked={selectedValueIds.includes(value.id)}
+                        aria-label={value.name}
+                        onCheckedChange={(checked) => toggle(value.id, checked === true)}
+                      />
+                      <span className="min-w-0 flex-1 truncate">{value.name}</span>
+                      <span className="text-xs text-[var(--yak-components-muted-text)]">
+                        {value.usageCount}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
+        {selectedValueIds.length > 0 && (
+          <div className="mt-2 flex justify-end border-t border-[var(--yak-components-panel-border)] pt-2">
+            <Button size="small" variant="ghost" onClick={() => onChange([])}>
+              清空标签
+            </Button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /** Search and filters above the catalog grid; the tree on the left is the only taxonomy control. */
 export default function CatalogFilters(props: Props) {
   const datasourceOptions: Option[] = [
@@ -83,10 +168,6 @@ export default function CatalogFilters(props: Props) {
   const databaseOptions: Option[] = [
     { value: "", label: "全部库" },
     ...props.databases.map((item) => ({ value: item, label: item })),
-  ];
-  const tagOptions: Option[] = [
-    { value: "", label: "全部标签" },
-    ...props.tags.map((tag) => ({ value: tag.id, label: tag.name })),
   ];
 
   return (
@@ -123,11 +204,10 @@ export default function CatalogFilters(props: Props) {
         options={databaseOptions}
         onChange={props.onDatabaseChange}
       />
-      <FilterSelect
-        label="标签"
-        value={props.tagId}
-        options={tagOptions}
-        onChange={props.onTagChange}
+      <TagFilter
+        tagDictionary={props.tagDictionary}
+        selectedValueIds={props.tagValueIds}
+        onChange={props.onTagValuesChange}
       />
 
       <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--yak-components-muted-text)]">

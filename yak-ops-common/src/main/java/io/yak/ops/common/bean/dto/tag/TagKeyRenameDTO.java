@@ -1,16 +1,16 @@
-package io.yak.ops.common.bean.dto.datamap;
+package io.yak.ops.common.bean.dto.tag;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
-/** Create or rename request of a Workspace tag. */
+/** Rename request of a tag key. */
 @Getter
 @Setter
-public class DataMapTagInputDTO {
+public class TagKeyRenameDTO {
 
-    /** Tag name, unique inside the Workspace. */
+    /** New dimension name, unique inside the Workspace. */
     @NotBlank
     @Size(max = 64)
     private String name;

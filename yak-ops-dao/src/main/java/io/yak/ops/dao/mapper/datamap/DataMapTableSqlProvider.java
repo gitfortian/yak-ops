@@ -29,9 +29,14 @@ public final class DataMapTableSqlProvider {
         if (criteria.getSchemaName() != null) conditions.add("t.schema_name=#{schemaName}");
         if (criteria.getDomainId() != null) conditions.add("t.domain_id=#{domainId}");
         if (criteria.isUnclassified()) conditions.add("t.domain_id IS NULL");
-        if (criteria.getTagId() != null) {
-            conditions.add("EXISTS (SELECT 1 FROM yak_ops_data_map_table_tag tt "
-                    + "WHERE tt.table_id=t.id AND tt.tag_id=#{tagId})");
+        if (!criteria.getTagValueGroups().isEmpty()) {
+            // One EXISTS clause per key, ANDed: values of one key are OR-ed inside their IN list,
+            // and the nested foreach binds each group without any caller value reaching the SQL text.
+            conditions.add("<foreach collection=\"tagValueGroups\" item=\"group\" separator=\" AND \">"
+                    + "EXISTS (SELECT 1 FROM yak_ops_data_map_table_tag_value b "
+                    + "WHERE b.workspace_id=t.workspace_id AND b.table_id=t.id AND b.tag_value_id IN "
+                    + "<foreach collection=\"group\" item=\"valueId\" open=\"(\" separator=\",\" close=\")\">"
+                    + "#{valueId}</foreach>)</foreach>");
         }
         if (!criteria.getIds().isEmpty()) {
             conditions.add("t.id IN <foreach collection=\"ids\" item=\"identity\" open=\"(\" separator=\",\" "

@@ -15,7 +15,7 @@ import {
   useDatabases,
   useDatasourceOptions,
   useDomainTaxonomy,
-  useTagOptions,
+  useTagDictionary,
 } from "../shared/lookups";
 import { useDataMapScope } from "../shared/scope";
 import DomainTree, { type DomainSelection } from "./domain-tree";
@@ -38,7 +38,7 @@ export default function CatalogPage() {
 
   const taxonomy = useDomainTaxonomy();
   const datasources = useDatasourceOptions();
-  const tags = useTagOptions();
+  const tagDictionary = useTagDictionary();
   const databases = useDatabases(query.datasourceId);
 
   useEffect(() => {
@@ -53,7 +53,7 @@ export default function CatalogPage() {
     database: query.database || undefined,
     domainId: query.domainId || undefined,
     unclassified: query.unclassified || undefined,
-    tagId: query.tagId || undefined,
+    tagValueIds: query.tagValueIds.length > 0 ? query.tagValueIds : undefined,
     includeMissing: query.includeMissing || undefined,
     pageNo: query.pageNo,
     pageSize: query.pageSize,
@@ -87,7 +87,7 @@ export default function CatalogPage() {
     query.database ||
     query.domainId ||
     query.unclassified ||
-    query.tagId,
+    query.tagValueIds.length > 0,
   );
 
   const selectDomain = (selection: DomainSelection) => {
@@ -104,7 +104,7 @@ export default function CatalogPage() {
       database: "",
       domainId: "",
       unclassified: false,
-      tagId: "",
+      tagValueIds: [],
     });
   };
 
@@ -138,17 +138,17 @@ export default function CatalogPage() {
             keyword={draft}
             datasourceId={query.datasourceId}
             database={query.database}
-            tagId={query.tagId}
+            tagValueIds={query.tagValueIds}
             includeMissing={query.includeMissing}
             datasources={datasources.options}
             databases={databases.data ?? []}
-            tags={tags.data ?? []}
+            tagDictionary={tagDictionary.data ?? []}
             hasActiveFilters={hasActiveFilters}
             onKeywordChange={setDraft}
             onKeywordCommit={() => update({ keyword: draft.trim() })}
             onDatasourceChange={(value) => update({ datasourceId: value, database: "" })}
             onDatabaseChange={(value) => update({ database: value })}
-            onTagChange={(value) => update({ tagId: value })}
+            onTagValuesChange={(value) => update({ tagValueIds: value })}
             onIncludeMissingChange={(value) => update({ includeMissing: value })}
             onReset={reset}
           />

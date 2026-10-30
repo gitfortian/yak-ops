@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getOwners, getPlanningTree } from "@/service/data-modeling/warehouse-planning";
-import { listTags } from "@/service/data-map/tags";
+import { listKeys } from "@/service/tags";
 import {
   listDataSourceDatabases,
   listDataSourceSchemas,
@@ -77,11 +77,15 @@ export function useDatasourceOptions() {
   return { options, ...query };
 }
 
-export function useTagOptions() {
+/**
+ * The whole tag dictionary of the Workspace: the catalog filter groups by key, and the asset dialog
+ * selects from the same values. One cache entry per Workspace keeps both views consistent.
+ */
+export function useTagDictionary() {
   const { scope, ready } = useDataMapScope();
   return useQuery({
-    queryKey: dataMapKeys.tags(scope),
-    queryFn: ({ signal }) => listTags(signal),
+    queryKey: dataMapKeys.tagDictionary(scope),
+    queryFn: ({ signal }) => listKeys(signal),
     enabled: ready,
     staleTime: OPTION_STALE_TIME,
   });

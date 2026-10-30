@@ -6,7 +6,6 @@ import io.yak.ops.business.datamap.catalog.DataMapCatalogService;
 import io.yak.ops.business.datamap.crawl.DataMapCrawlService;
 import io.yak.ops.business.datamap.personal.DataMapPersonalService;
 import io.yak.ops.business.datamap.preview.DataMapPreviewService;
-import io.yak.ops.business.datamap.tagging.DataMapTagService;
 import io.yak.ops.business.datamap.task.DataMapCrawlTaskService;
 import io.yak.ops.business.datamap.task.DataMapExcludePreviewService;
 import io.yak.ops.common.bean.dto.datamap.DataMapCrawlExcludePreviewDTO;
@@ -16,8 +15,6 @@ import io.yak.ops.common.bean.dto.datamap.DataMapCrawlTaskSaveDTO;
 import io.yak.ops.common.bean.dto.datamap.DataMapCrawlTaskStatusDTO;
 import io.yak.ops.common.bean.dto.datamap.DataMapCuratedUpdateDTO;
 import io.yak.ops.common.bean.dto.datamap.DataMapTableQueryDTO;
-import io.yak.ops.common.bean.dto.datamap.DataMapTagAssignmentDTO;
-import io.yak.ops.common.bean.dto.datamap.DataMapTagInputDTO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlDetailVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlExcludePreviewVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlSchedulePreviewVO;
@@ -28,7 +25,6 @@ import io.yak.ops.common.bean.vo.datamap.DataMapPreviewVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapTableChangeVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapTableDetailVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapTableSummaryVO;
-import io.yak.ops.common.bean.vo.datamap.DataMapTagVO;
 import io.yak.ops.common.constant.CommonConstants;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.page.PagingData;
@@ -77,9 +73,6 @@ public class DataMapController {
     private DataMapPersonalService personalService;
 
     @Resource
-    private DataMapTagService tagService;
-
-    @Resource
     private AuthenticationManager authentication;
 
     @Operation(summary = "数据地图总览")
@@ -119,13 +112,6 @@ public class DataMapController {
         return Result.success(previewService.preview(WorkspaceContext.requireWorkspaceId(), actor(), tableId));
     }
 
-    @Operation(summary = "替换资产标签")
-    @PutMapping("/tables/{tableId}/tags")
-    public Result<Boolean> assignTags(@PathVariable String tableId, @Valid @RequestBody DataMapTagAssignmentDTO input) {
-        tagService.assign(WorkspaceContext.requireWorkspaceId(), actor(), tableId, input.getTagIds());
-        return Result.success(true);
-    }
-
     @Operation(summary = "收藏资产")
     @PostMapping("/tables/{tableId}/favorites")
     public Result<Boolean> addFavorite(@PathVariable String tableId) {
@@ -162,31 +148,6 @@ public class DataMapController {
             @RequestParam(defaultValue = "1") @Min(1) int pageNo,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         return Result.success(personalService.recent(WorkspaceContext.requireWorkspaceId(), actor(), pageNo, pageSize));
-    }
-
-    @Operation(summary = "查询工作空间标签")
-    @GetMapping("/tags")
-    public Result<List<DataMapTagVO>> tags() {
-        return Result.success(tagService.list(WorkspaceContext.requireWorkspaceId()));
-    }
-
-    @Operation(summary = "创建标签")
-    @PostMapping("/tags")
-    public Result<DataMapTagVO> createTag(@Valid @RequestBody DataMapTagInputDTO input) {
-        return Result.success(tagService.create(WorkspaceContext.requireWorkspaceId(), actor(), input));
-    }
-
-    @Operation(summary = "重命名标签")
-    @PutMapping("/tags/{tagId}")
-    public Result<DataMapTagVO> renameTag(@PathVariable String tagId, @Valid @RequestBody DataMapTagInputDTO input) {
-        return Result.success(tagService.rename(WorkspaceContext.requireWorkspaceId(), actor(), tagId, input));
-    }
-
-    @Operation(summary = "删除标签")
-    @DeleteMapping("/tags/{tagId}")
-    public Result<Boolean> deleteTag(@PathVariable String tagId) {
-        tagService.delete(WorkspaceContext.requireWorkspaceId(), tagId);
-        return Result.success(true);
     }
 
     @Operation(summary = "查询采集实例")

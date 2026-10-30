@@ -23,6 +23,13 @@ const withQuery = (path: string, parameters: object) => {
   const search = new URLSearchParams();
   Object.entries(parameters).forEach(([key, value]) => {
     if (value === undefined || value === null || value === "") return;
+    // A repeated parameter, such as the tag value filter, is appended once per element.
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item !== undefined && item !== null && item !== "") search.append(key, String(item));
+      });
+      return;
+    }
     search.set(key, String(value));
   });
   const query = search.toString();

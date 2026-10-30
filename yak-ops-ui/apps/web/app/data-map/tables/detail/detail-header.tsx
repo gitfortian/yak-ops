@@ -177,8 +177,8 @@ export default function DetailHeader({ detail, onEdit, onToggleFavorite, favorit
           ) : (
             <span className="flex flex-wrap items-center gap-1">
               {detail.tags.map((tag) => (
-                <Badge key={tag.id} tone="info">
-                  {tag.name}
+                <Badge key={tag.valueId} tone="info">
+                  {tag.valueName}
                 </Badge>
               ))}
             </span>

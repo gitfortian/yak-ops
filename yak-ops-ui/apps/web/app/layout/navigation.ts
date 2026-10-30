@@ -8,6 +8,7 @@ import {
   Map as MapIcon,
   Network,
   Settings,
+  Tags,
   Users,
   Wrench,
   type LucideIcon,
@@ -88,6 +89,12 @@ export const DATA_GOVERNANCE_NAVIGATION: ProductNavigationItem[] = [
       { label: "元数据采集", path: "/data-governance/data-map/tasks" },
       { label: "我的数据", path: "/data-governance/data-map/personal" },
     ],
+  },
+  {
+    // The dictionary is shared vocabulary, not catalog browsing, so it is a sibling entry.
+    label: "标签管理",
+    path: "/data-governance/tags",
+    icon: Tags,
   },
 ];
 
