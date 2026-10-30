@@ -1,79 +1,53 @@
 -- Yak Ops v1.13.0 incremental schema.
--- Asset tag dictionary (FYOIP-19): a key names a dimension, a value names a term inside it, and a
--- binding attaches one value to one catalog asset. The flat tag table and its association table are
--- migrated into one legacy key per Workspace and then dropped, so this release both reads and
--- writes only the dictionary. Delete protection is a constraint: a bound value rejects the delete
--- (ON DELETE RESTRICT) and a key delete cascades into that same rejection.
+-- Logical model publication closed loop: per-environment layer targets, engine-specific physical
+-- table properties on the model, and execution evidence (operation, duration, log, diff) on every
+-- publication record.
 
-CREATE TABLE yak_ops_tag_key (
-    id VARCHAR(64) NOT NULL COMMENT 'Application-generated key identity',
-    workspace_id VARCHAR(64) NOT NULL COMMENT 'Workspace owning this key',
-    name VARCHAR(64) NOT NULL COMMENT 'Workspace-unique dimension name',
+-- One physical target per layer per publication environment. The publish dialog resolves the
+-- datasource and the target database from this binding, so the user picks an environment only.
+CREATE TABLE yak_ops_modeling_layer_target (
+    id VARCHAR(64) NOT NULL COMMENT 'Application-generated identity',
+    workspace_id VARCHAR(64) NOT NULL COMMENT 'Workspace owning the binding',
+    layer_id VARCHAR(64) NOT NULL COMMENT 'Layer this target belongs to',
+    environment VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT 'DEVELOP or PROD',
+    data_source_id VARCHAR(64) NOT NULL COMMENT 'Datasource used to reach the target',
+    physical_database VARCHAR(128) NOT NULL COMMENT 'Default target database resolved for publications',
+    physical_schema VARCHAR(128) NULL COMMENT 'Default target schema; null where the engine has none',
     create_time DATETIME(3) NOT NULL COMMENT 'Creation timestamp',
-    update_time DATETIME(3) NOT NULL COMMENT 'Most recent rename timestamp',
-    create_by VARCHAR(64) NOT NULL COMMENT 'Authenticated creator identity for audit',
-    update_by VARCHAR(64) NOT NULL COMMENT 'Authenticated updater identity for audit',
+    update_time DATETIME(3) NOT NULL COMMENT 'Last update timestamp',
+    create_by VARCHAR(64) NOT NULL COMMENT 'Creator identity',
+    update_by VARCHAR(64) NOT NULL COMMENT 'Last updater identity',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_tag_key_name (workspace_id, name),
-    UNIQUE KEY uk_tag_key_workspace (workspace_id, id)
+    UNIQUE KEY uk_modeling_layer_target (workspace_id, layer_id, environment),
+    KEY idx_modeling_layer_target_layer (workspace_id, layer_id),
+    CONSTRAINT fk_modeling_layer_target_layer FOREIGN KEY (layer_id)
+        REFERENCES yak_ops_modeling_layer (id) ON DELETE CASCADE,
+    CONSTRAINT fk_modeling_layer_target_datasource FOREIGN KEY (data_source_id)
+        REFERENCES yak_ops_data_source (id) ON DELETE RESTRICT,
+    CONSTRAINT ck_modeling_layer_target_environment CHECK (environment IN ('DEVELOP', 'PROD'))
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Workspace-owned tag keys; one key is one filter dimension';
+COMMENT 'Per-environment physical target bound to one warehouse layer';
 
-CREATE TABLE yak_ops_tag_value (
-    id VARCHAR(64) NOT NULL COMMENT 'Application-generated value identity',
-    workspace_id VARCHAR(64) NOT NULL COMMENT 'Workspace owning this value',
-    key_id VARCHAR(64) NOT NULL COMMENT 'Key this term belongs to',
-    name VARCHAR(128) NOT NULL COMMENT 'Key-unique term name',
-    create_time DATETIME(3) NOT NULL COMMENT 'Creation timestamp',
-    update_time DATETIME(3) NOT NULL COMMENT 'Most recent rename timestamp',
-    create_by VARCHAR(64) NOT NULL COMMENT 'Authenticated creator identity for audit',
-    update_by VARCHAR(64) NOT NULL COMMENT 'Authenticated updater identity for audit',
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_tag_value_name (key_id, name),
-    UNIQUE KEY uk_tag_value_workspace (workspace_id, id),
-    KEY idx_tag_value_key (workspace_id, key_id),
-    CONSTRAINT fk_tag_value_key FOREIGN KEY (workspace_id, key_id)
-        REFERENCES yak_ops_tag_key (workspace_id, id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Terms of one key; deleting the key cascades to its values';
+-- Engine-specific physical table properties (Doris bucket/replica/data model today), stored as a
+-- JSON object and validated against the target dialect at publication time.
+ALTER TABLE yak_ops_modeling_model
+    ADD COLUMN physical_properties VARCHAR(2000) NULL
+        COMMENT 'Engine-specific physical table properties as a JSON object; null when unset'
+        AFTER lifecycle_days;
 
-CREATE TABLE yak_ops_data_map_table_tag_value (
-    workspace_id VARCHAR(64) NOT NULL COMMENT 'Workspace owning the asset and the value',
-    table_id VARCHAR(64) NOT NULL COMMENT 'Tagged catalog asset',
-    tag_value_id VARCHAR(64) NOT NULL COMMENT 'Applied tag value',
-    create_time DATETIME(3) NOT NULL COMMENT 'Binding timestamp',
-    create_by VARCHAR(64) NOT NULL COMMENT 'Authenticated binder identity for audit',
-    PRIMARY KEY (workspace_id, table_id, tag_value_id),
-    KEY idx_table_tag_value_usage (workspace_id, tag_value_id, create_time),
-    CONSTRAINT fk_table_tag_value_table FOREIGN KEY (workspace_id, table_id)
-        REFERENCES yak_ops_data_map_table (workspace_id, id) ON DELETE CASCADE,
-    CONSTRAINT fk_table_tag_value_value FOREIGN KEY (workspace_id, tag_value_id)
-        REFERENCES yak_ops_tag_value (workspace_id, id) ON DELETE RESTRICT
-) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Asset-to-value bindings; a bound value cannot be deleted, an asset delete cascades';
-
--- Migration of the flat tags: one legacy key per Workspace that has at least one tag, with every
--- old tag name as one of its values and every old binding copied onto the matching value. The
--- identities are derived from the Workspace id, so the mapping is reproducible and never collides
--- with IdUtils.nextId(), which emits digits only. A Workspace without tags gets no legacy key.
-INSERT INTO yak_ops_tag_key (id, workspace_id, name, create_time, update_time, create_by, update_by)
-SELECT CONCAT('tklg', LEFT(SHA2(t.workspace_id, 256), 32)), t.workspace_id, 'legacy',
-       MIN(t.create_time), MAX(t.update_time), 'system', 'system'
-FROM yak_ops_data_map_tag t
-GROUP BY t.workspace_id;
-
-INSERT INTO yak_ops_tag_value (id, workspace_id, key_id, name, create_time, update_time, create_by, update_by)
-SELECT CONCAT('tvlgb', LEFT(SHA2(CONCAT(t.workspace_id, ':', t.id), 256), 32)),
-       t.workspace_id,
-       CONCAT('tklg', LEFT(SHA2(t.workspace_id, 256), 32)),
-       t.name, t.create_time, t.update_time, t.create_by, t.update_by
-FROM yak_ops_data_map_tag t;
-
-INSERT INTO yak_ops_data_map_table_tag_value (workspace_id, table_id, tag_value_id, create_time, create_by)
-SELECT b.workspace_id, b.table_id,
-       CONCAT('tvlgb', LEFT(SHA2(CONCAT(b.workspace_id, ':', b.tag_id), 256), 32)),
-       b.create_time, b.create_by
-FROM yak_ops_data_map_table_tag b;
-
-DROP TABLE yak_ops_data_map_table_tag;
-DROP TABLE yak_ops_data_map_tag;
+-- Execution evidence for one publication attempt.
+ALTER TABLE yak_ops_modeling_model_publication
+    ADD COLUMN environment VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NULL
+        COMMENT 'DEVELOP or PROD; null for records written before the column existed' AFTER datasource_revision,
+    ADD COLUMN operation VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NULL
+        COMMENT 'CREATE, ALTER or NONE; null for records written before the column existed' AFTER environment,
+    ADD COLUMN duration_ms BIGINT NULL
+        COMMENT 'Execution duration in milliseconds, observed read included' AFTER operation,
+    ADD COLUMN execution_log MEDIUMTEXT NULL
+        COMMENT 'Ordered execution log: statements, per-statement durations, stack traces' AFTER duration_ms,
+    ADD COLUMN changes_json MEDIUMTEXT NULL
+        COMMENT 'Schema diff snapshot serialized as JSON; empty list for a create' AFTER execution_log,
+    ADD CONSTRAINT ck_modeling_publication_environment CHECK (
+        environment IS NULL OR environment IN ('DEVELOP', 'PROD')),
+    ADD CONSTRAINT ck_modeling_publication_operation CHECK (
+        operation IS NULL OR operation IN ('CREATE', 'ALTER', 'NONE'));

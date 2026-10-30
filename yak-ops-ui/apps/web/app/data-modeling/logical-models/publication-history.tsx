@@ -20,6 +20,8 @@ import {
   type PublicationStatus,
 } from "@/service/data-modeling/dimension-modeling/publication";
 
+import PublicationDetailDialog from "./publication-detail";
+
 const STATUS_TONE: Record<PublicationStatus, "info" | "success" | "danger" | "warning"> = {
   PENDING: "info",
   SUCCEEDED: "success",
@@ -52,6 +54,7 @@ export default function PublicationHistory({ modelId, refreshKey }: Props) {
   const [failure, setFailure] = useState("");
   const [busyId, setBusyId] = useState("");
   const [reload, setReload] = useState(0);
+  const [detail, setDetail] = useState<PublicationRecord | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -146,32 +149,42 @@ export default function PublicationHistory({ modelId, refreshKey }: Props) {
     {
       title: "操作",
       key: "actions",
-      width: 92,
+      width: 128,
       align: "center",
-      render: (_, row) =>
-        row.status === "UNKNOWN" || row.status === "PENDING" ? (
+      render: (_, row) => (
+        <div className="flex items-center justify-center gap-1">
           <Button
             size="small"
             variant="ghost"
             className="px-0.5 font-normal [color:var(--yak-color-primary)]"
-            loading={busyId === row.id}
-            onClick={() => void act(row, "reconcile")}
+            onClick={() => setDetail(row)}
           >
-            对账
+            详情
           </Button>
-        ) : row.status === "SUCCEEDED" ? (
-          <Button
-            size="small"
-            variant="ghost"
-            className="px-0.5 font-normal [color:var(--yak-color-primary)]"
-            loading={busyId === row.id}
-            onClick={() => void act(row, "refresh")}
-          >
-            重读表结构
-          </Button>
-        ) : (
-          <span className="text-xs text-[var(--yak-components-muted-text)]">-</span>
-        ),
+          {(row.status === "UNKNOWN" || row.status === "PENDING") && (
+            <Button
+              size="small"
+              variant="ghost"
+              className="px-0.5 font-normal [color:var(--yak-color-primary)]"
+              loading={busyId === row.id}
+              onClick={() => void act(row, "reconcile")}
+            >
+              对账
+            </Button>
+          )}
+          {row.status === "SUCCEEDED" && (
+            <Button
+              size="small"
+              variant="ghost"
+              className="px-0.5 font-normal [color:var(--yak-color-primary)]"
+              loading={busyId === row.id}
+              onClick={() => void act(row, "refresh")}
+            >
+              重读表结构
+            </Button>
+          )}
+        </div>
+      ),
     },
   ];
 
@@ -184,15 +197,18 @@ export default function PublicationHistory({ modelId, refreshKey }: Props) {
   if (failure) return <Alert>{failure}</Alert>;
   if (items.length === 0) return <Empty description="还没有发布记录" />;
   return (
-    <Table<PublicationRecord>
-      rowKey="id"
-      columns={columns}
-      dataSource={items}
-      size="small"
-      bordered={false}
-      scroll={{ x: 900 }}
-      pagination={false}
-      emptyText="还没有发布记录"
-    />
+    <>
+      <Table<PublicationRecord>
+        rowKey="id"
+        columns={columns}
+        dataSource={items}
+        size="small"
+        bordered={false}
+        scroll={{ x: 900 }}
+        pagination={false}
+        emptyText="还没有发布记录"
+      />
+      <PublicationDetailDialog record={detail} onClose={() => setDetail(null)} />
+    </>
   );
 }

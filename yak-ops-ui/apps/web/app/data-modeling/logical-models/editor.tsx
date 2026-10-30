@@ -54,7 +54,9 @@ import {
   PUBLICATION_STATUS_LABEL,
   type PublicationStatus,
 } from "@/service/data-modeling/dimension-modeling/publication";
-import type { Layer } from "@/service/data-modeling/warehouse-planning/layers";
+import type { Layer, LayerDataSource } from "@/service/data-modeling/warehouse-planning/layers";
+import { getLayerDataSources } from "@/service/data-modeling/warehouse-planning/layers";
+import { enginePhysicalProperties, type PhysicalPropertyField } from "../shared/jdbc-engines";
 import { InputField, SelectField, TextareaField } from "../shared/form-fields";
 import FieldEditor from "./field-editor";
 import type { FieldDraft } from "./fields";
@@ -100,6 +102,8 @@ interface FormState {
   lifecycleDays: string;
   ownerId: string;
   description: string;
+  /** Engine-specific physical table properties as a JSON object string; empty when unset. */
+  physicalProperties: string;
 }
 
 const PUBLICATION_TONE: Record<PublicationStatus, "info" | "success" | "danger" | "warning"> = {
@@ -133,15 +137,55 @@ const INITIAL_FORM: FormState = {
   lifecycleDays: "30",
   ownerId: "",
   description: "",
+  physicalProperties: "",
 };
 
 type NameState = "idle" | "checking" | "available" | "taken" | "error";
 type FormErrors = Partial<
   Record<
-    "layerId" | "nameSuffix" | "cnName" | "lifecycle" | "ownerId" | "ownership" | "fields",
+    | "layerId"
+    | "nameSuffix"
+    | "cnName"
+    | "lifecycle"
+    | "ownerId"
+    | "ownership"
+    | "fields"
+    | "physicalProperties",
     string
   >
 >;
+
+/** Parses the stored JSON into an editable record; anything unreadable starts over empty. */
+function parseProperties(raw: string): Record<string, string> {
+  if (!raw.trim()) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>).map(([key, value]) => [key, String(value)]),
+    );
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Serializes the property controls back into the submit shape.
+ *
+ * <p>An engine without property fields keeps whatever was stored verbatim so an unknown engine's
+ * data survives an edit; an engine with fields rebuilds the object from the controls, so removed
+ * values are actually removed instead of lingering in stale JSON.
+ */
+function physicalPropertiesInput(raw: string, fields: PhysicalPropertyField[]): string | null {
+  if (!fields.length) return raw.trim() ? raw.trim() : null;
+  const values = parseProperties(raw);
+  const kept = Object.fromEntries(
+    fields
+      .filter((field) => values[field.key]?.trim())
+      .map((field) => [field.key, values[field.key].trim()]),
+  );
+  return Object.keys(kept).length ? JSON.stringify(kept) : null;
+}
 
 /**
  * Everything a save would send, in a comparable form. Editor-only field decorations (client keys,
@@ -314,6 +358,7 @@ export default function LogicalModelEditorPage() {
           lifecycleDays: String(model.lifecycleDays),
           ownerId: model.ownerId,
           description: model.description ?? "",
+          physicalProperties: model.physicalProperties ?? "",
         };
         setForm(loadedForm);
         const loaded = (model.fields ?? []).map(fromModelField);
@@ -403,6 +448,41 @@ export default function LogicalModelEditorPage() {
   }, [form.type, form.scope, dimensionScopeId]);
 
   const selectedLayer = options.layers.find((layer) => layer.id === form.layerId);
+
+  // The datasource behind the selected layer decides which engine-specific physical properties the
+  // storage section renders; a layer without a binding renders none.
+  const [layerSources, setLayerSources] = useState<LayerDataSource[]>([]);
+  useEffect(() => {
+    if (options.status !== "ready") return;
+    let alive = true;
+    const controller = new AbortController();
+    getLayerDataSources(controller.signal)
+      .then((items) => {
+        if (alive) setLayerSources(items);
+      })
+      .catch(() => {
+        if (alive) setLayerSources([]);
+      });
+    return () => {
+      alive = false;
+      controller.abort();
+    };
+  }, [options.status]);
+  const layerDbType =
+    layerSources.find((source) => source.id === selectedLayer?.dataSourceId)?.dbType ?? null;
+  const propertyFields = enginePhysicalProperties(layerDbType);
+  const propertyValues = parseProperties(form.physicalProperties);
+  const patchProperty = (key: string, value: string | null) => {
+    const next = { ...propertyValues };
+    if (value === null || value === "") delete next[key];
+    else next[key] = value;
+    setForm((previous) => ({
+      ...previous,
+      physicalProperties: Object.keys(next).length ? JSON.stringify(next) : "",
+    }));
+    setErrors((previous) => ({ ...previous, physicalProperties: undefined }));
+    setConflict(false);
+  };
   const layerSelectable = Boolean(selectedLayer?.enabled);
   const prefix = selectedLayer ? selectedLayer.enCode.toLowerCase() : "";
   const suffix = form.nameSuffix.trim();
@@ -617,6 +697,12 @@ export default function LogicalModelEditorPage() {
     const lifecycle = Number(form.lifecycleDays);
     if (!Number.isInteger(lifecycle) || lifecycle < 1 || lifecycle > 36000)
       next.lifecycle = "生命周期须为 1 到 36000 之间的整数";
+    for (const field of propertyFields) {
+      if (field.required && !propertyValues[field.key]?.trim()) {
+        next.physicalProperties = `请填写${field.label}`;
+        break;
+      }
+    }
     if (!form.ownerId) next.ownerId = "请选择负责人";
     if (rows.length === 0) next.fields = "请至少添加一个字段，模型发布时字段决定物理表结构";
     if (!form.categoryId) next.ownership = "请选择业务分类";
@@ -675,6 +761,7 @@ export default function LogicalModelEditorPage() {
       lifecycleDays: Number(form.lifecycleDays),
       ownerId: form.ownerId,
       description: form.description.trim() || null,
+      physicalProperties: physicalPropertiesInput(form.physicalProperties, propertyFields),
       fields: rows.map(toModelFieldInput),
     };
     busy.current = true;
@@ -1197,6 +1284,54 @@ export default function LogicalModelEditorPage() {
                 error={errors.lifecycle}
                 onChange={(value) => patch({ lifecycleDays: value.replace(/[^\d]/g, "") })}
               />
+              {propertyFields.length > 0 && (
+                <div className="rounded-lg border border-[var(--yak-components-panel-border)] p-3 md:col-span-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-xs font-medium">物理表属性（{layerDbType}）</p>
+                    {errors.physicalProperties && (
+                      <span className="text-xs text-[var(--yak-components-badge-danger-text)]">
+                        {errors.physicalProperties}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs text-[var(--yak-color-text-secondary)]">
+                    按目标引擎透传给 DDL 生成；发布到其他引擎时会被拒绝。
+                  </p>
+                  <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-3">
+                    {propertyFields.map((field) =>
+                      field.kind === "select" ? (
+                        <SelectField
+                          key={field.key}
+                          id={`model-prop-${field.key}`}
+                          label={field.label}
+                          value={propertyValues[field.key] ?? ""}
+                          required={field.required}
+                          disabled={disabled}
+                          items={(field.options ?? []).map((option) => ({
+                            value: option.value,
+                            label: option.label,
+                          }))}
+                          onChange={(value) => patchProperty(field.key, value || null)}
+                        />
+                      ) : (
+                        <InputField
+                          key={field.key}
+                          id={`model-prop-${field.key}`}
+                          label={field.label}
+                          value={propertyValues[field.key] ?? ""}
+                          required={field.required}
+                          maxLength={9}
+                          disabled={disabled}
+                          hint={field.hint}
+                          onChange={(value) =>
+                            patchProperty(field.key, value.replace(/[^\d]/g, "") || null)
+                          }
+                        />
+                      ),
+                    )}
+                  </div>
+                </div>
+              )}
               <SelectField
                 id="model-owner"
                 label="负责人"

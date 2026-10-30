@@ -20,15 +20,18 @@ import org.apache.ibatis.annotations.Update;
 @Mapper
 public interface ModelPublicationMapper {
     String PROJECTION = "SELECT p.id,p.workspace_id,p.model_id,p.datasource_id,p.datasource_revision,"
-            + "p.physical_database,p.physical_schema,p.physical_table,p.status,p.ddl,p.error,"
+            + "p.environment,p.operation,p.physical_database,p.physical_schema,p.physical_table,p.status,p.ddl,"
+            + "p.duration_ms,p.execution_log,p.changes_json,p.error,"
             + "p.created_time,p.finished_time,p.create_by "
             + "FROM yak_ops_modeling_model_publication p ";
 
     @Insert("INSERT INTO yak_ops_modeling_model_publication "
-            + "(id,workspace_id,model_id,datasource_id,datasource_revision,physical_database,physical_schema,"
-            + "physical_table,status,ddl,error,created_time,finished_time,create_by) VALUES "
-            + "(#{id},#{workspaceId},#{modelId},#{datasourceId},#{datasourceRevision},#{physicalDatabase},"
-            + "#{physicalSchema},#{physicalTable},#{status},#{ddl},#{error},#{createdTime},#{finishedTime},"
+            + "(id,workspace_id,model_id,datasource_id,datasource_revision,environment,operation,"
+            + "physical_database,physical_schema,"
+            + "physical_table,status,ddl,changes_json,error,created_time,finished_time,create_by) VALUES "
+            + "(#{id},#{workspaceId},#{modelId},#{datasourceId},#{datasourceRevision},#{environment},#{operation},"
+            + "#{physicalDatabase},"
+            + "#{physicalSchema},#{physicalTable},#{status},#{ddl},#{changesJson},#{error},#{createdTime},#{finishedTime},"
             + "#{createBy})")
     int insert(ModelPublicationEntity row);
 
@@ -41,6 +44,7 @@ public interface ModelPublicationMapper {
             @Param("workspaceId") String workspaceId, @Param("modelId") String modelId, @Param("limit") int limit);
 
     @Update("UPDATE yak_ops_modeling_model_publication SET status=#{status},error=#{error},"
+            + "duration_ms=#{durationMs},execution_log=#{executionLog},"
             + "finished_time=#{finishedTime} "
             + "WHERE workspace_id=#{workspaceId} AND id=#{id} AND status='PENDING'")
     int finish(
@@ -48,6 +52,8 @@ public interface ModelPublicationMapper {
             @Param("id") String id,
             @Param("status") String status,
             @Param("error") String error,
+            @Param("durationMs") Long durationMs,
+            @Param("executionLog") String executionLog,
             @Param("finishedTime") LocalDateTime finishedTime);
 
     /**

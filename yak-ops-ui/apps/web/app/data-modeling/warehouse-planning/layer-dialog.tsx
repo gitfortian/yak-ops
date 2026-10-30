@@ -19,20 +19,35 @@ import {
   toast,
 } from "@yak-ops/yak-ui";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { listDataSourceDatabases, listDataSourceSchemas } from "@/service/datasource";
 import {
   checkLayerCode,
+  getLayerTargets,
   isDatasourceUnavailable,
   layerFailureField,
   layerFailureMessage,
   saveLayer,
+  saveLayerTargets,
   type Layer,
   type LayerDataSource,
   type LayerInput,
 } from "@/service/data-modeling/warehouse-planning/layers";
+import { requiresSchema } from "../shared/jdbc-engines";
 
 const FIELD_CLASS = "grid grid-cols-[104px_minmax(0,1fr)] items-start !gap-3";
 const CODE = /^[A-Z][A-Z0-9_]{0,31}$/;
 const UNBOUND = "__unbound__";
+const TARGET_ENVIRONMENTS = ["DEVELOP", "PROD"] as const;
+const ENVIRONMENT_LABEL = { DEVELOP: "开发", PROD: "生产" } as const;
+
+/** One editable per-environment binding. */
+interface TargetDraft {
+  dataSourceId: string;
+  database: string;
+  schema: string;
+}
+
+const EMPTY_TARGET: TargetDraft = { dataSourceId: "", database: "", schema: "" };
 
 interface Props {
   layer: Layer | null;
@@ -56,6 +71,9 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
   const [failure, setFailure] = useState("");
   const [conflict, setConflict] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [targetDrafts, setTargetDrafts] = useState<Record<string, TargetDraft>>({});
+  const [databases, setDatabases] = useState<Record<string, string[]>>({});
+  const [schemas, setSchemas] = useState<Record<string, string[]>>({});
   const busy = useRef(false);
   const active = useRef(true);
   const selectedSource = dataSources.find((item) => item.id === input.dataSourceId);
@@ -71,6 +89,94 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
       active.current = false;
     };
   }, []);
+
+  // The publish dialog resolves its target from these bindings, so an existing layer opens with
+  // them loaded; a new layer starts unbound and they are written after the layer itself is saved.
+  useEffect(() => {
+    if (!layer?.id) return;
+    const controller = new AbortController();
+    getLayerTargets(layer.id, controller.signal)
+      .then((bound) => {
+        if (controller.signal.aborted) return;
+        setTargetDrafts((previous) => {
+          const next = { ...previous };
+          for (const target of bound) {
+            next[target.environment] = {
+              dataSourceId: target.dataSourceId,
+              database: target.database,
+              schema: target.schema ?? "",
+            };
+          }
+          return next;
+        });
+      })
+      .catch(() => {
+        // The dialog stays usable: binding can be retried on the next save.
+      });
+    return () => controller.abort();
+  }, [layer?.id]);
+
+  // Database and schema lists follow the datasource each environment binds.
+  useEffect(() => {
+    const cleanups: (() => void)[] = [];
+    for (const environment of TARGET_ENVIRONMENTS) {
+      const draft = targetDrafts[environment];
+      if (!draft?.dataSourceId) continue;
+      const key = `${environment}:${draft.dataSourceId}`;
+      if (databases[key]) continue;
+      const controller = new AbortController();
+      listDataSourceDatabases(draft.dataSourceId)
+        .then((values) => {
+          if (!controller.signal.aborted)
+            setDatabases((previous) => ({ ...previous, [key]: values }));
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setDatabases((previous) => ({ ...previous, [key]: [] }));
+        });
+      cleanups.push(() => controller.abort());
+    }
+    return () => cleanups.forEach((cleanup) => cleanup());
+  }, [targetDrafts, databases]);
+
+  useEffect(() => {
+    const cleanups: (() => void)[] = [];
+    for (const environment of TARGET_ENVIRONMENTS) {
+      const draft = targetDrafts[environment];
+      if (
+        !draft?.dataSourceId ||
+        !draft.database ||
+        !requiresSchema(sourceType(draft.dataSourceId))
+      )
+        continue;
+      const key = `${environment}:${draft.dataSourceId}:${draft.database}`;
+      if (schemas[key]) continue;
+      const controller = new AbortController();
+      listDataSourceSchemas(draft.dataSourceId, draft.database)
+        .then((values) => {
+          if (!controller.signal.aborted)
+            setSchemas((previous) => ({ ...previous, [key]: values }));
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setSchemas((previous) => ({ ...previous, [key]: [] }));
+        });
+      cleanups.push(() => controller.abort());
+    }
+    return () => cleanups.forEach((cleanup) => cleanup());
+  }, [targetDrafts, schemas]);
+
+  const sourceType = (dataSourceId: string) =>
+    dataSources.find((item) => item.id === dataSourceId)?.dbType ?? null;
+
+  const patchTarget = (environment: string, partial: Partial<TargetDraft>) => {
+    setTargetDrafts((previous) => {
+      const current = previous[environment] ?? EMPTY_TARGET;
+      const next = { ...current, ...partial };
+      // A schema belongs to one database: switching either clears the stale choice.
+      if (partial.dataSourceId !== undefined || partial.database !== undefined) next.schema = "";
+      return { ...previous, [environment]: next };
+    });
+    setFailure("");
+  };
 
   // Probe the Workspace-unique abbreviation so the user learns about a clash before submitting.
   useEffect(() => {
@@ -128,6 +234,20 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
         description: input.description?.trim() ? input.description.trim() : null,
         enabled: input.enabled,
       });
+      // The targets are written after the layer exists: a new layer only has an id now. An
+      // environment the user left empty simply unbinds that lane.
+      const entries = TARGET_ENVIRONMENTS.map((environment) => {
+        const draft = targetDrafts[environment];
+        if (!draft?.dataSourceId || !draft.database.trim()) return null;
+        const engineSchema = requiresSchema(sourceType(draft.dataSourceId));
+        return {
+          environment,
+          dataSourceId: draft.dataSourceId,
+          database: draft.database.trim(),
+          schema: engineSchema && draft.schema.trim() ? draft.schema.trim() : null,
+        };
+      }).filter((entry) => entry !== null);
+      await saveLayerTargets(saved.id, entries);
       if (active.current) {
         toast.success("保存成功");
         onSaved(saved);
@@ -283,6 +403,136 @@ export default function LayerDialog({ layer, dataSources, onClose, onSaved }: Pr
               默认分层只能调整绑定的物理数据源和启用状态。
             </p>
           )}
+          <div className="rounded-lg border border-[var(--yak-components-panel-border)] p-3">
+            <p className="text-xs font-medium">发布目标（按环境绑定）</p>
+            <p className="mt-0.5 text-xs text-[var(--yak-color-text-secondary)]">
+              逻辑模型发布时选择环境即可自动定位目标库，无需每次手动选择。
+            </p>
+            <div className="mt-2 grid gap-3">
+              {TARGET_ENVIRONMENTS.map((environment) => {
+                const draft = targetDrafts[environment] ?? EMPTY_TARGET;
+                const engineSchema = requiresSchema(sourceType(draft.dataSourceId));
+                const databaseKey = `${environment}:${draft.dataSourceId}`;
+                const schemaKey = `${databaseKey}:${draft.database}`;
+                return (
+                  <div
+                    key={environment}
+                    className="grid gap-2 rounded-md bg-[var(--yak-color-surface-muted)] p-2"
+                  >
+                    <p className="text-xs font-medium">{ENVIRONMENT_LABEL[environment]}环境</p>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <Field>
+                        <FieldLabel htmlFor={`${id}-target-${environment}-ds`} className="text-xs">
+                          数据源
+                        </FieldLabel>
+                        <Select
+                          value={draft.dataSourceId || UNBOUND}
+                          size="small"
+                          disabled={saving}
+                          items={[
+                            { value: UNBOUND, label: "未绑定" },
+                            ...dataSources.map((item) => ({
+                              value: item.id,
+                              label: sourceLabel(item),
+                            })),
+                          ]}
+                          onValueChange={(value) =>
+                            patchTarget(environment, {
+                              dataSourceId: value === UNBOUND ? "" : (value ?? ""),
+                            })
+                          }
+                        >
+                          <SelectTrigger id={`${id}-target-${environment}-ds`} variant="outlined">
+                            <SelectValue placeholder="请选择数据源" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={UNBOUND}>
+                              <SelectItemText>未绑定</SelectItemText>
+                            </SelectItem>
+                            {dataSources.map((item) => (
+                              <SelectItem key={item.id} value={item.id}>
+                                <SelectItemText>{sourceLabel(item)}</SelectItemText>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor={`${id}-target-${environment}-db`} className="text-xs">
+                          目标库
+                        </FieldLabel>
+                        <Select
+                          value={draft.database || null}
+                          size="small"
+                          disabled={
+                            saving || !draft.dataSourceId || !databases[databaseKey]?.length
+                          }
+                          items={(databases[databaseKey] ?? []).map((value) => ({
+                            value,
+                            label: value,
+                          }))}
+                          onValueChange={(value) =>
+                            patchTarget(environment, { database: value ?? "" })
+                          }
+                        >
+                          <SelectTrigger id={`${id}-target-${environment}-db`} variant="outlined">
+                            <SelectValue
+                              placeholder={
+                                !draft.dataSourceId ? "请先选择数据源" : "请选择目标数据库"
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(databases[databaseKey] ?? []).map((value) => (
+                              <SelectItem key={value} value={value}>
+                                <SelectItemText>{value}</SelectItemText>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      {engineSchema && (
+                        <Field>
+                          <FieldLabel
+                            htmlFor={`${id}-target-${environment}-schema`}
+                            className="text-xs"
+                          >
+                            Schema
+                          </FieldLabel>
+                          <Select
+                            value={draft.schema || null}
+                            size="small"
+                            disabled={saving || !draft.database || !schemas[schemaKey]?.length}
+                            items={(schemas[schemaKey] ?? []).map((value) => ({
+                              value,
+                              label: value,
+                            }))}
+                            onValueChange={(value) =>
+                              patchTarget(environment, { schema: value ?? "" })
+                            }
+                          >
+                            <SelectTrigger
+                              id={`${id}-target-${environment}-schema`}
+                              variant="outlined"
+                            >
+                              <SelectValue placeholder="请选择 Schema" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(schemas[schemaKey] ?? []).map((value) => (
+                                <SelectItem key={value} value={value}>
+                                  <SelectItemText>{value}</SelectItemText>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </Field>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
           {conflict && <Alert>数据已变更，请关闭弹窗并刷新后重试。</Alert>}
           {failure && <Alert>{failure}</Alert>}
           <div className="flex justify-end gap-2 pt-2">

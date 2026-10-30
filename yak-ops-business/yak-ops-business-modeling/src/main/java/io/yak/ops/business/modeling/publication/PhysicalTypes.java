@@ -38,7 +38,9 @@ public final class PhysicalTypes {
             case TIMESTAMP ->
                 new PhysicalTypeSpec(
                         PhysicalTypeSpec.TIMESTAMP,
-                        dialect == PhysicalDialect.MYSQL ? "datetime(3)" : "timestamp",
+                        dialect == PhysicalDialect.MYSQL || dialect == PhysicalDialect.DORIS
+                                ? "datetime(3)"
+                                : "timestamp",
                         null,
                         null);
         };

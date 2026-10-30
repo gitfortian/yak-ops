@@ -16,37 +16,64 @@ export const PUBLICATION_STATUS_LABEL: Record<PublicationStatus, string> = {
 export const PUBLICATION_STATUS_HINT: Record<PublicationStatus, string> = {
   PENDING: "记录已落库但未收到引擎结果；长时间停留时可对账",
   SUCCEEDED: "表已创建或已与模型一致",
-  FAILED: "引擎拒绝或表与模型不一致；目标表未被修改",
-  UNKNOWN: "连接中断，无法确认表是否已创建；请对账",
+  FAILED: "引擎拒绝或执行中断；详见执行日志",
+  UNKNOWN: "连接中断，无法确认引擎结果；请对账",
 };
 
-/** One explicit target. {@code schema} is null for engines that have no separate schema. */
+/** One publish request: an environment plus the data-loss acknowledgement. */
 export interface PublicationTarget {
-  database: string;
-  schema: string | null;
+  environment: string;
+  acknowledgeDataLoss?: boolean;
+}
+
+export const PUBLICATION_OPERATIONS = ["CREATE", "ALTER", "NONE"] as const;
+export type PublicationOperation = (typeof PUBLICATION_OPERATIONS)[number];
+
+export const PUBLICATION_OPERATION_LABEL: Record<PublicationOperation, string> = {
+  CREATE: "新建表",
+  ALTER: "变更表",
+  NONE: "无需发布",
+};
+
+/** One schema difference shown in the publish dialog. */
+export interface SchemaChange {
+  kind: "ADD" | "CHANGE" | "DROP";
+  column: string;
+  fromType: string | null;
+  toType: string | null;
+  detail: string;
 }
 
 export interface PublicationPreview {
   database: string;
   schema: string | null;
   table: string;
-  ddl: string;
+  operation: PublicationOperation | null;
+  changes: SchemaChange[];
+  ddl: string | null;
+  requiresDataLossAck: boolean;
 }
 
 /**
  * One publication record. {@code status} is null when the stored value is not known to this build:
- * the row stays readable and is never guessed at.
+ * the row stays readable and is never guessed at. {@code environment}/{@code operation} are null on
+ * records written before those columns existed.
  */
 export interface PublicationRecord {
   id: string;
   modelId: string | null;
   datasourceId: string;
   datasourceRevision: number;
+  environment: "DEVELOP" | "PROD" | null;
   database: string;
   schema: string | null;
   table: string;
+  operation: PublicationOperation | null;
   status: PublicationStatus | null;
+  changes: SchemaChange[];
   ddl: string;
+  durationMs: number | null;
+  executionLog: string | null;
   error: string | null;
   createdTime: string;
   finishedTime: string | null;
@@ -113,8 +140,8 @@ const message = (error: unknown) =>
 /**
  * Maps stable publication error codes to the part of the flow that failed.
  *
- * <p>Target validation comes back as a plain `PARAM_NOT_VALID` carrying the server's own sentence,
- * so it is passed through instead of being re-derived on the client.
+ * <p>19603 is the dangerous-operation guard (DROP COLUMN without acknowledgement) and 19604 is an
+ * unbound layer target; both come back with the server's own sentence and are passed through.
  */
 export function classifyPublicationFailure(error: unknown): PublicationFailure {
   if (!(error instanceof BizError)) return { kind: "unknown", message: "网络异常，请稍后重试" };
@@ -125,6 +152,11 @@ export function classifyPublicationFailure(error: unknown): PublicationFailure {
       return { kind: "missing", message: message(error) };
     case 19509:
       return { kind: "unavailable", message: message(error) };
+    case 19601:
+    case 19602:
+    case 19603:
+    case 19604:
+      return { kind: "target", message: message(error) };
     case 19514:
       return { kind: "unknown", message: message(error) };
     default:

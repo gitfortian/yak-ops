@@ -116,8 +116,8 @@ class PublicationDatabaseIT {
         assertNull(stored.getPhysicalSchema());
         assertEquals(3L, stored.getDatasourceRevision());
 
-        assertTrue(publications.finish("ws", "pub1", "SUCCEEDED", null, now()));
-        assertFalse(publications.finish("ws", "pub1", "FAILED", "second terminal state", now()));
+        assertTrue(publications.finish("ws", "pub1", "SUCCEEDED", null, 1200L, "log 1", now()));
+        assertFalse(publications.finish("ws", "pub1", "FAILED", "second terminal state", 1200L, "log 1", now()));
 
         var finished = publications.find("ws", "pub1").orElseThrow();
         assertEquals("SUCCEEDED", finished.getStatus());
@@ -138,7 +138,7 @@ class PublicationDatabaseIT {
         assertFalse(publications.reconcile("ws", "pub2", "FAILED", "late", now()));
 
         publications.add(pending("pub4"));
-        publications.finish("ws", "pub4", "UNKNOWN", "connection reset", now());
+        publications.finish("ws", "pub4", "UNKNOWN", "connection reset", 1200L, "log 4", now());
         assertTrue(publications.reconcile("ws", "pub4", "FAILED", "table absent", now()));
         assertEquals("FAILED", publications.find("ws", "pub4").orElseThrow().getStatus());
     }
@@ -148,7 +148,7 @@ class PublicationDatabaseIT {
         publications.add(pending("pub3"));
 
         assertTrue(publications.find("other", "pub3").isEmpty());
-        assertFalse(publications.finish("other", "pub3", "SUCCEEDED", null, now()));
+        assertFalse(publications.finish("other", "pub3", "SUCCEEDED", null, 1200L, "log 3", now()));
         assertEquals(1, publications.listByModel("ws", "model", 50).size());
         assertEquals(0, publications.listByModel("other", "model", 50).size());
     }
@@ -227,7 +227,7 @@ class PublicationDatabaseIT {
     @Test
     void readsTheNewestStatusPerModelInOneQuery() {
         publications.add(pending("pub8"));
-        publications.finish("ws", "pub8", "SUCCEEDED", null, now());
+        publications.finish("ws", "pub8", "SUCCEEDED", null, 1200L, "log 8", now());
         var later = pending("pub9");
         later.setCreatedTime(now().plusSeconds(1));
         publications.add(later);

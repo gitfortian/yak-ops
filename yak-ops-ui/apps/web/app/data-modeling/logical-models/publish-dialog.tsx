@@ -23,30 +23,48 @@ import {
   getPublicationMetadata,
   previewPublication,
   publishModel,
+  PUBLICATION_OPERATION_LABEL,
   PUBLICATION_STATUS_HINT,
   PUBLICATION_STATUS_LABEL,
   type MetadataSnapshot,
   type PublicationPreview,
   type PublicationRecord,
   type PublicationStatus,
+  type SchemaChange,
 } from "@/service/data-modeling/dimension-modeling/publication";
 import type { LogicalModel } from "@/service/data-modeling/dimension-modeling/types";
-import { getLayerDataSources, getLayers } from "@/service/data-modeling/warehouse-planning/layers";
-import { listDataSourceDatabases, listDataSourceSchemas } from "@/service/datasource";
-import { requiresSchema } from "../shared/jdbc-engines";
-import PublicationHistory from "./publication-history";
 import {
-  describeAddress,
-  describeEnvironment,
-  toTargetPayload,
-  validatePublicationTarget,
+  getLayerDataSources,
+  getLayerTargets,
+  getLayers,
+  type LayerDataSource,
+} from "@/service/data-modeling/warehouse-planning/layers";
+import {
+  PUBLISH_ENVIRONMENTS,
+  PUBLISH_ENVIRONMENT_LABEL,
+  type PublishEnvironment,
 } from "./publication-target";
+import PublicationHistory from "./publication-history";
+
+const ENV_LABEL: Record<string, string> = { PROD: "生产", TEST: "测试", DEVELOP: "开发" };
 
 const STATUS_TONE: Record<PublicationStatus, "info" | "success" | "danger" | "warning"> = {
   PENDING: "info",
   SUCCEEDED: "success",
   FAILED: "danger",
   UNKNOWN: "warning",
+};
+
+const CHANGE_TONE: Record<SchemaChange["kind"], { color: string; label: string }> = {
+  ADD: { color: "text-[var(--yak-components-badge-success-text)]", label: "🟢 新增列" },
+  CHANGE: { color: "text-[var(--yak-components-badge-warning-text)]", label: "🟡 类型变更" },
+  DROP: { color: "text-[var(--yak-components-badge-danger-text)]", label: "🔴 删除列" },
+};
+
+const OPERATION_TONE: Record<string, "info" | "warning" | "neutral"> = {
+  CREATE: "info",
+  ALTER: "warning",
+  NONE: "neutral",
 };
 
 interface Props {
@@ -57,71 +75,78 @@ interface Props {
 }
 
 /**
- * Publishes one saved logical model to one explicit physical table.
+ * Publishes one saved logical model through the environment its layer binds.
  *
- * <p>The address is chosen here, never inherited from the layer's default: the datasource comes from
- * the layer, but the database and schema are picked from live Catalog results. The generated script
- * must be rendered before the publish button unlocks, and publishing itself needs a separate
- * confirmation, because a table created here outlives the model.
+ * <p>The user picks 开发 or 生产 and the dialog resolves the datasource and the target database from
+ * the layer's per-environment binding — there is no database picker. 「生成变更对比」 fetches the live
+ * table structure and renders the diff (add / change / drop) plus the exact DDL; dropping columns
+ * needs a separate「我已知晓数据将丢失」acknowledgement before the publish button unlocks.
  */
 export default function PublishDialog({ model, onClose, onPublished }: Props) {
   const navigate = useNavigate();
-  const [layerName, setLayerName] = useState(model.layerName ?? "");
-  const [datasourceId, setDatasourceId] = useState("");
-  const [datasourceName, setDatasourceName] = useState("");
-  const [dbType, setDbType] = useState<string | null>(null);
-  const [connection, setConnection] = useState<string | null>(null);
-  const [environment, setEnvironment] = useState<string | null>(null);
-  const [sourceLoading, setSourceLoading] = useState(true);
-  const [sourceFailure, setSourceFailure] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadFailure, setLoadFailure] = useState("");
+  const [layerName, setLayerName] = useState("");
+  const [sources, setSources] = useState<Record<string, LayerDataSource>>({});
+  const [targets, setTargets] = useState<
+    Partial<
+      Record<PublishEnvironment, { database: string; schema: string | null; dataSourceId: string }>
+    >
+  >({});
 
-  const [databases, setDatabases] = useState<string[]>([]);
-  const [database, setDatabase] = useState("");
-  const [schemas, setSchemas] = useState<string[]>([]);
-  const [schema, setSchema] = useState("");
-  const [catalogLoading, setCatalogLoading] = useState(false);
-  const [catalogFailure, setCatalogFailure] = useState("");
-  const [catalogAttempt, setCatalogAttempt] = useState(0);
-
+  const [environment, setEnvironment] = useState<PublishEnvironment | "">("");
   const [preview, setPreview] = useState<PublicationPreview | null>(null);
-  const [previewKey, setPreviewKey] = useState("");
+  const [previewEnv, setPreviewEnv] = useState<PublishEnvironment | "">("");
   const [previewing, setPreviewing] = useState(false);
   const [previewFailure, setPreviewFailure] = useState("");
 
   const [confirmed, setConfirmed] = useState(false);
+  const [ackLoss, setAckLoss] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishFailure, setPublishFailure] = useState("");
   const [result, setResult] = useState<PublicationRecord | null>(null);
   const [snapshot, setSnapshot] = useState<MetadataSnapshot | null>(null);
   const [historyKey, setHistoryKey] = useState(0);
 
-  // The layer decides where the model may land; the datasource is read from it rather than picked.
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
-    setSourceLoading(true);
-    setSourceFailure("");
-    void Promise.all([getLayers(controller.signal), getLayerDataSources(controller.signal)])
-      .then(([layers, sources]) => {
+    setLoading(true);
+    setLoadFailure("");
+    void Promise.all([
+      getLayers(controller.signal),
+      getLayerDataSources(controller.signal),
+      getLayerTargets(model.layerId, controller.signal),
+    ])
+      .then(([layers, layerSources, layerTargets]) => {
         if (!active) return;
         const layer = layers.find((item) => item.id === model.layerId);
-        const source = sources.find((item) => item.id === layer?.dataSourceId);
-        if (!layer?.dataSourceId || !source) {
-          setSourceFailure("该模型所属分层未绑定物理数据源，无法发布");
+        if (!layer) {
+          setLoadFailure("该模型所属分层不存在，无法发布");
           return;
         }
         setLayerName(`${layer.cnName}（${layer.enCode}）`);
-        setDatasourceId(source.id);
-        setDatasourceName(source.name);
-        setDbType(source.dbType);
-        setConnection(source.connStatus ?? null);
-        setEnvironment(source.environment ?? null);
+        const byId = Object.fromEntries(layerSources.map((source) => [source.id, source]));
+        setSources(byId);
+        const bound: typeof targets = {};
+        for (const target of layerTargets) {
+          if (target.environment === "DEVELOP" || target.environment === "PROD") {
+            bound[target.environment] = {
+              database: target.database,
+              schema: target.schema,
+              dataSourceId: target.dataSourceId,
+            };
+          }
+        }
+        setTargets(bound);
+        // The environments are ordered, so the first bound one becomes the default choice.
+        setEnvironment(PUBLISH_ENVIRONMENTS.find((item) => bound[item]) ?? "");
       })
       .catch(() => {
-        if (active) setSourceFailure("分层与数据源加载失败，请稍后重试");
+        if (active) setLoadFailure("分层与发布目标加载失败，请稍后重试");
       })
       .finally(() => {
-        if (active) setSourceLoading(false);
+        if (active) setLoading(false);
       });
     return () => {
       active = false;
@@ -129,96 +154,52 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
     };
   }, [model.layerId]);
 
-  useEffect(() => {
-    if (!datasourceId) return;
-    let active = true;
-    setCatalogLoading(true);
-    setCatalogFailure("");
-    void listDataSourceDatabases(datasourceId)
-      .then((values) => {
-        if (active) setDatabases(values);
-      })
-      .catch(() => {
-        if (!active) return;
-        setDatabases([]);
-        setCatalogFailure("数据库列表读取失败，请检查数据源连接");
-      })
-      .finally(() => {
-        if (active) setCatalogLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [datasourceId, catalogAttempt]);
-
-  useEffect(() => {
-    if (!datasourceId || !requiresSchema(dbType)) {
-      setSchemas([]);
-      setSchema("");
-      return;
-    }
-    let active = true;
-    setSchemas([]);
-    // A schema belongs to one database: keeping the previous choice would submit dbB.schemaA and
-    // either create the table in the wrong place or fail the server-side address check.
-    setSchema("");
-    void listDataSourceSchemas(datasourceId, database || undefined)
-      .then((values) => {
-        if (active) setSchemas(values);
-      })
-      .catch(() => {
-        if (!active) return;
-        setSchemas([]);
-        setCatalogFailure("Schema 列表读取失败，请检查数据源连接");
-      });
-    return () => {
-      active = false;
-    };
-  }, [datasourceId, database, dbType]);
-
-  const target = { dbType, database, schema: requiresSchema(dbType) ? schema : null };
-  const targetKey = JSON.stringify(toTargetPayload(target));
-  const problem = validatePublicationTarget(target);
-  const addressText = describeAddress(database, schema, dbType);
-
-  // Any change of address invalidates the script, the confirmation and the previous result: none of
-  // them describe the table that would be touched now.
+  // Any change of environment invalidates the script, the diff, the acknowledgements and the
+  // previous result: none of them describe the target that would be touched now.
   useEffect(() => {
     setPreview(null);
-    setPreviewKey("");
+    setPreviewEnv("");
     setPreviewFailure("");
     setConfirmed(false);
+    setAckLoss(false);
     setResult(null);
     setSnapshot(null);
     setPublishFailure("");
-  }, [targetKey]);
+  }, [environment]);
+
+  const bound = environment ? targets[environment] : undefined;
+  const source = bound ? sources[bound.dataSourceId] : undefined;
+  const addressText = bound ? [bound.database, bound.schema].filter(Boolean).join(".") : "";
 
   const generate = async () => {
-    if (problem) {
-      setPreviewFailure(problem.message);
-      return;
-    }
+    if (!environment || !bound) return;
     setPreviewing(true);
     setPreviewFailure("");
     try {
-      const generated = await previewPublication(model.id, toTargetPayload(target));
+      const generated = await previewPublication(model.id, { environment });
       setPreview(generated);
-      setPreviewKey(targetKey);
+      setPreviewEnv(environment);
     } catch (error) {
       setPreview(null);
-      setPreviewKey("");
-      setPreviewFailure(classifyPublicationFailure(error).message ?? "DDL 生成失败，请稍后重试");
+      setPreviewEnv("");
+      setPreviewFailure(
+        classifyPublicationFailure(error).message ?? "变更对比生成失败，请稍后重试",
+      );
     } finally {
       setPreviewing(false);
     }
   };
 
   const publish = async () => {
-    if (!preview || previewKey !== targetKey || !confirmed || publishing) return;
+    if (!environment || !preview || previewEnv !== environment || !confirmed || publishing) return;
+    if (preview.requiresDataLossAck && !ackLoss) return;
     setPublishing(true);
     setPublishFailure("");
     try {
-      const record = await publishModel(model.id, toTargetPayload(target));
+      const record = await publishModel(model.id, {
+        environment,
+        acknowledgeDataLoss: preview.requiresDataLossAck,
+      });
       setResult(record);
       setHistoryKey((value) => value + 1);
       onPublished?.();
@@ -242,13 +223,15 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
     }
   };
 
-  // Publishing writes, so an unregistered environment is refused instead of guessed to be a
-  // harmless one; reading a wrong database costs nothing, creating a table in one does.
-  const environmentMissing = environment === null;
-  const production = environment === "PROD";
+  const previewFresh = Boolean(preview) && previewEnv === environment && environment !== "";
   const canPublish =
-    Boolean(preview) && previewKey === targetKey && confirmed && !problem && !environmentMissing;
-  const disconnected = connection === "DISCONNECTED";
+    previewFresh &&
+    confirmed &&
+    (!preview?.requiresDataLossAck || ackLoss) &&
+    !publishing &&
+    preview?.operation !== "NONE" &&
+    preview?.operation !== null;
+  const disconnected = source?.connStatus === "DISCONNECTED";
 
   return (
     <Dialog
@@ -261,112 +244,87 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
       <DialogContent className="w-[860px] max-w-[95vw] rounded-xl p-5 shadow-none">
         <DialogTitle className="text-sm font-medium">发布到物理表</DialogTitle>
         <DialogDescription className="mt-2 text-xs leading-5 text-[var(--yak-color-text-secondary)]">
-          发布会使用已保存的模型定义生成建表脚本。目标表不存在时创建；已存在时只做结构校验，
-          不会修改它，也不会删除任何数据。
+          选择发布环境后，系统按分层绑定的目标库自动定位物理表：目标表不存在时生成建表语句；
+          已存在且结构有差异时生成 ALTER 变更语句；结构一致时提示无需发布。
         </DialogDescription>
 
-        {sourceLoading ? (
+        {loading ? (
           <div className="flex h-24 items-center justify-center">
             <Spinner />
           </div>
-        ) : sourceFailure ? (
+        ) : loadFailure ? (
           <div className="mt-4">
-            <Alert>{sourceFailure}</Alert>
+            <Alert>{loadFailure}</Alert>
           </div>
         ) : (
           <>
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-              <div className="grid gap-1 text-xs">
-                <span className="font-medium">分层</span>
-                <span className="text-[var(--yak-components-field-label)]">{layerName || "-"}</span>
-              </div>
-              <div className="grid gap-1 text-xs">
-                <span className="font-medium">数据源</span>
-                <span className="text-[var(--yak-components-field-label)]">
-                  {datasourceName || datasourceId}（{describeEnvironment(environment)}）
-                </span>
-              </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label className="grid gap-1 text-xs">
+                <span className="font-medium">发布环境</span>
+                <Select
+                  value={environment || null}
+                  size="small"
+                  items={PUBLISH_ENVIRONMENTS.map((value) => ({
+                    value,
+                    label: `${PUBLISH_ENVIRONMENT_LABEL[value]}${targets[value] ? "" : "（未绑定目标库）"}`,
+                  }))}
+                  onValueChange={(value) =>
+                    setEnvironment((value ?? "") as PublishEnvironment | "")
+                  }
+                >
+                  <SelectTrigger variant="outlined" aria-label="选择发布环境">
+                    <SelectValue placeholder="请选择发布环境" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PUBLISH_ENVIRONMENTS.map((value) => (
+                      <SelectItem key={value} value={value} disabled={!targets[value]}>
+                        <SelectItemText>
+                          {PUBLISH_ENVIRONMENT_LABEL[value]}
+                          {targets[value] ? "" : "（未绑定目标库）"}
+                        </SelectItemText>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
               <div className="grid gap-1 text-xs">
                 <span className="font-medium">物理表</span>
                 <span className="text-[var(--yak-components-field-label)]">{model.name}</span>
               </div>
             </div>
 
-            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-xs">
-                <span className="font-medium">目标数据库</span>
-                <Select
-                  value={database || null}
-                  size="small"
-                  disabled={catalogLoading || databases.length === 0}
-                  items={databases.map((value) => ({ value, label: value }))}
-                  onValueChange={(value) => setDatabase(value ?? "")}
-                >
-                  <SelectTrigger variant="outlined" aria-label="选择目标数据库">
-                    <SelectValue placeholder={catalogLoading ? "数据库加载中" : "请选择数据库"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {databases.map((value) => (
-                      <SelectItem key={value} value={value}>
-                        <SelectItemText>{value}</SelectItemText>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-              {requiresSchema(dbType) ? (
-                <label className="grid gap-1 text-xs">
-                  <span className="font-medium">目标 Schema</span>
-                  <Select
-                    value={schema || null}
-                    size="small"
-                    disabled={!database || schemas.length === 0}
-                    items={schemas.map((value) => ({ value, label: value }))}
-                    onValueChange={(value) => setSchema(value ?? "")}
-                  >
-                    <SelectTrigger variant="outlined" aria-label="选择目标 Schema">
-                      <SelectValue placeholder={database ? "请选择 Schema" : "请先选择数据库"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {schemas.map((value) => (
-                        <SelectItem key={value} value={value}>
-                          <SelectItemText>{value}</SelectItemText>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-              ) : (
-                <div className="grid gap-1 text-xs">
-                  <span className="font-medium">目标 Schema</span>
-                  <span className="text-[var(--yak-color-text-secondary)]">
-                    该引擎以数据库作为 Schema，无需单独选择。
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {catalogFailure && (
+            {environment && !bound && (
               <div className="mt-3">
                 <Alert>
-                  {catalogFailure}
-                  <Button size="small" onClick={() => setCatalogAttempt((value) => value + 1)}>
-                    重试
-                  </Button>
+                  分层「{layerName}」未绑定{PUBLISH_ENVIRONMENT_LABEL[environment]}
+                  环境的发布目标，请先在数仓分层中配置。
                 </Alert>
               </div>
             )}
+
+            {bound && (
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="grid gap-1 text-xs">
+                  <span className="font-medium">目标数据源</span>
+                  <span className="text-[var(--yak-components-field-label)]">
+                    {source
+                      ? `${source.name}（${ENV_LABEL[source.environment ?? ""] ?? "环境未登记"} · ${source.dbType}）`
+                      : bound.dataSourceId}
+                  </span>
+                </div>
+                <div className="grid gap-1 text-xs">
+                  <span className="font-medium">目标库（由分层绑定自动带出）</span>
+                  <span className="text-[var(--yak-components-field-label)]">
+                    {addressText || "-"}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {disconnected && (
               <div className="mt-3">
                 <Alert>
                   该数据源连接状态为「未连接」，发布可能失败；请先在数据源页面检查连接。
-                </Alert>
-              </div>
-            )}
-            {environmentMissing && (
-              <div className="mt-3">
-                <Alert>
-                  该数据源未登记环境，无法判断目标是否为生产库；发布已禁用，请先在数据源页面补全环境。
                 </Alert>
               </div>
             )}
@@ -375,17 +333,15 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
               <Button
                 size="small"
                 loading={previewing}
-                disabled={Boolean(problem) || sourceLoading}
+                disabled={!bound}
                 onClick={() => void generate()}
               >
-                生成建表脚本
+                生成变更对比
               </Button>
               <span className="text-xs text-[var(--yak-color-text-secondary)]">
-                {problem
-                  ? problem.message
-                  : previewKey === targetKey && preview
-                    ? `脚本已生成，目标 ${addressText}.${preview.table}`
-                    : "先选择目标地址，再生成脚本核对"}
+                {previewFresh && preview
+                  ? `已生成：目标 ${addressText}.${preview.table}`
+                  : "先选择环境，再生成变更对比核对"}
               </span>
             </div>
             {previewFailure && (
@@ -393,28 +349,69 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
                 <Alert>{previewFailure}</Alert>
               </div>
             )}
-            {previewKey === targetKey && preview && (
-              <pre className="mt-3 max-h-56 overflow-auto rounded-lg border border-[var(--yak-components-panel-border)] bg-[var(--yak-color-surface)] p-3 text-xs leading-5 whitespace-pre-wrap text-[var(--yak-components-field-label)]">
-                {preview.ddl}
-              </pre>
-            )}
-            {previewKey === targetKey && preview && (
-              <div className="mt-3 flex items-start gap-2 rounded-lg border border-[var(--yak-components-panel-border)] px-3 py-2 text-xs text-[var(--yak-components-field-label)]">
-                <Checkbox
-                  aria-label="确认发布目标"
-                  checked={confirmed}
-                  onCheckedChange={(checked) => setConfirmed(checked)}
-                />
-                <span>
-                  {production && (
-                    <span className="text-[var(--yak-components-badge-danger-text)]">
-                      目标数据源登记为生产环境，这张表会直接建在生产库中。
+
+            {previewFresh && preview && (
+              <>
+                <div className="mt-3 flex items-center gap-2 text-xs">
+                  <span className="font-medium">变更类型</span>
+                  <Badge tone={OPERATION_TONE[preview.operation ?? "NONE"] ?? "neutral"}>
+                    {PUBLICATION_OPERATION_LABEL[preview.operation ?? "NONE"]}
+                  </Badge>
+                  {preview.operation === "NONE" && (
+                    <span className="text-[var(--yak-components-field-label)]">
+                      物理表与模型结构一致，无需发布。
                     </span>
                   )}
-                  我确认在「{addressText}」创建或校验物理表「
-                  {preview.table}」；若该表已存在，只做结构校验，不会被修改。
-                </span>
-              </div>
+                </div>
+                {preview.changes.length > 0 && (
+                  <ul className="mt-2 grid gap-1 rounded-lg border border-[var(--yak-components-panel-border)] px-3 py-2 text-xs">
+                    {preview.changes.map((change) => (
+                      <li
+                        key={`${change.kind}-${change.column}`}
+                        className={CHANGE_TONE[change.kind].color}
+                      >
+                        {CHANGE_TONE[change.kind].label}：{change.detail}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {preview.ddl && (
+                  <pre className="mt-3 max-h-56 overflow-auto rounded-lg border border-[var(--yak-components-panel-border)] bg-[var(--yak-color-surface)] p-3 text-xs leading-5 whitespace-pre-wrap text-[var(--yak-components-field-label)]">
+                    {preview.ddl}
+                  </pre>
+                )}
+                {preview.ddl && (
+                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-[var(--yak-components-panel-border)] px-3 py-2 text-xs text-[var(--yak-components-field-label)]">
+                    <Checkbox
+                      aria-label="确认发布目标"
+                      checked={confirmed}
+                      onCheckedChange={(checked) => setConfirmed(checked)}
+                    />
+                    <span>
+                      {environment === "PROD" && (
+                        <span className="text-[var(--yak-components-badge-danger-text)]">
+                          当前为生产环境，本次操作将直接作用于生产库。
+                        </span>
+                      )}
+                      我确认执行以上 DDL，在「{addressText}」
+                      {preview.operation === "CREATE" ? "创建" : "变更"}物理表「
+                      {preview.table}」。
+                    </span>
+                  </div>
+                )}
+                {preview.requiresDataLossAck && (
+                  <div className="mt-2 flex items-start gap-2 rounded-lg border border-[var(--yak-color-border-danger-subtle)] bg-[var(--yak-components-badge-danger-bg)] px-3 py-2 text-xs text-[var(--yak-components-badge-danger-text)]">
+                    <Checkbox
+                      aria-label="确认数据丢失风险"
+                      checked={ackLoss}
+                      onCheckedChange={(checked) => setAckLoss(checked)}
+                    />
+                    <span className="font-medium">
+                      我已知晓本次发布包含删除列操作，相关列的数据将丢失且无法恢复。
+                    </span>
+                  </div>
+                )}
+              </>
             )}
             {publishFailure && (
               <div className="mt-3">
@@ -435,6 +432,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
                   <span>
                     {[result.database, result.schema].filter(Boolean).join(".")}.{result.table}
                   </span>
+                  {result.durationMs !== null && <span>耗时 {result.durationMs} ms</span>}
                 </div>
                 <div className="mt-1">
                   {result.error ?? PUBLICATION_STATUS_HINT[result.status ?? "PENDING"]}
@@ -459,7 +457,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
                 )}
                 {result.status === "UNKNOWN" && (
                   <div className="mt-1">
-                    DDL 已提交但连接中断，无法确认表是否创建。请在下方发布历史中对账，不会重跑脚本。
+                    DDL 已提交但连接中断，无法确认引擎结果。请在下方发布历史中对账，不会重跑脚本。
                   </div>
                 )}
               </div>
@@ -468,7 +466,8 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
             <div className="mt-4">
               <h3 className="text-sm font-medium">发布历史</h3>
               <p className="mt-1 text-xs text-[var(--yak-color-text-secondary)]">
-                失败不自动重试；「结果未知」需对账。
+                最近 50 次发布记录。失败记录不会自动重试，「结果未知」只能对账；点击「详情」可查看
+                DDL、耗时与执行日志。
               </p>
               <div className="mt-2">
                 <PublicationHistory modelId={model.id} refreshKey={historyKey} />

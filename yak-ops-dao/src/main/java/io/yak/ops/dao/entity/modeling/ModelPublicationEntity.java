@@ -24,7 +24,11 @@ public class ModelPublicationEntity {
     private String datasourceId;
     /** Datasource revision pinned for this execution. */
     private long datasourceRevision;
-    /** Explicit target database confirmed by the user. */
+    /** Publication environment the layer target was resolved for; null on legacy rows. */
+    private String environment;
+    /** Planned operation: CREATE, ALTER or NONE; null on legacy rows. */
+    private String operation;
+    /** Explicit target database confirmed by the layer binding. */
     private String physicalDatabase;
     /** Explicit target schema; null where the engine has none. */
     private String physicalSchema;
@@ -32,6 +36,12 @@ public class ModelPublicationEntity {
     private String physicalTable;
     /** Persisted status text; read as text so an unknown value surfaces instead of failing the read. */
     private String status;
+    /** Schema diff snapshot serialized as JSON; empty list for a create. */
+    private String changesJson;
+    /** Execution duration in milliseconds, observed read included. */
+    private Long durationMs;
+    /** Ordered execution log: statements, per-statement durations, stack traces. */
+    private String executionLog;
     /** Generated DDL script attempted by this publication. */
     private String ddl;
     /** Failure or mismatch detail; null while pending and on success. */

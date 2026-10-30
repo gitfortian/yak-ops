@@ -65,6 +65,14 @@ public class ModelInputDTO {
     @Size(max = 500, message = "描述不能超过500个字符")
     private String description;
 
+    /**
+     * Engine-specific physical table properties as a JSON object (Doris bucket count, replica
+     * count, data model). Validated structurally here and against the target dialect at
+     * publication time.
+     */
+    @Size(max = 2000, message = "物理属性过长")
+    private String physicalProperties;
+
     @Valid
     private List<ModelFieldInputDTO> fields;
 }

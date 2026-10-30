@@ -38,10 +38,19 @@ public interface PublicationRepository {
      * @param id publication identity
      * @param status terminal status text
      * @param error failure detail, or null
+     * @param durationMs execution duration in milliseconds, or null when unknown
+     * @param executionLog ordered execution log, or null
      * @param finishedTime terminal timestamp
      * @return true when the record was pending and is now finished
      */
-    boolean finish(String workspaceId, String id, String status, String error, LocalDateTime finishedTime);
+    boolean finish(
+            String workspaceId,
+            String id,
+            String status,
+            String error,
+            Long durationMs,
+            String executionLog,
+            LocalDateTime finishedTime);
 
     /**
      * Resolves an unknown record without re-executing its DDL.

@@ -3,11 +3,13 @@ package io.yak.ops.boot.controller;
 import io.yak.ops.business.modeling.naming.NamingRuleService;
 import io.yak.ops.business.modeling.planning.LayerService;
 import io.yak.ops.common.bean.dto.modeling.LayerInputDTO;
+import io.yak.ops.common.bean.dto.modeling.LayerTargetsInputDTO;
 import io.yak.ops.common.bean.dto.modeling.NamingRuleUpdateDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateLayerDTO;
 import io.yak.ops.common.bean.vo.modeling.LayerDataSourceVO;
 import io.yak.ops.common.bean.vo.modeling.LayerNamingRuleVO;
 import io.yak.ops.common.bean.vo.modeling.LayerOptionVO;
+import io.yak.ops.common.bean.vo.modeling.LayerTargetVO;
 import io.yak.ops.common.bean.vo.modeling.LayerVO;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.result.Result;
@@ -89,6 +91,19 @@ public class WarehouseLayerController {
     public Result<LayerNamingRuleVO> namingRule(@PathVariable String id) {
         return Result.success(
                 namingRules.rule(WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), id));
+    }
+
+    @GetMapping("/{id}/targets")
+    public Result<List<LayerTargetVO>> targets(@PathVariable String id) {
+        return Result.success(
+                service.targets(WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), id));
+    }
+
+    @PutMapping("/{id}/targets")
+    public Result<List<LayerTargetVO>> bindTargets(
+            @PathVariable String id, @Valid @RequestBody LayerTargetsInputDTO input) {
+        return Result.success(
+                service.bindTargets(WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), id, input));
     }
 
     @PutMapping("/{id}/naming-rule")

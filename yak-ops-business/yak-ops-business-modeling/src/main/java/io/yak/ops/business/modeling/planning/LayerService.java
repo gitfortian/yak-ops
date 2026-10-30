@@ -1,9 +1,11 @@
 package io.yak.ops.business.modeling.planning;
 
 import io.yak.ops.common.bean.dto.modeling.LayerInputDTO;
+import io.yak.ops.common.bean.dto.modeling.LayerTargetsInputDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateLayerDTO;
 import io.yak.ops.common.bean.vo.modeling.LayerDataSourceVO;
 import io.yak.ops.common.bean.vo.modeling.LayerOptionVO;
+import io.yak.ops.common.bean.vo.modeling.LayerTargetVO;
 import io.yak.ops.common.bean.vo.modeling.LayerVO;
 import java.util.List;
 
@@ -11,6 +13,8 @@ import java.util.List;
  * Workspace data warehouse layers: five undeletable presets plus custom layers bound to a physical datasource.
  *
  * <p>Enabling a layer requires a committed datasource binding so physical publishing can resolve an instance.
+ * Publishing itself resolves its target through the per-environment bindings configured here, so the
+ * publish dialog asks for an environment instead of a database.
  */
 public interface LayerService {
     /**
@@ -68,4 +72,21 @@ public interface LayerService {
      * @param revision expected revision
      */
     void delete(String workspaceId, String actor, String id, long revision);
+    /**
+     * Reads the per-environment physical targets bound to one layer.
+     * @param workspaceId current Workspace
+     * @param actor authenticated user
+     * @param layerId layer identity
+     * @return bindings ordered by environment; an environment may be absent
+     */
+    List<LayerTargetVO> targets(String workspaceId, String actor, String layerId);
+    /**
+     * Replaces the per-environment physical targets of one layer.
+     * @param workspaceId current Workspace
+     * @param actor authenticated user
+     * @param layerId layer identity
+     * @param input replacement bindings, at most one per environment
+     * @return committed bindings
+     */
+    List<LayerTargetVO> bindTargets(String workspaceId, String actor, String layerId, LayerTargetsInputDTO input);
 }

@@ -20,6 +20,7 @@ import io.yak.ops.common.enums.modeling.LayerErrorCode;
 import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.dao.repository.modeling.LayerRepository;
 import io.yak.ops.dao.repository.modeling.impl.LayerRepositoryImpl;
+import io.yak.ops.dao.repository.modeling.impl.LayerTargetRepositoryImpl;
 import io.yak.ops.testutils.MySqlDatabase;
 import io.yak.ops.workspace.WorkspaceService;
 import io.yak.ops.workspace.enums.WorkspaceErrorCode;
@@ -69,7 +70,7 @@ class LayerDatabaseIT {
         jdbc = new JdbcTemplate(source);
         Flyway.configure().dataSource(source).locations("classpath:db/migration/yak-ops").load().migrate();
         context = new AnnotationConfigApplicationContext(
-                Beans.class, LayerRepositoryImpl.class, LayerServiceImpl.class);
+                Beans.class, LayerRepositoryImpl.class, LayerTargetRepositoryImpl.class, LayerServiceImpl.class);
         service = context.getBean(LayerService.class);
     }
 

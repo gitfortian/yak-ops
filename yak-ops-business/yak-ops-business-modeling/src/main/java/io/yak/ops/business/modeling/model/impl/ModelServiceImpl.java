@@ -306,6 +306,7 @@ public class ModelServiceImpl implements ModelService {
         if (lifecycle == null || lifecycle < MIN_LIFECYCLE_DAYS || lifecycle > MAX_LIFECYCLE_DAYS)
             throw new BusinessException(DimensionModelingErrorCode.INVALID_MODEL);
         row.setLifecycleDays(lifecycle);
+        row.setPhysicalProperties(normalizeProperties(input.getPhysicalProperties()));
         row.setOwnerId(requireOwner(workspaceId, actor, input.getOwnerId()));
         row.setDescription(optionalText(input.getDescription(), 500));
         return processCode;
@@ -540,6 +541,25 @@ public class ModelServiceImpl implements ModelService {
         return "%" + normalized.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
     }
 
+    /**
+     * Normalizes the declared physical table properties.
+     *
+     * <p>Only the JSON shape is checked here: which properties a model may declare depends on the
+     * datasource type the layer targets, and that is validated against the dialect at publication
+     * time, where the actual engine is known.
+     */
+    private static String normalizeProperties(String value) {
+        var normalized = trim(value);
+        if (normalized == null) return null;
+        try {
+            var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(normalized);
+            if (node == null || !node.isObject()) throw new IllegalArgumentException("not a JSON object");
+        } catch (Exception malformed) {
+            throw new BusinessException(DimensionModelingErrorCode.INVALID_MODEL, malformed);
+        }
+        return normalized;
+    }
+
     private static String trim(String value) {
         if (value == null) return null;
         var normalized = value.strip();
@@ -568,6 +588,7 @@ public class ModelServiceImpl implements ModelService {
                 row.getLifecycleDays(),
                 row.getOwnerId(),
                 row.getDescription(),
+                row.getPhysicalProperties(),
                 row.getNamingRootWordId(),
                 fields == null ? row.getFieldCount() : fields.size(),
                 row.getRevision(),
