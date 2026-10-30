@@ -1,5 +1,14 @@
 import { Input } from "@yak-ops/yak-ui";
-import { ChevronRight, FileText, Folder, FolderOpen, FolderPlus, Plus, Search, X } from "lucide-react";
+import {
+  ChevronRight,
+  FileText,
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  Plus,
+  Search,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   NodeKey,
@@ -148,7 +157,11 @@ export default function PlanningTree(props: Props) {
                     }
                   />
                 ) : open ? (
-                  <FolderOpen size={15} strokeWidth={1.75} className="shrink-0 text-[var(--yak-color-primary)]" />
+                  <FolderOpen
+                    size={15}
+                    strokeWidth={1.75}
+                    className="shrink-0 text-[var(--yak-color-primary)]"
+                  />
                 ) : (
                   <Folder
                     size={15}
@@ -296,7 +309,11 @@ export default function PlanningTree(props: Props) {
         )}
         {zero && (
           <div className="mx-1 mt-3 flex flex-col items-center gap-2 rounded-lg bg-[var(--yak-color-surface-muted)] px-3 py-5 text-center">
-            <Search size={16} strokeWidth={1.6} className="text-[var(--yak-components-muted-text)]" />
+            <Search
+              size={16}
+              strokeWidth={1.6}
+              className="text-[var(--yak-components-muted-text)]"
+            />
             <p className="text-[12px] leading-4 text-[var(--yak-components-muted-text)]">
               没有匹配「{keyword.trim()}」的节点
             </p>

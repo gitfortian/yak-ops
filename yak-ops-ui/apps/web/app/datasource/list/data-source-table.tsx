@@ -122,7 +122,10 @@ const DataSourceTable = ({
             <DatabaseIcons dbType={record.dbType} width="22" height="22" />
           </span>
           <div className="min-w-0">
-            <div className="truncate text-[13px] font-medium text-[var(--yak-color-text-primary)]" title={record.name}>
+            <div
+              className="truncate text-[13px] font-medium text-[var(--yak-color-text-primary)]"
+              title={record.name}
+            >
               {record.name || "-"}
             </div>
             <div className="mt-0.5 truncate text-xs text-[var(--yak-components-muted-text)]">

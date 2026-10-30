@@ -51,47 +51,47 @@ export default function MetricsPage() {
           ))}
         </div>
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[var(--yak-color-border)] bg-[var(--yak-components-panel-bg)] shadow-[0_1px_2px_0_rgb(16_24_40/4%)]">
-        {kind === "period" && (
-          <TimePeriodSection
-            unavailable={false}
-            version={version}
-            onChanged={changed}
-            onDelete={setDeleting}
-          />
-        )}
-        {kind === "modifier" && (
-          <ModifierSection
-            unavailable={false}
-            version={version}
-            onChanged={changed}
-            onDelete={setDeleting}
-          />
-        )}
-        {kind === "atomic" && (
-          <AtomicSection
-            unavailable={false}
-            version={version}
-            onChanged={changed}
-            onDelete={setDeleting}
-          />
-        )}
-        {kind === "derived" && (
-          <DerivedSection
-            unavailable={false}
-            version={version}
-            onChanged={changed}
-            onDelete={setDeleting}
-          />
-        )}
-        {kind === "composite" && (
-          <CompositeSection
-            unavailable={false}
-            version={version}
-            onChanged={changed}
-            onDelete={setDeleting}
-          />
-        )}
-      </div>
+          {kind === "period" && (
+            <TimePeriodSection
+              unavailable={false}
+              version={version}
+              onChanged={changed}
+              onDelete={setDeleting}
+            />
+          )}
+          {kind === "modifier" && (
+            <ModifierSection
+              unavailable={false}
+              version={version}
+              onChanged={changed}
+              onDelete={setDeleting}
+            />
+          )}
+          {kind === "atomic" && (
+            <AtomicSection
+              unavailable={false}
+              version={version}
+              onChanged={changed}
+              onDelete={setDeleting}
+            />
+          )}
+          {kind === "derived" && (
+            <DerivedSection
+              unavailable={false}
+              version={version}
+              onChanged={changed}
+              onDelete={setDeleting}
+            />
+          )}
+          {kind === "composite" && (
+            <CompositeSection
+              unavailable={false}
+              version={version}
+              onChanged={changed}
+              onDelete={setDeleting}
+            />
+          )}
+        </div>
       </div>
       {deleting && (
         <MetricDeleteDialog

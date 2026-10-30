@@ -217,7 +217,9 @@ export function CreateSyncTaskDialog({ onClose }: { onClose: () => void }) {
             </>
           }
         >
-          <p className="text-sm text-[var(--yak-color-text-secondary)]">更改方案将清除草稿中已填写的连接与表映射。</p>
+          <p className="text-sm text-[var(--yak-color-text-secondary)]">
+            更改方案将清除草稿中已填写的连接与表映射。
+          </p>
         </Modal>
       ) : null}
     </>

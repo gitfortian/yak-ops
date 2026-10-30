@@ -51,7 +51,9 @@ export default function TopBar({
       </div>
       <div className="flex min-w-0 flex-1 items-center justify-between px-4">
         <div className="flex min-w-0 items-center gap-3 text-xs">
-          <span className="truncate font-semibold text-[var(--yak-color-text-primary)]">{productLabel}</span>
+          <span className="truncate font-semibold text-[var(--yak-color-text-primary)]">
+            {productLabel}
+          </span>
           {showWorkspaceSwitcher ? (
             <>
               <span className="h-3 w-px shrink-0 bg-[var(--yak-color-border)]" />

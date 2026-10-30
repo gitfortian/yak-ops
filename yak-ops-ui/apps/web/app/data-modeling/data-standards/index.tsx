@@ -94,7 +94,9 @@ export default function DataStandardsPage() {
           aria-busy={catalog.loading}
         >
           <div className="flex min-h-11 items-center justify-between gap-2 border-b border-[var(--yak-components-control-border)] px-3">
-            <h2 className="text-[13px] font-medium text-[var(--yak-color-text-primary)]">标准分类</h2>
+            <h2 className="text-[13px] font-medium text-[var(--yak-color-text-primary)]">
+              标准分类
+            </h2>
             <Button
               size="small"
               variant="ghost"
@@ -107,23 +109,23 @@ export default function DataStandardsPage() {
             </Button>
           </div>
           <div className="flex min-h-0 flex-1 flex-col overflow-auto px-3 pb-3 pt-2">
-          <CategoryTree
-            nodes={catalog.roots}
-            selectedId={catalog.selectedId}
-            disabled={unavailable}
-            onSelect={catalog.select}
-            onCreate={createCategory}
-            onRename={(category) => {
-              const parent = categoryPath(catalog.roots, category.id)?.at(-2);
-              setCategoryDraft({
-                mode: "rename",
-                category,
-                parentPath: pathLabel(catalog.roots, parent?.id ?? null),
-              });
-            }}
-            onDelete={(node) => setDeleting({ kind: "category", node })}
-          />
-          {!catalog.loading && !catalog.failed && catalog.roots.length === 0 && (
+            <CategoryTree
+              nodes={catalog.roots}
+              selectedId={catalog.selectedId}
+              disabled={unavailable}
+              onSelect={catalog.select}
+              onCreate={createCategory}
+              onRename={(category) => {
+                const parent = categoryPath(catalog.roots, category.id)?.at(-2);
+                setCategoryDraft({
+                  mode: "rename",
+                  category,
+                  parentPath: pathLabel(catalog.roots, parent?.id ?? null),
+                });
+              }}
+              onDelete={(node) => setDeleting({ kind: "category", node })}
+            />
+            {!catalog.loading && !catalog.failed && catalog.roots.length === 0 && (
               <div className="mx-1 mt-2 flex flex-col items-center gap-2 rounded-lg bg-[var(--yak-color-surface-muted)] px-3 py-5 text-center">
                 <FolderPlus
                   size={16}
@@ -141,7 +143,7 @@ export default function DataStandardsPage() {
                   新建目录
                 </button>
               </div>
-          )}
+            )}
           </div>
         </aside>
         <section className="flex min-h-0 min-w-0 flex-col gap-4">
@@ -169,45 +171,45 @@ export default function DataStandardsPage() {
             ))}
           </div>
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[var(--yak-color-border)] bg-[var(--yak-components-panel-bg)] shadow-[0_1px_2px_0_rgb(16_24_40/4%)]">
-          {tab === "field" && (
-            <FieldSection
-              selectedId={catalog.selectedId}
-              selectedPath={selectedPath}
-              unavailable={unavailable}
-              kindBlocked={kind !== null && kind !== "FIELD"}
-              version={version}
-              onChanged={changed}
-              onDelete={setDeleting}
-              onCatalogStale={() => catalog.refresh()}
-            />
-          )}
-          {tab === "lookup" && (
-            <LookupSection
-              selectedId={catalog.selectedId}
-              selectedPath={selectedPath}
-              unavailable={unavailable}
-              kindBlocked={kind !== null && kind !== "LOOKUP"}
-              version={version}
-              onChanged={changed}
-              onDelete={setDeleting}
-            />
-          )}
-          {tab === "unit" && (
-            <UnitSection
-              unavailable={unavailable}
-              version={version}
-              onChanged={changed}
-              onDelete={setDeleting}
-            />
-          )}
-          {tab === "naming" && (
-            <NamingEntrySection
-              unavailable={unavailable}
-              version={version}
-              onChanged={changed}
-              onDelete={setDeleting}
-            />
-          )}
+            {tab === "field" && (
+              <FieldSection
+                selectedId={catalog.selectedId}
+                selectedPath={selectedPath}
+                unavailable={unavailable}
+                kindBlocked={kind !== null && kind !== "FIELD"}
+                version={version}
+                onChanged={changed}
+                onDelete={setDeleting}
+                onCatalogStale={() => catalog.refresh()}
+              />
+            )}
+            {tab === "lookup" && (
+              <LookupSection
+                selectedId={catalog.selectedId}
+                selectedPath={selectedPath}
+                unavailable={unavailable}
+                kindBlocked={kind !== null && kind !== "LOOKUP"}
+                version={version}
+                onChanged={changed}
+                onDelete={setDeleting}
+              />
+            )}
+            {tab === "unit" && (
+              <UnitSection
+                unavailable={unavailable}
+                version={version}
+                onChanged={changed}
+                onDelete={setDeleting}
+              />
+            )}
+            {tab === "naming" && (
+              <NamingEntrySection
+                unavailable={unavailable}
+                version={version}
+                onChanged={changed}
+                onDelete={setDeleting}
+              />
+            )}
           </div>
         </section>
       </div>

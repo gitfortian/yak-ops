@@ -65,7 +65,9 @@ export default function ProductLauncher({ open, onClose }: ProductLauncherProps)
             className={[
               "view-all mb-[7px] flex h-10 w-full shrink-0 cursor-pointer items-center border-0 px-0 text-left text-[var(--yak-color-text-inverse-secondary)] transition-colors",
               "hover:bg-[var(--yak-color-surface-inverse-hover)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/20",
-              secondLevelOpen ? "bg-[var(--yak-color-surface-inverse-raised)] text-white" : "bg-transparent",
+              secondLevelOpen
+                ? "bg-[var(--yak-color-surface-inverse-raised)] text-white"
+                : "bg-transparent",
             ].join(" ")}
             onClick={() => setAllProductsOpen((value) => !value)}
           >

@@ -325,8 +325,7 @@ export function InternalTable<RecordType extends object>({
                     className={cn(
                       "bg-[var(--yak-components-table-row-bg)]",
                       "data-[selected=true]:bg-[var(--yak-color-surface-muted)]",
-                      rowHoverable &&
-                        "transition-colors hover:bg-[var(--yak-color-surface-muted)]",
+                      rowHoverable && "transition-colors hover:bg-[var(--yak-color-surface-muted)]",
                       "[&:last-child>td]:border-b-0",
                       rowClassName,
                     )}

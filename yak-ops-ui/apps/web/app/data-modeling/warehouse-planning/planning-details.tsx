@@ -143,9 +143,7 @@ export default function PlanningDetails(props: Props) {
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <nav aria-label="层级路径" className="flex min-w-0 items-center gap-1.5 text-xs">
-            <span className="text-[var(--yak-components-muted-text)]">
-              {ROOT_LABEL[node.kind]}
-            </span>
+            <span className="text-[var(--yak-components-muted-text)]">{ROOT_LABEL[node.kind]}</span>
             {ancestors.map((ancestor) => (
               <span key={nodeKey(ancestor)} className="flex min-w-0 items-center gap-1.5">
                 <span aria-hidden="true" className="text-[var(--yak-color-border)]">

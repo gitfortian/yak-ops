@@ -32,7 +32,10 @@ export default function AllProductMenu({
       <div className="h-full w-[765px] max-w-[calc(100vw-220px)] overflow-y-auto">
         <div className="min-h-full px-12 pt-4">
           {ALL_PRODUCT_GROUPS.map((group) => (
-            <section key={group.id} className="flex min-h-12 border-b border-[var(--yak-color-border-inverse)] py-2">
+            <section
+              key={group.id}
+              className="flex min-h-12 border-b border-[var(--yak-color-border-inverse)] py-2"
+            >
               <h3 className="m-0 w-40 shrink-0 py-2 text-xs font-normal leading-8 text-[var(--yak-color-text-inverse-primary)]">
                 {group.label}
               </h3>

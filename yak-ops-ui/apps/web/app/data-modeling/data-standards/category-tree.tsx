@@ -1,4 +1,5 @@
-import {  DropdownMenu,
+import {
+  DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
@@ -81,7 +82,11 @@ export default function CategoryTree(props: Props) {
                 onClick={() => props.onSelect(node.id)}
               >
                 {hasChildren && expanded ? (
-                  <FolderOpen size={15} strokeWidth={1.75} className="shrink-0 text-[var(--yak-color-primary)]" />
+                  <FolderOpen
+                    size={15}
+                    strokeWidth={1.75}
+                    className="shrink-0 text-[var(--yak-color-primary)]"
+                  />
                 ) : (
                   <Folder
                     size={15}

@@ -244,7 +244,10 @@ export function DataSyncExecutionDetailContent({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 text-xs text-[var(--yak-color-text-secondary)]" role="status">
+        <div
+          className="flex items-center gap-1.5 text-xs text-[var(--yak-color-text-secondary)]"
+          role="status"
+        >
           <span>执行状态：</span>
           <span aria-hidden="true">
             <ExecutionStatusIcon status={record.status} realtime={realtime} />
