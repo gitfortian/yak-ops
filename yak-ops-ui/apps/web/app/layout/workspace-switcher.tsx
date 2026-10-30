@@ -22,10 +22,12 @@ export default function WorkspaceSwitcher() {
       <DropdownMenu>
         <DropdownMenuTrigger
           disabled={loading}
-          className="flex h-7 max-w-52 cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 text-left text-white outline-none hover:bg-white/8 focus-visible:ring-2 focus-visible:ring-white/20 disabled:cursor-default disabled:opacity-60"
+          className="flex h-7 max-w-52 cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 text-left text-[var(--yak-color-text-primary)] outline-none hover:bg-[var(--yak-color-hover)] focus-visible:ring-2 focus-visible:ring-[var(--yak-color-primary-ring)] disabled:cursor-default disabled:opacity-60"
         >
-          <span className="min-w-0 flex-1 truncate text-xs text-white/70">{workspaceLabel}</span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white/35" />
+          <span className="min-w-0 flex-1 truncate text-xs text-[var(--yak-color-text-secondary)]">
+            {workspaceLabel}
+          </span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[var(--yak-color-text-secondary)]" />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="start" className="w-64">
           <DropdownMenuGroup>

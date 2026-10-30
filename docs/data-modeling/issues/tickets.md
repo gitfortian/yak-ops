@@ -49,7 +49,7 @@
 
 | 集合 | 内容 | 可否落码 |
 |---|---|---|
-| [docs/data-map/issues/tickets.md](../../data-map/issues/tickets.md) | 发布≠登记（01，依赖 FYOIP-16）、资产详情不带模型事实（02）、5 条 P2 | 02 展示层可改；01 需裁决 |
+| [docs/data-map/issues/tickets.md](../../data-map/issues/tickets.md) | 发布≠登记（01，依赖 FYOIP-18）、资产详情不带模型事实（02）、5 条 P2 | 02 展示层可改；01 需裁决 |
 | [docs/data-sync/issues/tickets.md](../../data-sync/issues/tickets.md) | 同步侧 3 条 P1 + 2 条 P2（第 1 轮顺带发现） | **越界，需用户授权** |
 | [docs/data-modeling/issues/08](08-database-catalog-scope-leak.md) | 库候选暴露整台实例 | **越界，需 FYOIP** |
 

@@ -109,11 +109,11 @@ export default function CatalogPage() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--yak-color-background)]">
       <PageHeader
         title="资产目录"
-        bordered
-        className="bg-[var(--yak-color-background)] px-6 max-md:px-4"
+        description="按业务域浏览和检索已登记的数据资产。"
+        className="px-6 pb-5 pt-5 max-md:px-4"
         extra={
           <Button size="small" onClick={() => navigate(`${DATA_MAP_BASE}/tasks/new`)}>
             发起采集

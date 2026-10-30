@@ -314,7 +314,7 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
           )}
         </div>
         {nonProduction && (
-          <Alert className="mt-3">
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-[var(--yak-color-border-danger-subtle)] bg-[var(--yak-color-surface-danger-subtle)] px-3 py-2 text-xs text-[var(--yak-color-text-danger)]">
             <Checkbox
               aria-label="确认非生产环境"
               checked={envConfirmed}
@@ -325,7 +325,7 @@ export default function ImportDialog({ existing, onClose, onImport }: Props) {
               {ENV_LABEL[picker.datasource?.environment ?? ""] ?? picker.datasource?.environment}
               」环境读取字段， 请确认连接的是目标库；环境只作提示，不做拦截。
             </span>
-          </Alert>
+          </div>
         )}
         {failureMessages.length > 0 && (
           <div className="mt-3">

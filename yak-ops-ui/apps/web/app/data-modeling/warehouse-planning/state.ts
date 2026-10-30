@@ -40,6 +40,20 @@ export function findParent(tree: PlanningTree, node: PlanningNode): PlanningNode
   return findNodeInTree(tree, `${parentKind}:${node.parentId}`);
 }
 
+/** Ancestors from the tree root down to (excluding) the node, for breadcrumbs. */
+export function pathToNode(tree: PlanningTree, key: NodeKey | null): PlanningNode[] {
+  const walk = (nodes: readonly PlanningNode[]): PlanningNode[] | null => {
+    for (const node of nodes) {
+      if (nodeKey(node) === key) return [node];
+      const below = walk(node.children);
+      if (below) return [node, ...below];
+    }
+    return null;
+  };
+  const path = walk([...tree.categories, ...tree.datamarts]);
+  return path ? path.slice(0, -1) : [];
+}
+
 export function ancestorKeys(
   nodes: readonly PlanningNode[],
   key: NodeKey | null,

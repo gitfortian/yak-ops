@@ -34,16 +34,18 @@ export default function AccountMenu() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex h-8 max-w-52 cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 text-left text-white outline-none hover:bg-white/8 focus-visible:ring-2 focus-visible:ring-white/20">
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/12 text-[11px] font-semibold">
+      <DropdownMenuTrigger className="flex h-8 max-w-52 cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 text-left text-[var(--yak-color-text-primary)] outline-none hover:bg-[var(--yak-color-hover)] focus-visible:ring-2 focus-visible:ring-[var(--yak-color-primary-ring)]">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--yak-color-surface-muted)] text-[11px] font-semibold">
           {initial}
         </span>
-        <span className="min-w-0 flex-1 truncate text-xs text-white/80">{displayName}</span>
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white/40" />
+        <span className="min-w-0 flex-1 truncate text-xs text-[var(--yak-color-text-secondary)]">
+          {displayName}
+        </span>
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[var(--yak-color-text-secondary)]" />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="bottom" align="end" className="w-56">
         <div className="px-2.5 py-2">
-          <div className="font-semibold text-[#161823]">{displayName}</div>
+          <div className="font-semibold text-[var(--yak-color-text-primary)]">{displayName}</div>
           {currentUser?.email ? (
             <div className="mt-0.5 text-xs text-black/45">{currentUser.email}</div>
           ) : null}

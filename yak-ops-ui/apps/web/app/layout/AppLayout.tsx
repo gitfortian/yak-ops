@@ -42,7 +42,7 @@ export default function AppLayout({
 
   const productContent = workspaceScoped ? (
     workspaceLoading ? (
-      <div className="flex h-full items-center justify-center text-sm text-black/45">
+      <div className="flex h-full items-center justify-center text-sm text-[var(--yak-color-text-secondary)]">
         正在加载工作空间…
       </div>
     ) : currentWorkspace ? (
@@ -50,10 +50,12 @@ export default function AppLayout({
         <Outlet />
       </div>
     ) : (
-      <div className="flex h-full items-center justify-center bg-[#F6F6F6]">
+      <div className="flex h-full items-center justify-center bg-transparent">
         <div className="text-center">
-          <div className="text-sm font-semibold text-[#242731]">暂无工作空间</div>
-          <div className="mt-2 text-xs text-[#8b929e]">
+          <div className="text-sm font-semibold text-[var(--yak-color-text-primary)]">
+            暂无工作空间
+          </div>
+          <div className="mt-2 text-xs text-[var(--yak-color-text-secondary)]">
             请从顶部工作空间菜单新建一个工作空间后继续。
           </div>
         </div>
@@ -64,7 +66,7 @@ export default function AppLayout({
   );
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-white text-[#161823]">
+    <div className="flex h-dvh flex-col overflow-hidden bg-[var(--yak-color-background)] text-[var(--yak-color-text-primary)]">
       <TopBar
         launcherOpen={launcherOpen}
         onToggleLauncher={() => setLauncherOpen((open) => !open)}
@@ -76,7 +78,9 @@ export default function AppLayout({
       <div className="flex min-h-0 flex-1">
         <ProductSidebar productLabel={productLabel} navigation={navigation} />
 
-        <main className="min-w-0 flex-1 overflow-y-auto bg-white">{productContent}</main>
+        <main className="min-w-0 flex-1 overflow-y-auto bg-[var(--yak-color-background)]">
+          {productContent}
+        </main>
       </div>
 
       <ProductLauncher open={launcherOpen} onClose={() => setLauncherOpen(false)} />

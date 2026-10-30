@@ -13,7 +13,7 @@
 **根因证据（修前）**
 - 改写实现：[logical-models/fields.ts](../../../yak-ops-ui/apps/web/app/data-modeling/logical-models/fields.ts) `fromStandard()` 把 `enCode` 无条件替换为 `standard.enCode`；
 - 会话内**没有结构化的来源列信息**：`importNote` 只承载类型映射说明（如「JSON 以文本保存」），`FieldDraft` 里既无来源表也无来源列，绑定前无法判断「这次改写是否切断了与来源表的对齐」；
-- **没有持久化的来源列映射**：本模块不存在 `sourceColumn`/`source_column` 字段，`toModelFieldInput` 也不提交来源列——所以「跨会话的映射断裂检测」今天做不到，属**发布资产血缘**范畴（对应 `docs/yoips/FYOIP-16`、`FYOIP-17`），**不在本票偷偷加一列**。
+- **没有持久化的来源列映射**：本模块不存在 `sourceColumn`/`source_column` 字段，`toModelFieldInput` 也不提交来源列——所以「跨会话的映射断裂检测」今天做不到，属**发布资产血缘**范畴（对应 `docs/yoips/FYOIP-17`、`FYOIP-18`），**不在本票偷偷加一列**。
 
 **修法（本票范围＝会话内可判定）**
 1. `FieldDraft` 新增**仅会话内**的 `source: { table, column } | null`（[fields.ts:11-34](../../../yak-ops-ui/apps/web/app/data-modeling/logical-models/fields.ts)）：`columnToField()` 由「从表/视图导入」带入，`describeFieldDrafts()` 由「逆向建模」带入；`toModelFieldInput()` 不提交、`fromModelField()` 置空，后端与持久化零改动；
@@ -42,7 +42,7 @@
 - 后端零改动：`toModelFieldInput()` 未增加字段，模型保存/发布请求体不变
 
 **残留**
-- **来源列只在会话内存在**：`source` 不提交、不持久化；且保存成功后编辑器按服务端字段重建行（`fromModelField`），来源与行内提示随本次草稿一起清空。因此不会出现陈旧错误提示，但也无法跨会话检测；跨会话的映射断裂检测需要持久化「模型字段 → 来源物理列」，属 FYOIP-16/17 的资产血缘范围，本票不偷偷加列；
+- **来源列只在会话内存在**：`source` 不提交、不持久化；且保存成功后编辑器按服务端字段重建行（`fromModelField`），来源与行内提示随本次草稿一起清空。因此不会出现陈旧错误提示，但也无法跨会话检测；跨会话的映射断裂检测需要持久化「模型字段 → 来源物理列」，属 FYOIP-17/18 的资产血缘范围，本票不偷偷加列；
 - 告警只覆盖「绑定标准导致编码变化」这一条路径；手工直接改英文编码、或同步任务侧已有的列映射，本票不改写、不校验；
 - 来源表名按 schema 优先、库名兜底限定；同一实例内不同库的同名表在提示中可能只显示库名，属展示精度问题，不影响判定；
 - 内嵌浏览器 `visibilityState=hidden` 本次仍无法截图，证据为 DOM 原文读数与行状态读数；

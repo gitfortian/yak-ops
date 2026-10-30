@@ -90,8 +90,7 @@ export function DataSyncTaskDetailPage() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <PageHeader
           title={task.name}
-          bordered
-          className="shrink-0 bg-white px-6 max-md:px-4"
+          className="shrink-0 px-6 pb-5 pt-5 max-md:px-4"
           extra={
             <>
               {!realtime ? (

@@ -1,0 +1,155 @@
+/*
+ * Dark scheme — OpenMetadata (Untitled UI) dark ramp.
+ * Same key set and order as `light.css`.
+ */
+[data-theme="dark"] {
+  /* ---------- Brand ---------------------------------------------------- */
+  /* brand.400 keeps AA contrast on the dark canvas. */
+  --yak-color-primary: #53b1fd;
+  --yak-components-button-primary-bg-hover: #84caff; /* brand.300 */
+  --yak-components-button-primary-bg-active: #b2ddff; /* brand.200 */
+  --yak-color-primary-hover: color-mix(in srgb, var(--yak-color-primary) 86%, #fff);
+  --yak-color-primary-active: color-mix(in srgb, var(--yak-color-primary) 76%, #fff);
+  --yak-color-primary-subtle: color-mix(in srgb, var(--yak-color-primary) 18%, transparent);
+  --yak-color-primary-ring: color-mix(in srgb, var(--yak-color-primary) 30%, transparent);
+  --yak-color-primary-halo: color-mix(in srgb, var(--yak-color-primary) 16%, transparent);
+
+  /* ---------- Surfaces and text ---------------------------------------- */
+  --yak-color-background: #0c111d;
+  --yak-color-surface: #161b26;
+  --yak-color-surface-muted: #1f242f;
+  --yak-color-border: #333741;
+  --yak-color-text-primary: #ececed;
+  --yak-color-text-secondary: #94969c;
+  --yak-color-hover: #1f242f;
+  --yak-color-scrollbar: rgb(236 236 237 / 22%);
+  --yak-color-scrollbar-hover: rgb(236 236 237 / 36%);
+  /* Danger surfaces, used by inline form validation blocks. */
+  --yak-color-text-danger: #fda29b;
+  --yak-color-border-danger-subtle: rgb(240 68 56 / 30%);
+  --yak-color-surface-danger-subtle: rgb(240 68 56 / 12%);
+  /* Status colours: status text, progress fills and their tinted surfaces. */
+  --yak-color-status-success: #75e0a7;
+  --yak-color-status-success-surface: rgb(23 178 106 / 18%);
+  --yak-color-status-warning: #fec84b;
+  --yak-color-status-danger-surface: rgb(240 68 56 / 22%);
+  --yak-color-status-danger-soft: rgb(240 68 56 / 45%);
+  /* Top bar logo silhouette: black on light chrome, inverted on dark. */
+  --yak-logo-filter: brightness(0) invert(1);
+
+  /* ---------- Button --------------------------------------------------- */
+  --yak-components-button-primary-text: #0c111d;
+  --yak-components-button-secondary-bg: #1f242f;
+  --yak-components-button-secondary-bg-hover: #252b37;
+  --yak-components-button-secondary-bg-active: #2e3440;
+  --yak-components-button-secondary-text: #ececed;
+  --yak-components-button-ghost-text: #94969c;
+  --yak-components-button-ghost-bg-hover: #1f242f;
+  --yak-components-button-danger-bg: rgb(240 68 56 / 16%);
+  --yak-components-button-danger-bg-hover: rgb(240 68 56 / 24%);
+  --yak-components-button-danger-bg-active: rgb(240 68 56 / 32%);
+  --yak-components-button-danger-text: #fda29b;
+
+  /* ---------- Input and textarea --------------------------------------- */
+  --yak-components-input-bg: #161b26;
+  --yak-components-input-bg-hover: #1f242f;
+  --yak-components-input-bg-focus: #161b26;
+  --yak-components-input-bg-disabled: #1f242f;
+  --yak-components-input-text: #ececed;
+  --yak-components-input-text-disabled: #717680;
+  --yak-components-input-placeholder: #94969c;
+  --yak-components-input-icon: #94969c;
+  --yak-components-input-border: #333741;
+  --yak-components-input-border-hover: #5a616e;
+  --yak-components-input-border-danger: #fda29b;
+
+  /* ---------- Checkbox and switch -------------------------------------- */
+  --yak-components-checkbox-bg: #161b26;
+  --yak-components-checkbox-border: #5a616e;
+  --yak-components-checkbox-border-hover: #717680;
+  --yak-components-switch-bg: #333741;
+  --yak-components-switch-bg-hover: #404a58;
+
+  /* ---------- Select and menu ------------------------------------------ */
+  --yak-components-select-bg: #161b26;
+  --yak-components-select-border: #333741;
+  --yak-components-select-shadow: 0 20px 24px -4px rgb(0 0 0 / 45%);
+  --yak-components-select-item-text: #ececed;
+  --yak-components-select-item-bg-hover: #1f242f;
+  --yak-components-menu-item-hover: #1f242f;
+
+  /* ---------- Panel, dialog, overlay ----------------------------------- */
+  --yak-components-panel-bg: #161b26;
+  --yak-components-panel-border: #333741;
+  --yak-components-panel-text: #ececed;
+  --yak-components-panel-shadow: 0 20px 24px -4px rgb(0 0 0 / 45%);
+  --yak-components-dialog-shadow: 0 24px 48px -12px rgb(0 0 0 / 60%);
+  --yak-components-overlay: rgb(0 0 0 / 65%);
+  --yak-components-tooltip-bg: #ececed;
+  --yak-components-tooltip-text: #0c111d;
+
+  /* ---------- Table ---------------------------------------------------- */
+  --yak-components-table-bg: #161b26;
+  --yak-components-table-header-bg: #1f242f;
+  --yak-components-table-header-text: #94969c;
+  --yak-components-table-row-bg: #161b26;
+  --yak-components-table-text: #ececed;
+  --yak-components-table-border: #252b37;
+  --yak-components-table-border-strong: #333741;
+  --yak-components-table-loading-bg: rgb(22 27 38 / 72%);
+  --yak-components-table-sorter-inactive: #717680;
+  --yak-components-table-filter-inactive: #717680;
+  --yak-components-table-filter-bg-hover: #1f242f;
+
+  /* ---------- Pagination ----------------------------------------------- */
+  --yak-components-pagination-bg: #161b26;
+  --yak-components-pagination-bg-hover: #1f242f;
+  --yak-components-pagination-border: #333741;
+  --yak-components-pagination-text: #94969c;
+  --yak-components-pagination-active-bg: #161b26;
+
+  /* ---------- Badge ---------------------------------------------------- */
+  --yak-components-badge-neutral-bg: rgb(236 236 237 / 8%);
+  --yak-components-badge-neutral-text: #cecfd2;
+  --yak-components-badge-success-bg: rgb(23 178 106 / 18%);
+  --yak-components-badge-success-text: #75e0a7;
+  --yak-components-badge-warning-bg: rgb(247 144 9 / 18%);
+  --yak-components-badge-warning-text: #fec84b;
+  --yak-components-badge-danger-bg: rgb(240 68 56 / 18%);
+  --yak-components-badge-danger-text: #fda29b;
+  --yak-components-badge-info-bg: rgb(83 177 253 / 20%);
+  --yak-components-badge-info-text: #b2ddff;
+
+  /* ---------- Toast ---------------------------------------------------- */
+  --yak-components-toast-bg: #161b26;
+  --yak-components-toast-border: #333741;
+  --yak-components-toast-title: #ececed;
+  --yak-components-toast-description: #94969c;
+  --yak-components-toast-meta: #717680;
+  --yak-components-toast-shadow: 0 24px 48px -12px rgb(0 0 0 / 60%);
+
+  /* ---------- Field, header, misc -------------------------------------- */
+  --yak-components-field-label: #cecfd2;
+  --yak-components-field-description: #717680;
+  --yak-components-control-border: #252b37;
+  --yak-components-muted-text: #717680;
+  --yak-components-spinner: #94969c;
+  --yak-components-skeleton-bg: #1f242f;
+  --yak-components-empty-icon: #404a58;
+  --yak-components-empty-title: #cecfd2;
+  --yak-components-empty-description: #717680;
+  --yak-components-page-header-title: #ececed;
+  --yak-components-page-header-description: #94969c;
+  --yak-components-page-header-border: #333741;
+  --yak-components-tab-text: #94969c;
+  --yak-components-tab-text-hover: #cecfd2;
+  --yak-components-collapse-section-bg: #1f242f;
+  --yak-components-collapse-section-border: #333741;
+  --yak-components-collapse-section-text: #ececed;
+  --yak-components-collapse-section-icon: #94969c;
+
+  /* ---------- Data map surface ----------------------------------------- */
+  --yak-datamap-page-bg: #0c111d;
+  --yak-datamap-surface: #161b26;
+  --yak-datamap-card-shadow: 0 1px 2px 0 rgb(0 0 0 / 40%);
+}

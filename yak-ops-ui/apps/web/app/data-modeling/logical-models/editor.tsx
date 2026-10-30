@@ -796,7 +796,7 @@ export default function LogicalModelEditorPage() {
   if (loadFailed)
     return (
       <div className="flex h-full flex-col">
-        <PageHeader title="逻辑模型" bordered className="bg-[var(--yak-color-background)] px-6" />
+        <PageHeader title="逻辑模型" className="px-6 pb-5 pt-5" />
         <div className="p-6">
           <Alert>
             模型加载失败，可能已被删除。
@@ -812,8 +812,7 @@ export default function LogicalModelEditorPage() {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title={editing ? "编辑逻辑模型" : "新建逻辑模型"}
-        bordered
-        className="bg-[var(--yak-color-background)] px-6 max-md:px-4"
+        className="px-6 pb-5 pt-5 max-md:px-4"
         extra={
           <div className="flex items-center gap-2">
             {editing && savedModel && !unknownType && (

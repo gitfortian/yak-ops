@@ -118,11 +118,14 @@ const DataSourceTable = ({
       minWidth: 220,
       render: (_value, record) => (
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#eceef2] bg-white">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--yak-color-border)] bg-white">
             <DatabaseIcons dbType={record.dbType} width="22" height="22" />
           </span>
           <div className="min-w-0">
-            <div className="truncate text-[13px] font-medium text-[#252832]" title={record.name}>
+            <div
+              className="truncate text-[13px] font-medium text-[var(--yak-color-text-primary)]"
+              title={record.name}
+            >
               {record.name || "-"}
             </div>
             <div className="mt-0.5 truncate text-xs text-[var(--yak-components-muted-text)]">
@@ -194,11 +197,11 @@ const DataSourceTable = ({
             >
               {intl.formatMessage({ id: "pages.datasource.table.edit" })}
             </Button>
-            <span aria-hidden="true" className="h-3 w-px shrink-0 bg-[#e4e7ec]" />
+            <span aria-hidden="true" className="h-3 w-px shrink-0 bg-[var(--yak-color-border)]" />
             <Button
               variant="ghost"
               size="small"
-              className="px-0.5 text-xs font-normal text-[var(--yak-components-muted-text)] hover:text-[#d92d20]"
+              className="px-0.5 text-xs font-normal text-[var(--yak-components-muted-text)] hover:text-[var(--yak-components-danger-text)]"
               disabled={batchBusy}
               onClick={() => onDelete(record)}
             >

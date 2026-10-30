@@ -110,7 +110,7 @@ function ExecutionProgressCard({ record, realtime }: DetailProps) {
   const label = realtime ? "实时同步" : "离线同步";
 
   return (
-    <div className="border border-[#eef0f3] bg-white px-3 py-3 text-center">
+    <div className="border border-[var(--yak-color-border)] bg-white px-3 py-3 text-center">
       {realtime || record.steps.includes("SCHEMA") ? (
         <ExecutionStages
           status={record.status}
@@ -129,8 +129,8 @@ function ExecutionProgressCard({ record, realtime }: DetailProps) {
         />
       )}
 
-      <h3 className="mt-2 text-sm font-semibold text-[#344054]">{label}</h3>
-      <div className="mt-1 text-xs text-[#98a2b3]">
+      <h3 className="mt-2 text-sm font-semibold text-[var(--yak-color-text-primary)]">{label}</h3>
+      <div className="mt-1 text-xs text-[var(--yak-components-muted-text)]">
         v{record.taskVersion} · {dataSyncTriggerText(record.triggerType)}
       </div>
     </div>
@@ -244,7 +244,10 @@ export function DataSyncExecutionDetailContent({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 text-xs text-[#667085]" role="status">
+        <div
+          className="flex items-center gap-1.5 text-xs text-[var(--yak-color-text-secondary)]"
+          role="status"
+        >
           <span>执行状态：</span>
           <span aria-hidden="true">
             <ExecutionStatusIcon status={record.status} realtime={realtime} />
@@ -254,7 +257,7 @@ export function DataSyncExecutionDetailContent({
         {controls ? <div className="flex items-center gap-3">{controls}</div> : null}
       </div>
       {record.triggerType === "SCHEDULE" ? (
-        <div className="flex flex-wrap items-center gap-3 text-xs text-[#667085]">
+        <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--yak-color-text-secondary)]">
           {record.scheduledTime ? (
             <span>计划时间：{formatScheduleTime(record.scheduledTime)}</span>
           ) : null}
