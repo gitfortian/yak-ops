@@ -38,6 +38,11 @@ public class ModelEntity extends BaseEntity {
     private StoragePolicy storagePolicy;
     /** Data retention in days. */
     private int lifecycleDays;
+    /**
+     * Engine-specific physical table properties as a JSON object; validated against the target
+     * dialect at publication time, null when the model declares none.
+     */
+    private String physicalProperties;
     /** Assigned owner identity; retained after membership ends. */
     private String ownerId;
     /** Optional business description. */

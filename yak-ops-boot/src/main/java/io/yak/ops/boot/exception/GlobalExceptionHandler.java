@@ -194,6 +194,10 @@ public class GlobalExceptionHandler {
             return switch (code) {
                 // The request is well formed; the record simply is not in a state that allows it.
                 case INVALID_PUBLICATION_STATE -> HttpStatus.CONFLICT;
+                // Publishing needs the user to accept the loss the plan carries.
+                case DANGEROUS_OPERATION_UNCONFIRMED -> HttpStatus.UNPROCESSABLE_ENTITY;
+                // The layer has no target bound for this environment yet.
+                case TARGET_NOT_BOUND -> HttpStatus.UNPROCESSABLE_ENTITY;
                 // The model or data source cannot be published at all until something else changes.
                 case UNSUPPORTED_PUBLICATION -> HttpStatus.UNPROCESSABLE_ENTITY;
             };

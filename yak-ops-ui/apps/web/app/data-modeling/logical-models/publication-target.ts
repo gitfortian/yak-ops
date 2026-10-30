@@ -1,84 +1,51 @@
 /**
- * Client-side mirror of the target-address rules the publish endpoint enforces.
+ * Client-side mirror of the publish-request rules the endpoint enforces.
  *
- * <p>The publish dialog asks for an address before it calls the server, so the two must agree on
- * which engines take a schema and what a missing field means. Keeping the rules in a zero-import
- * module lets them be tested directly instead of only through a rendered dialog.
+ * <p>The user names an environment only: the datasource, database and schema come from the target
+ * the model's layer binds for that environment, so the client has no address to validate. What is
+ * still validated here is the environment choice itself and the reachability of the engine behind
+ * the bound datasource. Keeping the rules in a zero-import module lets them be tested directly
+ * instead of only through a rendered dialog.
  */
-import { isJdbcEngine, requiresSchema } from "../shared/jdbc-engines.ts";
+import { isJdbcEngine } from "../shared/jdbc-engines.ts";
 
-/** One rejected target, keyed to the control the user must correct. */
+/** One rejected request, keyed to the control the user must correct. */
 export interface TargetProblem {
-  field: "engine" | "database" | "schema";
+  field: "environment" | "engine";
   message: string;
 }
 
-export interface PublicationTargetInput {
-  dbType?: string | null;
-  database: string;
-  schema: string | null;
+export const PUBLISH_ENVIRONMENTS = ["DEVELOP", "PROD"] as const;
+export type PublishEnvironment = (typeof PUBLISH_ENVIRONMENTS)[number];
+
+export const PUBLISH_ENVIRONMENT_LABEL: Record<PublishEnvironment, string> = {
+  DEVELOP: "开发",
+  PROD: "生产",
+};
+
+/** Submits the request in the shape the endpoint expects. */
+export function toTargetPayload(environment: string, acknowledgeDataLoss?: boolean) {
+  return { environment, acknowledgeDataLoss: Boolean(acknowledgeDataLoss) };
 }
 
 /**
- * Validates one explicit target.
+ * Validates one publish request before any round trip.
  *
- * <p>The address is never inferred: an empty database, a missing schema on an engine that needs one,
- * and a surplus schema on MySQL are all refused here rather than discovered after a round trip.
+ * @param environment environment the user picked, empty when none
+ * @param dbType dbType of the datasource the layer binding resolves to, null while loading
  */
-export function validatePublicationTarget(input: PublicationTargetInput): TargetProblem | null {
-  if (!isJdbcEngine(input.dbType)) {
+export function validatePublicationTarget(
+  environment: string,
+  dbType?: string | null,
+): TargetProblem | null {
+  if (!PUBLISH_ENVIRONMENTS.includes(environment as PublishEnvironment)) {
+    return { field: "environment", message: "请选择发布环境（开发或生产）" };
+  }
+  if (!isJdbcEngine(dbType)) {
     return {
       field: "engine",
-      message: "该数据源类型不支持物理发布，仅支持 MySQL、Oracle、PostgreSQL",
+      message: "该数据源类型不支持物理发布，请检查分层绑定的目标数据源",
     };
   }
-  const database = input.database.trim();
-  const schema = input.schema?.trim() ?? "";
-  if (!database) return { field: "database", message: "请选择目标数据库" };
-  if (requiresSchema(input.dbType) && !schema)
-    return { field: "schema", message: "该引擎要求显式选择目标 Schema" };
-  if (!requiresSchema(input.dbType) && schema)
-    return { field: "schema", message: "该引擎没有独立 Schema，请勿选择目标 Schema" };
   return null;
-}
-
-/** Renders the resolved address as it will appear in the confirmation sentence. */
-export function describeAddress(
-  database: string,
-  schema: string | null,
-  dbType?: string | null,
-): string {
-  const parts = [database.trim()];
-  const trimmed = schema?.trim() ?? "";
-  if (requiresSchema(dbType) && trimmed) parts.push(trimmed);
-  return parts.filter(Boolean).join(".");
-}
-
-/** Submits the target in the shape the endpoint expects; MySQL sends no schema at all. */
-export function toTargetPayload(input: PublicationTargetInput) {
-  const schema = input.schema?.trim() ?? "";
-  return {
-    database: input.database.trim(),
-    schema: requiresSchema(input.dbType) && schema ? schema : null,
-  };
-}
-
-/**
- * Names the environment the target datasource is registered in.
- *
- * <p>Environment and connection status are separate dictionaries that share no value, so a status
- * such as {@code CONNECTED} must never render as an environment. An unregistered environment stays
- * visibly unregistered rather than falling through to a friendly label that reads as "not production".
- */
-export function describeEnvironment(environment: string | null): string {
-  switch (environment) {
-    case "PROD":
-      return "生产";
-    case "TEST":
-      return "测试";
-    case "DEVELOP":
-      return "开发";
-    default:
-      return "环境未登记";
-  }
 }

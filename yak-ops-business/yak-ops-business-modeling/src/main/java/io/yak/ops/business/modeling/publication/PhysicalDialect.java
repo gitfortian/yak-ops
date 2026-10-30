@@ -12,6 +12,11 @@ import java.util.Locale;
 public enum PhysicalDialect {
     /** MySQL family: no independent schema, backtick quoting, inline column comments. */
     MYSQL(65_535, false, true),
+    /**
+     * Doris: MySQL wire protocol and DDL shapes, no independent schema, backtick quoting, inline
+     * column comments, plus bucket, replica and data-model table properties.
+     */
+    DORIS(65_533, false, true),
     /** PostgreSQL: schema-qualified tables, double-quote quoting, {@code COMMENT ON} statements. */
     POSTGRESQL(10_485_760, true, false),
     /** Oracle: owner-qualified tables, {@code COMMENT ON} statements, no {@code bigint} type. */
@@ -37,6 +42,7 @@ public enum PhysicalDialect {
         if (dbType == null) return null;
         return switch (dbType.trim().toUpperCase()) {
             case "MYSQL" -> MYSQL;
+            case "DORIS" -> DORIS;
             case "POSTGRE_SQL", "POSTGRES", "POSTGRESQL" -> POSTGRESQL;
             case "ORACLE" -> ORACLE;
             default -> null;
@@ -72,7 +78,7 @@ public enum PhysicalDialect {
     public String catalogName(String identifier) {
         if (identifier == null) return null;
         return switch (this) {
-            case MYSQL, POSTGRESQL -> identifier;
+            case MYSQL, DORIS, POSTGRESQL -> identifier;
             case ORACLE -> identifier.toUpperCase(Locale.ROOT);
         };
     }
@@ -88,7 +94,7 @@ public enum PhysicalDialect {
      */
     public String quote(String identifier) {
         return switch (this) {
-            case MYSQL -> "`" + identifier + "`";
+            case MYSQL, DORIS -> "`" + identifier + "`";
             case POSTGRESQL -> "\"" + identifier + "\"";
             case ORACLE -> identifier.toUpperCase();
         };
@@ -107,7 +113,7 @@ public enum PhysicalDialect {
      */
     public String qualify(PhysicalAddress address, String table) {
         return switch (this) {
-            case MYSQL -> quote(address.database()) + "." + quote(table);
+            case MYSQL, DORIS -> quote(address.database()) + "." + quote(table);
             case POSTGRESQL -> quote(address.schema()) + "." + quote(table);
             case ORACLE -> quote(address.schema()) + "." + quote(table);
         };

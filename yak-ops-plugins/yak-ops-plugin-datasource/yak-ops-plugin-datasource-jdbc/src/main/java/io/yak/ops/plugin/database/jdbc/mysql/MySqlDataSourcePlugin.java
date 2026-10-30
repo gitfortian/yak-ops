@@ -19,9 +19,13 @@ import java.util.Set;
 
 /**
  * Defines MySQL provider defaults for ports, driver selection, JDBC URLs and connection properties.
+ *
+ * <p>Left open so the Doris provider can reuse the whole MySQL wire-protocol surface: Doris speaks
+ * the MySQL protocol and accepts the same JDBC URLs, so only the type name and the default port
+ * differ.
  */
 @AutoService(DataSourcePlugin.class)
-public final class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
+public class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
 
     private static final Option<String> DRIVER_ID = Options.key("driverId")
             .singleChoice(String.class, java.util.List.of("AUTO", "MYSQL_8", "MYSQL_5"))
