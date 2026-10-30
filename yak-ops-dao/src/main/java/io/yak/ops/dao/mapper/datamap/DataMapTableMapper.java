@@ -67,6 +67,15 @@ public interface DataMapTableMapper {
             @Param("id") String id,
             @Param("databaseName") String databaseName);
 
+    /**
+     * Locks the asset row so a tag replace-set serialises on the asset instead of interleaving.
+     *
+     * <p>The lock names only the asset table: the catalog projection joins the datasource for its
+     * display name, and a binding write has no reason to hold that row.
+     */
+    @Select("SELECT id FROM yak_ops_data_map_table WHERE workspace_id=#{workspaceId} AND id=#{id} FOR UPDATE")
+    String lockById(@Param("workspaceId") String workspaceId, @Param("id") String id);
+
     @Select("<script>" + DataMapTableSqlProvider.PROJECTION + " WHERE t.workspace_id=#{workspaceId} "
             + "AND t.id IN <foreach collection=\"ids\" item=\"id\" open=\"(\" separator=\",\" close=\")\">#{id}"
             + "</foreach></script>")

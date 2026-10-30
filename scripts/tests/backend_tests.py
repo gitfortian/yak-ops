@@ -38,7 +38,17 @@ SUITES = {
     "business": (BUSINESS, "business", {"TaskCursorIT": 5, "ScheduleAdmissionIT": 13}),
     "modeling": ("yak-ops-business/yak-ops-business-modeling", "modeling", {"PlanningDatabaseIT": 10, "StandardDatabaseIT": 8, "LayerDatabaseIT": 9, "DimensionDatabaseIT": 5, "ModelDatabaseIT": 12, "PublicationDatabaseIT": 9, "MetricDatabaseIT": 8}),
     # The scope lock is a unique-index property; it is asserted on MySQL, never through a mock.
-    "datamap": ("yak-ops-business/yak-ops-business-datamap", "datamap", {"DataMapDatabaseIT": 8}),
+    # The tag dictionary proves its delete protection, composite foreign keys and filter semantics
+    # on MySQL too, and the legacy migration proves the flat-tag upgrade path on real Flyway runs.
+    "datamap": (
+        "yak-ops-business/yak-ops-business-datamap",
+        "datamap",
+        {
+            "DataMapDatabaseIT": 8,
+            "TagDatabaseIT": 12,
+            "TagLegacyMigrationIT": 7,
+        },
+    ),
     "backend-e2e": (E2E, "backend-e2e", {"TaskExecutionIT": 5, "BatchSyncIT": 2, "RealtimeSyncIT": 1, "SingleTableRealtimeSchemaIT": 2, "OfflineIncrementalIT": 2, "SchemaMigrationIT": 2, "ScheduleIT": 1, "WarehousePlanningIT": 2, "DimensionModelingIT": 2, "DataStandardsIT": 1, "WarehouseLayersIT": 1, "MetricsIT": 1}),
     "recovery-e2e": (E2E, "recovery-e2e", {"ProcessRecoveryIT": 2}),
 }

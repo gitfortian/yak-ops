@@ -6,7 +6,8 @@ export interface CatalogQuery {
   datasourceId: string;
   database: string;
   domainId: string;
-  tagId: string;
+  /** Tag value ids of the filter; values of one key are OR-ed, different keys are AND-ed. */
+  tagValueIds: string[];
   unclassified: boolean;
   includeMissing: boolean;
   pageNo: number;
@@ -28,7 +29,7 @@ const readQuery = (params: URLSearchParams): CatalogQuery => ({
   datasourceId: params.get("datasourceId") ?? "",
   database: params.get("database") ?? "",
   domainId: params.get("domainId") ?? "",
-  tagId: params.get("tagId") ?? "",
+  tagValueIds: params.getAll("tagValueIds").filter((value) => value.length > 0),
   unclassified: params.get("unclassified") === "1",
   includeMissing: params.get("includeMissing") === "1",
   pageNo: positive(params.get("pageNo"), 1),
@@ -41,11 +42,13 @@ const writeQuery = (base: URLSearchParams, merged: CatalogQuery) => {
     if (value) next.set(key, value);
     else next.delete(key);
   };
+  // The tag filter is a repeated parameter, so it is rewritten as a set rather than assigned once.
+  next.delete("tagValueIds");
+  merged.tagValueIds.forEach((value) => next.append("tagValueIds", value));
   assign("keyword", merged.keyword.trim());
   assign("datasourceId", merged.datasourceId);
   assign("database", merged.database);
   assign("domainId", merged.domainId);
-  assign("tagId", merged.tagId);
   assign("unclassified", merged.unclassified ? "1" : "");
   assign("includeMissing", merged.includeMissing ? "1" : "");
   assign("pageNo", merged.pageNo > 1 ? String(merged.pageNo) : "");

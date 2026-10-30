@@ -21,21 +21,21 @@ interface Props {
       };
 }
 
-const MAX_VISIBLE_TAGS = 2;
+const MAX_VISIBLE_TAGS = 3;
 
-const TagList = ({ names }: { names: string[] }) => {
-  if (names.length === 0) return <span className="text-[var(--yak-components-muted-text)]">-</span>;
-  const visible = names.slice(0, MAX_VISIBLE_TAGS);
+const TagList = ({ tags }: { tags: TableSummary["tags"] }) => {
+  if (tags.length === 0) return <span className="text-[var(--yak-components-muted-text)]">-</span>;
+  const visible = tags.slice(0, MAX_VISIBLE_TAGS);
   return (
     <span className="flex min-w-0 flex-wrap items-center gap-1">
-      {visible.map((name) => (
-        <Badge key={name} tone="info">
-          {name}
+      {visible.map((tag) => (
+        <Badge key={tag.valueId} tone="info">
+          {tag.valueName}
         </Badge>
       ))}
-      {names.length > visible.length && (
+      {tags.length > visible.length && (
         <span className="text-xs text-[var(--yak-components-muted-text)]">
-          +{names.length - visible.length}
+          +{tags.length - visible.length}
         </span>
       )}
     </span>
@@ -110,7 +110,7 @@ export default function AssetTable({
       key: "tags",
       title: "标签",
       width: 170,
-      render: (_value, record) => <TagList names={record.tags.map((tag) => tag.name)} />,
+      render: (_value, record) => <TagList tags={record.tags} />,
     },
     {
       key: "status",

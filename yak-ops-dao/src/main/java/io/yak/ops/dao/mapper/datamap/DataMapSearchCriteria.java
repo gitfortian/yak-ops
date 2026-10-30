@@ -26,8 +26,14 @@ public class DataMapSearchCriteria {
     private String domainId;
     /** When true, only assets without a data domain are returned. */
     private boolean unclassified;
-    /** Optional tag filter. */
-    private String tagId;
+    /**
+     * Requested tag values grouped by their key.
+     *
+     * <p>Values of one key are OR-ed and different keys are AND-ed, so each inner list becomes one
+     * {@code EXISTS} clause and the clauses are combined with {@code AND}. Empty when no tag filter
+     * was requested.
+     */
+    private List<List<String>> tagValueGroups = List.of();
     /** When true, MISSING assets are included. */
     private boolean includeMissing;
     /** Optional closed set of asset identities; used by the hot list. */

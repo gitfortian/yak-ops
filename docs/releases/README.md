@@ -4,6 +4,7 @@ Yak Ops 每个正式版本都有一份独立的、经 Review 的发布说明。�
 
 | Version | Released | Release Notes | GitHub Release |
 | --- | --- | --- | --- |
+| v1.14.0 | 2026-10-30 | [v1.14.0](v1.14.0.md) | Not published |
 | v1.13.0 | 2026-10-30 | [v1.13.0](v1.13.0.md) | Not published |
 | v1.12.0 | 2026-10-30 | [v1.12.0](v1.12.0.md) | Not published |
 | v1.11.0 | 2026-10-29 | [v1.11.0](v1.11.0.md) | Not published |

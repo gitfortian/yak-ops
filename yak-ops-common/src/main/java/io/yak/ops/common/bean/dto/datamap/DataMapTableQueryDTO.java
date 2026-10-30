@@ -3,6 +3,7 @@ package io.yak.ops.common.bean.dto.datamap;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
+import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -34,9 +35,9 @@ public class DataMapTableQueryDTO {
     /** When true, only assets without a data domain are returned. */
     private Boolean unclassified;
 
-    /** Optional tag filter. */
-    @Size(max = 64)
-    private String tagId;
+    /** Optional tag value filter; values of one key are OR-ed, different keys are AND-ed. */
+    @Size(max = 20)
+    private List<String> tagValueIds;
 
     /** When true, MISSING assets are included. */
     private Boolean includeMissing;

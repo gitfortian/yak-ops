@@ -1,6 +1,6 @@
 {
   "name": "yak-ops-ui-workspace",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -12,7 +12,7 @@
     "preview": "vite preview --config apps/web/vite.config.ts",
     "architecture:check": "node scripts/check-architecture.mjs && node --test scripts/architecture-imports.test.mjs scripts/data-sync-style-architecture.test.mjs",
     "typecheck": "tsc --noEmit",
-    "test:unit": "node --experimental-strip-types --test apps/web/app/data-modeling/catalog-default.test.mjs apps/web/app/data-modeling/dimension-modeling/filters.test.mjs apps/web/app/data-modeling/dimension-modeling/reverse/wizard-layers.test.mjs apps/web/app/data-modeling/logical-models/field-mapping.test.mjs apps/web/app/data-modeling/logical-models/layer-binding.test.mjs apps/web/app/data-modeling/logical-models/ddl-parser.test.mjs apps/web/app/data-modeling/logical-models/reverse-modeling-draft.test.mjs apps/web/app/data-modeling/logical-models/reverse-modeling-engine.test.mjs apps/web/app/data-modeling/logical-models/publication-target.test.mjs apps/web/app/data-modeling/logical-models/standard-binding.test.mjs apps/web/app/data-modeling/logical-models/naming-composer.test.mjs apps/web/app/data-modeling/metrics/composition.test.mjs apps/web/app/data-modeling/metrics/expression.test.mjs apps/web/app/data-modeling/shared/form-fields.test.mjs apps/web/app/router/authenticated-path.test.mjs apps/web/app/layout/navigation-active.test.mjs apps/web/app/data-map/tables/detail/column-type.test.mjs",
+    "test:unit": "node --experimental-strip-types --test apps/web/app/data-modeling/catalog-default.test.mjs apps/web/app/data-modeling/dimension-modeling/filters.test.mjs apps/web/app/data-modeling/dimension-modeling/reverse/wizard-layers.test.mjs apps/web/app/data-modeling/logical-models/field-mapping.test.mjs apps/web/app/data-modeling/logical-models/layer-binding.test.mjs apps/web/app/data-modeling/logical-models/ddl-parser.test.mjs apps/web/app/data-modeling/logical-models/reverse-modeling-draft.test.mjs apps/web/app/data-modeling/logical-models/reverse-modeling-engine.test.mjs apps/web/app/data-modeling/logical-models/publication-target.test.mjs apps/web/app/data-modeling/logical-models/standard-binding.test.mjs apps/web/app/data-modeling/logical-models/naming-composer.test.mjs apps/web/app/data-modeling/metrics/composition.test.mjs apps/web/app/data-modeling/metrics/expression.test.mjs apps/web/app/data-modeling/shared/form-fields.test.mjs apps/web/app/router/authenticated-path.test.mjs apps/web/app/layout/navigation-active.test.mjs apps/web/app/data-map/tables/detail/column-type.test.mjs apps/web/app/data-governance/tags/tag-filter.test.mjs",
     "lint": "oxlint apps packages scripts --deny-warnings",
     "lint:fix": "oxlint apps packages scripts --fix",
     "format": "oxfmt apps packages scripts",

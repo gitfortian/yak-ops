@@ -1,0 +1,409 @@
+import {
+  Alert,
+  Button,
+  Card,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  PageHeader,
+  toast,
+} from "@yak-ops/yak-ui";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+import { dataMapKeys } from "@/app/data-map/shared/keys";
+import { useDataMapScope } from "@/app/data-map/shared/scope";
+import { useWorkspace } from "@/hooks/use-workspace";
+import {
+  addValue,
+  createKey,
+  deleteKey,
+  deleteValue,
+  listKeys,
+  renameKey,
+  renameValue,
+  tagFailureMessage,
+} from "@/service/tags";
+
+import BatchBindingDialog from "./batch-dialog";
+import KeyDialog, { type KeyDraft } from "./key-dialog";
+import ValueDialog, { type ValueDraft } from "./value-dialog";
+
+/** Only a Workspace manager writes the dictionary; every member may bind and unbind. */
+function useCanManageDictionary() {
+  const { currentWorkspace } = useWorkspace();
+  const role = currentWorkspace?.role;
+  return role === "OWNER" || role === "ADMIN";
+}
+
+export default function TagConsolePage() {
+  const navigate = useNavigate();
+  const { scope, ready } = useDataMapScope();
+  const queryClient = useQueryClient();
+  const canManage = useCanManageDictionary();
+  const [selectedKeyId, setSelectedKeyId] = useState("");
+  const [keyDraft, setKeyDraft] = useState<KeyDraft | null>(null);
+  const [valueDraft, setValueDraft] = useState<ValueDraft | null>(null);
+  const [confirming, setConfirming] = useState<{ kind: "key" | "value"; id: string } | null>(null);
+  const [batchOpen, setBatchOpen] = useState(false);
+
+  const dictionary = useQuery({
+    queryKey: dataMapKeys.tagDictionary(scope),
+    queryFn: ({ signal }) => listKeys(signal),
+    enabled: ready,
+  });
+
+  const keys = dictionary.data ?? [];
+  const selectedKey = useMemo(
+    () => keys.find((key) => key.id === selectedKeyId) ?? keys[0],
+    [keys, selectedKeyId],
+  );
+
+  useEffect(() => {
+    if (selectedKeyId || keys.length === 0) return;
+    setSelectedKeyId(keys[0].id);
+  }, [keys, selectedKeyId]);
+
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: dataMapKeys.tagDictionary(scope) });
+    void queryClient.invalidateQueries({ queryKey: [...dataMapKeys.all, "tables"] });
+  };
+
+  const onDictionaryError = (error: unknown) => toast.error(tagFailureMessage(error));
+
+  const create = useMutation({
+    mutationFn: (input: { name: string; values: string[] }) => createKey(input.name, input.values),
+    onSuccess: () => {
+      setKeyDraft(null);
+      refresh();
+      toast.success("标签键已创建");
+    },
+    onError: onDictionaryError,
+  });
+
+  const rename = useMutation({
+    mutationFn: (input: { keyId: string; name: string }) => renameKey(input.keyId, input.name),
+    onSuccess: () => {
+      setKeyDraft(null);
+      refresh();
+      toast.success("标签键已重命名");
+    },
+    onError: onDictionaryError,
+  });
+
+  const removeKey = useMutation({
+    mutationFn: (keyId: string) => deleteKey(keyId),
+    onSuccess: (_result, keyId) => {
+      setConfirming(null);
+      if (selectedKeyId === keyId) setSelectedKeyId("");
+      refresh();
+      toast.success("标签键已删除");
+    },
+    onError: (error) => {
+      setConfirming(null);
+      onDictionaryError(error);
+    },
+  });
+
+  const add = useMutation({
+    mutationFn: (input: { keyId: string; name: string }) => addValue(input.keyId, input.name),
+    onSuccess: () => {
+      setValueDraft(null);
+      refresh();
+      toast.success("标签值已创建");
+    },
+    onError: onDictionaryError,
+  });
+
+  const renameValueMutation = useMutation({
+    mutationFn: (input: { valueId: string; name: string }) =>
+      renameValue(input.valueId, input.name),
+    onSuccess: () => {
+      setValueDraft(null);
+      refresh();
+      toast.success("标签值已重命名");
+    },
+    onError: onDictionaryError,
+  });
+
+  const removeValue = useMutation({
+    mutationFn: (valueId: string) => deleteValue(valueId),
+    onSuccess: () => {
+      setConfirming(null);
+      refresh();
+      toast.success("标签值已删除");
+    },
+    onError: (error) => {
+      setConfirming(null);
+      onDictionaryError(error);
+    },
+  });
+
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-[var(--yak-color-background)]">
+      <PageHeader
+        title="标签管理"
+        description="维护工作空间的标签键与标签值；资产上的标签在数据地图中按 key = value 展示与筛选。"
+        className="px-6 pb-5 pt-5 max-md:px-4"
+        extra={
+          <div className="flex items-center gap-2">
+            <Button size="small" onClick={() => setBatchOpen(true)} disabled={keys.length === 0}>
+              批量绑定
+            </Button>
+            {canManage && (
+              <Button
+                size="small"
+                variant="primary"
+                onClick={() => setKeyDraft({ mode: "create", name: "", values: "" })}
+              >
+                新建标签键
+              </Button>
+            )}
+          </div>
+        }
+      />
+
+      {dictionary.isError && (
+        <Alert className="mx-6 mt-2">
+          {tagFailureMessage(dictionary.error, "标签加载失败，请稍后重试。")}
+        </Alert>
+      )}
+
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 px-6 pb-6 max-md:px-4 md:grid-cols-[280px_minmax(0,1fr)]">
+        <Card className="flex min-h-0 flex-col overflow-hidden">
+          <div className="flex min-h-11 items-center justify-between gap-2 border-b border-[var(--yak-components-control-border)] px-3">
+            <h2 className="text-[13px] font-medium text-[var(--yak-color-text-primary)]">标签键</h2>
+            <span className="text-xs text-[var(--yak-components-muted-text)]">
+              {keys.length} 个
+            </span>
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto p-2">
+            {keys.length === 0 && !dictionary.isPending && (
+              <p className="px-1 py-2 text-xs text-[var(--yak-components-muted-text)]">
+                还没有标签键。标签键是一个维度，例如「部门」或「敏感度」。
+              </p>
+            )}
+            {keys.map((key) => (
+              <button
+                key={key.id}
+                type="button"
+                aria-current={selectedKey?.id === key.id}
+                className={
+                  "mb-1 flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors " +
+                  (selectedKey?.id === key.id
+                    ? "bg-[var(--yak-color-surface-muted)] font-medium [color:var(--yak-color-primary)]"
+                    : "text-[var(--yak-components-panel-text)] hover:bg-[var(--yak-color-surface-muted)]")
+                }
+                onClick={() => setSelectedKeyId(key.id)}
+              >
+                <span className="min-w-0 truncate">{key.name}</span>
+                <span className="shrink-0 text-xs text-[var(--yak-components-muted-text)]">
+                  {key.values.length}
+                </span>
+              </button>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="flex min-h-0 flex-col overflow-hidden">
+          {selectedKey ? (
+            <>
+              <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-b border-[var(--yak-components-control-border)] px-3">
+                <h2 className="text-[13px] font-medium text-[var(--yak-color-text-primary)]">
+                  {selectedKey.name}
+                  <span className="ml-2 text-xs font-normal text-[var(--yak-components-muted-text)]">
+                    {selectedKey.values.length} 个取值
+                  </span>
+                </h2>
+                {canManage && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="small"
+                      variant="ghost"
+                      onClick={() =>
+                        setKeyDraft({
+                          mode: "rename",
+                          keyId: selectedKey.id,
+                          name: selectedKey.name,
+                        })
+                      }
+                    >
+                      重命名
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="ghost"
+                      onClick={() => setConfirming({ kind: "key", id: selectedKey.id })}
+                    >
+                      删除
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <div className="min-h-0 flex-1 overflow-auto">
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="border-b border-[var(--yak-components-control-border)] text-left text-xs text-[var(--yak-components-muted-text)]">
+                      <th className="px-3 py-2 font-medium">取值</th>
+                      <th className="w-24 px-3 py-2 font-medium">引用资产数</th>
+                      <th className="w-40 px-3 py-2 font-medium">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedKey.values.map((value) => (
+                      <tr
+                        key={value.id}
+                        className="border-b border-[var(--yak-components-control-border)] last:border-b-0"
+                      >
+                        <td className="px-3 py-2 text-[var(--yak-components-panel-text)]">
+                          {value.name}
+                        </td>
+                        <td className="px-3 py-2 text-[var(--yak-components-muted-text)]">
+                          {value.usageCount}
+                        </td>
+                        <td className="px-3 py-2">
+                          {canManage ? (
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="small"
+                                variant="ghost"
+                                onClick={() =>
+                                  setValueDraft({
+                                    mode: "rename",
+                                    valueId: value.id,
+                                    name: value.name,
+                                  })
+                                }
+                              >
+                                重命名
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="ghost"
+                                onClick={() => setConfirming({ kind: "value", id: value.id })}
+                              >
+                                删除
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-[var(--yak-components-muted-text)]">
+                              仅管理员可维护
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {selectedKey.values.length === 0 && (
+                  <p className="px-3 py-6 text-center text-xs text-[var(--yak-components-muted-text)]">
+                    这个键还没有取值。
+                  </p>
+                )}
+              </div>
+              {canManage && (
+                <div className="border-t border-[var(--yak-components-control-border)] px-3 py-2">
+                  <Button
+                    size="small"
+                    onClick={() =>
+                      setValueDraft({ mode: "create", keyId: selectedKey.id, name: "" })
+                    }
+                  >
+                    新增取值
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+              <p className="text-[13px] text-[var(--yak-components-muted-text)]">
+                从左侧选择一个标签键，或先创建一个。
+              </p>
+              <Button size="small" onClick={() => navigate("/data-governance/data-map/catalog")}>
+                去资产目录打标签
+              </Button>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {keyDraft && (
+        <KeyDialog
+          draft={keyDraft}
+          pending={create.isPending || rename.isPending}
+          onClose={() => setKeyDraft(null)}
+          onSaved={(input) => {
+            if (keyDraft.mode === "rename") {
+              rename.mutate({ keyId: keyDraft.keyId, name: input.name });
+              return;
+            }
+            create.mutate({ name: input.name, values: input.values });
+          }}
+        />
+      )}
+
+      {valueDraft && (
+        <ValueDialog
+          draft={valueDraft}
+          pending={add.isPending || renameValueMutation.isPending}
+          onClose={() => setValueDraft(null)}
+          onSaved={(name) => {
+            if (valueDraft.mode === "rename") {
+              renameValueMutation.mutate({ valueId: valueDraft.valueId, name });
+              return;
+            }
+            add.mutate({ keyId: valueDraft.keyId, name });
+          }}
+        />
+      )}
+
+      {confirming && (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setConfirming(null);
+          }}
+        >
+          <DialogContent className="w-[400px]">
+            <DialogTitle className="text-sm font-medium">删除确认</DialogTitle>
+            <DialogDescription className="mt-1 text-xs text-[var(--yak-components-muted-text)]">
+              {confirming.kind === "key"
+                ? "删除标签键会同时删除它的全部取值；仍在被资产引用的取值会阻止删除。"
+                : "仍在被资产引用的标签值不能删除，请先在资产上解除引用。"}
+            </DialogDescription>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button size="small" onClick={() => setConfirming(null)}>
+                取消
+              </Button>
+              <Button
+                size="small"
+                variant="danger"
+                loading={removeKey.isPending || removeValue.isPending}
+                onClick={() => {
+                  if (confirming.kind === "key") removeKey.mutate(confirming.id);
+                  else removeValue.mutate(confirming.id);
+                }}
+              >
+                确认删除
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {batchOpen && (
+        <BatchBindingDialog
+          keys={keys}
+          onClose={() => setBatchOpen(false)}
+          onApplied={(affected) => {
+            setBatchOpen(false);
+            refresh();
+            toast.success(`已更新 ${affected} 条标签绑定`);
+          }}
+        />
+      )}
+    </div>
+  );
+}

@@ -10,7 +10,7 @@ export const dataMapKeys = {
   all: ["data-map"] as const,
   taxonomy: (scope: DataMapScope) => [...dataMapKeys.all, "taxonomy", ...scope] as const,
   datasources: (scope: DataMapScope) => [...dataMapKeys.all, "datasources", ...scope] as const,
-  tags: (scope: DataMapScope) => [...dataMapKeys.all, "tags", ...scope] as const,
+  tagDictionary: (scope: DataMapScope) => [...dataMapKeys.all, "tag-dictionary", ...scope] as const,
   owners: (scope: DataMapScope) => [...dataMapKeys.all, "owners", ...scope] as const,
   overview: (scope: DataMapScope) => [...dataMapKeys.all, "overview", ...scope] as const,
   tables: (scope: DataMapScope, query: TableQuery) =>

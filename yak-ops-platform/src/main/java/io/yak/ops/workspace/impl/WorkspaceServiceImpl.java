@@ -196,6 +196,16 @@ public class WorkspaceServiceImpl implements WorkspaceService {
                 .isPresent();
     }
 
+    @Override
+    public boolean isManager(String workspaceId, String userId) {
+        if (StringUtils.isBlank(workspaceId) || StringUtils.isBlank(userId)) return false;
+        return workspaceMemberRepository
+                .queryMembership(workspaceId, userId)
+                .map(membership ->
+                        membership.getRole() == WorkspaceRole.OWNER || membership.getRole() == WorkspaceRole.ADMIN)
+                .orElse(false);
+    }
+
     private WorkspaceEntity requireWorkspace(String workspaceId) {
         String id = StringUtils.trimToNull(workspaceId);
         if (id == null) throw new WorkspaceException(WorkspaceErrorCode.NOT_FOUND);
