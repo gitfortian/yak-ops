@@ -1,21 +1,32 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, CircleDashed, LoaderCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDashed, LoaderCircle, ShieldAlert } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { listCrawls } from "@/service/data-map/crawl";
-import type { Crawl, CrawlStatus } from "@/service/data-map/types";
 
-import { CRAWL_STATUS_LABEL, DATA_MAP_BASE, formatDuration, relativeTime } from "../shared/labels";
+import {
+  DATA_MAP_BASE,
+  formatDuration,
+  relativeTime,
+  runDisplayStatus,
+  RUN_STATUS_LABEL,
+  type RunDisplayStatus,
+} from "../shared/labels";
 import { dataMapKeys } from "../shared/keys";
 import { useDataMapScope } from "../shared/scope";
 
 const FEED_LIMIT = 8;
 
-const STATUS_ICON: Record<CrawlStatus, { Icon: typeof CheckCircle2; className: string }> = {
+const STATUS_ICON: Record<RunDisplayStatus, { Icon: typeof CheckCircle2; className: string }> = {
   SUCCEEDED: {
     Icon: CheckCircle2,
     className:
       "bg-[var(--yak-components-badge-success-bg)] text-[var(--yak-components-badge-success-text)]",
+  },
+  PARTIAL: {
+    Icon: ShieldAlert,
+    className:
+      "bg-[var(--yak-components-badge-warning-bg)] text-[var(--yak-components-badge-warning-text)]",
   },
   FAILED: {
     Icon: AlertTriangle,
@@ -39,7 +50,7 @@ const STATUS_ICON: Record<CrawlStatus, { Icon: typeof CheckCircle2; className: s
   },
 };
 
-const line = (crawl: Crawl) => {
+const line = (crawl: CrawlLine) => {
   const scope = crawl.taskName || crawl.database || "数据源";
   if (crawl.status === "FAILED" || crawl.status === "INTERRUPTED") {
     return `失败 ${crawl.failedCount} 张表`;
@@ -50,12 +61,23 @@ const line = (crawl: Crawl) => {
   return `${scope} 采集完成 ${crawl.tableCount} 张表 · 新增 ${crawl.addedCount} · 耗时 ${formatDuration(crawl.durationSeconds)}`;
 };
 
+/** A crawl instance row of the feed, reduced to the fields the line and status render from. */
+interface CrawlLine {
+  status: RunDisplayStatus;
+  taskName: string | null;
+  database: string;
+  tableCount: number;
+  addedCount: number;
+  failedCount: number;
+  durationSeconds: number | null;
+}
+
 /** 平台动态：以采集实例为事件源，展示最近的元数据采集进展与结果。 */
 export default function ActivityFeed() {
   const navigate = useNavigate();
   const { scope, ready } = useDataMapScope();
   const crawls = useQuery({
-    queryKey: dataMapKeys.crawls(scope, "", "", 1, FEED_LIMIT),
+    queryKey: dataMapKeys.crawls(scope, { pageNo: 1, pageSize: FEED_LIMIT }),
     queryFn: ({ signal }) => listCrawls({ pageNo: 1, pageSize: FEED_LIMIT }, signal),
     enabled: ready,
   });
@@ -71,7 +93,9 @@ export default function ActivityFeed() {
         </p>
       )}
       {(crawls.data?.bizData ?? []).slice(0, FEED_LIMIT).map((crawl) => {
-        const { Icon, className } = STATUS_ICON[crawl.status];
+        const status = runDisplayStatus(crawl.status, crawl.failedCount);
+        if (!status) return null;
+        const { Icon, className } = STATUS_ICON[status];
         return (
           <button
             key={crawl.id}
@@ -82,11 +106,18 @@ export default function ActivityFeed() {
             <span
               className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md ${className}`}
             >
-              <Icon size={12} aria-hidden="true" />
+              <Icon
+                size={12}
+                aria-hidden="true"
+                className={
+                  status === "RUNNING" ? "animate-spin motion-reduce:animate-none" : undefined
+                }
+              />
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-xs leading-5 text-[var(--yak-components-panel-text)]">
-                <b className="font-semibold">{CRAWL_STATUS_LABEL[crawl.status]}</b> · {line(crawl)}
+                <b className="font-semibold">{RUN_STATUS_LABEL[status]}</b> ·{" "}
+                {line({ ...crawl, status })}
               </span>
               <span className="mt-0.5 block text-[11px] text-[var(--yak-components-muted-text)]">
                 {relativeTime(crawl.createdTime)}
