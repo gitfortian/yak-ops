@@ -4,7 +4,10 @@ import type { TableColumn } from "./interface";
 
 const FALLBACK_WIDTH = 160;
 
-const pixels = (value: CSSProperties["width"] | true | undefined): number | undefined => {
+/** Resolves a pixel width literal; percentages and keywords stay unresolved. */
+export const pixelWidth = (
+  value: CSSProperties["width"] | true | undefined,
+): number | undefined => {
   if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : undefined;
   if (typeof value !== "string") return undefined;
   const match = /^(\d+(?:\.\d+)?)px$/.exec(value.trim());
@@ -16,6 +19,25 @@ export interface ResolvedTableLayout {
   tableWidth?: number;
 }
 
+/**
+ * Replaces resolved widths with caller overrides, keeping null entries automatic.
+ *
+ * @param widths resolved pixel widths of one layout pass
+ * @param overrides caller-held widths aligned by column index; null keeps the resolved value
+ * @returns the merged widths, or the input when no override is present
+ */
+export function applyColumnWidthOverrides(
+  widths: number[] | null,
+  overrides: readonly (number | null)[] | null | undefined,
+): number[] | null {
+  if (!widths || !overrides?.some((item) => item != null)) return widths;
+  const merged = [...widths];
+  overrides.forEach((value, index) => {
+    if (value != null && index < merged.length) merged[index] = value;
+  });
+  return merged;
+}
+
 /** Share explicit pixel widths across header/body and sticky offsets. */
 export function resolveTableLayout<RecordType extends object>(
   columns: readonly TableColumn<RecordType>[],
@@ -24,7 +46,7 @@ export function resolveTableLayout<RecordType extends object>(
 ): ResolvedTableLayout {
   const definitions = columns.map((column) => {
     const value = column.width ?? column.minWidth;
-    const width = pixels(value);
+    const width = pixelWidth(value);
     if (value != null && width == null) return null;
     return { width: width ?? FALLBACK_WIDTH, flexible: column.width == null };
   });
@@ -34,7 +56,7 @@ export function resolveTableLayout<RecordType extends object>(
   const minimum = widths.reduce((sum, width) => sum + width, 0);
   // Never stretch explicitly fixed columns simply to fill the viewport.
   const available = flexible.length
-    ? Math.max(minimum, viewportWidth, pixels(scrollX) ?? 0)
+    ? Math.max(minimum, viewportWidth, pixelWidth(scrollX) ?? 0)
     : minimum;
   const extra = (available - minimum) / (flexible.length || 1);
   for (const index of flexible) widths[index] += extra;

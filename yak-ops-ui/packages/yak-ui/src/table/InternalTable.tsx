@@ -1,4 +1,12 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 
 import { cn } from "../cn";
 import { Empty } from "../empty";
@@ -19,8 +27,10 @@ import type {
   TableSize,
   TableSorterResult,
 } from "./interface";
-import { resolveTableLayout } from "./layout";
+import { applyColumnWidthOverrides, pixelWidth, resolveTableLayout } from "./layout";
 import { getTableColumnKey, resolveTableRowKey } from "./utils";
+
+const MIN_RESIZE_WIDTH = 80;
 
 const sizeClasses: Record<TableSize, { header: string; cell: string }> = {
   small: {
@@ -129,6 +139,9 @@ export function InternalTable<RecordType extends object>({
   scroll,
   size = "medium",
   sticky = false,
+  enableColumnResize = false,
+  columnWidths,
+  onColumnWidthsChange,
 }: TableProps<RecordType>) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
@@ -235,11 +248,13 @@ export function InternalTable<RecordType extends object>({
     rowKey,
   );
   const layout = resolveTableLayout(mergedColumns, viewportWidth, scroll?.x);
+  const widths = applyColumnWidthOverrides(layout.widths, columnWidths);
+  const tableWidth = widths?.reduce((sum, width) => sum + width, 0) ?? layout.tableWidth;
   const scrollStyle: CSSProperties | undefined =
     scroll?.y == null ? undefined : { maxHeight: scroll.y };
   const tableStyle: CSSProperties =
-    layout.tableWidth != null
-      ? { width: layout.tableWidth }
+    tableWidth != null
+      ? { width: tableWidth }
       : scroll?.x === true
         ? { minWidth: "max-content" }
         : scroll?.x == null
@@ -248,6 +263,48 @@ export function InternalTable<RecordType extends object>({
   const fixedRowHeight = rowHeight != null && rowHeight > 0 ? rowHeight : undefined;
   const stickyHeader = sticky || scroll?.y != null;
   const sizeClass = sizeClasses[size];
+
+  const resize = useRef<{ index: number; startX: number; startWidths: number[] } | null>(null);
+  const [resizing, setResizing] = useState(false);
+
+  useEffect(() => {
+    if (!resizing || !resize.current) return;
+    const move = (event: PointerEvent) => {
+      const state = resize.current;
+      if (!state) return;
+      const minWidth = pixelWidth(mergedColumns[state.index]?.minWidth) ?? MIN_RESIZE_WIDTH;
+      const next = [...state.startWidths];
+      next[state.index] = Math.max(
+        minWidth,
+        Math.round(state.startWidths[state.index] + event.clientX - state.startX),
+      );
+      onColumnWidthsChange?.(next);
+    };
+    const stop = () => {
+      resize.current = null;
+      setResizing(false);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+    };
+  }, [resizing, mergedColumns, onColumnWidthsChange]);
+
+  const beginResize = (index: number, event: ReactPointerEvent<HTMLSpanElement>) => {
+    if (!widths) return;
+    event.preventDefault();
+    resize.current = { index, startX: event.clientX, startWidths: [...widths] };
+    setResizing(true);
+  };
+
+  const resetColumnWidth = (index: number) => {
+    if (!columnWidths?.some((item) => item != null)) return;
+    const next = mergedColumns.map((_, itemIndex) => columnWidths[itemIndex] ?? null);
+    next[index] = null;
+    onColumnWidthsChange?.(next);
+  };
 
   return (
     <div className={cn("flex w-full min-w-0 flex-col", className)}>
@@ -265,7 +322,7 @@ export function InternalTable<RecordType extends object>({
             className={cn(
               "text-[var(--yak-components-table-text)] tabular-nums",
               bordered ? "border-separate border-spacing-0" : "border-collapse",
-              layout.widths != null ? "table-fixed" : "w-full table-auto",
+              widths != null ? "table-fixed" : "w-full table-auto",
             )}
             style={tableStyle}
           >
@@ -273,7 +330,7 @@ export function InternalTable<RecordType extends object>({
               {mergedColumns.map((column, index) => (
                 <col
                   key={getTableColumnKey(column, index)}
-                  style={getColumnStyle(column, index, layout.widths)}
+                  style={getColumnStyle(column, index, widths)}
                 />
               ))}
             </colgroup>
@@ -288,9 +345,9 @@ export function InternalTable<RecordType extends object>({
                     <th
                       key={getTableColumnKey(column, index)}
                       scope="col"
-                      style={getCellStyle(column, index, mergedColumns, layout.widths)}
+                      style={getCellStyle(column, index, mergedColumns, widths)}
                       className={cn(
-                        "border-b border-[var(--yak-color-border)] font-medium text-[var(--yak-components-table-header-text)]",
+                        "group/th relative border-b border-[var(--yak-color-border)] font-medium text-[var(--yak-components-table-header-text)]",
                         stickyHeader
                           ? "bg-[var(--yak-components-panel-bg)]"
                           : "bg-[var(--yak-components-table-bg)]",
@@ -300,11 +357,36 @@ export function InternalTable<RecordType extends object>({
                         stickyHeader && "top-0",
                         fixed ? "z-30" : stickyHeader && "z-20",
                         scroll?.x != null && fixedEdgeShadow(mergedColumns, index),
+                        resizing && "select-none",
                       )}
                     >
                       <div className={cn("min-w-0", column.ellipsis && "truncate")}>
                         {column.title}
                       </div>
+                      {enableColumnResize && !fixed && widths != null && (
+                        <span
+                          role="separator"
+                          aria-orientation="vertical"
+                          aria-label={`调整${typeof column.title === "string" ? column.title : ""}列宽，双击重置`}
+                          tabIndex={0}
+                          onPointerDown={(event) => beginResize(index, event)}
+                          onDoubleClick={() => resetColumnWidth(index)}
+                          onKeyDown={(event) => {
+                            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                            event.preventDefault();
+                            const minWidth = pixelWidth(column.minWidth) ?? MIN_RESIZE_WIDTH;
+                            const current = widths[index];
+                            const delta = event.key === "ArrowLeft" ? -16 : 16;
+                            const next = [...widths];
+                            next[index] = Math.max(minWidth, current + delta);
+                            onColumnWidthsChange?.(next);
+                          }}
+                          className={cn(
+                            "absolute inset-y-0 right-0 z-10 w-1.5 cursor-col-resize touch-none bg-[var(--yak-color-primary)] opacity-0 transition-opacity duration-150 group-hover/th:opacity-40 focus-visible:opacity-60 focus-visible:outline-none",
+                            resizing && "opacity-100",
+                          )}
+                        />
+                      )}
                     </th>
                   );
                 })}
@@ -342,7 +424,7 @@ export function InternalTable<RecordType extends object>({
                         <td
                           key={getTableColumnKey(column, columnIndex)}
                           style={{
-                            ...getCellStyle(column, columnIndex, mergedColumns, layout.widths),
+                            ...getCellStyle(column, columnIndex, mergedColumns, widths),
                             ...(fixedRowHeight != null
                               ? { height: fixedRowHeight, paddingTop: 0, paddingBottom: 0 }
                               : {}),

@@ -9,6 +9,7 @@ import { listFavorites, listRecent, removeFavorite } from "@/service/data-map/pe
 import { dataMapFailureMessage } from "@/service/data-map/request";
 
 import AssetTable from "../shared/asset-table";
+import { useStoredColumnWidths } from "../shared/use-stored-column-widths";
 import DataMapEmptyState from "../shared/empty-state";
 import { dataMapKeys } from "../shared/keys";
 import { DATA_MAP_BASE } from "../shared/labels";
@@ -71,6 +72,7 @@ export default function PersonalPage() {
   const tab = readTab(searchParams.get("tab"));
   const pageNo = Math.max(1, Number(searchParams.get("pageNo")) || 1);
   const { scope, ready } = useDataMapScope();
+  const [tableWidths, onTableWidthsChange] = useStoredColumnWidths("yak.datamap.personal-table.v1");
 
   const write = (next: { tab: PersonalTab; pageNo: number }) => {
     const params = new URLSearchParams();
@@ -250,6 +252,8 @@ export default function PersonalPage() {
               <AssetTable
                 records={records}
                 loading={activePage.isFetching}
+                columnWidths={tableWidths}
+                onColumnWidthsChange={onTableWidthsChange}
                 favoriteAction={
                   tab === "favorites"
                     ? (record) => (

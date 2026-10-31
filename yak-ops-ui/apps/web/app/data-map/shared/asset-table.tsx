@@ -15,6 +15,9 @@ interface Props {
   emptyText?: ReactNode;
   /** Leading star column for lists that own the favourite state, such as 我的数据-收藏. */
   favoriteAction?: (record: TableSummary) => ReactNode;
+  /** Caller-held column width overrides, persisted per browser. */
+  columnWidths?: (number | null)[];
+  onColumnWidthsChange?: (columnWidths: (number | null)[]) => void;
   pagination?:
     | false
     | {
@@ -55,6 +58,8 @@ export default function AssetTable({
   loading,
   emptyText = "暂无数据",
   favoriteAction,
+  columnWidths,
+  onColumnWidthsChange,
   pagination = false,
 }: Props) {
   const { domainNames } = useDomainTaxonomy();
@@ -151,27 +156,37 @@ export default function AssetTable({
     },
   ];
 
+  const stale = loading && records.length > 0;
+
   return (
-    <Table
-      columns={columns}
-      dataSource={records}
-      rowKey="id"
-      size="medium"
-      loading={loading}
-      emptyText={emptyText}
-      rowHoverable
-      pagination={
-        pagination
-          ? {
-              current: pagination.pageNo,
-              pageSize: pagination.pageSize,
-              total: pagination.total,
-              showSizeChanger: true,
-              onChange: pagination.onPageChange,
-            }
-          : false
-      }
-      scroll={{ x: 1010 }}
-    />
+    <div
+      className={`transition-opacity duration-150 ${stale ? "opacity-60" : "opacity-100"}`}
+      aria-busy={stale || undefined}
+    >
+      <Table
+        columns={columns}
+        dataSource={records}
+        rowKey="id"
+        size="medium"
+        loading={loading && records.length === 0}
+        emptyText={emptyText}
+        rowHoverable
+        enableColumnResize
+        columnWidths={columnWidths}
+        onColumnWidthsChange={onColumnWidthsChange}
+        pagination={
+          pagination
+            ? {
+                current: pagination.pageNo,
+                pageSize: pagination.pageSize,
+                total: pagination.total,
+                showSizeChanger: true,
+                onChange: pagination.onPageChange,
+              }
+            : false
+        }
+        scroll={{ x: 1010 }}
+      />
+    </div>
   );
 }
