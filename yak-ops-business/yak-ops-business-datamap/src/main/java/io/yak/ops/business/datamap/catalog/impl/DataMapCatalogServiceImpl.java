@@ -7,6 +7,8 @@ import io.yak.ops.business.datamap.support.DataMapSearchText;
 import io.yak.ops.business.modeling.planning.PlanningService;
 import io.yak.ops.common.bean.dto.datamap.DataMapCuratedUpdateDTO;
 import io.yak.ops.common.bean.dto.datamap.DataMapTableQueryDTO;
+import io.yak.ops.common.bean.vo.datamap.DataMapFacetSummaryVO;
+import io.yak.ops.common.bean.vo.datamap.DataMapOverviewFacetsVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapOverviewVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapTableChangeVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapTableDetailVO;
@@ -24,6 +26,7 @@ import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.dao.entity.datamap.DataMapTableEntity;
 import io.yak.ops.dao.entity.tag.TagValueEntity;
+import io.yak.ops.dao.mapper.datamap.DataMapFacetCountRow;
 import io.yak.ops.dao.mapper.datamap.DataMapPersonalMapper;
 import io.yak.ops.dao.mapper.datamap.DataMapSearchCriteria;
 import io.yak.ops.dao.mapper.datamap.DataMapTableChangeMapper;
@@ -82,8 +85,25 @@ public class DataMapCatalogServiceImpl implements DataMapCatalogService {
         overview.setNewTablesLastSevenDays(
                 tableMapper.countFirstSeenSince(workspaceId, DateUtils.now().minusDays(7)));
         overview.setUnclassifiedCount(tableMapper.countUnclassified(workspaceId));
+        overview.setDescribedCount(tableMapper.countDescribed(workspaceId));
+        overview.setOwnedCount(tableMapper.countOwned(workspaceId));
         overview.setHotTables(hotTables(workspaceId));
         return overview;
+    }
+
+    @Override
+    public DataMapOverviewFacetsVO overviewFacets(String workspaceId) {
+        DataMapOverviewFacetsVO facets = new DataMapOverviewFacetsVO();
+        facets.setDomains(facetSummaries(tableMapper.selectDomainFacets(workspaceId)));
+        facets.setDatasources(facetSummaries(tableMapper.selectDatasourceFacets(workspaceId)));
+        return facets;
+    }
+
+    private List<DataMapFacetSummaryVO> facetSummaries(List<DataMapFacetCountRow> rows) {
+        return rows.stream()
+                .map(row -> new DataMapFacetSummaryVO(
+                        row.getFacetKey(), row.getAssetCount(), row.getDescribedCount(), row.getOwnedCount()))
+                .toList();
     }
 
     @Override
@@ -171,6 +191,7 @@ public class DataMapCatalogServiceImpl implements DataMapCatalogService {
         criteria.setDatabaseName(StringUtils.trimToNull(query.getDatabase()));
         criteria.setSchemaName(StringUtils.trimToNull(query.getSchema()));
         criteria.setDomainId(StringUtils.trimToNull(query.getDomainId()));
+        criteria.setOwnerId(StringUtils.trimToNull(query.getOwnerId()));
         criteria.setUnclassified(Boolean.TRUE.equals(query.getUnclassified()));
         criteria.setTagValueGroups(tagValueGroups);
         criteria.setIncludeMissing(Boolean.TRUE.equals(query.getIncludeMissing()));

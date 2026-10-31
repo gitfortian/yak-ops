@@ -153,4 +153,43 @@ public interface DataMapTableMapper {
 
     @Select("SELECT COUNT(DISTINCT datasource_id) FROM yak_ops_data_map_table WHERE workspace_id=#{workspaceId}")
     long countDatasources(@Param("workspaceId") String workspaceId);
+
+    /** Counts active assets whose curated description is filled. */
+    @Select("SELECT COUNT(*) FROM yak_ops_data_map_table WHERE workspace_id=#{workspaceId} "
+            + "AND status='ACTIVE' AND description IS NOT NULL AND description<>''")
+    long countDescribed(@Param("workspaceId") String workspaceId);
+
+    /** Counts active assets whose curated owner is filled. */
+    @Select("SELECT COUNT(*) FROM yak_ops_data_map_table WHERE workspace_id=#{workspaceId} "
+            + "AND status='ACTIVE' AND owner_id IS NOT NULL AND owner_id<>''")
+    long countOwned(@Param("workspaceId") String workspaceId);
+
+    /**
+     * Aggregates active assets per data domain with their description and owner coverage.
+     *
+     * <p>Assets without a data domain are excluded: their count is reported by
+     * {@link #countUnclassified} and the browse panel shows it as its own entry.
+     *
+     * @param workspaceId Workspace whose assets are aggregated
+     * @return one row per data domain that owns at least one active asset
+     */
+    @Select("SELECT domain_id AS facet_key,COUNT(*) AS asset_count,"
+            + "SUM(CASE WHEN description IS NOT NULL AND description<>'' THEN 1 ELSE 0 END) AS described_count,"
+            + "SUM(CASE WHEN owner_id IS NOT NULL AND owner_id<>'' THEN 1 ELSE 0 END) AS owned_count "
+            + "FROM yak_ops_data_map_table WHERE workspace_id=#{workspaceId} "
+            + "AND status='ACTIVE' AND domain_id IS NOT NULL GROUP BY domain_id ORDER BY domain_id")
+    List<DataMapFacetCountRow> selectDomainFacets(@Param("workspaceId") String workspaceId);
+
+    /**
+     * Aggregates active assets per datasource with their description and owner coverage.
+     *
+     * @param workspaceId Workspace whose assets are aggregated
+     * @return one row per datasource that owns at least one catalogued asset
+     */
+    @Select("SELECT datasource_id AS facet_key,COUNT(*) AS asset_count,"
+            + "SUM(CASE WHEN description IS NOT NULL AND description<>'' THEN 1 ELSE 0 END) AS described_count,"
+            + "SUM(CASE WHEN owner_id IS NOT NULL AND owner_id<>'' THEN 1 ELSE 0 END) AS owned_count "
+            + "FROM yak_ops_data_map_table WHERE workspace_id=#{workspaceId} "
+            + "AND status='ACTIVE' GROUP BY datasource_id ORDER BY datasource_id")
+    List<DataMapFacetCountRow> selectDatasourceFacets(@Param("workspaceId") String workspaceId);
 }

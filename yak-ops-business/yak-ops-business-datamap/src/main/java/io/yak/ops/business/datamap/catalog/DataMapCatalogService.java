@@ -2,6 +2,7 @@ package io.yak.ops.business.datamap.catalog;
 
 import io.yak.ops.common.bean.dto.datamap.DataMapCuratedUpdateDTO;
 import io.yak.ops.common.bean.dto.datamap.DataMapTableQueryDTO;
+import io.yak.ops.common.bean.vo.datamap.DataMapOverviewFacetsVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapOverviewVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapTableChangeVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapTableDetailVO;
@@ -25,6 +26,14 @@ public interface DataMapCatalogService {
      * @return overview counters and hot assets
      */
     DataMapOverviewVO overview(String workspaceId, String actor);
+
+    /**
+     * Returns per-domain and per-datasource asset counts with their coverage numbers.
+     *
+     * @param workspaceId current Workspace
+     * @return browse facet counts ordered by facet key
+     */
+    DataMapOverviewFacetsVO overviewFacets(String workspaceId);
 
     /**
      * Searches and browses assets.
