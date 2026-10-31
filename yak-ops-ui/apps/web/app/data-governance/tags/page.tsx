@@ -1,7 +1,6 @@
 import {
   Alert,
   Button,
-  Card,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -10,9 +9,12 @@ import {
   toast,
 } from "@yak-ops/yak-ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus, Tags } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import AccentBadge, { accentToneOf } from "@/app/data-map/shared/accent-badge";
+import HeatBar from "@/app/data-map/shared/heat-bar";
 import { dataMapKeys } from "@/app/data-map/shared/keys";
 import { useDataMapScope } from "@/app/data-map/shared/scope";
 import { useWorkspace } from "@/hooks/use-workspace";
@@ -172,53 +174,75 @@ export default function TagConsolePage() {
       )}
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 px-6 pb-6 max-md:px-4 md:grid-cols-[280px_minmax(0,1fr)]">
-        <Card className="flex min-h-0 flex-col overflow-hidden">
-          <div className="flex min-h-11 items-center justify-between gap-2 border-b border-[var(--yak-components-control-border)] px-3">
-            <h2 className="text-[13px] font-medium text-[var(--yak-color-text-primary)]">标签键</h2>
-            <span className="text-xs text-[var(--yak-components-muted-text)]">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-[var(--yak-radius-lg)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] shadow-[var(--yak-datamap-card-shadow)]">
+          <div className="flex min-h-11 items-center justify-between gap-2 border-b border-[var(--yak-components-panel-border)] px-3">
+            <h2 className="text-[13px] font-bold text-[var(--yak-color-text-primary)]">标签键</h2>
+            <span className="rounded-full bg-[var(--yak-components-collapse-section-bg)] px-2 py-0.5 text-[11px] text-[var(--yak-components-muted-text)]">
               {keys.length} 个
             </span>
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-2">
             {keys.length === 0 && !dictionary.isPending && (
-              <p className="px-1 py-2 text-xs text-[var(--yak-components-muted-text)]">
-                还没有标签键。标签键是一个维度，例如「部门」或「敏感度」。
-              </p>
+              <div className="m-1 rounded-lg border border-dashed border-[var(--yak-components-control-border)] bg-[var(--yak-components-collapse-section-bg)] px-3 py-5 text-center text-xs leading-5 text-[var(--yak-components-muted-text)]">
+                还没有标签键。
+                <br />
+                标签键是一个维度，例如「部门」或「敏感级别」。
+              </div>
             )}
-            {keys.map((key) => (
-              <button
-                key={key.id}
-                type="button"
-                aria-current={selectedKey?.id === key.id}
-                className={
-                  "mb-1 flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors " +
-                  (selectedKey?.id === key.id
-                    ? "bg-[var(--yak-color-surface-muted)] font-medium [color:var(--yak-color-primary)]"
-                    : "text-[var(--yak-components-panel-text)] hover:bg-[var(--yak-color-surface-muted)]")
-                }
-                onClick={() => setSelectedKeyId(key.id)}
-              >
-                <span className="min-w-0 truncate">{key.name}</span>
-                <span className="shrink-0 text-xs text-[var(--yak-components-muted-text)]">
-                  {key.values.length}
-                </span>
-              </button>
-            ))}
+            {keys.map((key) => {
+              const active = selectedKey?.id === key.id;
+              return (
+                <button
+                  key={key.id}
+                  type="button"
+                  aria-current={active}
+                  className={
+                    "mb-1 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors " +
+                    (active
+                      ? "bg-[var(--yak-color-primary-subtle)] font-medium [color:var(--yak-color-primary)]"
+                      : "text-[var(--yak-components-panel-text)] hover:bg-[var(--yak-color-hover)]")
+                  }
+                  onClick={() => setSelectedKeyId(key.id)}
+                >
+                  <span
+                    className={`flex size-7 shrink-0 items-center justify-center rounded-lg ${
+                      active
+                        ? "bg-[var(--yak-color-primary-subtle)] text-[var(--yak-color-primary)]"
+                        : "bg-[var(--yak-components-collapse-section-bg)] text-[var(--yak-components-muted-text)]"
+                    }`}
+                  >
+                    <Tags size={13} aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{key.name}</span>
+                  <span className="shrink-0 rounded-full bg-[var(--yak-components-collapse-section-bg)] px-2 py-0.5 text-[11px] text-[var(--yak-components-muted-text)] [font-variant-numeric:tabular-nums]">
+                    {key.values.length}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        </Card>
+        </div>
 
-        <Card className="flex min-h-0 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-[var(--yak-radius-lg)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] shadow-[var(--yak-datamap-card-shadow)]">
           {selectedKey ? (
             <>
-              <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-b border-[var(--yak-components-control-border)] px-3">
-                <h2 className="text-[13px] font-medium text-[var(--yak-color-text-primary)]">
-                  {selectedKey.name}
-                  <span className="ml-2 text-xs font-normal text-[var(--yak-components-muted-text)]">
-                    {selectedKey.values.length} 个取值
+              <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-[var(--yak-components-panel-border)] px-4">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--yak-color-primary-subtle)] text-[var(--yak-color-primary)]">
+                    <Tags size={14} aria-hidden="true" />
                   </span>
-                </h2>
+                  <div className="min-w-0">
+                    <h2 className="truncate text-sm font-bold text-[var(--yak-color-text-primary)]">
+                      {selectedKey.name}
+                    </h2>
+                    <p className="mt-0.5 text-[11px] text-[var(--yak-components-muted-text)]">
+                      {selectedKey.values.length} 个取值 · 已绑定资产{" "}
+                      {selectedKey.values.reduce((sum, value) => sum + value.usageCount, 0)} 次
+                    </p>
+                  </div>
+                </div>
                 {canManage && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <Button
                       size="small"
                       variant="ghost"
@@ -245,79 +269,85 @@ export default function TagConsolePage() {
               <div className="min-h-0 flex-1 overflow-auto">
                 <table className="w-full text-[13px]">
                   <thead>
-                    <tr className="border-b border-[var(--yak-components-control-border)] text-left text-xs text-[var(--yak-components-muted-text)]">
-                      <th className="px-3 py-2 font-medium">取值</th>
-                      <th className="w-24 px-3 py-2 font-medium">引用资产数</th>
-                      <th className="w-40 px-3 py-2 font-medium">操作</th>
+                    <tr className="border-b border-[var(--yak-components-panel-border)] bg-[var(--yak-components-collapse-section-bg)] text-left text-xs text-[var(--yak-components-muted-text)]">
+                      <th className="px-4 py-2.5 font-medium">取值</th>
+                      <th className="w-48 px-3 py-2.5 font-medium">引用资产</th>
+                      {canManage && <th className="w-32 px-3 py-2.5 font-medium">操作</th>}
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedKey.values.map((value) => (
-                      <tr
-                        key={value.id}
-                        className="border-b border-[var(--yak-components-control-border)] last:border-b-0"
-                      >
-                        <td className="px-3 py-2 text-[var(--yak-components-panel-text)]">
-                          {value.name}
-                        </td>
-                        <td className="px-3 py-2 text-[var(--yak-components-muted-text)]">
-                          {value.usageCount}
-                        </td>
-                        <td className="px-3 py-2">
-                          {canManage ? (
-                            <div className="flex items-center gap-2">
-                              <Button
-                                size="small"
-                                variant="ghost"
-                                onClick={() =>
-                                  setValueDraft({
-                                    mode: "rename",
-                                    valueId: value.id,
-                                    name: value.name,
-                                  })
-                                }
-                              >
-                                重命名
-                              </Button>
-                              <Button
-                                size="small"
-                                variant="ghost"
-                                onClick={() => setConfirming({ kind: "value", id: value.id })}
-                              >
-                                删除
-                              </Button>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-[var(--yak-components-muted-text)]">
-                              仅管理员可维护
-                            </span>
+                    {selectedKey.values.map((value) => {
+                      const maxUsage = Math.max(
+                        1,
+                        ...selectedKey.values.map((candidate) => candidate.usageCount),
+                      );
+                      return (
+                        <tr
+                          key={value.id}
+                          className="border-b border-[var(--yak-datamap-divider-soft)] transition-colors last:border-b-0 hover:bg-[var(--yak-color-primary-subtle)]"
+                        >
+                          <td className="px-4 py-2.5">
+                            <AccentBadge tone={accentToneOf(value.id)}>{value.name}</AccentBadge>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <HeatBar value={value.usageCount} max={maxUsage} />
+                          </td>
+                          {canManage && (
+                            <td className="px-3 py-2.5">
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  size="small"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    setValueDraft({
+                                      mode: "rename",
+                                      valueId: value.id,
+                                      name: value.name,
+                                    })
+                                  }
+                                >
+                                  重命名
+                                </Button>
+                                <Button
+                                  size="small"
+                                  variant="ghost"
+                                  onClick={() => setConfirming({ kind: "value", id: value.id })}
+                                >
+                                  删除
+                                </Button>
+                              </div>
+                            </td>
                           )}
-                        </td>
-                      </tr>
-                    ))}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
                 {selectedKey.values.length === 0 && (
-                  <p className="px-3 py-6 text-center text-xs text-[var(--yak-components-muted-text)]">
-                    这个键还没有取值。
+                  <p className="px-4 py-8 text-center text-xs text-[var(--yak-components-muted-text)]">
+                    这个键还没有取值，添加第一个取值后即可绑定到资产。
                   </p>
                 )}
               </div>
               {canManage && (
-                <div className="border-t border-[var(--yak-components-control-border)] px-3 py-2">
+                <div className="border-t border-[var(--yak-components-panel-border)] px-4 py-2.5">
                   <Button
                     size="small"
                     onClick={() =>
                       setValueDraft({ mode: "create", keyId: selectedKey.id, name: "" })
                     }
                   >
+                    <Plus size={13} aria-hidden="true" />
                     新增取值
                   </Button>
                 </div>
               )}
             </>
           ) : (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+              <span className="flex size-12 items-center justify-center rounded-2xl bg-[var(--yak-color-primary-subtle)] text-[var(--yak-color-primary)]">
+                <Tags size={20} aria-hidden="true" />
+              </span>
               <p className="text-[13px] text-[var(--yak-components-muted-text)]">
                 从左侧选择一个标签键，或先创建一个。
               </p>
@@ -326,7 +356,7 @@ export default function TagConsolePage() {
               </Button>
             </div>
           )}
-        </Card>
+        </div>
       </div>
 
       {keyDraft && (
