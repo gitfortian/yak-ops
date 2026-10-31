@@ -83,7 +83,7 @@ export default function ActivityFeed() {
   });
 
   return (
-    <div className="space-y-3">
+    <div>
       {crawls.isError && (
         <p className="text-xs text-[var(--yak-components-muted-text)]">采集动态加载失败</p>
       )}
@@ -101,7 +101,7 @@ export default function ActivityFeed() {
             key={crawl.id}
             type="button"
             onClick={() => navigate(`${DATA_MAP_BASE}/tasks`)}
-            className="flex w-full cursor-pointer items-start gap-2.5 text-left"
+            className="flex w-full cursor-pointer items-start gap-2.5 border-b border-[var(--yak-datamap-divider-soft)] py-2.5 text-left last:border-b-0"
           >
             <span
               className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md ${className}`}

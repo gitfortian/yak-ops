@@ -36,6 +36,8 @@ export interface TableSummary {
   lastSeenTime: string;
   tags: TagRef[];
   matchedColumns: string[];
+  /** Summed visit count; populated only on the overview hot list. */
+  viewCount: number | null;
 }
 
 export interface TableColumn {

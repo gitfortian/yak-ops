@@ -160,4 +160,25 @@
   --yak-datamap-page-bg: #fafafa;
   --yak-datamap-surface: #ffffff;
   --yak-datamap-card-shadow: 0 1px 2px 0 rgb(10 13 18 / 5%);
+  --yak-datamap-card-shadow-hover:
+    0 4px 8px -2px rgb(10 13 18 / 8%), 0 12px 24px -4px rgb(10 13 18 / 10%);
+
+  /* Accent badge palette beyond the five semantic tones: gold ranks a core
+   * asset, purple marks a secondary domain family, cyan marks sensitive data. */
+  --yak-datamap-badge-gold-bg: #fffaeb;
+  --yak-datamap-badge-gold-border: #fedf89;
+  --yak-datamap-badge-gold-text: #a15c07;
+  --yak-datamap-badge-purple-bg: #f4f3ff;
+  --yak-datamap-badge-purple-border: #d9d6fe;
+  --yak-datamap-badge-purple-text: #5925dc;
+  --yak-datamap-badge-cyan-bg: #ecfdff;
+  --yak-datamap-badge-cyan-border: #99e6f5;
+  --yak-datamap-badge-cyan-text: #0e7090;
+
+  /* Explore-home hero and its lifted search field. */
+  --yak-datamap-hero-gradient: linear-gradient(135deg, #eef4ff 0%, #ffffff 58%);
+  --yak-datamap-hero-search-shadow: 0 4px 16px 0 rgb(47 84 235 / 10%);
+  --yak-datamap-avatar-gradient: linear-gradient(135deg, #2f54eb, #722ed1);
+  --yak-datamap-progress-track: #eef0f3;
+  --yak-datamap-divider-soft: #f0f1f3;
 }

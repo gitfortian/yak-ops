@@ -1,17 +1,13 @@
 import { Badge, Table, type TableColumns } from "@yak-ops/yak-ui";
+import { Table2 } from "lucide-react";
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
 
 import type { TableSummary } from "@/service/data-map/types";
 
-import {
-  locationLabel,
-  relativeTime,
-  TABLE_STATUS_LABEL,
-  TABLE_STATUS_TONE,
-  tablePath,
-} from "./labels";
-import { useDomainTaxonomy, useOwnerNames } from "./lookups";
+import { relativeTime, TABLE_STATUS_LABEL, TABLE_STATUS_TONE } from "./labels";
+import { useDomainTaxonomy } from "./lookups";
+import DomainBadge from "./domain-badge";
+import OwnerCell, { AssetNameCell } from "./cells";
 
 interface Props {
   records: TableSummary[];
@@ -31,15 +27,18 @@ interface Props {
 
 const MAX_VISIBLE_TAGS = 3;
 
-const TagList = ({ tags }: { tags: TableSummary["tags"] }) => {
+function TagList({ tags }: { tags: TableSummary["tags"] }) {
   if (tags.length === 0) return <span className="text-[var(--yak-components-muted-text)]">-</span>;
   const visible = tags.slice(0, MAX_VISIBLE_TAGS);
   return (
     <span className="flex min-w-0 flex-wrap items-center gap-1">
       {visible.map((tag) => (
-        <Badge key={tag.valueId} tone="info">
+        <span
+          key={tag.valueId}
+          className="inline-flex items-center whitespace-nowrap rounded-[4px] border border-transparent bg-[var(--yak-components-collapse-section-bg)] px-[7px] py-0.5 text-[11px] font-medium text-[var(--yak-components-panel-text)]"
+        >
           {tag.valueName}
-        </Badge>
+        </span>
       ))}
       {tags.length > visible.length && (
         <span className="text-xs text-[var(--yak-components-muted-text)]">
@@ -48,7 +47,7 @@ const TagList = ({ tags }: { tags: TableSummary["tags"] }) => {
       )}
     </span>
   );
-};
+}
 
 /** Asset list shared by the catalog result grid and the personal favourite/recent grids. */
 export default function AssetTable({
@@ -59,7 +58,6 @@ export default function AssetTable({
   pagination = false,
 }: Props) {
   const { domainNames } = useDomainTaxonomy();
-  const { names: ownerNames } = useOwnerNames();
 
   const columns: TableColumns<TableSummary> = [
     ...(favoriteAction
@@ -77,17 +75,11 @@ export default function AssetTable({
       title: "资产",
       minWidth: 240,
       render: (_value, record) => (
-        <div className="min-w-0">
-          <Link
-            to={tablePath(record.id)}
-            className="block truncate text-sm font-medium [color:var(--yak-color-primary)] hover:underline"
-            title={record.name}
-          >
-            {record.name}
-          </Link>
-          <div className="mt-0.5 truncate text-xs text-[var(--yak-components-muted-text)]">
-            {locationLabel(record.database, record.schema)}
-          </div>
+        <div className="flex min-w-0 items-start gap-2">
+          <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-[var(--yak-color-primary-subtle)] text-[var(--yak-color-primary)]">
+            <Table2 size={13} aria-hidden="true" />
+          </span>
+          <AssetNameCell record={record} mono />
         </div>
       ),
     },
@@ -97,8 +89,13 @@ export default function AssetTable({
       minWidth: 200,
       render: (_value, record) => (
         <div className="min-w-0">
-          <div className="line-clamp-2 text-sm" title={record.description ?? undefined}>
-            {record.description || record.remarks || "-"}
+          <div
+            className="line-clamp-2 text-[13px] leading-5 text-[var(--yak-components-panel-text)]"
+            title={record.description ?? undefined}
+          >
+            {record.description || record.remarks || (
+              <span className="text-[var(--yak-components-muted-text)]">— 缺少描述 —</span>
+            )}
           </div>
           {record.matchedColumns.length > 0 && (
             <div className="mt-0.5 truncate text-xs text-[var(--yak-components-muted-text)]">
@@ -111,33 +108,30 @@ export default function AssetTable({
     {
       key: "domain",
       title: "数据域",
-      width: 120,
-      ellipsis: true,
-      render: (_value, record) => {
-        const name = record.domainId ? domainNames.get(record.domainId) : undefined;
-        return name ?? <span className="text-[var(--yak-components-muted-text)]">未分类</span>;
-      },
+      width: 110,
+      render: (_value, record) => (
+        <DomainBadge
+          id={record.domainId}
+          name={record.domainId ? domainNames.get(record.domainId) : undefined}
+        />
+      ),
     },
     {
       key: "owner",
       title: "负责人",
-      width: 110,
-      ellipsis: true,
-      render: (_value, record) => {
-        const name = record.ownerId ? ownerNames.get(record.ownerId) : undefined;
-        return name ?? <span className="text-[var(--yak-components-muted-text)]">未指派</span>;
-      },
+      width: 120,
+      render: (_value, record) => <OwnerCell ownerId={record.ownerId} />,
     },
     {
       key: "tags",
       title: "标签",
-      width: 160,
+      width: 150,
       render: (_value, record) => <TagList tags={record.tags} />,
     },
     {
       key: "status",
       title: "状态",
-      width: 90,
+      width: 88,
       render: (_value, record) => (
         <Badge tone={TABLE_STATUS_TONE[record.status]}>{TABLE_STATUS_LABEL[record.status]}</Badge>
       ),
@@ -145,10 +139,10 @@ export default function AssetTable({
     {
       key: "lastSeen",
       title: "最近采集",
-      width: 110,
+      width: 100,
       render: (_value, record) => (
         <span
-          className="text-xs text-[var(--yak-components-muted-text)]"
+          className="text-xs text-[var(--yak-components-muted-text)] [font-variant-numeric:tabular-nums]"
           title={record.lastSeenTime}
         >
           {relativeTime(record.lastSeenTime)}
@@ -177,7 +171,7 @@ export default function AssetTable({
             }
           : false
       }
-      scroll={{ x: 1020 }}
+      scroll={{ x: 1010 }}
     />
   );
 }
