@@ -320,6 +320,22 @@ export default function ReverseModelingPage() {
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
+        <div className="flex gap-1 rounded-lg bg-[var(--yak-color-surface-muted)] p-1">
+          <button
+            type="button"
+            aria-pressed
+            className="rounded-md bg-[var(--yak-components-panel-bg)] px-3 py-1.5 text-xs font-medium text-[var(--yak-color-text-primary)] shadow-[0_1px_2px_0_rgb(16_24_40/6%)]"
+          >
+            单表精修
+          </button>
+          <button
+            type="button"
+            className="cursor-pointer rounded-md px-3 py-1.5 text-xs text-[var(--yak-components-muted-text)] transition-colors hover:text-[var(--yak-color-text-primary)]"
+            onClick={() => navigate("/data-modeling/dimension-modeling/reverse/batch")}
+          >
+            批量接入
+          </button>
+        </div>
         <h1 className="text-base font-medium">逆向建模</h1>
         <Button
           size="small"
