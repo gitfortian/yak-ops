@@ -14,6 +14,7 @@ import DimensionDeleteDialog from "../dimensions/delete-dialog";
 import DimensionDialog from "../dimensions/dimension-dialog";
 import ModelDeleteDialog from "../logical-models/delete-dialog";
 import PublishDialog from "../logical-models/publish-dialog";
+import BatchPublishDialog from "../logical-models/batch-publish-dialog";
 import ModelPanel from "./model-panel";
 import {
   EMPTY_MODEL_SEARCH,
@@ -53,6 +54,7 @@ export default function DimensionModelingPage() {
   const [deletingDimension, setDeletingDimension] = useState<ConceptDimension | null>(null);
   const [deletingModel, setDeletingModel] = useState<LogicalModel | null>(null);
   const [publishingModel, setPublishingModel] = useState<LogicalModel | null>(null);
+  const [batchPublishing, setBatchPublishing] = useState(false);
   const [filters, setFilters] = useState<ModelSearchFilters>(EMPTY_MODEL_SEARCH);
   const [searchPage, setSearchPage] = useState(1);
   const [searchPageSize, setSearchPageSize] = useState(20);
@@ -443,9 +445,16 @@ export default function DimensionModelingPage() {
           <div className="flex items-center gap-2">
             <Button
               size="small"
-              onClick={() => navigate("/data-modeling/dimension-modeling/reverse")}
+              onClick={() => navigate("/data-modeling/dimension-modeling/reverse/batch")}
             >
-              逆向建模
+              批量逆向
+            </Button>
+            <Button
+              size="small"
+              disabled={catalog.status !== "ready" || catalog.models.length === 0}
+              onClick={() => setBatchPublishing(true)}
+            >
+              批量发布
             </Button>
             <Button size="small" disabled={catalog.status === "loading"} onClick={catalog.reload}>
               刷新
@@ -588,6 +597,13 @@ export default function DimensionModelingPage() {
         <PublishDialog
           model={publishingModel}
           onClose={() => setPublishingModel(null)}
+          onPublished={catalog.reload}
+        />
+      )}
+      {batchPublishing && (
+        <BatchPublishDialog
+          models={catalog.models}
+          onClose={() => setBatchPublishing(false)}
           onPublished={catalog.reload}
         />
       )}

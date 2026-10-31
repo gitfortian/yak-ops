@@ -45,6 +45,11 @@ interface Props {
   requireMeasure?: boolean;
   /** Reverse modeling already produced the draft, so the import actions would re-import elsewhere. */
   hideImportActions?: boolean;
+  /**
+   * Derived metrics the model's business process offers; providing a non-empty list turns on the
+   * 指标 column, because a metric binding only means something when the process owns one.
+   */
+  metricOptions?: { value: string; label: string }[];
 }
 
 type Picker = { mode: "single"; index: number } | { mode: "multiple" };
@@ -59,6 +64,7 @@ export default function FieldEditor({
   allowAggregate = false,
   requireMeasure = false,
   hideImportActions = false,
+  metricOptions,
 }: Props) {
   const [picker, setPicker] = useState<Picker | null>(null);
   const [importing, setImporting] = useState(false);
@@ -153,6 +159,7 @@ export default function FieldEditor({
       }),
     );
   };
+  const showMetric = Boolean(metricOptions && metricOptions.length > 0);
   const partitionCount = rows.filter((row) => row.isPartition).length;
   const keyCount = rows.filter((row) => row.isPrimaryKey).length;
   const measureCount = rows.filter((row) => row.aggregateType != null).length;
@@ -299,6 +306,11 @@ export default function FieldEditor({
               <th className="w-[152px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 font-medium">
                 引用单位
               </th>
+              {showMetric && (
+                <th className="w-[168px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 font-medium">
+                  绑定指标
+                </th>
+              )}
               <th className="w-[240px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 font-medium">
                 字段描述
               </th>
@@ -543,6 +555,36 @@ export default function FieldEditor({
                       </SelectContent>
                     </Select>
                   </td>
+                  {showMetric && (
+                    <td className={cell}>
+                      <Select
+                        size="small"
+                        value={row.metricId ?? ""}
+                        items={metricOptions ?? []}
+                        disabled={disabled}
+                        onValueChange={(value) => {
+                          // A stand-in id that the first page did not carry keeps its binding.
+                          if (
+                            value &&
+                            !(metricOptions ?? []).some((entry) => entry.value === value)
+                          )
+                            return;
+                          patch(index, { metricId: value || null });
+                        }}
+                      >
+                        <SelectTrigger variant="outlined" aria-label={`第 ${index + 1} 行绑定指标`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(metricOptions ?? []).map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              <SelectItemText>{item.label}</SelectItemText>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                  )}
                   <td className={cell}>
                     <Input
                       size="small"
@@ -595,7 +637,7 @@ export default function FieldEditor({
             {rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={allowAggregate ? 14 : 13}
+                  colSpan={(allowAggregate ? 14 : 13) + (showMetric ? 1 : 0)}
                   className="px-3 py-8 text-center text-[var(--yak-color-text-secondary)]"
                 >
                   暂无字段，
