@@ -1,7 +1,7 @@
 import { Alert, Badge, Button } from "@yak-ops/yak-ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, AlertTriangle, ShieldCheck, Timer, TriangleAlert } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getHealth, getOverview } from "@/service/data-governance/asset-governance/overview";
@@ -129,6 +129,22 @@ export default function GovernanceOverviewPage() {
         ? 3000
         : false,
   });
+
+  /** 轮询发现最新一次运行从活跃变为终态时，刷新得分与计数。 */
+  const lastRunStatus = scans.data?.bizData[0]?.status;
+  const previousStatus = useRef(lastRunStatus);
+  useEffect(() => {
+    if (
+      previousStatus.current != null &&
+      previousStatus.current !== lastRunStatus &&
+      lastRunStatus !== "PENDING" &&
+      lastRunStatus !== "RUNNING"
+    ) {
+      void queryClient.invalidateQueries({ queryKey: ["governance", "overview"] });
+      void queryClient.invalidateQueries({ queryKey: ["governance", "health"] });
+    }
+    previousStatus.current = lastRunStatus;
+  }, [lastRunStatus, queryClient]);
 
   const scanDetail = useQuery({
     queryKey: ["governance", "scan", scanId],
