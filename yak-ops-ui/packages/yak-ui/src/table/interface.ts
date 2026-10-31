@@ -122,6 +122,15 @@ export interface TableProps<RecordType extends object> {
   emptyText?: ReactNode;
   rowHoverable?: boolean;
   className?: string;
+  /**
+   * 在每个非固定表头单元格上显示列宽拖拽手柄；需要与 columnWidths / onColumnWidthsChange
+   * 搭配使用，由调用方持有宽度状态并决定持久化方式。
+   */
+  enableColumnResize?: boolean;
+  /** 调用方持有的列宽覆盖，按列序对齐；null 表示该列保持自动宽度。 */
+  columnWidths?: readonly (number | null)[];
+  /** 拖拽或键盘调整、双击重置后回传完整覆盖数组；未启用手柄时不触发。 */
+  onColumnWidthsChange?: (columnWidths: (number | null)[]) => void;
   onChange?: (
     pagination: TablePaginationState | false,
     filters: TableFilters,

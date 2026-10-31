@@ -18,9 +18,9 @@ import { dataMapFailureMessage } from "@/service/data-map/request";
 
 import ActivityFeed from "./activity-feed";
 import DomainCards from "./domain-cards";
+import FirstRunGuide from "./first-run-guide";
 import HotTables from "./hot-tables";
 import StatCard from "../shared/stat-card";
-import DataMapEmptyState from "../shared/empty-state";
 import { dataMapKeys } from "../shared/keys";
 import { DATA_MAP_BASE } from "../shared/labels";
 import { useDataMapScope } from "../shared/scope";
@@ -148,21 +148,10 @@ export default function OverviewPage() {
       />
 
       {overview.isSuccess && assetCount === 0 ? (
-        <section className="mt-4 rounded-[var(--yak-radius-lg)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] shadow-[var(--yak-datamap-card-shadow)]">
-          <div className="p-4">
-            <DataMapEmptyState
-              title="还没有采集任何资产"
-              description="发起一次采集，把数据源中的表同步到资产目录。"
-              action={
-                <Button
-                  size="small"
-                  variant="primary"
-                  onClick={() => navigate(`${DATA_MAP_BASE}/tasks/new`)}
-                >
-                  发起采集
-                </Button>
-              }
-            />
+        <section className="mt-4">
+          <h3 className="text-sm font-bold tracking-tight">三步接入数据地图</h3>
+          <div className="mt-3">
+            <FirstRunGuide />
           </div>
         </section>
       ) : (
