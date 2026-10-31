@@ -16,15 +16,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@yak-ops/yak-ui";
-import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 
+import { dataMapFailureMessage } from "@/service/data-map/request";
+import { previewScope } from "@/service/data-map/task";
+
+import CascadeHint from "../../shared/cascade-hint";
+import { dataMapKeys } from "../../shared/keys";
 import {
   useDatabases,
   useDatasourceOptions,
   useOwnerOptions,
   useSchemas,
 } from "../../shared/lookups";
-import CascadeHint from "../../shared/cascade-hint";
+import { useDataMapScope } from "../../shared/scope";
 import type { TaskDraft, TaskDraftErrors } from "./form";
 
 interface OwnerChoice {
@@ -95,17 +101,52 @@ export default function BasicFields({
   draft,
   errors,
   onChange,
+  onScopeBlockedChange,
 }: {
   draft: TaskDraft;
   errors: TaskDraftErrors;
   onChange: (patch: Partial<TaskDraft>) => void;
+  onScopeBlockedChange?: (blocked: boolean) => void;
 }) {
+  const { scope: workspaceScope, ready } = useDataMapScope();
   const datasources = useDatasourceOptions();
   const databases = useDatabases(draft.datasourceId);
   const schemas = useSchemas(draft.datasourceId, draft.database);
   const owners = useOwnerOptions();
   const [manualDatabase, setManualDatabase] = useState(false);
   const [manualName, setManualName] = useState("");
+
+  const scoped = Boolean(draft.datasourceId && draft.database.trim());
+
+  /**
+   * Size of the namespace, counted by the datasource engine. It is shown before scheduling so a
+   * scope over the collection ceiling can be corrected here instead of failing the first run.
+   */
+  const estimate = useQuery({
+    queryKey: dataMapKeys.scopePreview(
+      workspaceScope,
+      draft.datasourceId,
+      draft.database.trim(),
+      draft.schema,
+    ),
+    queryFn: ({ signal }) =>
+      previewScope(
+        {
+          datasourceId: draft.datasourceId,
+          database: draft.database.trim(),
+          schema: draft.schema || undefined,
+        },
+        signal,
+      ),
+    enabled: ready && scoped,
+    retry: false,
+    staleTime: 30_000,
+  });
+
+  const blocked = estimate.data?.exceeded ?? false;
+  useEffect(() => {
+    onScopeBlockedChange?.(blocked);
+  }, [blocked, onScopeBlockedChange]);
 
   const databaseOptions = withCurrent(databases.data ?? [], manualDatabase ? "" : draft.database);
   const schemaOptions = withCurrent(schemas.data ?? [], draft.schema);
@@ -295,6 +336,52 @@ export default function BasicFields({
             emptyText="该库下没有可选的 Schema，将使用默认 Schema"
             onRetry={() => void schemas.refetch()}
           />
+        )}
+      </div>
+
+      <div
+        className={`md:col-span-2 rounded-[var(--yak-radius-control-small)] px-3 py-2.5 text-xs leading-5 ${
+          blocked
+            ? "bg-[var(--yak-components-badge-danger-bg)] text-[var(--yak-components-badge-danger-text)]"
+            : "bg-[var(--yak-color-hover)] text-[var(--yak-components-muted-text)]"
+        }`}
+      >
+        {!scoped ? (
+          "选择数据库后，这里会估算本次采集的表数量。"
+        ) : estimate.isError ? (
+          <span className="flex flex-wrap items-center gap-2">
+            {dataMapFailureMessage(estimate.error, "表数量统计失败")}
+            <button
+              type="button"
+              className="text-[var(--yak-color-primary)] hover:underline"
+              onClick={() => void estimate.refetch()}
+            >
+              重试
+            </button>
+          </span>
+        ) : estimate.isPending ? (
+          "正在统计表数量…"
+        ) : (
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>
+              预计{" "}
+              <span className="font-medium tabular-nums text-[var(--yak-components-panel-text)]">
+                {estimate.data.tableCount.toLocaleString()}
+              </span>{" "}
+              张表
+            </span>
+            {draft.excludeTables.length > 0 && (
+              <span>按表排除 {draft.excludeTables.length} 张</span>
+            )}
+            {blocked ? (
+              <span>
+                超过单次采集上限 {estimate.data.limit.toLocaleString()} 张，请缩小 Schema
+                范围或改用排除规则。
+              </span>
+            ) : (
+              <span>上限 {estimate.data.limit.toLocaleString()} 张</span>
+            )}
+          </span>
         )}
       </div>
     </div>

@@ -1,6 +1,7 @@
 package io.yak.ops.business.datamap.crawl;
 
 import io.yak.ops.business.datamap.config.DataMapProperties;
+import io.yak.ops.business.datamap.support.DataMapLimits;
 import io.yak.ops.business.datamap.support.DataMapScope;
 import io.yak.ops.business.datasource.DataSourceCatalogService;
 import io.yak.ops.common.bean.dto.datasource.DataSourceTablePathDTO;
@@ -47,7 +48,6 @@ public class DataMapCrawlWorker {
 
     private static final Logger LOG = LoggerFactory.getLogger(DataMapCrawlWorker.class);
 
-    private static final int TABLE_CEILING = 2_000;
     private static final int ERROR_LENGTH = 1_000;
     /** Same ceiling the detail read uses, so a retry covers every failure the operator can see. */
     private static final int RETRY_FAILURE_LIMIT = 200;
@@ -123,7 +123,7 @@ public class DataMapCrawlWorker {
             failRun(run, failure);
             return;
         }
-        if (tables.size() >= TABLE_CEILING) {
+        if (tables.size() >= DataMapLimits.TABLE_CEILING) {
             crawlMapper.finishFailed(
                     run.getId(),
                     DataMapErrorCode.CRAWL_TOO_LARGE.getMessage(),

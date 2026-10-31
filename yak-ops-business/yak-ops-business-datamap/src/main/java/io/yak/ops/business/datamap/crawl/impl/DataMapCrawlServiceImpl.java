@@ -8,10 +8,12 @@ import io.yak.ops.business.datamap.support.DataMapScope;
 import io.yak.ops.common.bean.dto.datamap.DataMapCrawlSubmitDTO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlDetailVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlFailureVO;
+import io.yak.ops.common.bean.vo.datamap.DataMapCrawlSummaryVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlVO;
 import io.yak.ops.common.constant.CommonConstants;
 import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.datamap.DataMapCrawlStatus;
+import io.yak.ops.common.enums.datamap.DataMapCrawlTaskStatus;
 import io.yak.ops.common.enums.datamap.DataMapCrawlTriggerType;
 import io.yak.ops.common.enums.datamap.DataMapErrorCode;
 import io.yak.ops.common.exception.BusinessException;
@@ -23,7 +25,13 @@ import io.yak.ops.common.util.JSONUtils;
 import io.yak.ops.common.util.StringUtils;
 import io.yak.ops.dao.entity.datamap.DataMapCrawlEntity;
 import io.yak.ops.dao.entity.datamap.DataMapCrawlFailureEntity;
+import io.yak.ops.dao.mapper.datamap.DataMapColumnCoverageRow;
+import io.yak.ops.dao.mapper.datamap.DataMapColumnMapper;
 import io.yak.ops.dao.mapper.datamap.DataMapCrawlMapper;
+import io.yak.ops.dao.mapper.datamap.DataMapCrawlTaskMapper;
+import io.yak.ops.dao.mapper.datamap.DataMapRunQualityRow;
+import io.yak.ops.dao.mapper.datamap.DataMapRunSummaryRow;
+import io.yak.ops.dao.mapper.datamap.DataMapTaskFailureRow;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceInfo;
 import io.yak.ops.plugin.datasource.api.lookup.DataSourceLookupService;
 import jakarta.annotation.Resource;
@@ -53,11 +61,19 @@ public class DataMapCrawlServiceImpl implements DataMapCrawlService, DataMapCraw
     private static final Logger LOG = LoggerFactory.getLogger(DataMapCrawlServiceImpl.class);
 
     private static final int FAILURE_LIMIT = 200;
+    private static final int DEFAULT_SUMMARY_HOURS = 24;
+    private static final int DEFAULT_QUALITY_DAYS = 7;
     private static final String RESTART_ERROR = "应用重启导致采集中断";
     private static final long RECOVERY_WAIT_MILLIS = 30_000L;
 
     @Resource
     private DataMapCrawlMapper crawlMapper;
+
+    @Resource
+    private DataMapCrawlTaskMapper taskMapper;
+
+    @Resource
+    private DataMapColumnMapper columnMapper;
 
     @Resource
     private DataMapCrawlWorker worker;
@@ -72,18 +88,79 @@ public class DataMapCrawlServiceImpl implements DataMapCrawlService, DataMapCraw
 
     @Override
     public PagingData<DataMapCrawlVO> list(
-            String workspaceId, String datasourceId, String taskId, int pageNo, int pageSize) {
+            String workspaceId,
+            String datasourceId,
+            String taskId,
+            DataMapCrawlStatus status,
+            DataMapCrawlTriggerType triggerType,
+            Boolean failed,
+            Integer days,
+            int pageNo,
+            int pageSize) {
         String datasourceFilter = StringUtils.trimToNull(datasourceId);
         String taskFilter = StringUtils.trimToNull(taskId);
-        long total = crawlMapper.count(workspaceId, datasourceFilter, taskFilter);
+        String statusFilter = status == null ? null : status.name();
+        String triggerFilter = triggerType == null ? null : triggerType.name();
+        LocalDateTime since = days == null ? null : DateUtils.now().minusDays(days);
+        long total = crawlMapper.count(
+                workspaceId, datasourceFilter, taskFilter, statusFilter, triggerFilter, failed, since);
         List<DataMapCrawlVO> rows = total == 0
                 ? List.of()
                 : crawlMapper
-                        .listPage(workspaceId, datasourceFilter, taskFilter, pageSize, (pageNo - 1) * pageSize)
+                        .listPage(
+                                workspaceId,
+                                datasourceFilter,
+                                taskFilter,
+                                statusFilter,
+                                triggerFilter,
+                                failed,
+                                since,
+                                pageSize,
+                                (pageNo - 1) * pageSize)
                         .stream()
                         .map(DataMapCrawlServiceImpl::toVO)
                         .toList();
         return PagingData.from(PageData.of(rows, total, pageNo, pageSize));
+    }
+
+    @Override
+    public DataMapCrawlSummaryVO summary(String workspaceId, Integer hours) {
+        int windowHours = hours == null ? DEFAULT_SUMMARY_HOURS : hours;
+        LocalDateTime now = DateUtils.now();
+        DataMapRunSummaryRow runs = crawlMapper.summarizeRuns(workspaceId, now.minusHours(windowHours));
+        DataMapRunQualityRow quality = crawlMapper.summarizeRunQuality(
+                workspaceId, now.toLocalDate().atStartOfDay(), now.minusDays(DEFAULT_QUALITY_DAYS));
+        Long p95 = crawlMapper.percentile95Duration(workspaceId, now.minusDays(DEFAULT_QUALITY_DAYS));
+        DataMapTaskFailureRow backlog = crawlMapper.summarizeLatestTaskFailures(workspaceId);
+        DataMapColumnCoverageRow coverage = columnMapper.summarizeCoverage(workspaceId);
+        DataMapCrawlSummaryVO summary = new DataMapCrawlSummaryVO();
+        summary.setWindowHours(windowHours);
+        summary.setTaskTotal(taskMapper.count(workspaceId, null, null, null, null));
+        summary.setOnlineTaskCount(
+                taskMapper.count(workspaceId, null, DataMapCrawlTaskStatus.RUNNING.name(), null, null));
+        summary.setRunTotal(count(runs == null ? null : runs.getTotal()));
+        summary.setRunSucceeded(count(runs == null ? null : runs.getSucceeded()));
+        summary.setRunPartial(count(runs == null ? null : runs.getPartial()));
+        summary.setRunFailed(count(runs == null ? null : runs.getFailed()));
+        summary.setRunInterrupted(count(runs == null ? null : runs.getInterrupted()));
+        summary.setRunRunning(count(runs == null ? null : runs.getRunning()));
+        summary.setRunPending(count(runs == null ? null : runs.getPending()));
+        summary.setTodayRunTotal(count(quality == null ? null : quality.getTodayTotal()));
+        summary.setTodayRunSucceeded(count(quality == null ? null : quality.getTodaySucceeded()));
+        summary.setWeekRunTotal(count(quality == null ? null : quality.getWeekTotal()));
+        summary.setWeekRunSucceeded(count(quality == null ? null : quality.getWeekSucceeded()));
+        summary.setAvgDurationSeconds(count(quality == null ? null : quality.getAvgSeconds()));
+        summary.setP95DurationSeconds(count(p95));
+        summary.setFailedTableCount(count(backlog == null ? null : backlog.getFailedTables()));
+        summary.setAbnormalTaskCount(count(backlog == null ? null : backlog.getAbnormalTasks()));
+        summary.setColumnTotal(count(coverage == null ? null : coverage.getColumnTotal()));
+        summary.setDescribedColumnCount(count(coverage == null ? null : coverage.getDescribedColumns()));
+        return summary;
+    }
+
+    /** An empty workspace aggregates to zero rows, which some dialects report as null. */
+    private static long count(Long value) {
+        return value == null ? 0L : value;
     }
 
     @Override

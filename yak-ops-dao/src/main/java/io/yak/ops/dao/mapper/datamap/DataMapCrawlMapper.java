@@ -101,25 +101,130 @@ public interface DataMapCrawlMapper {
             + "WHERE crawl_id=#{crawlId} ORDER BY created_time, id LIMIT #{limit}")
     List<DataMapCrawlFailureEntity> listFailures(@Param("crawlId") String crawlId, @Param("limit") int limit);
 
-    @Select("<script>SELECT " + SELECT_COLUMNS + " FROM yak_ops_data_map_crawl c "
-            + "WHERE c.workspace_id=#{workspaceId}"
-            + "<if test=\"datasourceId != null\"> AND c.datasource_id=#{datasourceId}</if>"
+    /** Filters of the run feed, shared by the page and the count. */
+    String RUN_FILTER = "<if test=\"datasourceId != null\"> AND c.datasource_id=#{datasourceId}</if>"
             + "<if test=\"taskId != null\"> AND c.task_id=#{taskId}</if>"
+            + "<if test=\"status != null\"> AND c.status=#{status}</if>"
+            + "<if test=\"triggerType != null\"> AND c.trigger_type=#{triggerType}</if>"
+            + "<if test=\"failed != null and failed\"> AND c.failed_count &gt; 0</if>"
+            + "<if test=\"failed != null and !failed\"> AND c.failed_count = 0</if>"
+            + "<if test=\"since != null\"> AND c.created_time &gt;= #{since}</if>";
+
+    @Select("<script>SELECT " + SELECT_COLUMNS + " FROM yak_ops_data_map_crawl c "
+            + "WHERE c.workspace_id=#{workspaceId}" + RUN_FILTER
             + " ORDER BY c.created_time DESC, c.id DESC LIMIT #{limit} OFFSET #{offset}</script>")
     List<DataMapCrawlEntity> listPage(
             @Param("workspaceId") String workspaceId,
             @Param("datasourceId") String datasourceId,
             @Param("taskId") String taskId,
+            @Param("status") String status,
+            @Param("triggerType") String triggerType,
+            @Param("failed") Boolean failed,
+            @Param("since") LocalDateTime since,
             @Param("limit") int limit,
             @Param("offset") int offset);
 
-    @Select("<script>SELECT COUNT(*) FROM yak_ops_data_map_crawl WHERE workspace_id=#{workspaceId}"
-            + "<if test=\"datasourceId != null\"> AND datasource_id=#{datasourceId}</if>"
-            + "<if test=\"taskId != null\"> AND task_id=#{taskId}</if></script>")
+    @Select("<script>SELECT COUNT(*) FROM yak_ops_data_map_crawl c WHERE c.workspace_id=#{workspaceId}" + RUN_FILTER
+            + "</script>")
     long count(
             @Param("workspaceId") String workspaceId,
             @Param("datasourceId") String datasourceId,
-            @Param("taskId") String taskId);
+            @Param("taskId") String taskId,
+            @Param("status") String status,
+            @Param("triggerType") String triggerType,
+            @Param("failed") Boolean failed,
+            @Param("since") LocalDateTime since);
+
+    /**
+     * Counts runs of one workspace by outcome inside a time window.
+     *
+     * <p>{@code COUNT(CASE ...)} rather than {@code SUM(...)} keeps the result integral on every
+     * supported dialect and yields zero instead of null for an empty window, so the caller never
+     * has to explain a null count.
+     *
+     * @param workspaceId owning Workspace
+     * @param since earliest submission time included
+     * @return outcome distribution of the window
+     */
+    @Select("SELECT COUNT(*) AS total,"
+            + "COUNT(CASE WHEN c.status='SUCCEEDED' AND c.failed_count=0 THEN 1 END) AS succeeded,"
+            + "COUNT(CASE WHEN c.status='SUCCEEDED' AND c.failed_count>0 THEN 1 END) AS partial,"
+            + "COUNT(CASE WHEN c.status='FAILED' THEN 1 END) AS failed,"
+            + "COUNT(CASE WHEN c.status='INTERRUPTED' THEN 1 END) AS interrupted,"
+            + "COUNT(CASE WHEN c.status='RUNNING' THEN 1 END) AS running,"
+            + "COUNT(CASE WHEN c.status='PENDING' THEN 1 END) AS pending "
+            + "FROM yak_ops_data_map_crawl c WHERE c.workspace_id=#{workspaceId} AND c.created_time>=#{since}")
+    DataMapRunSummaryRow summarizeRuns(@Param("workspaceId") String workspaceId, @Param("since") LocalDateTime since);
+
+    /**
+     * Quality figures of the run window: today's ratio, a seven-day success rate and how long a
+     * successful run takes.
+     *
+     * <p>Only terminal outcomes (SUCCEEDED or FAILED) enter every figure, so a run that is still
+     * queued cannot move the success rate in either direction. A succeeded run with failed tables
+     * counts as a success, because it did catalogue the namespace. Duration is measured over the
+     * successful runs only: a failed run usually aborts early and would drag the average down
+     * without describing a healthy run.
+     *
+     * @param workspaceId owning Workspace
+     * @param todayStart local start of the current day
+     * @param weekStart local start seven days ago
+     * @return quality figures of the window
+     */
+    @Select("SELECT COUNT(CASE WHEN c.created_time>=#{todayStart} THEN 1 END) AS today_total,"
+            + "COUNT(CASE WHEN c.created_time>=#{todayStart} AND c.status='SUCCEEDED' THEN 1 END)"
+            + " AS today_succeeded,"
+            + "COUNT(CASE WHEN c.created_time>=#{weekStart} THEN 1 END) AS week_total,"
+            + "COUNT(CASE WHEN c.created_time>=#{weekStart} AND c.status='SUCCEEDED' THEN 1 END)"
+            + " AS week_succeeded,"
+            + "AVG(CASE WHEN c.status='SUCCEEDED' AND c.started_time IS NOT NULL"
+            + " AND c.finished_time IS NOT NULL"
+            + " AND c.created_time>=#{weekStart}"
+            + " THEN TIMESTAMPDIFF(SECOND, c.started_time, c.finished_time) END) AS avg_seconds"
+            + " FROM yak_ops_data_map_crawl c"
+            + " WHERE c.workspace_id=#{workspaceId}"
+            + " AND c.status IN ('SUCCEEDED','FAILED')"
+            + " AND c.created_time>=#{weekStart}")
+    DataMapRunQualityRow summarizeRunQuality(
+            @Param("workspaceId") String workspaceId,
+            @Param("todayStart") LocalDateTime todayStart,
+            @Param("weekStart") LocalDateTime weekStart);
+
+    /**
+     * P95 duration of successful runs in the window, resolved with a window function because no
+     * supported dialect ships a percentile aggregate. Rows are rare (a few runs per datasource
+     * per day), so scanning them twice is cheaper than the complexity of an approximation.
+     *
+     * @param workspaceId owning Workspace
+     * @param weekStart local start seven days ago
+     * @return p95 of successful run durations in seconds, or null when nothing succeeded
+     */
+    @Select("WITH ranked AS (SELECT TIMESTAMPDIFF(SECOND, c.started_time, c.finished_time) AS seconds,"
+            + " ROW_NUMBER() OVER (ORDER BY c.finished_time-c.started_time) AS rn,"
+            + " COUNT(*) OVER () AS total"
+            + " FROM yak_ops_data_map_crawl c"
+            + " WHERE c.workspace_id=#{workspaceId} AND c.status='SUCCEEDED'"
+            + " AND c.started_time IS NOT NULL AND c.finished_time IS NOT NULL"
+            + " AND c.created_time>=#{weekStart})"
+            + " SELECT MIN(CASE WHEN rn>=CEIL(total*0.95) THEN seconds END) AS p95_seconds FROM ranked")
+    Long percentile95Duration(@Param("workspaceId") String workspaceId, @Param("weekStart") LocalDateTime weekStart);
+
+    /**
+     * Sums the failure backlog over the newest run of each task.
+     *
+     * <p>A failure a later run already fixed is not pending anymore, so the newest run per task is
+     * the unit of measurement. Runs submitted outside a task carry no schedule to act on and are
+     * excluded, which keeps the figure consistent with the task list that filters the same way.
+     *
+     * @param workspaceId owning Workspace
+     * @return failed tables and abnormal task count of the current state
+     */
+    @Select("SELECT COALESCE(SUM(x.failed_count),0) AS failed_tables,"
+            + "COUNT(CASE WHEN x.status='FAILED' OR x.failed_count>0 THEN 1 END) AS abnormal_tasks "
+            + "FROM yak_ops_data_map_crawl x WHERE x.workspace_id=#{workspaceId} AND x.task_id IS NOT NULL "
+            + "AND NOT EXISTS (SELECT 1 FROM yak_ops_data_map_crawl n WHERE n.task_id=x.task_id "
+            + "AND (n.created_time > x.created_time OR (n.created_time = x.created_time AND n.id > x.id)))")
+    DataMapTaskFailureRow summarizeLatestTaskFailures(@Param("workspaceId") String workspaceId);
 
     /**
      * Reads the newest run of each requested task, so a task list shows one status per task without

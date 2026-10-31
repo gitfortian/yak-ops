@@ -18,30 +18,54 @@ export const TABLE_STATUS_TONE: Record<TableStatus, NonNullable<BadgeProps["tone
   MISSING: "warning",
 };
 
-export const CRAWL_STATUS_LABEL: Record<CrawlStatus, string> = {
+/**
+ * What a run looks like in the UI. `PARTIAL` is derived, never stored: the backend reports such a
+ * run as `SUCCEEDED` with `failedCount > 0`.
+ */
+export type RunDisplayStatus = CrawlStatus | "PARTIAL";
+
+export const RUN_STATUS_LABEL: Record<RunDisplayStatus, string> = {
   PENDING: "排队中",
   RUNNING: "采集中",
-  SUCCEEDED: "已完成",
+  SUCCEEDED: "成功",
+  PARTIAL: "部分成功",
   FAILED: "失败",
   INTERRUPTED: "异常中断",
 };
 
-export const CRAWL_STATUS_TONE: Record<CrawlStatus, NonNullable<BadgeProps["tone"]>> = {
+export const RUN_STATUS_TONE: Record<RunDisplayStatus, NonNullable<BadgeProps["tone"]>> = {
   PENDING: "neutral",
   RUNNING: "info",
   SUCCEEDED: "success",
+  PARTIAL: "warning",
   FAILED: "danger",
   INTERRUPTED: "neutral",
 };
+
+/**
+ * A run that ends with failed tables makes no missing-table judgement, so it must never be shown
+ * as a plain success. Keep this derivation in one place rather than in each surface.
+ */
+export function runDisplayStatus(
+  status: CrawlStatus | null | undefined,
+  failedCount?: number | null,
+): RunDisplayStatus | null {
+  if (!status) return null;
+  return status === "SUCCEEDED" && (failedCount ?? 0) > 0 ? "PARTIAL" : status;
+}
 
 export const CRAWL_TRIGGER_LABEL: Record<CrawlTrigger, string> = {
   MANUAL: "手动",
   SCHEDULED: "定时",
 };
 
+/**
+ * `RUNNING` on a task means "scheduled and running by the scheduler", not "an instance is running
+ * right now" — that state lives on the run. The label says so; the enum stays untouched.
+ */
 export const TASK_STATUS_LABEL: Record<CrawlTaskStatus, string> = {
   DRAFT: "草稿",
-  RUNNING: "运行中",
+  RUNNING: "已上线",
   OFFLINE: "已下线",
 };
 
@@ -50,6 +74,15 @@ export const TASK_STATUS_TONE: Record<CrawlTaskStatus, NonNullable<BadgeProps["t
   RUNNING: "info",
   OFFLINE: "neutral",
 };
+
+/**
+ * Reads the task status filter from the URL. An unknown value is dropped rather than sent to the
+ * API, because the list endpoint rejects a status outside the enum.
+ */
+const TASK_STATUSES: CrawlTaskStatus[] = ["DRAFT", "RUNNING", "OFFLINE"];
+
+export const readTaskStatus = (value: string | null | undefined): CrawlTaskStatus | undefined =>
+  TASK_STATUSES.find((status) => status === value);
 
 const WEEKDAY_LABEL: Record<number, string> = {
   1: "日",
@@ -97,6 +130,39 @@ export function formatDuration(seconds: number | null | undefined): string {
   const hours = Math.floor(minutes / 60);
   const left = minutes % 60;
   return left === 0 ? `${hours}小时` : `${hours}小时${left}分`;
+}
+
+/** Parses either the stored `yyyy-MM-dd HH:mm:ss` form or an ISO string; null when unparseable. */
+const parseTimestamp = (raw: string | null | undefined): Date | null => {
+  if (!raw) return null;
+  const date = new Date(raw.includes("T") ? raw : raw.replace(" ", "T"));
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+/** Absolute wall clock without seconds: 10-30 12:02. */
+export function clockLabel(raw: string | null | undefined): string {
+  const date = parseTimestamp(raw);
+  if (!date) return raw ?? "-";
+  return `${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+/**
+ * Age of a timestamp, e.g. 12 分钟前. Beyond a month the absolute date is more useful than a count
+ * of days, so the two forms share one column instead of two.
+ */
+export function relativeTime(raw: string | null | undefined, now: number = Date.now()): string {
+  if (!raw) return "-";
+  const date = parseTimestamp(raw);
+  if (!date) return raw;
+  const seconds = Math.max(0, Math.round((now - date.getTime()) / 1000));
+  if (seconds < 60) return "刚刚";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} 分钟前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} 天前`;
+  return clockLabel(raw);
 }
 
 export const CHANGE_TYPE_LABEL: Record<string, string> = {

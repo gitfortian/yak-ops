@@ -2,7 +2,9 @@ package io.yak.ops.business.datamap.crawl;
 
 import io.yak.ops.common.bean.dto.datamap.DataMapCrawlSubmitDTO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlDetailVO;
+import io.yak.ops.common.bean.vo.datamap.DataMapCrawlSummaryVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlVO;
+import io.yak.ops.common.enums.datamap.DataMapCrawlStatus;
 import io.yak.ops.common.enums.datamap.DataMapCrawlTriggerType;
 import io.yak.ops.common.page.PagingData;
 
@@ -15,11 +17,37 @@ public interface DataMapCrawlService {
      * @param workspaceId current Workspace
      * @param datasourceId optional datasource filter
      * @param taskId optional task filter
+     * @param status optional run status filter
+     * @param triggerType optional trigger filter, MANUAL or SCHEDULED
+     * @param failed true for runs with failed tables, false for runs without, null for both
+     * @param days when given, only runs submitted within this many days are returned
      * @param pageNo one-based page number
      * @param pageSize page size
      * @return one page of runs
      */
-    PagingData<DataMapCrawlVO> list(String workspaceId, String datasourceId, String taskId, int pageNo, int pageSize);
+    PagingData<DataMapCrawlVO> list(
+            String workspaceId,
+            String datasourceId,
+            String taskId,
+            DataMapCrawlStatus status,
+            DataMapCrawlTriggerType triggerType,
+            Boolean failed,
+            Integer days,
+            int pageNo,
+            int pageSize);
+
+    /**
+     * Reads the Workspace-wide collection health shown above the task table.
+     *
+     * <p>Counts cover the whole Workspace rather than the visible page, so the band cannot disagree
+     * with the list. Run counts are limited to a rolling window because an all-time distribution
+     * says nothing about whether collection is healthy now.
+     *
+     * @param workspaceId current Workspace
+     * @param hours length of the run window in hours, or null for the default
+     * @return task totals, run outcome distribution, failure backlog and comment coverage
+     */
+    DataMapCrawlSummaryVO summary(String workspaceId, Integer hours);
 
     /**
      * Records a pending run and hands it to the crawl executor.

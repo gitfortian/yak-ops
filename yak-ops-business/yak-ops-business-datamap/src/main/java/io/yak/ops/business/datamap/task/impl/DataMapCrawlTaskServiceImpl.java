@@ -2,7 +2,9 @@ package io.yak.ops.business.datamap.task.impl;
 
 import io.yak.ops.business.datamap.crawl.DataMapCrawlService;
 import io.yak.ops.business.datamap.crawl.DataMapCrawlTaskSpec;
+import io.yak.ops.business.datamap.support.DataMapLimits;
 import io.yak.ops.business.datamap.support.DataMapScope;
+import io.yak.ops.business.datamap.support.DataMapSearchText;
 import io.yak.ops.business.datamap.task.DataMapCrawlCron;
 import io.yak.ops.business.datamap.task.DataMapCrawlTaskService;
 import io.yak.ops.business.modeling.planning.PlanningService;
@@ -53,7 +55,6 @@ public class DataMapCrawlTaskServiceImpl implements DataMapCrawlTaskService {
 
     private static final Logger LOG = LoggerFactory.getLogger(DataMapCrawlTaskServiceImpl.class);
 
-    private static final int EXCLUDE_TABLE_LIMIT = 500;
     private static final int DUE_BATCH_LIMIT = 20;
     private static final int PREVIEW_COUNT = 3;
 
@@ -73,10 +74,28 @@ public class DataMapCrawlTaskServiceImpl implements DataMapCrawlTaskService {
     private PlanningService planningService;
 
     @Override
-    public PagingData<DataMapCrawlTaskVO> list(String workspaceId, int pageNo, int pageSize) {
-        long total = taskMapper.count(workspaceId);
-        List<DataMapCrawlTaskEntity> rows =
-                total == 0 ? List.of() : taskMapper.listPage(workspaceId, pageSize, (pageNo - 1) * pageSize);
+    public PagingData<DataMapCrawlTaskVO> list(
+            String workspaceId,
+            String keyword,
+            DataMapCrawlTaskStatus status,
+            String datasourceId,
+            Boolean abnormal,
+            int pageNo,
+            int pageSize) {
+        String keywordPattern = DataMapSearchText.containsPattern(StringUtils.trimToNull(keyword));
+        String statusFilter = status == null ? null : status.name();
+        String datasourceFilter = StringUtils.trimToNull(datasourceId);
+        long total = taskMapper.count(workspaceId, keywordPattern, statusFilter, datasourceFilter, abnormal);
+        List<DataMapCrawlTaskEntity> rows = total == 0
+                ? List.of()
+                : taskMapper.listPage(
+                        workspaceId,
+                        keywordPattern,
+                        statusFilter,
+                        datasourceFilter,
+                        abnormal,
+                        pageSize,
+                        (pageNo - 1) * pageSize);
         Map<String, DataMapCrawlEntity> latest = latestRuns(workspaceId, rows);
         List<DataMapCrawlTaskVO> tasks =
                 rows.stream().map(row -> toVO(row, latest.get(row.getId()))).toList();
@@ -269,7 +288,7 @@ public class DataMapCrawlTaskServiceImpl implements DataMapCrawlTaskService {
             String name = StringUtils.trimToNull(table);
             if (name != null) names.add(name);
         }
-        if (names.size() > EXCLUDE_TABLE_LIMIT) {
+        if (names.size() > DataMapLimits.EXCLUDE_TABLE_LIMIT) {
             throw new BusinessException(DataMapErrorCode.CRAWL_EXCLUDE_TOO_MANY);
         }
         return JSONUtils.toJson(List.copyOf(names));

@@ -1,4 +1,4 @@
-import type { TableQuery } from "@/service/data-map/types";
+import type { CrawlQuery, TableQuery, TaskQuery } from "@/service/data-map/types";
 
 import type { DataMapScope } from "./scope";
 
@@ -23,8 +23,9 @@ export const dataMapKeys = {
     [...dataMapKeys.all, "changes", ...scope, tableId] as const,
   preview: (scope: DataMapScope, tableId: string) =>
     [...dataMapKeys.all, "preview", ...scope, tableId] as const,
-  tasks: (scope: DataMapScope, pageNo: number, pageSize: number) =>
-    [...dataMapKeys.all, "tasks", ...scope, pageNo, pageSize] as const,
+  /** Task page; the query object carries the server-side filters, so a changed filter refetches. */
+  tasks: (scope: DataMapScope, query: TaskQuery) =>
+    [...dataMapKeys.all, "tasks", ...scope, query] as const,
   task: (scope: DataMapScope, taskId: string) =>
     [...dataMapKeys.all, "task", ...scope, taskId] as const,
   taskSchedulePreview: (scope: DataMapScope, cronExpression: string) =>
@@ -45,6 +46,8 @@ export const dataMapKeys = {
       schema,
       keyword,
     ] as const,
+  scopePreview: (scope: DataMapScope, datasourceId: string, database: string, schema: string) =>
+    [...dataMapKeys.all, "scope-preview", ...scope, datasourceId, database, schema] as const,
   excludePreview: (
     scope: DataMapScope,
     datasourceId: string,
@@ -61,13 +64,14 @@ export const dataMapKeys = {
       schema,
       regex,
     ] as const,
-  crawls: (
-    scope: DataMapScope,
-    datasourceId: string,
-    taskId: string,
-    pageNo: number,
-    pageSize: number,
-  ) => [...dataMapKeys.all, "crawls", ...scope, datasourceId, taskId, pageNo, pageSize] as const,
+  crawls: (scope: DataMapScope, query: CrawlQuery) =>
+    [...dataMapKeys.all, "crawls", ...scope, query] as const,
+  /** Workspace-wide health band figures; hours names the run window, not a cache policy. */
+  crawlSummary: (scope: DataMapScope, hours: number) =>
+    [...dataMapKeys.all, "crawl-summary", ...scope, hours] as const,
+  /** Latest runs of one task (empty taskId = the workspace feed), read by the task drawer. */
+  taskCrawls: (scope: DataMapScope, taskId: string, pageSize: number) =>
+    dataMapKeys.crawls(scope, taskId ? { taskId, pageNo: 1, pageSize } : { pageNo: 1, pageSize }),
   crawl: (scope: DataMapScope, crawlId: string) =>
     [...dataMapKeys.all, "crawl", ...scope, crawlId] as const,
   favorites: (scope: DataMapScope, pageNo: number, pageSize: number) =>
