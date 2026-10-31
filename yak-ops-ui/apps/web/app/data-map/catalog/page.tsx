@@ -236,7 +236,6 @@ export default function CatalogPage() {
     <div className="flex h-full min-h-0 flex-col bg-[var(--yak-color-background)]">
       <PageHeader
         title="资产目录"
-        description="搜索与浏览全部数据资产，按数据域、数据源与标签分面过滤。"
         className="px-6 pb-5 pt-5 max-md:px-4"
         extra={
           <Button size="small" onClick={() => navigate(`${DATA_MAP_BASE}/tasks/new`)}>
@@ -354,7 +353,7 @@ export default function CatalogPage() {
                 hasActiveFilters ? (
                   <DataMapEmptyState
                     title="没有匹配的资产"
-                    description="当前筛选条件下没有资产。调整条件或清空筛选后重试。"
+                    description="调整条件或清空筛选后重试。"
                     action={
                       <Button size="small" onClick={reset}>
                         清空筛选
@@ -364,7 +363,7 @@ export default function CatalogPage() {
                 ) : (
                   <DataMapEmptyState
                     title="还没有采集任何资产"
-                    description="发起一次采集，把数据源中的表和字段同步到资产目录。采集完成后这里会显示每一张表。"
+                    description="发起一次采集，把数据源中的表同步到资产目录。"
                     action={
                       <Button
                         size="small"

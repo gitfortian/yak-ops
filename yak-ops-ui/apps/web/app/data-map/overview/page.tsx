@@ -66,8 +66,7 @@ function Hero({
       </h2>
       <p className="mt-1.5 text-xs text-[var(--yak-components-muted-text)]">
         已收录 {datasourceCount === undefined ? "—" : countLabel(datasourceCount)} 个数据源的{" "}
-        {assetCount === undefined ? "—" : countLabel(assetCount)}{" "}
-        张表，支持按表名、字段、描述与标签搜索
+        {assetCount === undefined ? "—" : countLabel(assetCount)} 张表
       </p>
       <div className="relative mt-4 max-w-[640px]">
         <Search
@@ -153,7 +152,7 @@ export default function OverviewPage() {
           <div className="p-4">
             <DataMapEmptyState
               title="还没有采集任何资产"
-              description="发起一次采集，把数据源中的表和字段同步到资产目录，这里会展示覆盖概况与热门资产。"
+              description="发起一次采集，把数据源中的表同步到资产目录。"
               action={
                 <Button
                   size="small"
@@ -174,7 +173,6 @@ export default function OverviewPage() {
               iconClassName="bg-[var(--yak-color-primary-subtle)] text-[var(--yak-color-primary)]"
               label="资产总数"
               value={data ? countLabel(assetCount) : "—"}
-              hint={data ? `近 7 天新增 ${countLabel(data.newTablesLastSevenDays)}` : undefined}
             />
             <StatCard
               icon={<Server size={15} aria-hidden="true" />}
@@ -207,8 +205,8 @@ export default function OverviewPage() {
               iconClassName="bg-[var(--yak-components-badge-warning-bg)] text-[var(--yak-components-badge-warning-text)]"
               label="未分类"
               value={data ? countLabel(data.unclassifiedCount) : "—"}
-              hint={data && data.unclassifiedCount > 0 ? "有待归类的资产" : "全部资产已归类"}
-              hintTone={data && data.unclassifiedCount > 0 ? "down" : "up"}
+              hint={data && data.unclassifiedCount > 0 ? "待归类" : undefined}
+              hintTone="down"
             />
           </section>
 

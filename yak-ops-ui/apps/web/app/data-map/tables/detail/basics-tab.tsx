@@ -231,15 +231,6 @@ export default function BasicsTab({ detail, editing, onCancel, onSaved, onEdit }
                     {detail.tableType ?? "-"}
                   </dd>
                 </div>
-                <div className="flex items-center justify-between gap-2">
-                  <dt className="text-xs text-[var(--yak-components-muted-text)]">数据源</dt>
-                  <dd
-                    className="max-w-32 truncate text-xs text-[var(--yak-components-panel-text)]"
-                    title={detail.datasourceName ?? detail.datasourceId}
-                  >
-                    {detail.datasourceName ?? detail.datasourceId}
-                  </dd>
-                </div>
               </dl>
             </div>
           </div>

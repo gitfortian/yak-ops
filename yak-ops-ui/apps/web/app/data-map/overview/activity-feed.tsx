@@ -88,9 +88,7 @@ export default function ActivityFeed() {
         <p className="text-xs text-[var(--yak-components-muted-text)]">采集动态加载失败</p>
       )}
       {crawls.isSuccess && crawls.data.bizData.length === 0 && (
-        <p className="text-xs text-[var(--yak-components-muted-text)]">
-          还没有采集记录，发起一次采集后这里会展示平台动态。
-        </p>
+        <p className="text-xs text-[var(--yak-components-muted-text)]">暂无采集记录</p>
       )}
       {(crawls.data?.bizData ?? []).slice(0, FEED_LIMIT).map((crawl) => {
         const status = runDisplayStatus(crawl.status, crawl.failedCount);
@@ -101,7 +99,7 @@ export default function ActivityFeed() {
             key={crawl.id}
             type="button"
             onClick={() => navigate(`${DATA_MAP_BASE}/tasks`)}
-            className="flex w-full cursor-pointer items-start gap-2.5 border-b border-[var(--yak-datamap-divider-soft)] py-2.5 text-left last:border-b-0"
+            className="flex w-full cursor-pointer items-start gap-2.5 rounded-lg border-b border-[var(--yak-datamap-divider-soft)] px-2 py-2.5 text-left transition-colors last:border-b-0 hover:bg-[var(--yak-color-hover)]"
           >
             <span
               className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md ${className}`}

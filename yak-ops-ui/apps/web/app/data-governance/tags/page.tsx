@@ -147,7 +147,7 @@ export default function TagConsolePage() {
     <div className="flex h-full min-h-0 flex-col bg-[var(--yak-color-background)]">
       <PageHeader
         title="标签管理"
-        description="维护工作空间的标签键与标签值；资产上的标签在数据地图中按 key = value 展示与筛选。"
+        description="维护标签键与标签值，资产按 key = value 展示与筛选。"
         className="px-6 pb-5 pt-5 max-md:px-4"
         extra={
           <div className="flex items-center gap-2">
