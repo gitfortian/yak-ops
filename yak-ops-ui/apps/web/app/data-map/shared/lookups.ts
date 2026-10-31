@@ -102,6 +102,16 @@ export function useOwnerOptions() {
   });
 }
 
+/** Display names keyed by user id, so list rows can resolve an owner id without extra reads. */
+export function useOwnerNames() {
+  const owners = useOwnerOptions();
+  const names = new Map<string, string>();
+  (owners.data ?? []).forEach((owner) => {
+    if (owner.userId) names.set(owner.userId, owner.displayName || owner.userId);
+  });
+  return { names, ...owners };
+}
+
 const catalogKeys = {
   databases: (scope: readonly string[], datasourceId: string) =>
     ["data-source-catalog", "databases", ...scope, datasourceId] as const,

@@ -4,6 +4,7 @@ import { dataMapRequest } from "./request";
 import type {
   CuratedUpdate,
   Overview,
+  OverviewFacets,
   Paging,
   Preview,
   TableChange,
@@ -39,6 +40,14 @@ const withQuery = (path: string, parameters: object) => {
 export const getOverview = (signal?: AbortSignal) =>
   dataMapRequest(
     HttpUtils.getData<Overview>(`${API}/overview`, { signal, skipErrorHandler: true }),
+  );
+
+export const getOverviewFacets = (signal?: AbortSignal) =>
+  dataMapRequest(
+    HttpUtils.getData<OverviewFacets>(`${API}/overview/facets`, {
+      signal,
+      skipErrorHandler: true,
+    }),
   );
 
 export const searchTables = (query: TableQuery, signal?: AbortSignal) =>

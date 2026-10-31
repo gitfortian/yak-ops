@@ -118,3 +118,21 @@ export const locationLabel = (database: string, schema: string) => {
   const parts = [database, schema].filter((part) => part.length > 0);
   return parts.length > 0 ? parts.join(" / ") : "-";
 };
+
+/**
+ * Renders a crawl or visit time relative to now: 今天/昨天 with a clock, an earlier date as
+ * `MM-DD`. Unknown or unparseable input stays visible as the raw value.
+ */
+export function relativeTime(value: string | null | undefined): string {
+  if (!value) return "-";
+  const time = new Date(value).getTime();
+  if (Number.isNaN(time)) return value;
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const clock = `${pad2(new Date(time).getHours())}:${pad2(new Date(time).getMinutes())}`;
+  if (time >= startOfToday) return `今天 ${clock}`;
+  if (time >= startOfToday - 86400000) return `昨天 ${clock}`;
+  const month = pad2(new Date(time).getMonth() + 1);
+  const day = pad2(new Date(time).getDate());
+  return `${month}-${day}`;
+}

@@ -80,7 +80,7 @@ export const DATA_GOVERNANCE_NAVIGATION: ProductNavigationItem[] = [
     path: "/data-governance/data-map",
     icon: MapIcon,
     children: [
-      { label: "数据地图概述", path: "/data-governance/data-map/overview" },
+      { label: "探索首页", path: "/data-governance/data-map/overview" },
       {
         label: "资产目录",
         path: "/data-governance/data-map/catalog",

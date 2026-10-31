@@ -13,6 +13,8 @@ export const dataMapKeys = {
   tagDictionary: (scope: DataMapScope) => [...dataMapKeys.all, "tag-dictionary", ...scope] as const,
   owners: (scope: DataMapScope) => [...dataMapKeys.all, "owners", ...scope] as const,
   overview: (scope: DataMapScope) => [...dataMapKeys.all, "overview", ...scope] as const,
+  overviewFacets: (scope: DataMapScope) =>
+    [...dataMapKeys.all, "overview-facets", ...scope] as const,
   tables: (scope: DataMapScope, query: TableQuery) =>
     [...dataMapKeys.all, "tables", ...scope, query] as const,
   table: (scope: DataMapScope, tableId: string) =>

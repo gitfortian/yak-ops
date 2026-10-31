@@ -6,10 +6,13 @@ export interface CatalogQuery {
   datasourceId: string;
   database: string;
   domainId: string;
+  ownerId: string;
   /** Tag value ids of the filter; values of one key are OR-ed, different keys are AND-ed. */
   tagValueIds: string[];
   unclassified: boolean;
   includeMissing: boolean;
+  /** Result presentation; the list view is the default. */
+  view: "list" | "cards";
   pageNo: number;
   pageSize: number;
 }
@@ -29,9 +32,11 @@ const readQuery = (params: URLSearchParams): CatalogQuery => ({
   datasourceId: params.get("datasourceId") ?? "",
   database: params.get("database") ?? "",
   domainId: params.get("domainId") ?? "",
+  ownerId: params.get("ownerId") ?? "",
   tagValueIds: params.getAll("tagValueIds").filter((value) => value.length > 0),
   unclassified: params.get("unclassified") === "1",
   includeMissing: params.get("includeMissing") === "1",
+  view: params.get("view") === "cards" ? "cards" : "list",
   pageNo: positive(params.get("pageNo"), 1),
   pageSize: positive(params.get("pageSize"), DEFAULT_CATALOG_PAGE_SIZE),
 });
@@ -49,8 +54,10 @@ const writeQuery = (base: URLSearchParams, merged: CatalogQuery) => {
   assign("datasourceId", merged.datasourceId);
   assign("database", merged.database);
   assign("domainId", merged.domainId);
+  assign("ownerId", merged.ownerId);
   assign("unclassified", merged.unclassified ? "1" : "");
   assign("includeMissing", merged.includeMissing ? "1" : "");
+  assign("view", merged.view === "cards" ? "cards" : "");
   assign("pageNo", merged.pageNo > 1 ? String(merged.pageNo) : "");
   assign("pageSize", merged.pageSize !== DEFAULT_CATALOG_PAGE_SIZE ? String(merged.pageSize) : "");
   return next;
