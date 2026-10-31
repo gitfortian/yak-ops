@@ -18,6 +18,7 @@ import BrowsePanel, { type BrowseSelection } from "./browse-panel";
 import CatalogFilters from "./filters";
 import { useCatalogQuery } from "./query";
 import AssetTable from "../shared/asset-table";
+import { useStoredColumnWidths } from "../shared/use-stored-column-widths";
 import DataMapEmptyState from "../shared/empty-state";
 import { dataMapKeys } from "../shared/keys";
 import { DATA_MAP_BASE } from "../shared/labels";
@@ -52,6 +53,7 @@ export default function CatalogPage() {
   const { query, update } = useCatalogQuery();
   const { scope, ready } = useDataMapScope();
   const [draft, setDraft] = useState(query.keyword);
+  const [tableWidths, onTableWidthsChange] = useStoredColumnWidths("yak.datamap.catalog-table.v1");
 
   const taxonomy = useDomainTaxonomy();
   const datasources = useDatasourceOptions();
@@ -396,6 +398,8 @@ export default function CatalogPage() {
                 <AssetTable
                   records={records}
                   loading={page.isFetching}
+                  columnWidths={tableWidths}
+                  onColumnWidthsChange={onTableWidthsChange}
                   pagination={{
                     pageNo: query.pageNo,
                     pageSize: query.pageSize,
