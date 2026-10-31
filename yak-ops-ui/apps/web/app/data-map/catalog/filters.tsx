@@ -24,16 +24,19 @@ interface Props {
   keyword: string;
   datasourceId: string;
   database: string;
+  ownerId: string;
   tagValueIds: string[];
   includeMissing: boolean;
   datasources: DatasourceOption[];
   databases: string[];
   tagDictionary: TagKey[];
+  ownerOptions: { userId: string; displayName: string }[];
   hasActiveFilters: boolean;
   onKeywordChange: (value: string) => void;
   onKeywordCommit: () => void;
   onDatasourceChange: (value: string) => void;
   onDatabaseChange: (value: string) => void;
+  onOwnerChange: (value: string) => void;
   onTagValuesChange: (valueIds: string[]) => void;
   onIncludeMissingChange: (value: boolean) => void;
   onReset: () => void;
@@ -169,6 +172,14 @@ export default function CatalogFilters(props: Props) {
     { value: "", label: "全部库" },
     ...props.databases.map((item) => ({ value: item, label: item })),
   ];
+  const ownerOptions: Option[] = [
+    { value: "", label: "全部负责人" },
+    ...props.ownerOptions.map((item) => ({ value: item.userId, label: item.displayName })),
+  ];
+  const statusOptions: Option[] = [
+    { value: "active", label: "正常" },
+    { value: "all", label: "包含已缺失" },
+  ];
 
   return (
     <section className="flex shrink-0 flex-wrap items-center gap-2">
@@ -204,19 +215,24 @@ export default function CatalogFilters(props: Props) {
         options={databaseOptions}
         onChange={props.onDatabaseChange}
       />
+      <FilterSelect
+        label="负责人"
+        value={props.ownerId}
+        options={ownerOptions}
+        onChange={props.onOwnerChange}
+      />
       <TagFilter
         tagDictionary={props.tagDictionary}
         selectedValueIds={props.tagValueIds}
         onChange={props.onTagValuesChange}
       />
 
-      <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--yak-components-muted-text)]">
-        <Checkbox
-          checked={props.includeMissing}
-          onCheckedChange={(checked) => props.onIncludeMissingChange(checked === true)}
-        />
-        包含已缺失
-      </label>
+      <FilterSelect
+        label="状态"
+        value={props.includeMissing ? "all" : "active"}
+        options={statusOptions}
+        onChange={(value) => props.onIncludeMissingChange(value === "all")}
+      />
 
       {props.hasActiveFilters && (
         <Button size="small" variant="ghost" onClick={props.onReset}>

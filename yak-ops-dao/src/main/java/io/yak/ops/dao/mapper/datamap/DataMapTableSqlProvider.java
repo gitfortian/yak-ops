@@ -28,6 +28,7 @@ public final class DataMapTableSqlProvider {
         if (criteria.getDatabaseName() != null) conditions.add("t.database_name=#{databaseName}");
         if (criteria.getSchemaName() != null) conditions.add("t.schema_name=#{schemaName}");
         if (criteria.getDomainId() != null) conditions.add("t.domain_id=#{domainId}");
+        if (criteria.getOwnerId() != null) conditions.add("t.owner_id=#{ownerId}");
         if (criteria.isUnclassified()) conditions.add("t.domain_id IS NULL");
         if (!criteria.getTagValueGroups().isEmpty()) {
             // One EXISTS clause per key, ANDed: values of one key are OR-ed inside their IN list,

@@ -32,6 +32,10 @@ public class DataMapTableQueryDTO {
     @Size(max = 64)
     private String domainId;
 
+    /** Optional accountable owner filter. */
+    @Size(max = 64)
+    private String ownerId;
+
     /** When true, only assets without a data domain are returned. */
     private Boolean unclassified;
 

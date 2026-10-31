@@ -20,6 +20,7 @@ import io.yak.ops.common.bean.vo.datamap.DataMapCrawlExcludePreviewVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlSchedulePreviewVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlTaskVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapCrawlVO;
+import io.yak.ops.common.bean.vo.datamap.DataMapOverviewFacetsVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapOverviewVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapPreviewVO;
 import io.yak.ops.common.bean.vo.datamap.DataMapTableChangeVO;
@@ -79,6 +80,12 @@ public class DataMapController {
     @GetMapping("/overview")
     public Result<DataMapOverviewVO> overview() {
         return Result.success(catalogService.overview(WorkspaceContext.requireWorkspaceId(), actor()));
+    }
+
+    @Operation(summary = "数据域与数据源分面计数")
+    @GetMapping("/overview/facets")
+    public Result<DataMapOverviewFacetsVO> overviewFacets() {
+        return Result.success(catalogService.overviewFacets(WorkspaceContext.requireWorkspaceId()));
     }
 
     @Operation(summary = "搜索与浏览资产")

@@ -4,13 +4,21 @@ import { Link } from "react-router-dom";
 
 import type { TableSummary } from "@/service/data-map/types";
 
-import { locationLabel, TABLE_STATUS_LABEL, TABLE_STATUS_TONE, tablePath } from "./labels";
-import { useDomainTaxonomy } from "./lookups";
+import {
+  locationLabel,
+  relativeTime,
+  TABLE_STATUS_LABEL,
+  TABLE_STATUS_TONE,
+  tablePath,
+} from "./labels";
+import { useDomainTaxonomy, useOwnerNames } from "./lookups";
 
 interface Props {
   records: TableSummary[];
   loading: boolean;
   emptyText?: ReactNode;
+  /** Leading star column for lists that own the favourite state, such as 我的数据-收藏. */
+  favoriteAction?: (record: TableSummary) => ReactNode;
   pagination?:
     | false
     | {
@@ -47,15 +55,27 @@ export default function AssetTable({
   records,
   loading,
   emptyText = "暂无数据",
+  favoriteAction,
   pagination = false,
 }: Props) {
   const { domainNames } = useDomainTaxonomy();
+  const { names: ownerNames } = useOwnerNames();
 
   const columns: TableColumns<TableSummary> = [
+    ...(favoriteAction
+      ? [
+          {
+            key: "favorite",
+            title: "",
+            width: 44,
+            render: (_value: unknown, record: TableSummary) => favoriteAction(record),
+          },
+        ]
+      : []),
     {
       key: "name",
       title: "资产",
-      minWidth: 260,
+      minWidth: 240,
       render: (_value, record) => (
         <div className="min-w-0">
           <Link
@@ -74,7 +94,7 @@ export default function AssetTable({
     {
       key: "description",
       title: "描述",
-      minWidth: 220,
+      minWidth: 200,
       render: (_value, record) => (
         <div className="min-w-0">
           <div className="line-clamp-2 text-sm" title={record.description ?? undefined}>
@@ -89,17 +109,9 @@ export default function AssetTable({
       ),
     },
     {
-      key: "datasource",
-      title: "数据源",
-      dataIndex: "datasourceName",
-      width: 160,
-      ellipsis: true,
-      render: (_value, record) => record.datasourceName || record.datasourceId,
-    },
-    {
       key: "domain",
       title: "数据域",
-      width: 140,
+      width: 120,
       ellipsis: true,
       render: (_value, record) => {
         const name = record.domainId ? domainNames.get(record.domainId) : undefined;
@@ -107,15 +119,25 @@ export default function AssetTable({
       },
     },
     {
+      key: "owner",
+      title: "负责人",
+      width: 110,
+      ellipsis: true,
+      render: (_value, record) => {
+        const name = record.ownerId ? ownerNames.get(record.ownerId) : undefined;
+        return name ?? <span className="text-[var(--yak-components-muted-text)]">未指派</span>;
+      },
+    },
+    {
       key: "tags",
       title: "标签",
-      width: 170,
+      width: 160,
       render: (_value, record) => <TagList tags={record.tags} />,
     },
     {
       key: "status",
       title: "状态",
-      width: 100,
+      width: 90,
       render: (_value, record) => (
         <Badge tone={TABLE_STATUS_TONE[record.status]}>{TABLE_STATUS_LABEL[record.status]}</Badge>
       ),
@@ -123,9 +145,15 @@ export default function AssetTable({
     {
       key: "lastSeen",
       title: "最近采集",
-      dataIndex: "lastSeenTime",
-      width: 170,
-      render: (_value, record) => record.lastSeenTime || "-",
+      width: 110,
+      render: (_value, record) => (
+        <span
+          className="text-xs text-[var(--yak-components-muted-text)]"
+          title={record.lastSeenTime}
+        >
+          {relativeTime(record.lastSeenTime)}
+        </span>
+      ),
     },
   ];
 
@@ -149,7 +177,7 @@ export default function AssetTable({
             }
           : false
       }
-      scroll={{ x: 1180 }}
+      scroll={{ x: 1020 }}
     />
   );
 }

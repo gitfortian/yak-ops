@@ -22,6 +22,12 @@ public class DataMapOverviewVO {
     /** Active assets without a data domain. */
     private long unclassifiedCount;
 
+    /** Active assets whose curated description is filled. */
+    private long describedCount;
+
+    /** Active assets whose curated owner is filled. */
+    private long ownedCount;
+
     /** The ten assets with the highest summed visit count. */
     private List<DataMapTableSummaryVO> hotTables = new ArrayList<>();
 }

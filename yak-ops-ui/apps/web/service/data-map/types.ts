@@ -78,6 +78,7 @@ export interface TableQuery {
   schema?: string;
   domainId?: string;
   unclassified?: boolean;
+  ownerId?: string;
   tagValueIds?: string[];
   includeMissing?: boolean;
   pageNo: number;
@@ -101,7 +102,23 @@ export interface Overview {
   managedDatasourceCount: number;
   newTablesLastSevenDays: number;
   unclassifiedCount: number;
+  describedCount: number;
+  ownedCount: number;
   hotTables: TableSummary[];
+}
+
+/** Asset and coverage counts of one browse facet value, such as a domain or a datasource. */
+export interface FacetSummary {
+  facetKey: string;
+  assetCount: number;
+  describedCount: number;
+  ownedCount: number;
+}
+
+/** Per-domain and per-datasource facet counts of the Workspace. */
+export interface OverviewFacets {
+  domains: FacetSummary[];
+  datasources: FacetSummary[];
 }
 
 export interface Preview {

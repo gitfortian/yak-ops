@@ -24,6 +24,8 @@ public class DataMapSearchCriteria {
     private String schemaName;
     /** Optional data domain filter. */
     private String domainId;
+    /** Optional accountable owner filter. */
+    private String ownerId;
     /** When true, only assets without a data domain are returned. */
     private boolean unclassified;
     /**
