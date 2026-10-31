@@ -1,23 +1,20 @@
 import { Badge, Button, Card, toast } from "@yak-ops/yak-ui";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Check,
-  Clock3,
-  Copy,
-  Layers,
-  Pencil,
-  Star,
-  UserRound,
-} from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, Clock3, Copy, Pencil, Star } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import type { TableDetail } from "@/service/data-map/types";
 
-import { DATA_MAP_BASE, locationLabel, TABLE_STATUS_LABEL } from "../../shared/labels";
-import { useDomainTaxonomy, useOwnerOptions } from "../../shared/lookups";
+import {
+  DATA_MAP_BASE,
+  locationLabel,
+  relativeTime,
+  TABLE_STATUS_LABEL,
+} from "../../shared/labels";
+import { useDomainTaxonomy, useOwnerNames } from "../../shared/lookups";
+import DomainBadge from "../../shared/domain-badge";
+import UserAvatar from "../../shared/user-avatar";
 
 interface Props {
   detail: TableDetail;
@@ -50,15 +47,12 @@ function Meta({ icon, label, children }: { icon: ReactNode; label: string; child
  * behind the edit action so a detail visit can never change data by accident.
  */
 export default function DetailHeader({ detail, onEdit, onToggleFavorite, favoritePending }: Props) {
-  const owners = useOwnerOptions();
+  const { names: ownerNames } = useOwnerNames();
   const taxonomy = useDomainTaxonomy();
   const [copied, setCopied] = useState(false);
 
   const missing = detail.status === "MISSING";
-  const ownerName = detail.ownerId
-    ? ((owners.data ?? []).find((owner) => owner.userId === detail.ownerId)?.displayName ??
-      detail.ownerId)
-    : null;
+  const ownerName = detail.ownerId ? (ownerNames.get(detail.ownerId) ?? detail.ownerId) : null;
   const domainName = detail.domainId ? taxonomy.domainNames.get(detail.domainId) : null;
 
   const copyName = async () => {
@@ -96,7 +90,7 @@ export default function DetailHeader({ detail, onEdit, onToggleFavorite, favorit
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2.5">
               <h1
-                className="truncate text-lg font-semibold leading-7 text-[var(--yak-components-panel-text)]"
+                className="truncate font-mono text-lg font-bold leading-7 tracking-tight text-[var(--yak-components-panel-text)]"
                 title={detail.name}
               >
                 {detail.name}
@@ -150,24 +144,27 @@ export default function DetailHeader({ detail, onEdit, onToggleFavorite, favorit
       </div>
 
       <div className="mt-3.5 flex flex-wrap items-center gap-x-7 gap-y-2 border-t border-[var(--yak-components-panel-border)] px-6 py-2.5 text-xs max-md:px-4">
-        <Meta icon={<UserRound size={13} aria-hidden="true" />} label="负责人">
-          {ownerName ?? (
+        <div className={META_CLASS}>
+          <span className={META_LABEL_CLASS}>负责人</span>
+          {ownerName ? (
+            <span className="inline-flex items-center gap-1.5 text-[var(--yak-components-panel-text)]">
+              <UserAvatar name={ownerName} />
+              {ownerName}
+            </span>
+          ) : (
             <span className="font-medium text-[var(--yak-components-badge-warning-text)]">
               未指派
             </span>
           )}
-        </Meta>
+        </div>
 
-        <Meta icon={<Layers size={13} aria-hidden="true" />} label="数据域">
-          {domainName ? (
-            <Badge tone="info">{domainName}</Badge>
-          ) : (
-            <span className="text-[var(--yak-components-muted-text)]">未分类</span>
-          )}
-        </Meta>
+        <div className={META_CLASS}>
+          <span className={META_LABEL_CLASS}>数据域</span>
+          <DomainBadge id={detail.domainId} name={domainName ?? undefined} />
+        </div>
 
         <Meta icon={<Clock3 size={13} aria-hidden="true" />} label="最近采集">
-          {detail.lastSeenTime}
+          <span title={detail.lastSeenTime}>{relativeTime(detail.lastSeenTime)}</span>
         </Meta>
 
         <div className={`${META_CLASS} gap-2`}>

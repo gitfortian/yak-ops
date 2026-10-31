@@ -106,7 +106,7 @@ export default function TableDetailPage() {
                 <Tabs value={tab} onValueChange={(value) => changeTab(value as string)}>
                   <TabsList>
                     <TabsTab value="basics">基础信息</TabsTab>
-                    <TabsTab value="columns">字段</TabsTab>
+                    <TabsTab value="columns">字段（{record.columns.length}）</TabsTab>
                     <TabsTab value="preview" disabled={previewDisabled}>
                       数据预览
                     </TabsTab>

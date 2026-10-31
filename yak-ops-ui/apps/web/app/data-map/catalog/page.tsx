@@ -1,4 +1,4 @@
-import { Alert, Button, Card, CardContent, PageHeader, Pagination } from "@yak-ops/yak-ui";
+import { Alert, Button, PageHeader, Pagination } from "@yak-ops/yak-ui";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { LayoutGrid, List, X } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -261,86 +261,84 @@ export default function CatalogPage() {
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-3">
-          <Card>
-            <CardContent className="p-3.5">
-              <CatalogFilters
-                keyword={draft}
-                datasourceId={query.datasourceId}
-                database={query.database}
-                ownerId={query.ownerId}
-                tagValueIds={query.tagValueIds}
-                includeMissing={query.includeMissing}
-                datasources={datasources.options}
-                databases={databases.data ?? []}
-                tagDictionary={tagDictionary.data ?? []}
-                ownerOptions={ownerOptions.data ?? []}
-                hasActiveFilters={hasActiveFilters}
-                onKeywordChange={setDraft}
-                onKeywordCommit={() => update({ keyword: draft.trim() })}
-                onDatasourceChange={(value) => update({ datasourceId: value, database: "" })}
-                onDatabaseChange={(value) => update({ database: value })}
-                onOwnerChange={(value) => update({ ownerId: value })}
-                onTagValuesChange={(value) => update({ tagValueIds: value })}
-                onIncludeMissingChange={(value) => update({ includeMissing: value })}
-                onReset={reset}
-              />
+          <div className="rounded-[var(--yak-radius-lg)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] p-3.5 shadow-[var(--yak-datamap-card-shadow)]">
+            <CatalogFilters
+              keyword={draft}
+              datasourceId={query.datasourceId}
+              database={query.database}
+              ownerId={query.ownerId}
+              tagValueIds={query.tagValueIds}
+              includeMissing={query.includeMissing}
+              datasources={datasources.options}
+              databases={databases.data ?? []}
+              tagDictionary={tagDictionary.data ?? []}
+              ownerOptions={ownerOptions.data ?? []}
+              hasActiveFilters={hasActiveFilters}
+              onKeywordChange={setDraft}
+              onKeywordCommit={() => update({ keyword: draft.trim() })}
+              onDatasourceChange={(value) => update({ datasourceId: value, database: "" })}
+              onDatabaseChange={(value) => update({ database: value })}
+              onOwnerChange={(value) => update({ ownerId: value })}
+              onTagValuesChange={(value) => update({ tagValueIds: value })}
+              onIncludeMissingChange={(value) => update({ includeMissing: value })}
+              onReset={reset}
+            />
 
-              <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                {activeFacets.map((facet) => (
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              {activeFacets.map((facet) => (
+                <button
+                  key={facet.key}
+                  type="button"
+                  onClick={facet.onRemove}
+                  className="flex cursor-pointer items-center gap-1 rounded-full border border-[var(--yak-color-primary-subtle)] bg-[var(--yak-color-primary-subtle)] px-2.5 py-0.5 text-xs text-[var(--yak-color-primary)] hover:opacity-80"
+                >
+                  {facet.label}
+                  <X size={11} aria-hidden="true" />
+                </button>
+              ))}
+              {activeFacets.length > 0 && (
+                <button
+                  type="button"
+                  onClick={reset}
+                  className="cursor-pointer text-xs text-[var(--yak-components-muted-text)] hover:text-[var(--yak-components-panel-text)]"
+                >
+                  清空筛选
+                </button>
+              )}
+              <span className="ml-auto flex items-center gap-3 text-xs text-[var(--yak-components-muted-text)]">
+                共 <b className="text-[var(--yak-components-panel-text)]">{countLabel(total)}</b>{" "}
+                个资产
+                <span className="flex overflow-hidden rounded-[var(--yak-radius-control-small)] border border-[var(--yak-components-control-border)]">
                   <button
-                    key={facet.key}
                     type="button"
-                    onClick={facet.onRemove}
-                    className="flex cursor-pointer items-center gap-1 rounded-full border border-[var(--yak-color-primary-subtle)] bg-[var(--yak-color-primary-subtle)] px-2.5 py-0.5 text-xs text-[var(--yak-color-primary)] hover:opacity-80"
+                    title="列表视图"
+                    aria-pressed={query.view === "list"}
+                    onClick={() => update({ view: "list" })}
+                    className={`flex h-7 w-8 cursor-pointer items-center justify-center ${
+                      query.view === "list"
+                        ? "bg-[var(--yak-color-primary-subtle)] text-[var(--yak-color-primary)]"
+                        : "bg-[var(--yak-components-panel-bg)] text-[var(--yak-components-muted-text)]"
+                    }`}
                   >
-                    {facet.label}
-                    <X size={11} aria-hidden="true" />
+                    <List size={13} aria-hidden="true" />
                   </button>
-                ))}
-                {activeFacets.length > 0 && (
                   <button
                     type="button"
-                    onClick={reset}
-                    className="cursor-pointer text-xs text-[var(--yak-components-muted-text)] hover:text-[var(--yak-components-panel-text)]"
+                    title="卡片视图"
+                    aria-pressed={query.view === "cards"}
+                    onClick={() => update({ view: "cards" })}
+                    className={`flex h-7 w-8 cursor-pointer items-center justify-center border-l border-[var(--yak-components-control-border)] ${
+                      query.view === "cards"
+                        ? "bg-[var(--yak-color-primary-subtle)] text-[var(--yak-color-primary)]"
+                        : "bg-[var(--yak-components-panel-bg)] text-[var(--yak-components-muted-text)]"
+                    }`}
                   >
-                    清空筛选
+                    <LayoutGrid size={13} aria-hidden="true" />
                   </button>
-                )}
-                <span className="ml-auto flex items-center gap-3 text-xs text-[var(--yak-components-muted-text)]">
-                  共 <b className="text-[var(--yak-components-panel-text)]">{countLabel(total)}</b>{" "}
-                  个资产
-                  <span className="flex overflow-hidden rounded-[var(--yak-radius-control-small)] border border-[var(--yak-components-control-border)]">
-                    <button
-                      type="button"
-                      title="列表视图"
-                      aria-pressed={query.view === "list"}
-                      onClick={() => update({ view: "list" })}
-                      className={`flex h-7 w-8 cursor-pointer items-center justify-center ${
-                        query.view === "list"
-                          ? "bg-[var(--yak-color-primary-subtle)] text-[var(--yak-color-primary)]"
-                          : "bg-[var(--yak-components-panel-bg)] text-[var(--yak-components-muted-text)]"
-                      }`}
-                    >
-                      <List size={13} aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      title="卡片视图"
-                      aria-pressed={query.view === "cards"}
-                      onClick={() => update({ view: "cards" })}
-                      className={`flex h-7 w-8 cursor-pointer items-center justify-center border-l border-[var(--yak-components-control-border)] ${
-                        query.view === "cards"
-                          ? "bg-[var(--yak-color-primary-subtle)] text-[var(--yak-color-primary)]"
-                          : "bg-[var(--yak-components-panel-bg)] text-[var(--yak-components-muted-text)]"
-                      }`}
-                    >
-                      <LayoutGrid size={13} aria-hidden="true" />
-                    </button>
-                  </span>
                 </span>
-              </div>
-            </CardContent>
-          </Card>
+              </span>
+            </div>
+          </div>
 
           {page.isError && (
             <Alert>
@@ -350,8 +348,8 @@ export default function CatalogPage() {
             </Alert>
           )}
 
-          <Card className="flex min-h-0 flex-1 flex-col">
-            <CardContent className="min-h-0 flex-1 overflow-auto p-3.5">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--yak-radius-lg)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] shadow-[var(--yak-datamap-card-shadow)]">
+            <div className="min-h-0 flex-1 overflow-auto p-3.5">
               {isEmpty ? (
                 hasActiveFilters ? (
                   <DataMapEmptyState
@@ -407,8 +405,8 @@ export default function CatalogPage() {
                   }}
                 />
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </div>

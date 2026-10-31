@@ -1,9 +1,12 @@
+import { Table2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { TableSummary } from "@/service/data-map/types";
 
-import { locationLabel, TABLE_STATUS_LABEL, TABLE_STATUS_TONE, tablePath } from "../shared/labels";
+import { TABLE_STATUS_LABEL, TABLE_STATUS_TONE } from "../shared/labels";
 import { useDomainTaxonomy, useOwnerNames } from "../shared/lookups";
+import DomainBadge from "../shared/domain-badge";
+import UserAvatar from "../shared/user-avatar";
 
 interface Props {
   records: TableSummary[];
@@ -22,7 +25,7 @@ const TONE_CLASS: Record<string, string> = {
     "bg-[var(--yak-components-badge-neutral-bg)] text-[var(--yak-components-badge-neutral-text)]",
 };
 
-/** Card presentation of the catalog result set, mirroring the list columns. */
+/** 卡片视图：与列表同构的资产卡片，悬停浮起。 */
 export default function AssetCards({ records, loading }: Props) {
   const { domainNames } = useDomainTaxonomy();
   const { names: ownerNames } = useOwnerNames();
@@ -33,7 +36,7 @@ export default function AssetCards({ records, loading }: Props) {
         {[0, 1, 2, 3, 4, 5].map((key) => (
           <div
             key={key}
-            className="h-28 animate-pulse rounded-[var(--yak-radius-control-medium)] bg-[var(--yak-components-skeleton-bg)]"
+            className="h-32 animate-pulse rounded-[var(--yak-radius-md)] bg-[var(--yak-components-skeleton-bg)]"
           />
         ))}
       </div>
@@ -48,19 +51,24 @@ export default function AssetCards({ records, loading }: Props) {
         return (
           <Link
             key={record.id}
-            to={tablePath(record.id)}
-            className="block rounded-[var(--yak-radius-control-medium)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-components-panel-bg)] p-3.5 transition-shadow hover:border-[var(--yak-color-primary)] hover:shadow-[var(--yak-components-panel-shadow)]"
+            to={`/data-governance/data-map/tables/${record.id}`}
+            className="block rounded-[var(--yak-radius-md)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] p-4 shadow-[var(--yak-datamap-card-shadow)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--yak-color-primary-ring)] hover:shadow-[var(--yak-datamap-card-shadow-hover)]"
           >
             <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div
-                  className="truncate text-sm font-medium [color:var(--yak-color-primary)]"
-                  title={record.name}
-                >
-                  {record.name}
-                </div>
-                <div className="mt-0.5 truncate text-xs text-[var(--yak-components-muted-text)]">
-                  {locationLabel(record.database, record.schema)}
+              <div className="flex min-w-0 items-start gap-2">
+                <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-[var(--yak-color-primary-subtle)] text-[var(--yak-color-primary)]">
+                  <Table2 size={13} aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <div
+                    className="truncate font-mono text-[12.5px] font-semibold text-[var(--yak-color-primary)]"
+                    title={record.name}
+                  >
+                    {record.name}
+                  </div>
+                  <div className="mt-0.5 truncate text-[11px] text-[var(--yak-components-muted-text)]">
+                    {[record.database, record.schema].filter(Boolean).join(" / ") || "-"}
+                  </div>
                 </div>
               </div>
               <span
@@ -69,20 +77,27 @@ export default function AssetCards({ records, loading }: Props) {
                 {TABLE_STATUS_LABEL[record.status]}
               </span>
             </div>
-            <p className="mt-2 line-clamp-2 min-h-10 text-xs leading-5 text-[var(--yak-components-panel-text)]">
-              {record.description || record.remarks || "— 缺少描述 —"}
+            <p className="mt-2.5 line-clamp-2 min-h-10 text-xs leading-5 text-[var(--yak-components-panel-text)]">
+              {record.description || record.remarks || (
+                <span className="text-[var(--yak-components-muted-text)]">— 缺少描述 —</span>
+              )}
             </p>
-            <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--yak-components-muted-text)]">
-              <span className="rounded-full bg-[var(--yak-components-table-header-bg)] px-2 py-0.5">
-                {domain ?? "未分类"}
-              </span>
-              <span className="rounded-full bg-[var(--yak-components-table-header-bg)] px-2 py-0.5">
-                {owner ?? "未指派"}
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <DomainBadge id={record.domainId} name={domain} />
+              <span className="inline-flex items-center gap-1 rounded-[4px] bg-[var(--yak-components-collapse-section-bg)] px-[7px] py-0.5 text-[11px] text-[var(--yak-components-panel-text)]">
+                {owner ? (
+                  <>
+                    <UserAvatar name={owner} />
+                    {owner}
+                  </>
+                ) : (
+                  <span className="text-[var(--yak-components-muted-text)]">未指派</span>
+                )}
               </span>
               {record.tags.slice(0, 2).map((tag) => (
                 <span
                   key={tag.valueId}
-                  className="rounded-full bg-[var(--yak-components-badge-info-bg)] px-2 py-0.5 text-[var(--yak-components-badge-info-text)]"
+                  className="rounded-[4px] bg-[var(--yak-components-collapse-section-bg)] px-[7px] py-0.5 text-[11px] font-medium text-[var(--yak-components-panel-text)]"
                 >
                   {tag.valueName}
                 </span>

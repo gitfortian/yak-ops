@@ -26,12 +26,15 @@ const readTab = (value: string | null): PersonalTab => {
 
 const StatCard = ({
   icon,
+  iconClassName,
   value,
   label,
   active,
   onClick,
 }: {
   icon: ReactNode;
+  /** Tinted icon-square background class of the stat. */
+  iconClassName: string;
   value: string;
   label: string;
   active: boolean;
@@ -40,17 +43,20 @@ const StatCard = ({
   <button
     type="button"
     onClick={onClick}
-    className={`flex cursor-pointer items-center gap-3 rounded-[var(--yak-radius-control-medium)] border p-4 text-left transition-colors ${
+    aria-pressed={active}
+    className={`flex cursor-pointer items-center gap-3 rounded-[var(--yak-radius-lg)] border p-4 text-left shadow-[var(--yak-datamap-card-shadow)] transition-all duration-200 ${
       active
         ? "border-[var(--yak-color-primary)] bg-[var(--yak-color-primary-subtle)]"
-        : "border-[var(--yak-components-panel-border)] bg-[var(--yak-components-panel-bg)] hover:border-[var(--yak-color-primary)]"
+        : "border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] hover:-translate-y-0.5 hover:border-[var(--yak-color-primary-ring)] hover:shadow-[var(--yak-datamap-card-shadow-hover)]"
     }`}
   >
-    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--yak-color-primary-subtle)] text-[var(--yak-color-primary)]">
+    <span
+      className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${iconClassName}`}
+    >
       {icon}
     </span>
     <span className="min-w-0">
-      <span className="block text-xl font-semibold text-[var(--yak-components-panel-text)]">
+      <span className="block text-xl font-bold text-[var(--yak-components-panel-text)] [font-variant-numeric:tabular-nums]">
         {value}{" "}
         <span className="text-xs font-normal text-[var(--yak-components-muted-text)]">{label}</span>
       </span>
@@ -164,6 +170,7 @@ export default function PersonalPage() {
         <div className="grid shrink-0 grid-cols-1 gap-3 md:grid-cols-3">
           <StatCard
             icon={<Star size={16} aria-hidden="true" />}
+            iconClassName="bg-[var(--yak-datamap-badge-gold-bg)] text-[var(--yak-datamap-badge-gold-text)]"
             value={stats.data ? countLabel(stats.data.favorites) : "—"}
             label="个收藏"
             active={tab === "favorites"}
@@ -171,6 +178,7 @@ export default function PersonalPage() {
           />
           <StatCard
             icon={<Clock size={16} aria-hidden="true" />}
+            iconClassName="bg-[var(--yak-datamap-badge-cyan-bg)] text-[var(--yak-datamap-badge-cyan-text)]"
             value={stats.data ? countLabel(stats.data.recent) : "—"}
             label="条最近访问"
             active={tab === "recent"}
@@ -178,6 +186,7 @@ export default function PersonalPage() {
           />
           <StatCard
             icon={<Users size={16} aria-hidden="true" />}
+            iconClassName="bg-[var(--yak-color-primary-subtle)] text-[var(--yak-color-primary)]"
             value={stats.data ? countLabel(stats.data.owned) : "—"}
             label="我负责的资产"
             active={tab === "owned"}
@@ -185,7 +194,7 @@ export default function PersonalPage() {
           />
         </div>
 
-        <div className="mt-4 flex min-h-0 flex-1 flex-col rounded-[var(--yak-radius-control-medium)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-components-panel-bg)] p-4">
+        <div className="mt-4 flex min-h-0 flex-1 flex-col rounded-[var(--yak-radius-lg)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] p-4 shadow-[var(--yak-datamap-card-shadow)]">
           <Tabs
             value={tab}
             onValueChange={(value) => write({ tab: readTab(value as string), pageNo: 1 })}

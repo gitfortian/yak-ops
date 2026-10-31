@@ -156,10 +156,14 @@ public class DataMapCatalogServiceImpl implements DataMapCatalogService {
     private List<DataMapTableSummaryVO> hotTables(String workspaceId) {
         List<DataMapViewTotalRow> totals = personalMapper.hotTables(workspaceId, HOT_TABLE_LIMIT);
         if (totals.isEmpty()) return List.of();
-        return assembler.summariesInOrder(
+        List<DataMapTableSummaryVO> summaries = assembler.summariesInOrder(
                 workspaceId,
                 totals.stream().map(DataMapViewTotalRow::getTableId).toList(),
                 null);
+        Map<String, Long> counts = totals.stream()
+                .collect(Collectors.toMap(DataMapViewTotalRow::getTableId, DataMapViewTotalRow::getViewCount));
+        summaries.forEach(summary -> summary.setViewCount(counts.get(summary.getId())));
+        return summaries;
     }
 
     private DataMapTableEntity requireAsset(String workspaceId, String tableId) {

@@ -58,4 +58,7 @@ public class DataMapTableSummaryVO {
 
     /** Column names that matched the keyword; empty when no keyword was given. */
     private List<String> matchedColumns = new ArrayList<>();
+
+    /** Summed visit count; populated only on the overview hot list, null elsewhere. */
+    private Long viewCount;
 }

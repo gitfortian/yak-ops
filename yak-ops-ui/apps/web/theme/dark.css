@@ -152,4 +152,24 @@
   --yak-datamap-page-bg: #0c111d;
   --yak-datamap-surface: #161b26;
   --yak-datamap-card-shadow: 0 1px 2px 0 rgb(0 0 0 / 40%);
+  --yak-datamap-card-shadow-hover:
+    0 4px 8px -2px rgb(0 0 0 / 45%), 0 12px 24px -4px rgb(0 0 0 / 50%);
+
+  /* Dark accent badges follow the light ramp with tinted backgrounds and
+   * brightened text, mirroring the semantic badge pattern above. */
+  --yak-datamap-badge-gold-bg: rgb(240 177 21 / 14%);
+  --yak-datamap-badge-gold-border: rgb(240 177 21 / 35%);
+  --yak-datamap-badge-gold-text: #fdb022;
+  --yak-datamap-badge-purple-bg: rgb(127 86 217 / 20%);
+  --yak-datamap-badge-purple-border: rgb(127 86 217 / 45%);
+  --yak-datamap-badge-purple-text: #bdb4fe;
+  --yak-datamap-badge-cyan-bg: rgb(54 191 250 / 14%);
+  --yak-datamap-badge-cyan-border: rgb(54 191 250 / 35%);
+  --yak-datamap-badge-cyan-text: #7cd4fd;
+
+  --yak-datamap-hero-gradient: linear-gradient(135deg, rgb(83 177 253 / 8%) 0%, transparent 58%);
+  --yak-datamap-hero-search-shadow: 0 4px 16px 0 rgb(0 0 0 / 35%);
+  --yak-datamap-avatar-gradient: linear-gradient(135deg, #2f54eb, #722ed1);
+  --yak-datamap-progress-track: #262b36;
+  --yak-datamap-divider-soft: rgb(236 236 237 / 8%);
 }
