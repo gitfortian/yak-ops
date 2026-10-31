@@ -59,6 +59,9 @@ public class DataMapTableDetailVO {
     /** Tag values applied to the asset, grouped by their key. */
     private List<DataMapTagRefVO> tags = new ArrayList<>();
 
+    /** Summed visit count of the asset across every Workspace viewer. */
+    private long viewCount;
+
     /** Collected columns, ordered by ordinal position. */
     private List<DataMapColumnVO> columns = new ArrayList<>();
 }

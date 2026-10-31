@@ -1,5 +1,15 @@
 import { Badge, Button, Card, toast } from "@yak-ops/yak-ui";
-import { AlertTriangle, ArrowLeft, Check, Clock3, Copy, Pencil, Star } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  Clock3,
+  Columns3,
+  Copy,
+  Flame,
+  Pencil,
+  Star,
+} from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -165,6 +175,18 @@ export default function DetailHeader({ detail, onEdit, onToggleFavorite, favorit
 
         <Meta icon={<Clock3 size={13} aria-hidden="true" />} label="最近采集">
           <span title={detail.lastSeenTime}>{relativeTime(detail.lastSeenTime)}</span>
+        </Meta>
+
+        <Meta icon={<Flame size={13} aria-hidden="true" />} label="累计访问">
+          <span className="font-semibold [font-variant-numeric:tabular-nums]">
+            {detail.viewCount}
+          </span>
+        </Meta>
+
+        <Meta icon={<Columns3 size={13} aria-hidden="true" />} label="字段">
+          <span className="font-semibold [font-variant-numeric:tabular-nums]">
+            {detail.columns.length}
+          </span>
         </Meta>
 
         <div className={`${META_CLASS} gap-2`}>

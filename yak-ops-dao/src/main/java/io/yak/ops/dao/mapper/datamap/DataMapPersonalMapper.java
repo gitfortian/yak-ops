@@ -43,6 +43,17 @@ public interface DataMapPersonalMapper {
     @Select("SELECT COUNT(*) FROM yak_ops_data_map_favorite WHERE workspace_id=#{workspaceId} AND user_id=#{userId}")
     long countFavorites(@Param("workspaceId") String workspaceId, @Param("userId") String userId);
 
+    /**
+     * Sums the visit counter of one asset across every viewer of the Workspace.
+     *
+     * @param workspaceId current Workspace
+     * @param tableId asset identity
+     * @return total visit count; zero when the asset has never been opened
+     */
+    @Select("SELECT COALESCE(SUM(view_count),0) FROM yak_ops_data_map_view "
+            + "WHERE workspace_id=#{workspaceId} AND table_id=#{tableId}")
+    long countTableViews(@Param("workspaceId") String workspaceId, @Param("tableId") String tableId);
+
     @Insert("INSERT INTO yak_ops_data_map_view "
             + "(workspace_id,user_id,table_id,view_count,first_viewed_time,last_viewed_time) "
             + "VALUES (#{workspaceId},#{userId},#{tableId},1,#{viewedTime},#{viewedTime}) "

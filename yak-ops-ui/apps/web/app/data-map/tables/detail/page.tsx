@@ -120,6 +120,7 @@ export default function TableDetailPage() {
                   <BasicsTab
                     detail={record}
                     editing={editing}
+                    onEdit={() => setEditing(true)}
                     onCancel={() => setEditing(false)}
                     onSaved={() => {
                       setEditing(false);

@@ -71,6 +71,8 @@ export interface TableDetail {
   favorited: boolean;
   tags: TagRef[];
   columns: TableColumn[];
+  /** Summed visit count of the asset across every Workspace viewer. */
+  viewCount: number;
 }
 
 export interface TableQuery {
