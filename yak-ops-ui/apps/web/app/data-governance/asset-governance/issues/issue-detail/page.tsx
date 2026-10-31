@@ -1,7 +1,7 @@
 import { Alert, Badge, Button, Spinner, toast } from "@yak-ops/yak-ui";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import OwnerCell from "@/app/data-map/shared/cells";
@@ -33,17 +33,19 @@ export default function GovernanceIssueDetailPage() {
   const { issueId = "" } = useParams();
   const queryClient = useQueryClient();
   const [command, setCommand] = useState<SingleCommand | null>(null);
-  const [eventsPage, setEventsPage] = useState(1);
-
   const detail = useQuery({
     queryKey: ["governance", "issue", issueId],
     queryFn: ({ signal }) => getIssue(issueId, signal),
     enabled: Boolean(issueId),
   });
 
-  const events = useQuery({
-    queryKey: ["governance", "issue-events", issueId, eventsPage],
-    queryFn: ({ signal }) => pageIssueEvents(issueId, eventsPage, 20, signal),
+  /** 事件流分页为累积式：加载更多把下一页并进列表，而不是替换。 */
+  const events = useInfiniteQuery({
+    queryKey: ["governance", "issue-events", issueId],
+    queryFn: ({ signal, pageParam }) => pageIssueEvents(issueId, pageParam, 20, signal),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.pagination.total > allPages.length * 20 ? allPages.length + 1 : undefined,
     enabled: Boolean(issueId),
   });
 
@@ -83,6 +85,11 @@ export default function GovernanceIssueDetailPage() {
     }
     return items;
   };
+
+  const eventRows = useMemo(
+    () => (events.data?.pages ?? []).flatMap((page) => page.bizData),
+    [events.data],
+  );
 
   const commandProps = {
     pending: act.isPending,
@@ -229,15 +236,15 @@ export default function GovernanceIssueDetailPage() {
                   <Spinner size="small" />
                   正在加载事件
                 </div>
-              ) : (events.data?.bizData.length ?? 0) === 0 ? (
+              ) : eventRows.length === 0 ? (
                 <p className="py-6 text-center text-xs text-[var(--yak-components-muted-text)]">
                   暂无事件
                 </p>
               ) : (
                 <ol className="m-0 list-none p-0">
-                  {(events.data?.bizData ?? []).map((event, index) => (
+                  {eventRows.map((event, index) => (
                     <li key={event.id} className="relative flex gap-3 pb-5 last:pb-0">
-                      {index < (events.data?.bizData.length ?? 0) - 1 && (
+                      {index < eventRows.length - 1 && (
                         <span
                           aria-hidden="true"
                           className="absolute top-4 left-[5px] h-full w-px bg-[var(--yak-components-panel-border)]"
@@ -278,14 +285,19 @@ export default function GovernanceIssueDetailPage() {
                   ))}
                 </ol>
               )}
+              {events.hasNextPage && (
+                <div className="mt-2 text-center">
+                  <Button
+                    size="small"
+                    variant="ghost"
+                    loading={events.isFetchingNextPage}
+                    onClick={() => void events.fetchNextPage()}
+                  >
+                    加载更多
+                  </Button>
+                </div>
+              )}
             </div>
-            {events.data && events.data.pagination.total > eventsPage * 20 && (
-              <div className="mt-2 text-center">
-                <Button size="small" variant="ghost" onClick={() => setEventsPage(eventsPage + 1)}>
-                  加载更多
-                </Button>
-              </div>
-            )}
           </div>
         </>
       )}
