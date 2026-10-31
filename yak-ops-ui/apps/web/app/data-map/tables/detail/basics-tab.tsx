@@ -1,6 +1,5 @@
 import {
   Alert,
-  Badge,
   Button,
   Field,
   FieldLabel,
@@ -21,8 +20,9 @@ import { updateTable } from "@/service/data-map/catalog";
 import { dataMapFailureMessage } from "@/service/data-map/request";
 import type { TableDetail } from "@/service/data-map/types";
 
+import AccentBadge, { accentToneOf } from "../../shared/accent-badge";
 import { dataMapKeys } from "../../shared/keys";
-import { locationLabel } from "../../shared/labels";
+import { relativeTime } from "../../shared/labels";
 import { useDomainTaxonomy, useOwnerOptions } from "../../shared/lookups";
 import { useDataMapScope } from "../../shared/scope";
 import TagDialog from "./tag-dialog";
@@ -32,19 +32,12 @@ interface Props {
   editing: boolean;
   onCancel: () => void;
   onSaved: () => void;
+  /** Enters edit mode from the read view; the header owns the same action. */
+  onEdit: () => void;
 }
 
 const NO_DOMAIN = "__none__";
 const NO_OWNER = "__none__";
-
-const Fact = ({ label, value }: { label: string; value: string }) => (
-  <div className="min-w-0">
-    <dt className="text-xs text-[var(--yak-components-muted-text)]">{label}</dt>
-    <dd className="mt-0.5 truncate text-sm text-[var(--yak-components-panel-text)]" title={value}>
-      {value || "-"}
-    </dd>
-  </div>
-);
 
 /** Groups the asset's tag values by their key, keeping the key order of the response. */
 function groupTagsByKey(tags: TableDetail["tags"]) {
@@ -64,7 +57,7 @@ function groupTagsByKey(tags: TableDetail["tags"]) {
  * tags are plain text until the overview card's edit action turns this into a form. The crawler
  * never writes these fields, so saving here cannot conflict with a run.
  */
-export default function BasicsTab({ detail, editing, onCancel, onSaved }: Props) {
+export default function BasicsTab({ detail, editing, onCancel, onSaved, onEdit }: Props) {
   const { scope } = useDataMapScope();
   const queryClient = useQueryClient();
   const owners = useOwnerOptions();
@@ -91,10 +84,6 @@ export default function BasicsTab({ detail, editing, onCancel, onSaved }: Props)
     onError: (error) => setFailure(dataMapFailureMessage(error, "保存失败，请稍后重试。")),
   });
 
-  const ownerName = ownerId
-    ? ((owners.data ?? []).find((owner) => owner.userId === ownerId)?.displayName ?? ownerId)
-    : null;
-  const domainName = domainId ? taxonomy.domainNames.get(domainId) : null;
   const tagGroups = groupTagsByKey(detail.tags);
 
   const ownerOptions = [
@@ -123,18 +112,138 @@ export default function BasicsTab({ detail, editing, onCancel, onSaved }: Props)
   return (
     <div className="space-y-6">
       {!editing && (
-        <section>
-          <h2 className="text-xs font-medium text-[var(--yak-components-muted-text)]">业务描述</h2>
-          {detail.description ? (
-            <p className="mt-2 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-[var(--yak-components-panel-text)]">
-              {detail.description}
-            </p>
-          ) : (
-            <p className="mt-2 text-sm text-[var(--yak-components-muted-text)]">
-              暂无业务描述，点击右上角「编辑信息」补充。
-            </p>
-          )}
-        </section>
+        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="space-y-6">
+            <section>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--yak-components-muted-text)]">
+                业务描述
+              </h2>
+              {detail.description ? (
+                <p className="mt-2.5 whitespace-pre-wrap rounded-[var(--yak-radius-md)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-components-collapse-section-bg)] px-4 py-3 text-sm leading-6 text-[var(--yak-components-panel-text)]">
+                  {detail.description}
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="mt-2.5 w-full cursor-pointer rounded-[var(--yak-radius-md)] border border-dashed border-[var(--yak-components-control-border)] px-4 py-5 text-left text-sm text-[var(--yak-components-muted-text)] transition-colors hover:border-[var(--yak-color-primary)] hover:text-[var(--yak-color-primary)]"
+                >
+                  暂无业务描述，点击补充这张表的业务含义、口径与使用注意事项。
+                </button>
+              )}
+            </section>
+
+            <section>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--yak-components-muted-text)]">
+                业务标签
+              </h2>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                {tagGroups.length === 0 ? (
+                  <span className="text-sm text-[var(--yak-components-muted-text)]">未打标签</span>
+                ) : (
+                  tagGroups.map((group) => (
+                    <span key={group.keyId} className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs text-[var(--yak-components-muted-text)]">
+                        {group.keyName}
+                      </span>
+                      {group.values.map((value) => (
+                        <AccentBadge key={value} tone={accentToneOf(value)}>
+                          {value}
+                        </AccentBadge>
+                      ))}
+                    </span>
+                  ))
+                )}
+                <Button size="small" variant="ghost" onClick={() => setTagsOpen(true)}>
+                  编辑标签
+                </Button>
+              </div>
+            </section>
+
+            {detail.remarks && (
+              <section>
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--yak-components-muted-text)]">
+                  引擎注释
+                </h2>
+                <p className="mt-2.5 text-sm leading-6 text-[var(--yak-components-muted-text)]">
+                  {detail.remarks}
+                </p>
+              </section>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-[var(--yak-radius-md)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--yak-components-muted-text)]">
+                资产统计
+              </h3>
+              <dl className="mt-3 space-y-2.5">
+                {[
+                  { label: "字段数", value: detail.columns.length },
+                  {
+                    label: "主键",
+                    value: detail.columns.filter((column) => column.primaryKey).length,
+                  },
+                  {
+                    label: "可空字段",
+                    value: detail.columns.filter((column) => column.nullable).length,
+                  },
+                  { label: "累计访问", value: detail.viewCount },
+                ].map((stat) => (
+                  <div key={stat.label} className="flex items-center justify-between gap-2">
+                    <dt className="text-xs text-[var(--yak-components-muted-text)]">
+                      {stat.label}
+                    </dt>
+                    <dd className="text-sm font-bold text-[var(--yak-components-panel-text)] [font-variant-numeric:tabular-nums]">
+                      {stat.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+
+            <div className="rounded-[var(--yak-radius-md)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--yak-components-muted-text)]">
+                采集生命周期
+              </h3>
+              <dl className="mt-3 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs text-[var(--yak-components-muted-text)]">首次采集</dt>
+                  <dd
+                    className="text-xs text-[var(--yak-components-panel-text)]"
+                    title={detail.firstSeenTime}
+                  >
+                    {relativeTime(detail.firstSeenTime)}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs text-[var(--yak-components-muted-text)]">最近采集</dt>
+                  <dd
+                    className="text-xs text-[var(--yak-components-panel-text)]"
+                    title={detail.lastSeenTime}
+                  >
+                    {relativeTime(detail.lastSeenTime)}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs text-[var(--yak-components-muted-text)]">表类型</dt>
+                  <dd className="font-mono text-xs text-[var(--yak-components-panel-text)]">
+                    {detail.tableType ?? "-"}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs text-[var(--yak-components-muted-text)]">数据源</dt>
+                  <dd
+                    className="max-w-32 truncate text-xs text-[var(--yak-components-panel-text)]"
+                    title={detail.datasourceName ?? detail.datasourceId}
+                  >
+                    {detail.datasourceName ?? detail.datasourceId}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+        </div>
       )}
 
       {editing && (
@@ -209,42 +318,6 @@ export default function BasicsTab({ detail, editing, onCancel, onSaved }: Props)
           </div>
         </div>
       )}
-
-      <section>
-        <h2 className="text-xs font-medium text-[var(--yak-components-muted-text)]">业务标签</h2>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          {tagGroups.length === 0 ? (
-            <span className="text-sm text-[var(--yak-components-muted-text)]">未打标签</span>
-          ) : (
-            tagGroups.map((group) => (
-              <span key={group.keyId} className="flex flex-wrap items-center gap-1">
-                <span className="text-xs text-[var(--yak-components-muted-text)]">
-                  {group.keyName}:
-                </span>
-                {group.values.map((value) => (
-                  <Badge key={value} tone="info">
-                    {value}
-                  </Badge>
-                ))}
-              </span>
-            ))
-          )}
-          <Button size="small" variant="ghost" onClick={() => setTagsOpen(true)}>
-            编辑标签
-          </Button>
-        </div>
-      </section>
-
-      <dl className="grid grid-cols-2 gap-x-8 gap-y-4 border-t border-[var(--yak-components-panel-border)] pt-5 md:grid-cols-3">
-        <Fact label="数据源" value={detail.datasourceName ?? detail.datasourceId} />
-        <Fact label="位置" value={locationLabel(detail.database, detail.schema)} />
-        <Fact label="表类型" value={detail.tableType ?? ""} />
-        <Fact label="引擎注释" value={detail.remarks ?? ""} />
-        <Fact label="首次采集" value={detail.firstSeenTime} />
-        <Fact label="最近采集" value={detail.lastSeenTime} />
-        {!editing && <Fact label="负责人" value={ownerName ?? "未指派"} />}
-        {!editing && <Fact label="数据域" value={domainName ?? "未分类"} />}
-      </dl>
 
       {tagsOpen && (
         <TagDialog

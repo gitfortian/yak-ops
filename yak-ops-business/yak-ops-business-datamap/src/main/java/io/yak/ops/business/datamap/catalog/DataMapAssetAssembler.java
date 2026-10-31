@@ -96,6 +96,7 @@ public class DataMapAssetAssembler {
         DataMapTableDetailVO detail = new DataMapTableDetailVO();
         copyObserved(row, detail);
         detail.setFavorited(personalMapper.favoriteExists(workspaceId, userId, row.getId()) > 0);
+        detail.setViewCount(personalMapper.countTableViews(workspaceId, row.getId()));
         detail.setTags(loadTagRefs(workspaceId, List.of(row.getId())).getOrDefault(row.getId(), List.of()));
         List<DataMapColumnEntity> columns = columnMapper.listByTable(workspaceId, row.getId());
         List<DataMapColumnVO> projected = new ArrayList<>(columns.size());
