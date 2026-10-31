@@ -100,7 +100,7 @@ export default function HotTables({
                 colSpan={6}
                 className="px-4 py-8 text-center text-xs text-[var(--yak-components-muted-text)]"
               >
-                暂无访问记录，打开任意资产详情后这里会展示访问最多的表。
+                暂无访问记录
               </td>
             </tr>
           )}

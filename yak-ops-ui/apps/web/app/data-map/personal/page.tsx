@@ -160,11 +160,7 @@ export default function PersonalPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--yak-color-background)]">
-      <PageHeader
-        title="我的数据"
-        description="你的收藏、最近访问与负责的资产。"
-        className="px-6 pb-5 pt-5 max-md:px-4"
-      />
+      <PageHeader title="我的数据" className="px-6 pb-5 pt-5 max-md:px-4" />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-auto px-6 pb-4 max-md:px-4">
         <div className="grid shrink-0 grid-cols-1 gap-3 md:grid-cols-3">
@@ -235,10 +231,10 @@ export default function PersonalPage() {
                 }
                 description={
                   tab === "favorites"
-                    ? "在资产详情页点击收藏，常用的表会集中出现在这里。"
+                    ? "在资产详情页点击收藏。"
                     : tab === "recent"
-                      ? "打开任意资产详情后，最近访问会按时间倒序记录在这里。"
-                      : "在资产详情页把负责人指派给自己后，资产会集中出现在这里。"
+                      ? "打开任意资产详情后记录在这里。"
+                      : "在资产详情页把负责人指派给自己。"
                 }
                 action={
                   <Button

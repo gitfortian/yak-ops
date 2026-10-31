@@ -55,7 +55,7 @@ export default function ChangesTab({ tableId }: { tableId: string }) {
     return (
       <Empty
         className="min-h-32 rounded border border-dashed border-[var(--yak-components-panel-border)]"
-        description="暂无变更记录。第一次采集只登记资产，之后的采集若发现字段或注释变化，会按时间记录在这里。"
+        description="暂无变更记录"
       />
     );
   }

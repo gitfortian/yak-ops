@@ -4,7 +4,6 @@ import {
   Checkbox,
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogTitle,
   toast,
 } from "@yak-ops/yak-ui";
@@ -67,22 +66,19 @@ export default function TagDialog({ tableId, selectedValueIds, onClose, onSaved 
       }}
     >
       <DialogContent className="w-[480px]">
-        <DialogTitle className="text-sm font-medium">标签</DialogTitle>
-        <DialogDescription className="mt-1 text-xs text-[var(--yak-components-muted-text)]">
-          按标签键选择该资产的取值；同一个键可以选多个值。标签键与取值由
-          <Link
-            to="/data-governance/tags"
-            className="mx-1 [color:var(--yak-color-primary)] hover:underline"
-          >
-            标签管理
-          </Link>
-          维护。
-        </DialogDescription>
+        <DialogTitle className="text-[15px] font-semibold">编辑标签</DialogTitle>
 
         <div className="mt-4 max-h-72 space-y-3 overflow-auto">
           {keys.length === 0 && !dictionary.isPending && (
-            <p className="text-xs text-[var(--yak-components-muted-text)]">
-              工作空间还没有标签键，请先到标签管理创建。
+            <p className="text-xs leading-5 text-[var(--yak-components-muted-text)]">
+              还没有标签键，先到
+              <Link
+                to="/data-governance/tags"
+                className="mx-1 [color:var(--yak-color-primary)] hover:underline"
+              >
+                标签管理
+              </Link>
+              创建。
             </p>
           )}
           {keys.map((key) => (
@@ -127,7 +123,7 @@ export default function TagDialog({ tableId, selectedValueIds, onClose, onSaved 
             disabled={dictionary.isPending}
             onClick={() => save.mutate()}
           >
-            保存标签
+            保存
           </Button>
         </div>
       </DialogContent>

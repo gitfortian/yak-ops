@@ -96,10 +96,40 @@ export default function BatchBindingDialog({ keys, onClose, onApplied }: Props) 
       onOpenChange={(open) => !open && !apply.isPending && onClose()}
     >
       <DialogContent className="max-h-[85vh] w-[720px] overflow-hidden">
-        <DialogTitle className="text-sm font-medium">批量绑定标签</DialogTitle>
+        <DialogTitle className="text-[15px] font-semibold">批量绑定标签</DialogTitle>
         <DialogDescription className="mt-1 text-xs text-[var(--yak-components-muted-text)]">
-          一次最多 100 张资产、20 个标签值、1000 条绑定；整个批量操作是一个事务。
+          一次最多 100 张资产与 20 个标签值。
         </DialogDescription>
+
+        <div className="mt-4 flex items-center gap-2">
+          <span className="text-xs text-[var(--yak-components-muted-text)]">操作</span>
+          <div className="flex overflow-hidden rounded-[var(--yak-radius-control-small)] border border-[var(--yak-components-control-border)]">
+            <button
+              type="button"
+              aria-pressed={operation === "ADD"}
+              onClick={() => setOperation("ADD")}
+              className={`h-7 cursor-pointer px-3 text-xs transition-colors ${
+                operation === "ADD"
+                  ? "bg-[var(--yak-color-primary-subtle)] font-medium text-[var(--yak-color-primary)]"
+                  : "bg-[var(--yak-datamap-surface)] text-[var(--yak-components-muted-text)] hover:text-[var(--yak-components-panel-text)]"
+              }`}
+            >
+              添加
+            </button>
+            <button
+              type="button"
+              aria-pressed={operation === "REMOVE"}
+              onClick={() => setOperation("REMOVE")}
+              className={`h-7 cursor-pointer border-l border-[var(--yak-components-control-border)] px-3 text-xs transition-colors ${
+                operation === "REMOVE"
+                  ? "bg-[var(--yak-color-primary-subtle)] font-medium text-[var(--yak-color-primary)]"
+                  : "bg-[var(--yak-datamap-surface)] text-[var(--yak-components-muted-text)] hover:text-[var(--yak-components-panel-text)]"
+              }`}
+            >
+              移除
+            </button>
+          </div>
+        </div>
 
         <div className="mt-4 grid min-h-0 grid-cols-1 gap-4 md:grid-cols-2">
           <section className="flex min-h-0 flex-col">
@@ -172,24 +202,6 @@ export default function BatchBindingDialog({ keys, onClose, onApplied }: Props) 
           </section>
         </div>
 
-        <div className="mt-4 flex items-center gap-2">
-          <span className="text-xs text-[var(--yak-components-muted-text)]">操作</span>
-          <Button
-            size="small"
-            variant={operation === "ADD" ? "primary" : "ghost"}
-            onClick={() => setOperation("ADD")}
-          >
-            添加
-          </Button>
-          <Button
-            size="small"
-            variant={operation === "REMOVE" ? "primary" : "ghost"}
-            onClick={() => setOperation("REMOVE")}
-          >
-            移除
-          </Button>
-        </div>
-
         {failure && <Alert className="mt-3">{failure}</Alert>}
 
         <div className="mt-5 flex justify-end gap-2">
@@ -206,7 +218,7 @@ export default function BatchBindingDialog({ keys, onClose, onApplied }: Props) 
               apply.mutate();
             }}
           >
-            确认批量绑定
+            应用
           </Button>
         </div>
       </DialogContent>

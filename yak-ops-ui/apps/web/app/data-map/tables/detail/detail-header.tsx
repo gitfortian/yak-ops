@@ -81,9 +81,7 @@ export default function DetailHeader({ detail, onEdit, onToggleFavorite, favorit
       {missing && (
         <div className="flex items-start gap-2 border-b border-[var(--yak-components-panel-border)] bg-[var(--yak-components-badge-danger-bg)] px-6 py-2.5 text-xs leading-5 text-[var(--yak-components-badge-danger-text)] max-md:px-4">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-          <span>
-            该表已不在其数据源中，通常意味着被删除或重命名。重命名后的新表会作为新资产出现，描述与负责人需要手工复制。
-          </span>
+          <span>该表已不在其数据源中，通常是被删除或重命名；新表会作为新资产登记。</span>
         </div>
       )}
 

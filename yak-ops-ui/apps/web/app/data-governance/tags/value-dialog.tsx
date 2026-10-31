@@ -1,11 +1,4 @@
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-  Input,
-} from "@yak-ops/yak-ui";
+import { Button, Dialog, DialogContent, DialogTitle, Input } from "@yak-ops/yak-ui";
 import { useState } from "react";
 
 /** Add or rename request of one value inside one key. */
@@ -27,12 +20,9 @@ export default function ValueDialog({ draft, pending, onClose, onSaved }: Props)
   return (
     <Dialog open disablePointerDismissal onOpenChange={(open) => !open && !pending && onClose()}>
       <DialogContent className="w-[400px]">
-        <DialogTitle className="text-sm font-medium">
+        <DialogTitle className="text-[15px] font-semibold">
           {draft.mode === "create" ? "新增标签值" : "重命名标签值"}
         </DialogTitle>
-        <DialogDescription className="mt-1 text-xs text-[var(--yak-components-muted-text)]">
-          标签值是键下的一个取值，名称在键内唯一，最多 128 个字符。
-        </DialogDescription>
 
         <div className="mt-4">
           <Input
