@@ -26,6 +26,8 @@ export const AUTHENTICATED_PATHS: ReadonlySet<string> = new Set([
   "/data-governance/data-map/tasks",
   "/data-governance/data-map/crawls",
   "/data-governance/data-map/personal",
+  "/data-governance/governance/overview",
+  "/data-governance/governance/issues",
   "/operations",
   "/operations/offline-tasks",
   "/operations/realtime-tasks",

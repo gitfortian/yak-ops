@@ -8,6 +8,7 @@ import {
   Map as MapIcon,
   Network,
   Settings,
+  ShieldCheck,
   Tags,
   Users,
   Wrench,
@@ -99,6 +100,20 @@ export const DATA_GOVERNANCE_NAVIGATION: ProductNavigationItem[] = [
     label: "标签管理",
     path: "/data-governance/tags",
     icon: Tags,
+  },
+  {
+    label: "资产治理",
+    path: "/data-governance/governance/overview",
+    icon: ShieldCheck,
+    children: [
+      { label: "治理总览", path: "/data-governance/governance/overview" },
+      {
+        label: "治理问题",
+        path: "/data-governance/governance/issues",
+        activePrefixes: ["/data-governance/governance/issues"],
+      },
+      { label: "治理规则", path: "/data-governance/governance/rules" },
+    ],
   },
 ];
 

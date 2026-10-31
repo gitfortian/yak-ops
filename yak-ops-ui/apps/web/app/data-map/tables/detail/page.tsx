@@ -14,8 +14,9 @@ import ChangesTab from "./changes-tab";
 import ColumnsTab from "./columns-tab";
 import DetailHeader from "./detail-header";
 import PreviewTab from "./preview-tab";
+import GovernanceTab from "./governance-tab";
 
-const TABS = ["basics", "columns", "preview", "changes"] as const;
+const TABS = ["basics", "columns", "preview", "changes", "governance"] as const;
 type DetailTab = (typeof TABS)[number];
 
 const readTab = (value: string | null): DetailTab => TABS.find((tab) => tab === value) ?? "basics";
@@ -111,6 +112,7 @@ export default function TableDetailPage() {
                       数据预览
                     </TabsTab>
                     <TabsTab value="changes">变更记录</TabsTab>
+                    <TabsTab value="governance">治理</TabsTab>
                   </TabsList>
                 </Tabs>
               </div>
@@ -131,6 +133,7 @@ export default function TableDetailPage() {
                 {tab === "columns" && <ColumnsTab columns={record.columns} />}
                 {tab === "preview" && <PreviewTab tableId={record.id} />}
                 {tab === "changes" && <ChangesTab tableId={record.id} />}
+                {tab === "governance" && <GovernanceTab tableId={record.id} />}
               </div>
             </Card>
           </>

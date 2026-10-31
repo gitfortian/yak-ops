@@ -12,6 +12,10 @@ import DataMapCrawlRunsPage from "@/app/data-map/crawls/page";
 import DataMapTasksPage from "@/app/data-map/tasks/page";
 import DataMapTaskEditorPage from "@/app/data-map/tasks/editor/page";
 import DataMapPersonalPage from "@/app/data-map/personal/page";
+import GovernanceIssuesPage from "@/app/data-governance/asset-governance/issues/page";
+import GovernanceIssueDetailPage from "@/app/data-governance/asset-governance/issues/issue-detail/page";
+import GovernanceOverviewPage from "@/app/data-governance/asset-governance/overview/page";
+import GovernanceRulesPage from "@/app/data-governance/asset-governance/rules/page";
 import TagConsolePage from "@/app/data-governance/tags/page";
 import WarehousePlanningPage from "@/app/data-modeling/warehouse-planning";
 import DataStandardsPage from "@/app/data-modeling/data-standards";
@@ -164,6 +168,17 @@ export default function AppRouter() {
           <Route path="/data-governance/data-map/crawls" element={<DataMapCrawlRunsPage />} />
           <Route path="/data-governance/data-map/personal" element={<DataMapPersonalPage />} />
           <Route path="/data-governance/tags" element={<TagConsolePage />} />
+          <Route
+            path="/data-governance/governance"
+            element={<Navigate replace to="/data-governance/governance/overview" />}
+          />
+          <Route path="/data-governance/governance/overview" element={<GovernanceOverviewPage />} />
+          <Route path="/data-governance/governance/issues" element={<GovernanceIssuesPage />} />
+          <Route
+            path="/data-governance/governance/issues/:issueId"
+            element={<GovernanceIssueDetailPage />}
+          />
+          <Route path="/data-governance/governance/rules" element={<GovernanceRulesPage />} />
         </Route>
 
         <Route
