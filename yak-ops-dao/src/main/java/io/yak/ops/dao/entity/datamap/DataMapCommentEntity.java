@@ -21,7 +21,7 @@ public class DataMapCommentEntity extends BaseEntity {
     /** Parent comment id for replies; null for top-level comments. */
     private String parentId;
 
-    /** Comment body; plain text with @DisplayName mention tokens. */
+    /** Plain-text comment body; @tokens inside are rendered client-side only. */
     private String body;
 
     /** Author user id. */
@@ -30,9 +30,6 @@ public class DataMapCommentEntity extends BaseEntity {
     /** Denormalized author display name so a rename does not rewrite history. */
     private String authorName;
 
-    /** Comma-separated mentioned user ids resolved at creation; null when none. */
-    private String mentionIds;
-
-    /** Count of direct replies; maintained by the service on reply creation and cascade deletion. */
+    /** Count of direct replies; maintained by the service on reply creation and reply deletion. */
     private Integer replyCount;
 }

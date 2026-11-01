@@ -1,24 +1,21 @@
 package io.yak.ops.boot.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.ops.business.datamap.comment.DataMapCommentService;
-import io.yak.ops.business.datamap.comment.DataMapCommentService.CommentPage;
 import io.yak.ops.business.datamap.comment.DataMapCommentService.CommentThread;
 import io.yak.ops.common.bean.vo.datamap.DataMapCommentVO;
 import io.yak.ops.common.constant.CommonConstants;
 import io.yak.ops.common.context.WorkspaceContext;
+import io.yak.ops.common.page.PageData;
 import io.yak.ops.common.page.PagingData;
 import io.yak.ops.common.result.Result;
 import io.yak.ops.dao.entity.datamap.DataMapCommentEntity;
 import io.yak.ops.security.authentication.AuthenticationManager;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import jakarta.annotation.Resource;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-
 import java.util.List;
-
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -42,31 +39,43 @@ public class DataMapCommentController {
 
     record CommentCreateRequest(String targetType, String targetId, String body, String parentId) {}
 
-    record CommentPageResponse(List<DataMapCommentVO> comments, long total, long unreadCount) {}
-
     @Operation(summary = "读取资产评论")
     @GetMapping
-    public Result<CommentPageResponse> comments(
+    public Result<PagingData<DataMapCommentVO>> comments(
             @RequestParam(defaultValue = "DATA_MAP_TABLE") String targetType,
             @RequestParam String targetId,
             @RequestParam(defaultValue = "1") @Min(1) int pageNo,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
-        String workspaceId = WorkspaceContext.requireWorkspaceId();
-        String actor = authentication.getLoginUserId();
-        CommentPage page = commentService.page(workspaceId, targetType, targetId, actor, pageNo, pageSize);
-        return Result.success(new CommentPageResponse(
-                page.page().records().stream().map(this::toVO).toList(),
-                page.page().total(), page.unreadCount()));
+        PageData<CommentThread> page = commentService.page(
+                WorkspaceContext.requireWorkspaceId(),
+                targetType,
+                targetId,
+                authentication.getLoginUserId(),
+                pageNo,
+                pageSize);
+        List<DataMapCommentVO> threads = page.records().stream().map(this::toVO).toList();
+        return Result.success(PagingData.from(PageData.of(threads, page.total(), page.pageNo(), page.pageSize())));
+    }
+
+    @Operation(summary = "读取资产评论未读数")
+    @GetMapping("/unread-count")
+    public Result<Long> unreadCount(
+            @RequestParam(defaultValue = "DATA_MAP_TABLE") String targetType, @RequestParam String targetId) {
+        return Result.success(commentService.unreadCount(
+                WorkspaceContext.requireWorkspaceId(), targetType, targetId, authentication.getLoginUserId()));
     }
 
     @Operation(summary = "创建评论或回复")
     @PostMapping
     public Result<DataMapCommentVO> create(@RequestBody CommentCreateRequest input) {
-        String workspaceId = WorkspaceContext.requireWorkspaceId();
-        String actor = authentication.getLoginUserId();
         DataMapCommentEntity saved = commentService.create(
-                workspaceId, actor, actor,
-                input.targetType(), input.targetId(), input.body(), input.parentId());
+                WorkspaceContext.requireWorkspaceId(),
+                authentication.getLoginUserId(),
+                authentication.getLoginUsername(),
+                input.targetType(),
+                input.targetId(),
+                input.body(),
+                input.parentId());
         return Result.success(toEntityVO(saved));
     }
 
@@ -80,8 +89,7 @@ public class DataMapCommentController {
     @Operation(summary = "标记已读")
     @PostMapping("/read")
     public Result<Boolean> markRead(@RequestParam String targetId) {
-        commentService.advanceRead(
-                WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), targetId);
+        commentService.advanceRead(WorkspaceContext.requireWorkspaceId(), authentication.getLoginUserId(), targetId);
         return Result.success(true);
     }
 

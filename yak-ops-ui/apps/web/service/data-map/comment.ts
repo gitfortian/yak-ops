@@ -2,6 +2,8 @@ import HttpUtils from "@/service/http/HttpUtils";
 
 import { dataMapRequest } from "@/service/data-map/request";
 
+import type { Paging } from "./types";
+
 const API = "/api/v1/data-map/comments";
 
 export interface CommentVO {
@@ -15,12 +17,6 @@ export interface CommentVO {
   replies: CommentVO[];
 }
 
-export interface CommentPageResult {
-  comments: CommentVO[];
-  total: number;
-  unreadCount: number;
-}
-
 export const pageComments = (
   targetId: string,
   pageNo: number,
@@ -28,8 +24,16 @@ export const pageComments = (
   signal?: AbortSignal,
 ) =>
   dataMapRequest(
-    HttpUtils.getData<CommentPageResult>(
+    HttpUtils.getData<Paging<CommentVO>>(
       `${API}?targetType=DATA_MAP_TABLE&targetId=${encodeURIComponent(targetId)}&pageNo=${pageNo}&pageSize=${pageSize}`,
+      { signal, skipErrorHandler: true },
+    ),
+  );
+
+export const unreadCommentCount = (targetId: string, signal?: AbortSignal) =>
+  dataMapRequest(
+    HttpUtils.getData<number>(
+      `${API}/unread-count?targetType=DATA_MAP_TABLE&targetId=${encodeURIComponent(targetId)}`,
       { signal, skipErrorHandler: true },
     ),
   );
@@ -45,7 +49,7 @@ export const createComment = (targetId: string, body: string, parentId?: string)
 
 export const deleteComment = (commentId: string) =>
   dataMapRequest(
-    HttpUtils.deleteData<boolean>(`${API}/${encodeURIComponent(commentId)}`, {
+    HttpUtils.deleteData<boolean>(`${API}/${encodeURIComponent(commentId)}`, undefined, {
       skipErrorHandler: true,
     }),
   );

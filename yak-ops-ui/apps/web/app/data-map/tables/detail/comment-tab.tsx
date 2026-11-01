@@ -21,7 +21,7 @@ interface Props {
   tableId: string;
 }
 
-/** 资产详情的评论 Tab：扁平线程 + 单层回复，@ 成员用于提醒。 */
+/** 资产详情的评论 Tab：扁平线程 + 单层回复，@ 记号仅作视觉标记。 */
 export default function CommentTab({ tableId }: Props) {
   const queryClient = useQueryClient();
   const { currentUser } = useAuth();
@@ -34,11 +34,15 @@ export default function CommentTab({ tableId }: Props) {
     queryFn: ({ signal }) => pageComments(tableId, 1, 50, signal),
   });
 
-  // 打开 Tab 即标记已读，驱动未读计数归零。
+  // 打开 Tab 即标记已读，驱动 Tab 标签上的未读徽标归零。
   useEffect(() => {
     if (!comments.isSuccess) return;
-    void markCommentsRead(tableId);
-  }, [comments.isSuccess, tableId]);
+    markCommentsRead(tableId)
+      .then(() => {
+        void queryClient.invalidateQueries({ queryKey: dataMapKeys.commentUnread(tableId) });
+      })
+      .catch(() => {});
+  }, [comments.isSuccess, tableId, queryClient]);
 
   const create = useMutation({
     mutationFn: (body: string) => createComment(tableId, body, replyTo?.id ?? undefined),
@@ -54,13 +58,13 @@ export default function CommentTab({ tableId }: Props) {
     mutationFn: deleteComment,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: dataMapKeys.commentThread(tableId) });
+      void queryClient.invalidateQueries({ queryKey: dataMapKeys.commentUnread(tableId) });
       toast.success("已删除");
     },
     onError: (error) => toast.error(dataMapFailureMessage(error, "删除失败，请稍后重试")),
   });
 
-  const records = comments.data?.comments ?? [];
-  const unread = comments.data?.unreadCount ?? 0;
+  const records = comments.data?.bizData ?? [];
 
   const submit = () => {
     const body = draft.trim();
@@ -79,16 +83,14 @@ export default function CommentTab({ tableId }: Props) {
 
   const canDelete = (comment: CommentVO) => comment.authorId === currentUser?.id;
 
+  const replyToThread = (comment: CommentVO) => {
+    setReplyTo(comment);
+    setDraft(`@${comment.authorName} `);
+  };
+
   return (
     <div className="flex min-h-0 flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-[13px] font-bold">评论</h3>
-        {unread > 0 && (
-          <span className="rounded-full bg-[var(--yak-color-primary-subtle)] px-2 py-0.5 text-[11px] font-medium text-[var(--yak-color-primary)]">
-            {unread} 条未读
-          </span>
-        )}
-      </div>
+      <h3 className="text-[13px] font-bold">评论</h3>
 
       <div className="flex items-start gap-2.5">
         <UserAvatar name={currentUser?.realName ?? currentUser?.userName ?? "?"} size="md" />
@@ -97,7 +99,7 @@ export default function CommentTab({ tableId }: Props) {
             value={draft}
             rows={2}
             maxLength={2000}
-            placeholder={replyTo ? `回复 ${replyTo.authorName}…` : "添加评论，@成员名 可提醒对方"}
+            placeholder={replyTo ? `回复 ${replyTo.authorName}…` : "添加评论，@成员名 可标记对方"}
             className="w-full resize-none rounded-[var(--yak-radius-md)] border border-[var(--yak-components-input-border)] bg-[var(--yak-components-input-bg)] px-3 py-2 text-sm outline-none transition-colors placeholder:text-[var(--yak-components-input-placeholder)] focus:border-[var(--yak-components-input-border-focus)]"
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
@@ -168,10 +170,7 @@ export default function CommentTab({ tableId }: Props) {
                   <button
                     type="button"
                     className="ml-1 cursor-pointer text-xs text-[var(--yak-color-primary)]"
-                    onClick={() => {
-                      setReplyTo(comment);
-                      setDraft(`@${comment.replies[0]?.authorName ?? ""} `);
-                    }}
+                    onClick={() => replyToThread(comment)}
                   >
                     回复
                   </button>
@@ -181,10 +180,7 @@ export default function CommentTab({ tableId }: Props) {
                 <button
                   type="button"
                   className="ml-9 cursor-pointer text-xs text-[var(--yak-components-muted-text)] opacity-0 transition-opacity group-hover:opacity-100 hover:text-[var(--yak-color-primary)]"
-                  onClick={() => {
-                    setReplyTo(comment);
-                    setDraft(`@${comment.authorName} `);
-                  }}
+                  onClick={() => replyToThread(comment)}
                 >
                   回复
                 </button>
@@ -236,9 +232,12 @@ function CommentRow({
   );
 }
 
-/** Renders @DisplayName tokens as accent chips; plain text stays plain. */
+/**
+ * Renders @tokens that start a word as accent chips; plain text stays plain. The word-boundary
+ * lookbehind keeps email addresses like user@example.com out of the chip styling.
+ */
 function renderBody(body: string) {
-  const parts = body.split(/(@[^\s@]+)/g);
+  const parts = body.split(/((?<=^|\s)@[^\s@]+)/g);
   return parts.map((part, index) =>
     part.startsWith("@") ? (
       <span
