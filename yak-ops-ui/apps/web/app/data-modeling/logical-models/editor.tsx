@@ -62,6 +62,7 @@ import { getLayerDataSources } from "@/service/data-modeling/warehouse-planning/
 import { enginePhysicalProperties, type PhysicalPropertyField } from "../shared/jdbc-engines";
 import { InputField, SelectField, TextareaField } from "../shared/form-fields";
 import FieldEditor from "./field-editor";
+import { getDerived } from "@/service/data-modeling/metrics";
 import type { FieldDraft } from "./fields";
 import {
   MODEL_SUFFIX_RULE,
@@ -547,6 +548,30 @@ export default function LogicalModelEditorPage() {
   const composerActive =
     Boolean(selectedLayer?.namingRuleEnabled) && (form.type === "DWD" || form.type === "DWS");
   const processCode = processes.find((item) => item.id === form.processId)?.code ?? "";
+
+  // 绑定指标列的候选：仅当前业务过程下的派生指标；切换过程后重新拉取。
+  const [metricOptions, setMetricOptions] = useState<{ value: string; label: string }[]>([]);
+  useEffect(() => {
+    if (form.type !== "DWD" || !form.processId) {
+      setMetricOptions([]);
+      return;
+    }
+    const controller = new AbortController();
+    void getDerived({ processId: form.processId, pageNo: 1, pageSize: 100 }, controller.signal)
+      .then((page) => {
+        if (controller.signal.aborted) return;
+        setMetricOptions(
+          page.bizData.map((metric) => ({
+            value: metric.id,
+            label: `${metric.cnName}（${metric.enCode}）`,
+          })),
+        );
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setMetricOptions([]);
+      });
+    return () => controller.abort();
+  }, [form.type, form.processId]);
   // The qualifier input cannot push the composed name past the backend's 41-character cap.
   const qualifierCap = composerActive
     ? qualifierMaxLength(
@@ -1432,6 +1457,7 @@ export default function LogicalModelEditorPage() {
                     disabled={disabled}
                     allowAggregate={AGGREGATE_MODEL_TYPES.has(form.type)}
                     requireMeasure={form.type === "DWS"}
+                    metricOptions={metricOptions}
                   />
                 </CardContent>
               </Card>

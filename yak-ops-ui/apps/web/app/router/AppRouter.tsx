@@ -22,6 +22,7 @@ import DataStandardsPage from "@/app/data-modeling/data-standards";
 import MetricsPage from "@/app/data-modeling/metrics";
 import DimensionModelingPage from "@/app/data-modeling/dimension-modeling";
 import ReverseModelingPage from "@/app/data-modeling/dimension-modeling/reverse";
+import BatchReversePage from "@/app/data-modeling/dimension-modeling/reverse/batch-workbench";
 import LogicalModelEditorPage from "@/app/data-modeling/logical-models/editor";
 import { DataSyncTaskEditorPage } from "@/app/data-sync/editor/page";
 import { DataSyncTaskDetailPage } from "@/app/data-sync/detail";
@@ -109,6 +110,10 @@ export default function AppRouter() {
           <Route
             path="/data-modeling/dimension-modeling/reverse"
             element={<ReverseModelingPage />}
+          />
+          <Route
+            path="/data-modeling/dimension-modeling/reverse/batch"
+            element={<BatchReversePage />}
           />
           {/* The two list pages merged into the tree; stale links land on it instead of a blank route. */}
           <Route

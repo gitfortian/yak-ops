@@ -15,6 +15,7 @@ export const AUTHENTICATED_PATHS: ReadonlySet<string> = new Set([
   "/data-modeling/metrics",
   "/data-modeling/dimension-modeling",
   "/data-modeling/dimension-modeling/reverse",
+  "/data-modeling/dimension-modeling/reverse/batch",
   "/data-modeling/dimensions",
   "/data-modeling/logical-models",
   "/data-modeling/logical-models/new",
