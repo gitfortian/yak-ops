@@ -214,8 +214,8 @@ export default function ExclusionFields({
               </ComboboxContent>
             </Combobox>
             <FieldDescription>
-              可搜索数据源中的表并多选，最多 {EXCLUDE_TABLE_LIMIT} 张。
-              {selected.length > 0 ? `已选 ${selected.length} 张。` : ""}
+              最多 {EXCLUDE_TABLE_LIMIT} 张
+              {selected.length > 0 ? ` · 已选 ${selected.length} 张` : ""}
             </FieldDescription>
             {errors.excludeTables && (
               <FieldDescription className="!text-[var(--yak-components-field-error)]">
@@ -251,9 +251,7 @@ export default function ExclusionFields({
               className="font-mono"
               onChange={(event) => onChange({ excludePattern: event.target.value })}
             />
-            <FieldDescription>
-              使用 Java 正则匹配表名。预览在数据源引擎中执行，不会把全部表名加载到平台内存。
-            </FieldDescription>
+            <FieldDescription>使用 Java 正则匹配表名。</FieldDescription>
             {(errors.excludePattern || patternError) && (
               <FieldDescription className="!text-[var(--yak-components-field-error)]">
                 {errors.excludePattern || patternError}
@@ -264,11 +262,11 @@ export default function ExclusionFields({
           <div className="mt-3 rounded-[var(--yak-radius-control-small)] bg-[var(--yak-color-hover)] px-3 py-2.5 text-xs">
             {!hasScope ? (
               <span className="text-[var(--yak-components-muted-text)]">
-                先选择数据源与数据库，再预览命中的表。
+                先选择数据源与数据库。
               </span>
             ) : !draft.excludePattern.trim() ? (
               <span className="text-[var(--yak-components-muted-text)]">
-                输入正则后，这里会显示命中的表。
+                输入正则后显示命中的表。
               </span>
             ) : patternError ? (
               <span className="text-[var(--yak-components-field-error)]">

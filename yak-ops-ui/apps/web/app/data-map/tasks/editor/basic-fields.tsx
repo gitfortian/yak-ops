@@ -347,7 +347,7 @@ export default function BasicFields({
         }`}
       >
         {!scoped ? (
-          "选择数据库后，这里会估算本次采集的表数量。"
+          "选择数据库后估算采集范围。"
         ) : estimate.isError ? (
           <span className="flex flex-wrap items-center gap-2">
             {dataMapFailureMessage(estimate.error, "表数量统计失败")}
@@ -360,7 +360,7 @@ export default function BasicFields({
             </button>
           </span>
         ) : estimate.isPending ? (
-          "正在统计表数量…"
+          "统计中…"
         ) : (
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span>

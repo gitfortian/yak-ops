@@ -945,7 +945,12 @@ export default function LogicalModelEditorPage() {
                   <Badge tone="neutral">{MODEL_TYPE_LABEL[savedModel.type]}</Badge>
                 )}
                 <PublicationBadge status={savedModel.latestPublicationStatus} />
-                <Button size="small" disabled={saving} onClick={() => setPublishing(true)}>
+                <Button
+                  size="small"
+                  title={dirty ? "有未保存的变更，请先保存" : undefined}
+                  disabled={saving || dirty}
+                  onClick={() => setPublishing(true)}
+                >
                   发布
                 </Button>
               </>
@@ -1468,10 +1473,17 @@ export default function LogicalModelEditorPage() {
                   <CardContent>
                     <div className="mb-3 flex items-center gap-2">
                       <PublicationBadge status={savedModel.latestPublicationStatus} />
+                      {dirty && (
+                        <span className="ml-auto text-xs text-[var(--yak-components-badge-warning-text)]">
+                          有未保存的变更，保存后才能发布
+                        </span>
+                      )}
                       <Button
                         size="small"
                         variant="primary"
-                        className="ml-auto"
+                        className={dirty ? "" : "ml-auto"}
+                        title={dirty ? "有未保存的变更，请先保存" : undefined}
+                        disabled={dirty}
                         onClick={() => setPublishing(true)}
                       >
                         发布到物理表
@@ -1501,7 +1513,10 @@ export default function LogicalModelEditorPage() {
             size="small"
             variant="primary"
             loading={saving}
-            disabled={disabled || suffixMismatch || nameState === "taken" || processBlocked}
+            title={dirty ? undefined : "没有需要保存的变更"}
+            disabled={
+              disabled || !dirty || suffixMismatch || nameState === "taken" || processBlocked
+            }
             onClick={() => void submit()}
           >
             保存

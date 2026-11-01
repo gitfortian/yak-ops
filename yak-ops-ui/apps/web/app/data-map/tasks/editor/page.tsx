@@ -226,7 +226,7 @@ export default function CrawlTaskEditorPage() {
           )}
 
           <div className="space-y-4">
-            <StepSection step={1} title="基本信息" description="任务身份、采集范围与负责人。">
+            <StepSection step={1} title="基本信息" description="">
               <BasicFields
                 draft={draft}
                 errors={showErrors ? errors : {}}
@@ -235,7 +235,7 @@ export default function CrawlTaskEditorPage() {
               />
             </StepSection>
 
-            <StepSection step={2} title="调度设置" description="手动触发，或按 Cron 周期自动执行。">
+            <StepSection step={2} title="调度设置" description="">
               <ScheduleFields
                 draft={draft}
                 errors={showErrors ? errors : {}}
@@ -244,11 +244,7 @@ export default function CrawlTaskEditorPage() {
               />
             </StepSection>
 
-            <StepSection
-              step={3}
-              title="高级设置 · 排除规则"
-              description="排除不需要采集的表；被排除的表不会被采集，也不会被标记为缺失。"
-            >
+            <StepSection step={3} title="高级设置 · 排除规则" description="排除不需要采集的表。">
               <ExclusionFields draft={draft} errors={showErrors ? errors : {}} onChange={change} />
             </StepSection>
           </div>

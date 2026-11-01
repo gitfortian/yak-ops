@@ -14,11 +14,6 @@ import type { CrawlScheduleType } from "@/service/data-map/types";
 import type { TaskDraft, TaskDraftErrors } from "./form";
 import SchedulePreview from "./schedule-preview";
 
-const MANUAL_POINTS = [
-  "任务上线后，可在任务列表或运维中心手动触发一次采集。",
-  "同一数据源同时只运行一个采集实例，重复触发会被拒绝。",
-];
-
 export default function ScheduleFields({
   draft,
   errors,
@@ -40,18 +35,7 @@ export default function ScheduleFields({
         <TabsTab value="CRON">定时执行</TabsTab>
       </TabsList>
 
-      <TabsPanel value="MANUAL" className="pt-4">
-        <ul className="space-y-1.5 text-sm text-[var(--yak-components-muted-text)]">
-          {MANUAL_POINTS.map((point) => (
-            <li key={point} className="flex gap-2">
-              <span aria-hidden="true" className="text-[var(--yak-color-primary)]">
-                ·
-              </span>
-              {point}
-            </li>
-          ))}
-        </ul>
-      </TabsPanel>
+      <TabsPanel value="MANUAL" className="pt-4" />
 
       <TabsPanel value="CRON" className="pt-4">
         <Field invalid={Boolean(errors.cronExpression)}>
@@ -64,9 +48,6 @@ export default function ScheduleFields({
               <SchedulePreview cronExpression={cronExpression} />
             )}
           />
-          <FieldDescription>
-            按服务器时区触发；Cron 使用六位格式（秒 分 时 日 月 周）。
-          </FieldDescription>
           {errors.cronExpression && (
             <FieldDescription className="!text-[var(--yak-components-field-error)]">
               {errors.cronExpression}
