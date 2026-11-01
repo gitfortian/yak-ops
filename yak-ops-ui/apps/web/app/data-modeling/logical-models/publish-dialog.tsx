@@ -175,6 +175,9 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
     if (!environment || !bound) return;
     setPreviewing(true);
     setPreviewFailure("");
+    // 重新生成预览即重新开始一次发布流程：上一次的结果不再解锁发布按钮。
+    setResult(null);
+    setSnapshot(null);
     try {
       const generated = await previewPublication(model.id, { environment });
       setPreview(generated);
@@ -223,11 +226,14 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
   };
 
   const previewFresh = Boolean(preview) && previewEnv === environment && environment !== "";
+  // 终态结果落定后锁定发布：同一份预览重复点击就是重复 DDL；再次发布必须重新生成预览。
+  const published = result != null;
   const canPublish =
     previewFresh &&
     confirmed &&
     (!preview?.requiresDataLossAck || ackLoss) &&
     !publishing &&
+    !published &&
     preview?.operation !== "NONE" &&
     preview?.operation !== null;
   const disconnected = source?.connStatus === "DISCONNECTED";
@@ -351,7 +357,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
               <Button
                 size="small"
                 loading={previewing}
-                disabled={!bound}
+                disabled={!bound || publishing}
                 onClick={() => void generate()}
               >
                 生成变更对比
@@ -489,6 +495,7 @@ export default function PublishDialog({ model, onClose, onPublished }: Props) {
                 size="small"
                 variant="primary"
                 loading={publishing}
+                title={published ? "本次发布已完成；再次发布请重新生成变更对比" : undefined}
                 disabled={!canPublish}
                 onClick={() => void publish()}
               >
