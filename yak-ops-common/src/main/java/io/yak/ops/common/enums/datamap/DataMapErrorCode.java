@@ -53,7 +53,9 @@ public enum DataMapErrorCode implements ErrorCode {
     /** The datasource could not evaluate the preview expression. */
     CRAWL_PREVIEW_FAILED(19721, "正则预览查询失败，请稍后重试"),
     /** The exclusion list exceeds the accepted size. */
-    CRAWL_EXCLUDE_TOO_MANY(19722, "排除表数量不能超过 500 张");
+    CRAWL_EXCLUDE_TOO_MANY(19722, "排除表数量不能超过 500 张"),
+    COMMENT_TOO_LONG(19723, "评论内容不能超过 2000 字符"),
+    COMMENT_PARENT_MISMATCH(19724, "回复的父评论不存在或不属于当前资产");
 
     private final Integer code;
     private final String message;

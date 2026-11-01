@@ -64,6 +64,7 @@ export const dataMapKeys = {
       schema,
       regex,
     ] as const,
+  commentThread: (targetId: string) => [...dataMapKeys.all, "comments", targetId] as const,
   crawls: (scope: DataMapScope, query: CrawlQuery) =>
     [...dataMapKeys.all, "crawls", ...scope, query] as const,
   /** Workspace-wide health band figures; hours names the run window, not a cache policy. */
