@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
 import { getTable } from "@/service/data-map/catalog";
+import { unreadCommentCount } from "@/service/data-map/comment";
 import { addFavorite, recordView, removeFavorite } from "@/service/data-map/personal";
 import { dataMapFailureMessage } from "@/service/data-map/request";
 
@@ -15,8 +16,9 @@ import ColumnsTab from "./columns-tab";
 import DetailHeader from "./detail-header";
 import PreviewTab from "./preview-tab";
 import GovernanceTab from "./governance-tab";
+import CommentTab from "./comment-tab";
 
-const TABS = ["basics", "columns", "preview", "changes", "governance"] as const;
+const TABS = ["basics", "columns", "preview", "changes", "governance", "comments"] as const;
 type DetailTab = (typeof TABS)[number];
 
 const readTab = (value: string | null): DetailTab => TABS.find((tab) => tab === value) ?? "basics";
@@ -33,6 +35,13 @@ export default function TableDetailPage() {
     queryKey: dataMapKeys.table(scope, tableId),
     queryFn: ({ signal }) => getTable(tableId, signal),
     enabled: ready && Boolean(tableId),
+  });
+
+  // 未读评论数常驻查询，驱动 Tab 标签上的徽标；打开评论 Tab 推进水位后归零。
+  const commentUnread = useQuery({
+    queryKey: dataMapKeys.commentUnread(tableId),
+    queryFn: ({ signal }) => unreadCommentCount(tableId, signal),
+    enabled: Boolean(tableId),
   });
 
   const recorded = useRef("");
@@ -113,6 +122,14 @@ export default function TableDetailPage() {
                     </TabsTab>
                     <TabsTab value="changes">变更记录</TabsTab>
                     <TabsTab value="governance">治理</TabsTab>
+                    <TabsTab value="comments">
+                      评论
+                      {(commentUnread.data ?? 0) > 0 && (
+                        <span className="ml-1.5 inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-[var(--yak-components-badge-danger-bg)] px-1 text-[10px] font-medium leading-none text-[var(--yak-components-badge-danger-text)]">
+                          {commentUnread.data}
+                        </span>
+                      )}
+                    </TabsTab>
                   </TabsList>
                 </Tabs>
               </div>
@@ -134,6 +151,7 @@ export default function TableDetailPage() {
                 {tab === "preview" && <PreviewTab tableId={record.id} />}
                 {tab === "changes" && <ChangesTab tableId={record.id} />}
                 {tab === "governance" && <GovernanceTab tableId={record.id} />}
+                {tab === "comments" && <CommentTab tableId={record.id} />}
               </div>
             </Card>
           </>

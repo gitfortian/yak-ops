@@ -53,7 +53,16 @@ public enum DataMapErrorCode implements ErrorCode {
     /** The datasource could not evaluate the preview expression. */
     CRAWL_PREVIEW_FAILED(19721, "正则预览查询失败，请稍后重试"),
     /** The exclusion list exceeds the accepted size. */
-    CRAWL_EXCLUDE_TOO_MANY(19722, "排除表数量不能超过 500 张");
+    CRAWL_EXCLUDE_TOO_MANY(19722, "排除表数量不能超过 500 张"),
+    COMMENT_TOO_LONG(19723, "评论内容不能超过 2000 字符"),
+    /** The parent comment does not exist, is itself a reply, or anchors to a different asset. */
+    COMMENT_PARENT_MISMATCH(19724, "回复的父评论不存在或不属于当前资产"),
+    /** The comment id does not resolve inside the current Workspace. */
+    COMMENT_NOT_FOUND(19725, "评论不存在或已被删除"),
+    /** The caller is not the comment author. */
+    COMMENT_FORBIDDEN(19726, "只有评论作者可以删除该评论"),
+    /** The target type is not supported in this release, or the anchored asset does not exist. */
+    COMMENT_TARGET_INVALID(19727, "评论目标不存在或类型暂不支持");
 
     private final Integer code;
     private final String message;
