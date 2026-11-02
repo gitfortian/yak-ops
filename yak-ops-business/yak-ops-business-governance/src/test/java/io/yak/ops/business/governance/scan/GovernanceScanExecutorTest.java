@@ -18,6 +18,7 @@ import io.yak.ops.business.governance.rule.IssueCandidate;
 import io.yak.ops.business.governance.score.GovernanceDimensionFacts;
 import io.yak.ops.business.governance.score.GovernanceScoreCalculator;
 import io.yak.ops.business.task.governance.TaskGovernanceQuery;
+import io.yak.ops.business.modeling.governance.ModelingGovernanceQuery;
 import io.yak.ops.common.enums.governance.GovernanceDimension;
 import io.yak.ops.common.enums.governance.GovernanceScanStatus;
 import io.yak.ops.common.enums.governance.IssueSeverity;
@@ -45,11 +46,13 @@ class GovernanceScanExecutorTest {
 
     private final TaskGovernanceQuery tasks = mock(TaskGovernanceQuery.class);
 
+    private final ModelingGovernanceQuery modeling = mock(ModelingGovernanceQuery.class);
+
     private GovernanceScanExecutor executor(GovernanceRule... rules) {
         when(writer.claim(eq(WORKSPACE), eq(SCAN), any())).thenReturn(true);
         when(writer.startRule(eq(WORKSPACE), eq(SCAN), any(), any())).thenReturn("result-1");
         return new GovernanceScanExecutor(
-                new GovernanceRuleRegistry(List.of(rules)), writer, calculator, dataMap, tasks);
+                new GovernanceRuleRegistry(List.of(rules)), writer, calculator, dataMap, tasks, modeling);
     }
 
     private static GovernanceRule rule(String code, Consumer<Consumer<IssueCandidate>> body) {
@@ -193,7 +196,7 @@ class GovernanceScanExecutorTest {
     @Test
     void aRunAnotherWorkerClaimedDoesNothing() {
         GovernanceScanExecutor executor =
-                new GovernanceScanExecutor(new GovernanceRuleRegistry(List.of()), writer, calculator, dataMap, tasks);
+                new GovernanceScanExecutor(new GovernanceRuleRegistry(List.of()), writer, calculator, dataMap, tasks, modeling);
         when(writer.claim(eq(WORKSPACE), eq(SCAN), any())).thenReturn(false);
 
         executor.execute(WORKSPACE, SCAN);

@@ -271,6 +271,7 @@ export default function ReverseModelingPage() {
         type,
         layerId,
         categoryId,
+        grainNote: null,
         processId: type === "DWD" ? processId || null : null,
         domainId:
           type === "DWD" || (type === "DIM" && scope === "PUBLIC") ? domainId || null : null,

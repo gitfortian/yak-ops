@@ -385,6 +385,7 @@ export default function BatchReversePage() {
           type,
           layerId,
           categoryId,
+          grainNote: null,
           processId: type === "DWD" ? processId || null : null,
           domainId: type === "DWD" ? domainId || null : null,
           datamartId: null,

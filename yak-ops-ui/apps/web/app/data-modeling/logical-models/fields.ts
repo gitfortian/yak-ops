@@ -29,6 +29,7 @@ export interface FieldDraft {
   isPrimaryKey: boolean;
   isNotNull: boolean;
   isPartition: boolean;
+  isTime: boolean;
   aggregateType: AggregateType | null;
   standardId: string | null;
   standardEnCode: string | null;
@@ -83,6 +84,7 @@ export function emptyField(): FieldDraft {
     isPrimaryKey: false,
     isNotNull: false,
     isPartition: false,
+    isTime: false,
     aggregateType: null,
     standardId: null,
     standardEnCode: null,
@@ -107,6 +109,7 @@ export function fromModelField(field: ModelField): FieldDraft {
     isPrimaryKey: field.isPrimaryKey,
     isNotNull: field.isNotNull,
     isPartition: field.isPartition,
+    isTime: field.isTime,
     aggregateType: field.aggregateType,
     standardId: field.standardId,
     standardEnCode: field.standardEnCode,
@@ -130,6 +133,7 @@ export function toModelFieldInput(row: FieldDraft): ModelFieldInput {
     isPrimaryKey: row.isPrimaryKey,
     isNotNull: row.isNotNull,
     isPartition: row.isPartition,
+    isTime: row.isTime,
     aggregateType: row.aggregateType,
     standardId: row.standardId,
     lookupId: row.lookupId,

@@ -62,6 +62,8 @@ import { getLayerDataSources } from "@/service/data-modeling/warehouse-planning/
 import { enginePhysicalProperties, type PhysicalPropertyField } from "../shared/jdbc-engines";
 import { InputField, SelectField, TextareaField } from "../shared/form-fields";
 import FieldEditor from "./field-editor";
+import { ModelRelationsPanel } from "./relations-panel";
+import { SemanticExportPanel } from "./semantic-export-panel";
 import { getDerived } from "@/service/data-modeling/metrics";
 import type { FieldDraft } from "./fields";
 import {
@@ -107,6 +109,8 @@ interface FormState {
   lifecycleDays: string;
   ownerId: string;
   description: string;
+  /** Declared meaning of one row, e.g. "one row per order line"; empty when unset. */
+  grainNote: string;
   /** Engine-specific physical table properties as a JSON object string; empty when unset. */
   physicalProperties: string;
 }
@@ -142,6 +146,7 @@ const INITIAL_FORM: FormState = {
   lifecycleDays: "30",
   ownerId: "",
   description: "",
+  grainNote: "",
   physicalProperties: "",
 };
 
@@ -207,7 +212,7 @@ interface DimensionState {
 }
 
 /** The editor tabs; 发布 exists only for a saved model. */
-const EDITOR_TABS = ["info", "fields", "publish"] as const;
+const EDITOR_TABS = ["info", "fields", "relations", "export", "publish"] as const;
 type EditorTab = (typeof EDITOR_TABS)[number];
 
 export default function LogicalModelEditorPage() {
@@ -298,8 +303,9 @@ export default function LogicalModelEditorPage() {
   // publish yet, so a publish deep link there lands on the basic-information tab.
   const requestedTab = searchParams.get("tab");
   const activeTab: EditorTab =
-    editing && requestedTab === "publish"
-      ? "publish"
+    editing &&
+    (requestedTab === "publish" || requestedTab === "relations" || requestedTab === "export")
+      ? requestedTab
       : requestedTab === "fields"
         ? "fields"
         : "info";
@@ -367,6 +373,7 @@ export default function LogicalModelEditorPage() {
           lifecycleDays: String(model.lifecycleDays),
           ownerId: model.ownerId,
           description: model.description ?? "",
+          grainNote: model.grainNote ?? "",
           physicalProperties: model.physicalProperties ?? "",
         };
         setForm(loadedForm);
@@ -794,6 +801,7 @@ export default function LogicalModelEditorPage() {
       lifecycleDays: Number(form.lifecycleDays),
       ownerId: form.ownerId,
       description: form.description.trim() || null,
+      grainNote: form.grainNote.trim() || null,
       physicalProperties: physicalPropertiesInput(form.physicalProperties, propertyFields),
       fields: rows.map(toModelFieldInput),
     };
@@ -813,6 +821,7 @@ export default function LogicalModelEditorPage() {
           ...formRef.current,
           cnName: saved.cnName,
           description: saved.description ?? "",
+          grainNote: saved.grainNote ?? "",
         };
         setForm(savedForm);
         setRows(savedRows);
@@ -1001,6 +1010,8 @@ export default function LogicalModelEditorPage() {
             <TabsList>
               <TabsTab value="info">基本信息</TabsTab>
               <TabsTab value="fields">字段定义</TabsTab>
+              {editing && <TabsTab value="relations">关系</TabsTab>}
+              {editing && <TabsTab value="export">语义导出</TabsTab>}
               {editing && <TabsTab value="publish">发布</TabsTab>}
             </TabsList>
             <TabsPanel value="info" className="pt-4">
@@ -1428,6 +1439,18 @@ export default function LogicalModelEditorPage() {
                         onChange={(value) => patch({ description: value })}
                       />
                     </div>
+                    <div className="md:col-span-2">
+                      <InputField
+                        id="model-grain"
+                        label="粒度声明"
+                        value={form.grainNote}
+                        placeholder="一行代表什么，例如：一行 = 一个订单明细行"
+                        maxLength={200}
+                        disabled={disabled}
+                        hint="治理扫描会对未声明粒度的明细 / 汇总 / 应用表给出提醒"
+                        onChange={(value) => patch({ grainNote: value })}
+                      />
+                    </div>
                   </div>
                   {errors.ownership && (
                     <p className="mt-2 text-xs text-[var(--yak-components-badge-danger-text)]">
@@ -1467,6 +1490,19 @@ export default function LogicalModelEditorPage() {
                 </CardContent>
               </Card>
             </TabsPanel>
+            {editing && id && (
+              <TabsPanel value="relations" className="pt-4">
+                <ModelRelationsPanel modelId={id} revision={revision ?? 0} />
+              </TabsPanel>
+            )}
+            {editing && id && (
+              <TabsPanel value="export" className="pt-4">
+                <SemanticExportPanel
+                  modelId={id}
+                  published={savedModel?.latestPublicationStatus === "SUCCEEDED"}
+                />
+              </TabsPanel>
+            )}
             {editing && savedModel && (
               <TabsPanel value="publish" className="pt-4">
                 <Card>

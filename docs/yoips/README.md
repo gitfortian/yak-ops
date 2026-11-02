@@ -41,6 +41,7 @@ FYOIP-4; shared ancestry with upstream is recorded per document.
 | FYOIP-18 | [Data Map — Model-Published Asset Registration and Crawl Scope Governance](FYOIP-18-model-published-asset-registration.md) | Discussion (proposal PR not yet opened) |
 | FYOIP-19 | [Asset Tag Dictionary and Value Bindings](FYOIP-19-asset-tag-dictionary.md) | Accepted |
 | FYOIP-20 | [Asset Comments — Collaboration Threads on Data Map Assets](FYOIP-20-asset-comments.md) | Discussion (proposal and implementation in PR #70) |
+| FYOIP-21 | [Semantic Model — Relationships, Time Role, Synonyms and Ossie Export](FYOIP-21-semantic-model-relationships.md) | Accepted (implementation in progress on `V14__v1_16_0.sql`; PR reference pending) |
 
 New fork proposals use the next unused `FYOIP-N` number; add the document and update
 this index in the same PR.

@@ -51,6 +51,7 @@ export function describeFieldDrafts(
       isPrimaryKey: Boolean(column.primaryKey),
       isNotNull: column.nullable === false,
       isPartition: false,
+      isTime: false,
       aggregateType: null,
       standardId: null,
       standardEnCode: null,

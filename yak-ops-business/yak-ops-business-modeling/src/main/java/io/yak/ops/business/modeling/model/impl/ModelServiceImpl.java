@@ -23,6 +23,7 @@ import io.yak.ops.dao.entity.modeling.ModelFieldEntity;
 import io.yak.ops.dao.entity.modeling.PlanningNodeEntity;
 import io.yak.ops.dao.repository.modeling.DimensionRepository;
 import io.yak.ops.dao.repository.modeling.ModelRepository;
+import io.yak.ops.dao.repository.modeling.ModelingRelationRepository;
 import io.yak.ops.dao.repository.modeling.PlanningRepository;
 import io.yak.ops.dao.repository.modeling.PublicationRepository;
 import io.yak.ops.dao.repository.modeling.metric.MetricDerivedRepository;
@@ -81,6 +82,10 @@ public class ModelServiceImpl implements ModelService {
     /** Read-only here: the model surface shows the newest publication status but never writes one. */
     @Resource
     private PublicationRepository publications;
+
+    /** Read-only here: model deletion must refuse while semantic relations still reference the model. */
+    @Resource
+    private ModelingRelationRepository relations;
 
     @Resource
     private WorkspaceService workspaces;
@@ -210,6 +215,10 @@ public class ModelServiceImpl implements ModelService {
         if (revision < 1) throw new BusinessException(DimensionModelingErrorCode.INVALID_MODEL);
         var row = lockRow(workspaceId, id);
         if (row.getRevision() != revision) throw new BusinessException(DimensionModelingErrorCode.REVISION_CONFLICT);
+        // Semantic relations bind this model by identity; deleting it would orphan every relation
+        // that names the model on either side. The relations must be removed first.
+        if (relations.countByModel(workspaceId, id) > 0)
+            throw new BusinessException(DimensionModelingErrorCode.MODEL_HAS_RELATIONS);
         if (!models.delete(workspaceId, id, revision))
             throw new BusinessException(DimensionModelingErrorCode.REVISION_CONFLICT);
     }
@@ -309,6 +318,7 @@ public class ModelServiceImpl implements ModelService {
         row.setPhysicalProperties(normalizeProperties(input.getPhysicalProperties()));
         row.setOwnerId(requireOwner(workspaceId, actor, input.getOwnerId()));
         row.setDescription(optionalText(input.getDescription(), 500));
+        row.setGrainNote(optionalText(input.getGrainNote(), 200, DimensionModelingErrorCode.GRAIN_TOO_LONG));
         return processCode;
     }
 
@@ -473,6 +483,7 @@ public class ModelServiceImpl implements ModelService {
             row.setIsPrimaryKey(Boolean.TRUE.equals(field.getIsPrimaryKey()));
             row.setIsNotNull(isNotNull);
             row.setIsPartition(partition);
+            row.setIsTime(Boolean.TRUE.equals(field.getIsTime()));
             row.setAggregateType(aggregate);
             row.setStandardId(standardId);
             row.setLookupId(lookupId);
@@ -588,6 +599,7 @@ public class ModelServiceImpl implements ModelService {
                 row.getLifecycleDays(),
                 row.getOwnerId(),
                 row.getDescription(),
+                row.getGrainNote(),
                 row.getPhysicalProperties(),
                 row.getNamingRootWordId(),
                 fields == null ? row.getFieldCount() : fields.size(),
@@ -614,6 +626,7 @@ public class ModelServiceImpl implements ModelService {
                 Boolean.TRUE.equals(row.getIsPrimaryKey()),
                 Boolean.TRUE.equals(row.getIsNotNull()),
                 Boolean.TRUE.equals(row.getIsPartition()),
+                Boolean.TRUE.equals(row.getIsTime()),
                 row.getAggregateType(),
                 row.getStandardId(),
                 row.getStandardEnCode(),

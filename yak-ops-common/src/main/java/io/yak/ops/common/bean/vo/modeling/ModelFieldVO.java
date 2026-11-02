@@ -38,6 +38,7 @@ public record ModelFieldVO(
         @JsonProperty("isPrimaryKey") boolean isPrimaryKey,
         @JsonProperty("isNotNull") boolean isNotNull,
         @JsonProperty("isPartition") boolean isPartition,
+        @JsonProperty("isTime") boolean isTime,
         AggregateType aggregateType,
         String standardId,
         String standardEnCode,

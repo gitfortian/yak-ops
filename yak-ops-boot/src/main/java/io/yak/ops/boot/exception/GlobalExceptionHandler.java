@@ -177,6 +177,23 @@ public class GlobalExceptionHandler {
                 case LAYER_NOT_SELECTABLE -> HttpStatus.UNPROCESSABLE_ENTITY;
                 // The physical table exists; only reading it back failed, so this is an upstream fault.
                 case METADATA_COLLECTION_FAILED -> HttpStatus.BAD_GATEWAY;
+                // Relation and synonym surfaces mirror the model contract: malformed keys or names
+                // are client faults, stale revisions are conflicts, a missing standard is a state
+                // precondition, and a blocked deletion is a referential conflict.
+                case RELATION_KEY_EMPTY,
+                        RELATION_KEY_TOO_MANY,
+                        RELATION_KEY_FIELD_UNSTANDARDIZED,
+                        GRAIN_TOO_LONG,
+                        SYNONYM_INVALID -> HttpStatus.BAD_REQUEST;
+                case RELATION_KEY_FIELD_MISSING -> HttpStatus.UNPROCESSABLE_ENTITY;
+                case RELATION_DUPLICATE_NAME,
+                        RELATION_SELF,
+                        RELATION_TARGET_NOT_DIM,
+                        RELATION_FROM_IS_DIM,
+                        RELATION_DUPLICATE_KEY_SET,
+                        MODEL_HAS_RELATIONS,
+                        SYNONYM_TARGET_INVALID,
+                        RELATION_NOT_FOUND -> HttpStatus.CONFLICT;
                 case DUPLICATE_CODE, DUPLICATE_TABLE_NAME, HAS_DEPENDENCIES, REVISION_CONFLICT -> HttpStatus.CONFLICT;
             };
         }

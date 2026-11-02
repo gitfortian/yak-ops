@@ -22,7 +22,7 @@ import org.apache.ibatis.annotations.Update;
 public interface ModelMapper {
     String PROJECTION = "SELECT m.id,m.workspace_id,m.type,m.layer_id,m.category_id,m.process_id,m.domain_id,"
             + "m.datamart_id,m.dimension_id,m.name,m.naming_root_word_id,m.cn_name,m.storage_policy,m.lifecycle_days,"
-            + "m.physical_properties,m.owner_id,m.description,m.revision,m.create_time,m.update_time,m.create_by,m.update_by,"
+            + "m.physical_properties,m.owner_id,m.description,m.grain_note,m.revision,m.create_time,m.update_time,m.create_by,m.update_by,"
             + "l.cn_name AS layer_name, c.name AS category_name, p.name AS process_name, "
             + "dom.name AS domain_name, dm.name AS datamart_name, dim.name AS dimension_name, "
             + "(SELECT COUNT(*) FROM yak_ops_modeling_model_field f WHERE f.model_id=m.id) AS field_count "
@@ -96,11 +96,11 @@ public interface ModelMapper {
     @Insert("INSERT INTO yak_ops_modeling_model(id,workspace_id,type,layer_id,category_id,process_id,domain_id,"
             + "datamart_id,dimension_id,name,naming_root_word_id,cn_name,storage_policy,lifecycle_days,"
             + "physical_properties,owner_id,"
-            + "description,revision,create_time,update_time,create_by,update_by) "
+            + "description,grain_note,revision,create_time,update_time,create_by,update_by) "
             + "VALUES(#{id},#{workspaceId},#{type},#{layerId},"
             + "#{categoryId},#{processId},#{domainId},#{datamartId},#{dimensionId},#{name},#{namingRootWordId},"
             + "#{cnName},#{storagePolicy},#{lifecycleDays},#{physicalProperties},#{ownerId},#{description},"
-            + "#{revision},#{createTime},"
+            + "#{grainNote},#{revision},#{createTime},"
             + "#{updateTime},#{createBy},#{updateBy})")
     int insert(ModelEntity row);
 
@@ -109,6 +109,7 @@ public interface ModelMapper {
             + "dimension_id=#{dimensionId},name=#{name},naming_root_word_id=#{namingRootWordId},"
             + "cn_name=#{cnName},storage_policy=#{storagePolicy},"
             + "lifecycle_days=#{lifecycleDays},physical_properties=#{physicalProperties},owner_id=#{ownerId},description=#{description},"
+            + "grain_note=#{grainNote},"
             + "revision=revision+1,update_time=#{updateTime},update_by=#{updateBy} "
             + "WHERE workspace_id=#{workspaceId} AND id=#{id} AND revision=#{revision}")
     int update(ModelEntity row);
@@ -118,7 +119,7 @@ public interface ModelMapper {
     int delete(@Param("workspaceId") String workspaceId, @Param("id") String id, @Param("revision") long revision);
 
     @Select("SELECT f.id,f.workspace_id,f.model_id,f.ordinal,f.en_code,f.cn_name,f.data_type,f.length_precision,"
-            + "f.is_primary_key,f.is_not_null,f.is_partition,f.aggregate_type,f.standard_id,"
+            + "f.is_primary_key,f.is_not_null,f.is_partition,f.is_time,f.aggregate_type,f.standard_id,"
             + "f.lookup_id,f.measure_unit_id,f.metric_id,f.description,"
             + "f.create_time,"
             + "f.update_time,f.create_by,f.update_by,s.en_code AS standard_en_code,"
@@ -136,13 +137,23 @@ public interface ModelMapper {
     int deleteFields(@Param("modelId") String modelId);
 
     @Insert("INSERT INTO yak_ops_modeling_model_field(id,workspace_id,model_id,ordinal,en_code,cn_name,data_type,"
-            + "length_precision,is_primary_key,is_not_null,is_partition,aggregate_type,standard_id,"
+            + "length_precision,is_primary_key,is_not_null,is_partition,is_time,aggregate_type,standard_id,"
             + "lookup_id,measure_unit_id,metric_id,description,"
             + "create_time,update_time,create_by,update_by) VALUES(#{id},#{workspaceId},#{modelId},#{ordinal},"
             + "#{enCode},#{cnName},#{dataType},#{lengthPrecision},#{isPrimaryKey},#{isNotNull},#{isPartition},"
-            + "#{aggregateType},#{standardId},#{lookupId},#{measureUnitId},#{metricId},#{description},#{createTime},"
+            + "#{isTime},#{aggregateType},#{standardId},#{lookupId},#{measureUnitId},#{metricId},#{description},#{createTime},"
             + "#{updateTime},#{createBy},#{updateBy})")
     int insertField(ModelFieldEntity row);
+
+    @Select("SELECT COUNT(*) FROM yak_ops_modeling_model_field "
+            + "WHERE workspace_id=#{workspaceId} AND metric_id=#{metricId}")
+    long countFieldsByMetric(
+            @Param("workspaceId") String workspaceId, @Param("metricId") String metricId);
+
+    @Select("SELECT id,workspace_id,type,name,cn_name,grain_note FROM yak_ops_modeling_model "
+            + "WHERE workspace_id=#{workspaceId} AND type IN ('DWD','DWS','ADS') "
+            + "AND (grain_note IS NULL OR grain_note = '') ORDER BY name")
+    List<ModelEntity> listMissingGrain(@Param("workspaceId") String workspaceId);
 
     @Select("SELECT s.en_code, s.cn_name, s.data_type, s.length_precision, s.is_not_null "
             + "FROM yak_ops_standard_field s WHERE s.workspace_id=#{workspaceId} AND s.id=#{id}")

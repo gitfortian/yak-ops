@@ -117,6 +117,21 @@ public interface ModelRepository {
      * @param modelId owning model identity
      */
     void deleteFields(String modelId);
+
+    /**
+     * Counts the model fields across the Workspace that bind one metric.
+     * @param workspaceId authorized Workspace
+     * @param metricId metric identity the field binds
+     * @return number of fields carrying the binding
+     */
+    long countFieldsByMetric(String workspaceId, String metricId);
+
+    /**
+     * Lists DWD/DWS/ADS models of the Workspace that declare no grain.
+     * @param workspaceId authorized Workspace
+     * @return partial entities carrying id, name, display name and type
+     */
+    List<ModelEntity> listMissingGrain(String workspaceId);
     /**
      * Inserts one replacement field.
      * @param row fully initialized field row

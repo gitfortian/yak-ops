@@ -69,6 +69,7 @@ export function fromStandard(standard: StandardField): FieldDraft {
     ...inheritStandard(standard),
     isPrimaryKey: false,
     isPartition: false,
+    isTime: false,
     aggregateType: null,
     lookupId: null,
     lookupEnCode: null,

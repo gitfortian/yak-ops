@@ -64,6 +64,7 @@ export interface ModelField {
   isPrimaryKey: boolean;
   isNotNull: boolean;
   isPartition: boolean;
+  isTime: boolean;
   aggregateType: AggregateType | null;
   standardId: string | null;
   standardEnCode: string | null;
@@ -103,6 +104,8 @@ export interface LogicalModel {
   lifecycleDays: number;
   ownerId: string;
   description: string | null;
+  /** Declared meaning of one row; null when the model declares no grain. */
+  grainNote: string | null;
   /** Engine-specific physical table properties as a JSON object string; null when unset. */
   physicalProperties: string | null;
   /** Naming-dictionary root the layer rule recorded for this model; null when the rule was off. */
@@ -142,6 +145,7 @@ export interface ModelFieldInput {
   isPrimaryKey: boolean;
   isNotNull: boolean;
   isPartition: boolean;
+  isTime: boolean;
   aggregateType: AggregateType | null;
   standardId: string | null;
   /** Bound lookup table; the server overwrites code and name from it while no standard is set. */
@@ -171,6 +175,8 @@ export interface ModelInput {
   lifecycleDays: number;
   ownerId: string;
   description: string | null;
+  /** Declared meaning of one row, e.g. "one row per order line"; null when unset. */
+  grainNote: string | null;
   /** Engine-specific physical table properties as a JSON object string; null when unset. */
   physicalProperties: string | null;
   fields: ModelFieldInput[];

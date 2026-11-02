@@ -3,6 +3,7 @@ package io.yak.ops.business.governance.scan;
 import io.yak.ops.business.datamap.governance.DataMapGovernanceQuery;
 import io.yak.ops.business.governance.rule.GovernanceRule;
 import io.yak.ops.business.governance.rule.GovernanceRuleContext;
+import io.yak.ops.business.modeling.governance.ModelingGovernanceQuery;
 import io.yak.ops.business.governance.rule.GovernanceRuleRegistry;
 import io.yak.ops.business.governance.rule.IssueCandidate;
 import io.yak.ops.business.governance.score.GovernanceDimensionFacts;
@@ -62,17 +63,21 @@ public class GovernanceScanExecutor {
 
     private final TaskGovernanceQuery tasks;
 
+    private final ModelingGovernanceQuery modeling;
+
     public GovernanceScanExecutor(
             GovernanceRuleRegistry registry,
             GovernanceScanWriter writer,
             GovernanceScoreCalculator calculator,
             DataMapGovernanceQuery dataMap,
-            TaskGovernanceQuery tasks) {
+            TaskGovernanceQuery tasks,
+            ModelingGovernanceQuery modeling) {
         this.registry = registry;
         this.writer = writer;
         this.calculator = calculator;
         this.dataMap = dataMap;
         this.tasks = tasks;
+        this.modeling = modeling;
     }
 
     /** Executes one run; a run another worker already claimed is left untouched. */
@@ -139,7 +144,7 @@ public class GovernanceScanExecutor {
                     throw new ScanBudgetExceededException();
                 }
                 GovernanceRuleContext context =
-                        new GovernanceRuleContext(workspaceId, scanId, startedAt, dataMap, tasks);
+                        new GovernanceRuleContext(workspaceId, scanId, startedAt, dataMap, tasks, modeling);
                 rule.evaluate(context, run::accept);
                 run.flush();
                 int autoResolved = writer.autoResolveUnobserved(workspaceId, scanId, rule.code(), LocalDateTime.now());

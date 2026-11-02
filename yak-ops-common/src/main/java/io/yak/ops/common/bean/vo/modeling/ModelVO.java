@@ -62,6 +62,7 @@ public record ModelVO(
         int lifecycleDays,
         String ownerId,
         String description,
+        String grainNote,
         String physicalProperties,
         String namingRootWordId,
         long fieldCount,
