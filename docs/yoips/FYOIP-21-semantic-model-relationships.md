@@ -2,11 +2,11 @@
 
 Status: Accepted
 
-Discussion: N/A until a pull request opens
+Discussion: https://github.com/gitfortian/yak-ops/pull/71
 
-Decision: Accepted by review on 2026-11-02; the PR reference is recorded here when the implementation pull request opens
+Decision: Accepted by review on 2026-11-02; implementation review continues in PR #71
 
-Implementation: In progress — starts from `V14__v1_16_0.sql`
+Implementation: PR #71 — starts from `V14__v1_16_0.sql`
 
 Release: Tracked in [v1.16.0](../releases/v1.16.0.md); not yet released
 
