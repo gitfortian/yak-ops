@@ -21,6 +21,8 @@ import io.yak.ops.dao.repository.modeling.ModelingRelationRepository;
 import io.yak.ops.dao.repository.modeling.ModelingSynonymRepository;
 import io.yak.ops.dao.repository.modeling.PublicationRepository;
 import io.yak.ops.dao.repository.modeling.metric.MetricAtomicRepository;
+import io.yak.ops.dao.repository.modeling.metric.MetricCompositeRepository;
+import io.yak.ops.dao.repository.modeling.metric.MetricDerivedRepository;
 import io.yak.ops.workspace.WorkspaceService;
 import java.util.List;
 import java.util.Optional;
@@ -42,6 +44,8 @@ class OssieSemanticExporterTest {
     private ModelingSynonymRepository synonyms;
     private PublicationRepository publications;
     private MetricAtomicRepository atomicMetrics;
+    private MetricDerivedRepository derivedMetrics;
+    private MetricCompositeRepository compositeMetrics;
     private LayerRepository layers;
     private OssieSemanticExporter exporter;
 
@@ -52,6 +56,8 @@ class OssieSemanticExporterTest {
         synonyms = Mockito.mock(ModelingSynonymRepository.class);
         publications = Mockito.mock(PublicationRepository.class);
         atomicMetrics = Mockito.mock(MetricAtomicRepository.class);
+        derivedMetrics = Mockito.mock(MetricDerivedRepository.class);
+        compositeMetrics = Mockito.mock(MetricCompositeRepository.class);
         layers = Mockito.mock(LayerRepository.class);
         WorkspaceService workspaces = Mockito.mock(WorkspaceService.class);
         when(workspaces.isActiveMember(anyString(), anyString())).thenReturn(true);
@@ -61,6 +67,8 @@ class OssieSemanticExporterTest {
         inject("synonyms", synonyms);
         inject("publications", publications);
         inject("atomicMetrics", atomicMetrics);
+        inject("derivedMetrics", derivedMetrics);
+        inject("compositeMetrics", compositeMetrics);
         inject("layers", layers);
         inject("workspaces", workspaces);
     }

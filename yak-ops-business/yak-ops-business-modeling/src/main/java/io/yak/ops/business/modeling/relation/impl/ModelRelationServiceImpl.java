@@ -30,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -95,7 +96,11 @@ public class ModelRelationServiceImpl implements ModelRelationService {
         row.setJoinType(joinType.name());
         row.setDescription(optionalText(input.getDescription()));
         row.setRevision(1L);
-        relations.add(row);
+        try {
+            relations.add(row);
+        } catch (DuplicateKeyException conflict) {
+            throw new BusinessException(DimensionModelingErrorCode.RELATION_DUPLICATE_NAME, conflict);
+        }
         for (ModelingRelationColumnEntity column : columns) {
             relations.addColumn(column);
         }
@@ -122,7 +127,11 @@ public class ModelRelationServiceImpl implements ModelRelationService {
         row.setName(name);
         row.setJoinType(joinType.name());
         row.setDescription(optionalText(input.getDescription()));
-        if (!relations.update(row)) throw new BusinessException(DimensionModelingErrorCode.REVISION_CONFLICT);
+        try {
+            if (!relations.update(row)) throw new BusinessException(DimensionModelingErrorCode.REVISION_CONFLICT);
+        } catch (DuplicateKeyException conflict) {
+            throw new BusinessException(DimensionModelingErrorCode.RELATION_DUPLICATE_NAME, conflict);
+        }
         relations.deleteColumns(relationId);
         for (ModelingRelationColumnEntity column : columns) {
             relations.addColumn(column);

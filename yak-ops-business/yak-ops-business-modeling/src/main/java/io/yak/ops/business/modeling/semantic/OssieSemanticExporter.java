@@ -19,6 +19,8 @@ import io.yak.ops.dao.repository.modeling.ModelingRelationRepository;
 import io.yak.ops.dao.repository.modeling.ModelingSynonymRepository;
 import io.yak.ops.dao.repository.modeling.PublicationRepository;
 import io.yak.ops.dao.repository.modeling.metric.MetricAtomicRepository;
+import io.yak.ops.dao.repository.modeling.metric.MetricCompositeRepository;
+import io.yak.ops.dao.repository.modeling.metric.MetricDerivedRepository;
 import io.yak.ops.workspace.WorkspaceService;
 import jakarta.annotation.Resource;
 import java.time.LocalDate;
@@ -67,6 +69,12 @@ public class OssieSemanticExporter {
 
     @Resource
     private MetricAtomicRepository atomicMetrics;
+
+    @Resource
+    private MetricDerivedRepository derivedMetrics;
+
+    @Resource
+    private MetricCompositeRepository compositeMetrics;
 
     @Resource
     private LayerRepository layers;
@@ -193,7 +201,11 @@ public class OssieSemanticExporter {
     }
 
     private String metricCode(String workspaceId, String metricId) {
-        return atomicMetrics
+        var atomic = atomicMetrics.find(workspaceId, metricId);
+        if (atomic.isPresent()) return atomic.get().getEnCode();
+        var derived = derivedMetrics.find(workspaceId, metricId);
+        if (derived.isPresent()) return derived.get().getEnCode();
+        return compositeMetrics
                 .find(workspaceId, metricId)
                 .map(metric -> metric.getEnCode())
                 .orElse(metricId);
