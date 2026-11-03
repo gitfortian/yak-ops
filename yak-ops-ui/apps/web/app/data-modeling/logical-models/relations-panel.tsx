@@ -239,7 +239,7 @@ function RelationCard({
         <span className="font-mono">{relation.joinType} JOIN</span>
         {relation.description ? ` · ${relation.description}` : ""}
       </p>
-      <div className="mb-2.5 rounded-md border border-[var(--yak-components-panel-border)] bg-[#f7f8fa] px-2.5 py-1.5 font-mono text-xs">
+      <div className="mb-2.5 rounded-md border border-[var(--yak-components-panel-border)] bg-[var(--yak-color-surface-muted)] px-2.5 py-1.5 font-mono text-xs">
         {relation.keys.map((key, index) => (
           <span key={key.ordinal}>
             {index > 0 && ", "}
@@ -534,11 +534,11 @@ function RelationDrawer({
             <div className="space-y-2">
               {pairs.map((pair, index) => (
                 <div key={`${pair.fromFieldCode}-${index}`} className="flex items-center gap-2">
-                  <span className="flex-1 rounded-md border border-[var(--yak-components-panel-border)] bg-[#f7f8fa] px-2.5 py-1.5 font-mono text-xs">
+                  <span className="flex-1 rounded-md border border-[var(--yak-components-panel-border)] bg-[var(--yak-color-surface-muted)] px-2.5 py-1.5 font-mono text-xs">
                     {pair.fromFieldCode}
                   </span>
                   <span className="text-[var(--yak-components-field-label)]">→</span>
-                  <span className="flex-1 rounded-md border border-[var(--yak-components-panel-border)] bg-[#f7f8fa] px-2.5 py-1.5 font-mono text-xs">
+                  <span className="flex-1 rounded-md border border-[var(--yak-components-panel-border)] bg-[var(--yak-color-surface-muted)] px-2.5 py-1.5 font-mono text-xs">
                     {pair.toFieldCode}
                   </span>
                   <Button

@@ -102,7 +102,7 @@ export function SemanticExportPanel({
               </Button>
             </div>
           </div>
-          <pre className="max-h-[420px] overflow-auto rounded-b-xl bg-[#1d2129] p-3.5 font-mono text-xs leading-6 text-[#e8eaed]">
+          <pre className="max-h-[420px] overflow-auto rounded-b-xl bg-[var(--yak-color-surface-muted)] p-3.5 font-mono text-xs leading-6 text-[var(--yak-color-text-primary)]">
             {result.yaml}
           </pre>
         </div>
