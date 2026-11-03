@@ -29,6 +29,7 @@ export interface FieldDraft {
   isPrimaryKey: boolean;
   isNotNull: boolean;
   isPartition: boolean;
+  isTime: boolean;
   aggregateType: AggregateType | null;
   standardId: string | null;
   standardEnCode: string | null;
@@ -40,6 +41,8 @@ export interface FieldDraft {
   metricId: string | null;
   /** Optional business description; loaded from and submitted with the model field. */
   description: string | null;
+  /** Business synonyms shown as tags; edited through their own endpoint, never submitted with the model. */
+  synonyms: string[];
   /** Why an imported column still has no logical type; shown beside the row and never submitted. */
   importNote: string | null;
   /**
@@ -83,6 +86,7 @@ export function emptyField(): FieldDraft {
     isPrimaryKey: false,
     isNotNull: false,
     isPartition: false,
+    isTime: false,
     aggregateType: null,
     standardId: null,
     standardEnCode: null,
@@ -92,6 +96,7 @@ export function emptyField(): FieldDraft {
     measureUnitEnCode: null,
     metricId: null,
     description: null,
+    synonyms: [],
     importNote: null,
     source: null,
   };
@@ -107,6 +112,7 @@ export function fromModelField(field: ModelField): FieldDraft {
     isPrimaryKey: field.isPrimaryKey,
     isNotNull: field.isNotNull,
     isPartition: field.isPartition,
+    isTime: field.isTime,
     aggregateType: field.aggregateType,
     standardId: field.standardId,
     standardEnCode: field.standardEnCode,
@@ -116,6 +122,7 @@ export function fromModelField(field: ModelField): FieldDraft {
     measureUnitEnCode: field.measureUnitEnCode,
     metricId: field.metricId ?? null,
     description: field.description,
+    synonyms: field.synonyms ?? [],
     importNote: null,
     source: null,
   };
@@ -130,6 +137,7 @@ export function toModelFieldInput(row: FieldDraft): ModelFieldInput {
     isPrimaryKey: row.isPrimaryKey,
     isNotNull: row.isNotNull,
     isPartition: row.isPartition,
+    isTime: row.isTime,
     aggregateType: row.aggregateType,
     standardId: row.standardId,
     lookupId: row.lookupId,

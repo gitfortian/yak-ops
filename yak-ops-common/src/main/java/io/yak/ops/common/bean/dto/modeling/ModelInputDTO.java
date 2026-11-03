@@ -65,6 +65,10 @@ public class ModelInputDTO {
     @Size(max = 500, message = "描述不能超过500个字符")
     private String description;
 
+    /** Declared meaning of one row, e.g. "one row per order line"; optional. */
+    @Size(max = 200, message = "粒度声明不能超过200个字符")
+    private String grainNote;
+
     /**
      * Engine-specific physical table properties as a JSON object (Doris bucket count, replica
      * count, data model). Validated structurally here and against the target dialect at

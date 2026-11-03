@@ -28,6 +28,11 @@ public interface GovernanceRule {
     /** Dimension the rule is scored in. */
     GovernanceDimension dimension();
 
+    /** Whether the findings contribute to the health score; advisory rules return false. */
+    default boolean scored() {
+        return true;
+    }
+
     /** Severity every Issue of this rule carries. */
     IssueSeverity severity();
 

@@ -23,6 +23,8 @@ import io.yak.ops.dao.entity.modeling.ModelFieldEntity;
 import io.yak.ops.dao.entity.modeling.PlanningNodeEntity;
 import io.yak.ops.dao.repository.modeling.DimensionRepository;
 import io.yak.ops.dao.repository.modeling.ModelRepository;
+import io.yak.ops.dao.repository.modeling.ModelingRelationRepository;
+import io.yak.ops.dao.repository.modeling.ModelingSynonymRepository;
 import io.yak.ops.dao.repository.modeling.PlanningRepository;
 import io.yak.ops.dao.repository.modeling.PublicationRepository;
 import io.yak.ops.dao.repository.modeling.metric.MetricDerivedRepository;
@@ -82,6 +84,14 @@ public class ModelServiceImpl implements ModelService {
     @Resource
     private PublicationRepository publications;
 
+    /** Read-only here: model deletion must refuse while semantic relations still reference the model. */
+    @Resource
+    private ModelingRelationRepository relations;
+
+    /** Read-only here: the field rows carry their business synonyms for display. */
+    @Resource
+    private ModelingSynonymRepository synonyms;
+
     @Resource
     private WorkspaceService workspaces;
 
@@ -123,7 +133,7 @@ public class ModelServiceImpl implements ModelService {
                 workspaceId, rows.stream().map(ModelEntity::getId).toList());
         return PageData.of(
                 rows.stream()
-                        .map(row -> project(row, null, statusOf(statuses, row.getId())))
+                        .map(row -> project(row, null, statusOf(statuses, row.getId()), Map.of()))
                         .toList(),
                 total,
                 pageNo,
@@ -137,7 +147,17 @@ public class ModelServiceImpl implements ModelService {
         var row = models.find(workspaceId, id)
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
         var statuses = publications.latestStatusByModel(workspaceId, List.of(row.getId()));
-        return project(row, models.fields(row.getId()), statusOf(statuses, row.getId()));
+        var fieldRows = models.fields(row.getId());
+        Map<String, List<String>> synonymTerms = new java.util.HashMap<>();
+        List<String> fieldKeys = fieldRows.stream()
+                .map(field -> field.getModelId() + ":" + field.getEnCode())
+                .toList();
+        for (var synonym : synonyms.listByTargets(workspaceId, "MODEL_FIELD", fieldKeys)) {
+            synonymTerms
+                    .computeIfAbsent(synonym.getTargetId(), key -> new ArrayList<>())
+                    .add(synonym.getTerm());
+        }
+        return project(row, fieldRows, statusOf(statuses, row.getId()), synonymTerms);
     }
 
     @Override
@@ -210,6 +230,10 @@ public class ModelServiceImpl implements ModelService {
         if (revision < 1) throw new BusinessException(DimensionModelingErrorCode.INVALID_MODEL);
         var row = lockRow(workspaceId, id);
         if (row.getRevision() != revision) throw new BusinessException(DimensionModelingErrorCode.REVISION_CONFLICT);
+        // Semantic relations bind this model by identity; deleting it would orphan every relation
+        // that names the model on either side. The relations must be removed first.
+        if (relations.countByModel(workspaceId, id) > 0)
+            throw new BusinessException(DimensionModelingErrorCode.MODEL_HAS_RELATIONS);
         if (!models.delete(workspaceId, id, revision))
             throw new BusinessException(DimensionModelingErrorCode.REVISION_CONFLICT);
     }
@@ -309,6 +333,10 @@ public class ModelServiceImpl implements ModelService {
         row.setPhysicalProperties(normalizeProperties(input.getPhysicalProperties()));
         row.setOwnerId(requireOwner(workspaceId, actor, input.getOwnerId()));
         row.setDescription(optionalText(input.getDescription(), 500));
+        row.setGrainNote(
+                input.getType() == ModelType.DIM
+                        ? null
+                        : optionalText(input.getGrainNote(), 200, DimensionModelingErrorCode.GRAIN_TOO_LONG));
         return processCode;
     }
 
@@ -473,6 +501,7 @@ public class ModelServiceImpl implements ModelService {
             row.setIsPrimaryKey(Boolean.TRUE.equals(field.getIsPrimaryKey()));
             row.setIsNotNull(isNotNull);
             row.setIsPartition(partition);
+            row.setIsTime(Boolean.TRUE.equals(field.getIsTime()));
             row.setAggregateType(aggregate);
             row.setStandardId(standardId);
             row.setLookupId(lookupId);
@@ -566,7 +595,11 @@ public class ModelServiceImpl implements ModelService {
         return normalized.isEmpty() ? null : normalized;
     }
 
-    private static ModelVO project(ModelEntity row, List<ModelFieldEntity> fields, PublicationStatus status) {
+    private static ModelVO project(
+            ModelEntity row,
+            List<ModelFieldEntity> fields,
+            PublicationStatus status,
+            Map<String, List<String>> synonymTerms) {
         return new ModelVO(
                 row.getId(),
                 ModelType.from(row.getType()),
@@ -588,13 +621,16 @@ public class ModelServiceImpl implements ModelService {
                 row.getLifecycleDays(),
                 row.getOwnerId(),
                 row.getDescription(),
+                row.getGrainNote(),
                 row.getPhysicalProperties(),
                 row.getNamingRootWordId(),
                 fields == null ? row.getFieldCount() : fields.size(),
                 row.getRevision(),
                 fields == null
                         ? null
-                        : fields.stream().map(ModelServiceImpl::project).toList(),
+                        : fields.stream()
+                                .map(field -> project(field, synonymTerms))
+                                .toList(),
                 status);
     }
 
@@ -603,7 +639,7 @@ public class ModelServiceImpl implements ModelService {
         return PublicationStatus.from(statuses.get(modelId));
     }
 
-    private static ModelFieldVO project(ModelFieldEntity row) {
+    private static ModelFieldVO project(ModelFieldEntity row, Map<String, List<String>> synonymTerms) {
         return new ModelFieldVO(
                 row.getId(),
                 row.getOrdinal(),
@@ -614,6 +650,7 @@ public class ModelServiceImpl implements ModelService {
                 Boolean.TRUE.equals(row.getIsPrimaryKey()),
                 Boolean.TRUE.equals(row.getIsNotNull()),
                 Boolean.TRUE.equals(row.getIsPartition()),
+                Boolean.TRUE.equals(row.getIsTime()),
                 row.getAggregateType(),
                 row.getStandardId(),
                 row.getStandardEnCode(),
@@ -624,6 +661,7 @@ public class ModelServiceImpl implements ModelService {
                 row.getMetricId(),
                 row.getMetricEnCode(),
                 row.getMetricCnName(),
-                row.getDescription());
+                row.getDescription(),
+                synonymTerms.getOrDefault(row.getModelId() + ":" + row.getEnCode(), List.of()));
     }
 }

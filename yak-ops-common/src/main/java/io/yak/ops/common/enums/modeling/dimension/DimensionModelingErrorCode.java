@@ -33,7 +33,22 @@ public enum DimensionModelingErrorCode implements ErrorCode {
      * A collection run failed. A failed publication is not an error code: it is a recorded terminal
      * state that the publish endpoint returns, so the client can read which column differs.
      */
-    METADATA_COLLECTION_FAILED(19514, "元数据采集失败，物理表可能已创建，请稍后重新采集");
+    METADATA_COLLECTION_FAILED(19514, "元数据采集失败，物理表可能已创建，请稍后重新采集"),
+    RELATION_DUPLICATE_NAME(19515, "关系名在当前工作空间已存在"),
+    RELATION_SELF(19516, "关系的两端不能是同一个模型"),
+    RELATION_TARGET_NOT_DIM(19517, "关系目标必须为维度表（DIM）"),
+    RELATION_FROM_IS_DIM(19518, "维度表只能作为关系的一端，不能作为多端"),
+    RELATION_KEY_FIELD_MISSING(19519, "关联键字段不存在或已被移除"),
+    RELATION_KEY_FIELD_UNSTANDARDIZED(19520, "关联键字段必须绑定数据标准"),
+    RELATION_DUPLICATE_KEY_SET(19521, "相同模型间已存在相同关联键的关系"),
+    RELATION_KEY_EMPTY(19522, "关联键不能为空"),
+    MODEL_HAS_RELATIONS(19523, "模型存在语义关系，无法删除，请先删除关系"),
+    RELATION_NOT_FOUND(19524, "语义关系不存在"),
+    GRAIN_TOO_LONG(19525, "粒度声明不能超过200个字符"),
+    SYNONYM_INVALID(19526, "同义词不合法：每项不能为空且不超过64个字符"),
+    SYNONYM_TARGET_INVALID(19527, "同义词目标不存在或类型不支持"),
+    RELATION_KEY_TOO_MANY(19528, "关联键对数量不能超过8个"),
+    GRAIN_NOT_APPLICABLE(19529, "维度表不需要声明粒度");
 
     private final Integer code;
     private final String message;

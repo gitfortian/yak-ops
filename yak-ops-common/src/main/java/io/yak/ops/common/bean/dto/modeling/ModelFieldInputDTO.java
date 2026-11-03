@@ -34,6 +34,9 @@ public class ModelFieldInputDTO {
 
     private Boolean isPartition;
 
+    /** Analysis time role, independent of {@link #dataType}; false when absent. */
+    private Boolean isTime;
+
     /** Measure function; accepted for DWS and ADS only and validated against the resolved type. */
     private AggregateType aggregateType;
 

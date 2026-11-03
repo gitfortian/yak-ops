@@ -9,7 +9,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum IssueTargetType {
     DATA_MAP_TABLE("DATA_MAP_TABLE"),
-    TASK_DEFINITION("TASK_DEFINITION");
+    TASK_DEFINITION("TASK_DEFINITION"),
+    MODELING_MODEL("MODELING_MODEL");
 
     @EnumValue
     private final String value;

@@ -12,6 +12,7 @@ import io.yak.ops.business.datamap.governance.DataMapGovernanceQuery;
 import io.yak.ops.business.datamap.governance.GovernanceTableSnapshot;
 import io.yak.ops.business.governance.rule.GovernanceRule;
 import io.yak.ops.business.governance.rule.GovernanceRuleContext;
+import io.yak.ops.business.modeling.governance.ModelingGovernanceQuery;
 import io.yak.ops.business.governance.rule.IssueCandidate;
 import io.yak.ops.business.task.governance.TaskGovernanceQuery;
 import java.math.BigDecimal;
@@ -26,10 +27,11 @@ class TableRulesTest {
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 29, 9, 12);
 
     private final DataMapGovernanceQuery dataMap = mock(DataMapGovernanceQuery.class);
+    private final ModelingGovernanceQuery modeling = mock(ModelingGovernanceQuery.class);
     private final TaskGovernanceQuery tasks = mock(TaskGovernanceQuery.class);
 
     private GovernanceRuleContext context() {
-        return new GovernanceRuleContext("ws-1", "scan-1", NOW, dataMap, tasks);
+        return new GovernanceRuleContext("ws-1", "scan-1", NOW, dataMap, tasks, modeling);
     }
 
     private void tables(GovernanceTableSnapshot... rows) {

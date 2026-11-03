@@ -19,7 +19,7 @@ import org.apache.ibatis.annotations.Update;
 @Mapper
 public interface GovernanceIssueMapper {
 
-    String COLUMNS = "id,workspace_id,rule_code,rule_version,dimension_code,severity,target_type,target_id,"
+    String COLUMNS = "id,workspace_id,rule_code,rule_version,dimension_code,scored,severity,target_type,target_id,"
             + "target_name,status,owner_id,ignore_until,resolved_at,resolved_by,resolution,observed_value,"
             + "threshold_value,sample_count,window_days,first_detected_at,last_detected_at,last_scan_id,revision,"
             + "create_time,update_time,create_by,update_by";
@@ -41,7 +41,7 @@ public interface GovernanceIssueMapper {
     String BOARD_ORDER = " ORDER BY FIELD(severity, 'HIGH', 'MEDIUM', 'LOW'), update_time DESC, id DESC";
 
     @Insert("INSERT INTO yak_ops_governance_issue (" + COLUMNS + ") VALUES "
-            + "(#{id},#{workspaceId},#{ruleCode},#{ruleVersion},#{dimensionCode},#{severity},#{targetType},"
+            + "(#{id},#{workspaceId},#{ruleCode},#{ruleVersion},#{dimensionCode},#{scored},#{severity},#{targetType},"
             + "#{targetId},#{targetName},#{status},#{ownerId},#{ignoreUntil},#{resolvedAt},#{resolvedBy},"
             + "#{resolution},#{observedValue},#{thresholdValue},#{sampleCount},#{windowDays},#{firstDetectedAt},"
             + "#{lastDetectedAt},#{lastScanId},#{revision},#{createTime},#{updateTime},#{createBy},#{updateBy})")
@@ -130,7 +130,7 @@ public interface GovernanceIssueMapper {
 
     /** Severity counts of the score-bearing Issues of one dimension. */
     @Select("SELECT severity, COUNT(*) AS total FROM yak_ops_governance_issue "
-            + "WHERE workspace_id=#{workspaceId} AND dimension_code=#{dimensionCode} "
+            + "WHERE workspace_id=#{workspaceId} AND dimension_code=#{dimensionCode} AND scored=1 "
             + "AND status IN ('OPEN', 'HANDLING') GROUP BY severity")
     List<GovernanceSeverityCountRow> countScoredBySeverity(
             @Param("workspaceId") String workspaceId, @Param("dimensionCode") String dimensionCode);

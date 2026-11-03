@@ -371,11 +371,17 @@ export default function GovernanceIssuesPage() {
 
 function TargetCell({ issue }: { issue: GovernanceIssue }) {
   const name = governanceTargetLabel(issue.targetName);
-  if (issue.targetType === "DATA_MAP_TABLE") {
+  if (issue.targetType === "DATA_MAP_TABLE" || issue.targetType === "MODELING_MODEL") {
+    const href =
+      issue.targetType === "DATA_MAP_TABLE"
+        ? `/data-governance/data-map/tables/${issue.targetId}`
+        : `/data-modeling/logical-models/${issue.targetId}?tab=${
+            issue.ruleCode === "MODEL_RELATION_KEY_UNSTANDARDIZED" ? "relations" : "info"
+          }`;
     return (
       <div className="min-w-0">
         <a
-          href={`/data-governance/data-map/tables/${issue.targetId}`}
+          href={href}
           onClick={(event) => event.stopPropagation()}
           className="block truncate font-mono text-[12.5px] font-semibold [color:var(--yak-color-primary)] hover:underline"
           title={name}

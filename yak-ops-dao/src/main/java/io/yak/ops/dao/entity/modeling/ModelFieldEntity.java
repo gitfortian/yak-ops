@@ -35,6 +35,8 @@ public class ModelFieldEntity extends BaseEntity {
     private Boolean isNotNull;
     /** Whether the field is the model partition column; same naming rule as {@link #isPrimaryKey}. */
     private Boolean isPartition;
+    /** Whether the field is the analysis time dimension, independent of {@link #dataType}. */
+    private Boolean isTime;
     /** Measure function for a DWS / ADS field; null for a plain column and outside those kinds. */
     private AggregateType aggregateType;
     /** Bound field standard; null when the field is maintained by hand. */

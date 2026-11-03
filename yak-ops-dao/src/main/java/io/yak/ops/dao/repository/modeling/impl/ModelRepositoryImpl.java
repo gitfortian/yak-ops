@@ -96,6 +96,16 @@ public class ModelRepositoryImpl implements ModelRepository {
     }
 
     @Override
+    public long countFieldsByMetric(String workspaceId, String metricId) {
+        return mapper.countFieldsByMetric(workspaceId, metricId);
+    }
+
+    @Override
+    public List<ModelEntity> listMissingGrain(String workspaceId) {
+        return mapper.listMissingGrain(workspaceId);
+    }
+
+    @Override
     public void addField(ModelFieldEntity row) {
         mapper.insertField(row);
     }

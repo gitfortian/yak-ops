@@ -55,7 +55,11 @@ const columns: TableColumns<GovernanceRule> = [
     title: "目标类型",
     width: 130,
     render: (_value, record) =>
-      record.targetType === "DATA_MAP_TABLE" ? "数据地图表" : "任务定义",
+      record.targetType === "DATA_MAP_TABLE"
+        ? "数据地图表"
+        : record.targetType === "MODELING_MODEL"
+          ? "逻辑模型"
+          : "任务定义",
   },
   {
     key: "thresholds",

@@ -69,6 +69,8 @@ class ModelServiceTest {
     @Mock MetricDerivedRepository derivedMetrics;
     @Mock WorkspaceService workspaces;
     @Mock PublicationRepository publications;
+    @Mock io.yak.ops.dao.repository.modeling.ModelingRelationRepository relations;
+    @Mock io.yak.ops.dao.repository.modeling.ModelingSynonymRepository synonyms;
     @InjectMocks ModelServiceImpl service;
     AutoCloseable mocks;
 

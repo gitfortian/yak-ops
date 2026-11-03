@@ -27,6 +27,8 @@ import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.dao.repository.modeling.impl.DimensionRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.impl.LayerRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.impl.ModelRepositoryImpl;
+import io.yak.ops.dao.repository.modeling.ModelingRelationRepositoryImpl;
+import io.yak.ops.dao.repository.modeling.impl.ModelingSynonymRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.impl.PlanningRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.impl.PublicationRepositoryImpl;
 import io.yak.ops.dao.repository.modeling.metric.impl.MetricDerivedRepositoryImpl;
@@ -81,6 +83,8 @@ class ModelDatabaseIT {
         context = new AnnotationConfigApplicationContext(
                 Beans.class,
                 ModelRepositoryImpl.class,
+                ModelingRelationRepositoryImpl.class,
+                ModelingSynonymRepositoryImpl.class,
                 ModelServiceImpl.class,
                 PlanningRepositoryImpl.class,
                 DimensionRepositoryImpl.class,

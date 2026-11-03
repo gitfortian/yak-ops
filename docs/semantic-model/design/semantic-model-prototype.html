@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>语义模型 · 关系与时间角色 · 交互原型</title>
+<style>
+  :root{
+    --primary:#2f6bff; --primary-hover:#265ad9; --primary-bg:#e8f3ff;
+    --bg:#f5f6fa; --card:#ffffff; --border:#e5e6eb; --border-light:#f0f0f0;
+    --text:#1d2129; --text-2:#86909c; --text-3:#c9cdd4;
+    --green:#00b42a; --green-bg:#e8f8ee; --red:#f53f3f; --red-bg:#ffece8;
+    --amber:#ff7d00; --amber-bg:#fff7e8;
+    --radius:10px; --radius-sm:8px;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:"PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;font-size:13px;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+  .app{display:flex;height:100vh;overflow:hidden}
+
+  .sidebar{width:212px;background:#fff;border-right:1px solid var(--border-light);display:flex;flex-direction:column;flex-shrink:0}
+  .logo{height:50px;display:flex;align-items:center;gap:8px;padding:0 16px;font-size:15px;font-weight:600;border-bottom:1px solid var(--border-light)}
+  .logo .mark{width:22px;height:22px;border-radius:6px;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+  .nav{padding:10px 8px;overflow-y:auto;flex:1}
+  .nav-group{font-size:11px;color:var(--text-2);padding:10px 8px 6px}
+  .nav-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--radius-sm);color:var(--text);cursor:default;margin-bottom:2px}
+  .nav-item:hover{background:#f7f8fa}
+  .nav-item.active{background:var(--primary-bg);color:var(--primary);font-weight:500}
+  .nav-item .dot{width:6px;height:6px;border-radius:50%;background:var(--text-3)}
+
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .topbar{height:50px;background:#fff;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;padding:0 20px;flex-shrink:0}
+  .crumb{font-size:12px;color:var(--text-2)}
+  .crumb b{color:var(--text);font-weight:500}
+  .top-actions{display:flex;gap:8px;align-items:center}
+  .btn{height:30px;padding:0 12px;border:1px solid var(--border);background:#fff;border-radius:var(--radius-sm);font-size:12px;color:var(--text);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .btn:hover{border-color:var(--primary);color:var(--primary)}
+  .btn-primary{background:var(--primary);border-color:var(--primary);color:#fff}
+  .btn-primary:hover{background:var(--primary-hover);color:#fff}
+  .btn-sm{height:26px;padding:0 9px;font-size:12px}
+  .btn-ghost{border-color:transparent;background:transparent;color:var(--text-2)}
+
+  .tabs{background:#fff;border-bottom:1px solid var(--border-light);padding:0 20px;display:flex;gap:22px;flex-shrink:0}
+  .tab{height:40px;display:flex;align-items:center;font-size:13px;color:var(--text-2);cursor:pointer;border-bottom:2px solid transparent}
+  .tab.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:500}
+  .tab .count{font-size:11px;color:var(--text-2);margin-left:4px}
+
+  .content{flex:1;overflow:auto;padding:16px 20px 28px}
+  .panel{display:none}
+  .panel.active{display:block}
+
+  .card{background:var(--card);border:1px solid var(--border-light);border-radius:var(--radius);margin-bottom:14px}
+  .card-hd{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--border-light)}
+  .card-hd h3{font-size:13px;font-weight:500}
+  .card-hd .hint{font-size:12px;color:var(--text-2)}
+  .card-bd{padding:14px 16px}
+
+  .summary{display:flex;gap:10px;margin-bottom:14px}
+  .stat{background:#fff;border:1px solid var(--border-light);border-radius:var(--radius);padding:12px 16px;min-width:132px}
+  .stat .k{font-size:12px;color:var(--text-2);margin-bottom:6px}
+  .stat .v{font-size:20px;font-weight:500}
+  .stat .v.warn{color:var(--amber)}
+  .stat .v.ok{color:var(--green)}
+
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  thead th{text-align:left;font-weight:400;color:var(--text-2);padding:8px 10px;border-bottom:1px solid var(--border-light);white-space:nowrap}
+  tbody td{padding:10px;border-bottom:1px solid var(--border-light);vertical-align:middle}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#fafbfc}
+  .mono{font-family:var(--mono);font-size:12px}
+  .muted{color:var(--text-2)}
+  .key{color:var(--text);font-weight:500}
+
+  .tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:4px;font-size:11px;background:#f2f3f5;color:var(--text-2);margin:1px 3px 1px 0}
+  .tag.blue{background:var(--primary-bg);color:var(--primary)}
+  .tag.green{background:var(--green-bg);color:var(--green)}
+  .tag.amber{background:var(--amber-bg);color:var(--amber)}
+  .tag.red{background:var(--red-bg);color:var(--red)}
+  .tag .x{color:inherit;opacity:.55;margin-left:4px;cursor:pointer}
+
+  .switch{position:relative;display:inline-block;width:32px;height:18px;vertical-align:middle}
+  .switch input{opacity:0;width:0;height:0}
+  .switch span{position:absolute;inset:0;background:#d9dde3;border-radius:9px;transition:.15s;cursor:pointer}
+  .switch span:before{content:"";position:absolute;width:14px;height:14px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.15s}
+  .switch input:checked + span{background:var(--primary)}
+  .switch input:checked + span:before{transform:translateX(14px)}
+
+  .rel-card{border:1px solid var(--border-light);border-left:3px solid var(--green);border-radius:var(--radius-sm);padding:11px 13px;background:#fff}
+  .rel-card.warn{border-left-color:var(--amber)}
+  .rel-card.bad{border-left-color:var(--red)}
+  .rel-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px}
+  .rel-name{font-size:13px;font-weight:500;color:var(--text)}
+  .rel-sub{font-size:11px;color:var(--text-2);margin-top:2px}
+  .rel-meta{font-size:12px;color:var(--text-2);margin-bottom:7px}
+  .rel-key{background:#f7f8fa;border:1px solid var(--border-light);border-radius:6px;padding:7px 10px;font-size:12px;margin-bottom:9px}
+  .rel-actions{display:flex;gap:8px}
+
+  .drawer-mask{position:fixed;inset:0;background:rgba(29,33,41,.35);opacity:0;pointer-events:none;transition:.18s;z-index:20}
+  .drawer-mask.show{opacity:1;pointer-events:auto}
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:460px;background:#fff;border-left:1px solid var(--border-light);transform:translateX(100%);transition:.22s;z-index:21;display:flex;flex-direction:column}
+  .drawer.show{transform:none}
+  .drawer-hd{height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;border-bottom:1px solid var(--border-light);font-size:14px;font-weight:500}
+  .drawer-bd{flex:1;overflow:auto;padding:18px}
+  .drawer-ft{height:56px;border-top:1px solid var(--border-light);display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:0 18px}
+  .field{margin-bottom:16px}
+  .field label{display:block;font-size:12px;color:var(--text-2);margin-bottom:6px}
+  .select,.input{width:100%;height:32px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 10px;font-size:12px;color:var(--text);background:#fff;outline:none}
+  .select:focus,.input:focus{border-color:var(--primary)}
+  .prop{border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;cursor:pointer;display:flex;gap:10px;align-items:flex-start}
+  .prop:hover{border-color:var(--primary)}
+  .prop.sel{border-color:var(--primary);background:var(--primary-bg)}
+  .prop .l{flex:1}
+  .prop .t{font-family:var(--mono);font-size:12px;margin-bottom:4px}
+  .prop .s{font-size:11px;color:var(--text-2);line-height:1.6}
+  .map-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .map-row .mono{flex:1;background:#f7f8fa;border:1px solid var(--border-light);border-radius:var(--radius-sm);padding:6px 9px}
+  .map-row .arrow{color:var(--text-3)}
+  .note{background:var(--amber-bg);border:1px solid #ffd8a8;color:#8a5200;border-radius:var(--radius-sm);padding:9px 11px;font-size:12px;line-height:1.6;margin-bottom:16px}
+  .radio-line{display:flex;gap:16px;font-size:12px;color:var(--text-2)}
+  .radio-line label{display:flex;align-items:center;gap:5px;cursor:pointer}
+
+  pre.yaml{background:#1d2129;color:#e8eaed;border-radius:var(--radius-sm);padding:14px 16px;font-family:var(--mono);font-size:12px;line-height:1.7;overflow:auto;max-height:420px}
+  pre.yaml .k{color:#8ab4f8}
+  pre.yaml .s{color:#a8d08d}
+  pre.yaml .c{color:#9aa0a6}
+  .banner{display:flex;gap:10px;align-items:flex-start;background:var(--amber-bg);border:1px solid #ffd8a8;border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;color:#8a5200;line-height:1.6;margin-bottom:14px}
+  .banner b{font-weight:500}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo"><span class="mark">Y</span> Yak Ops</div>
+    <nav class="nav">
+      <div class="nav-group">数据治理</div>
+      <div class="nav-item"><span class="dot"></span>数据地图</div>
+      <div class="nav-item"><span class="dot"></span>资产治理</div>
+      <div class="nav-group">数据建模</div>
+      <div class="nav-item"><span class="dot"></span>数仓规划</div>
+      <div class="nav-item"><span class="dot"></span>数据标准</div>
+      <div class="nav-item"><span class="dot"></span>维度</div>
+      <div class="nav-item active"><span class="dot" style="background:var(--primary)"></span>逻辑模型</div>
+      <div class="nav-item"><span class="dot"></span>指标</div>
+      <div class="nav-group">数据集成</div>
+      <div class="nav-item"><span class="dot"></span>数据源</div>
+      <div class="nav-item"><span class="dot"></span>同步任务</div>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="crumb">数据建模 / 逻辑模型 / <b>dwd_trade_order_detail</b></div>
+      <div class="top-actions">
+        <span class="tag green">已发布 v3</span>
+        <button class="btn">编辑模型</button>
+        <button class="btn" onclick="switchTab('export')">导出语义模型</button>
+      </div>
+    </header>
+
+    <div class="tabs">
+      <div class="tab" onclick="switchTab('fields')">字段 <span class="count">8</span></div>
+      <div class="tab active" onclick="switchTab('relations')">关系 <span class="count">3</span></div>
+      <div class="tab" onclick="switchTab('export')">语义导出</div>
+    </div>
+
+    <div class="content">
+      <section class="panel active" id="panel-relations">
+        <div class="summary">
+          <div class="stat"><div class="k">关系</div><div class="v">3</div></div>
+          <div class="stat"><div class="k">键已绑标准</div><div class="v ok">2 / 3</div></div>
+          <div class="stat"><div class="k">待修复</div><div class="v warn">1</div></div>
+          <div class="stat"><div class="k">粒度声明 <span style="font-size:10px;color:var(--text-3)">基本信息页签内编辑</span></div><div class="v" style="font-size:13px;padding-top:4px" id="grainText">一行 = 一个订单明细行</div><div id="grainEditor" style="display:none;margin-top:8px"><input class="input" id="grainInput" value="一行 = 一个订单明细行"><div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px"><button class="btn btn-sm" onclick="cancelGrain()">取消</button><button class="btn btn-primary btn-sm" onclick="saveGrain()">保存</button></div></div><button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="editGrain()">编辑</button></div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd">
+            <h3>关系</h3>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span class="hint">按目标维表分组 · 左边框颜色即健康状态</span>
+              <button class="btn btn-primary btn-sm" onclick="openDrawer()">新建关系</button>
+            </div>
+          </div>
+          <div class="card-bd" style="display:flex;flex-direction:column;gap:10px">
+            <div class="rel-card warn">
+              <div class="rel-hd">
+                <div>
+                  <div class="rel-name">dim_product</div>
+                  <div class="rel-sub">DIM · 商品</div>
+                </div>
+                <span class="tag amber" style="margin-left:auto">product_id 未绑标准</span>
+              </div>
+              <div class="rel-meta"><span class="mono">LEFT JOIN</span> · 维表缺失时保留事实行</div>
+              <div class="rel-key mono">product_id <span class="muted">(事实)</span> = product_id <span class="muted">(维表)</span></div>
+              <div class="rel-actions">
+                <button class="btn btn-sm" style="background:var(--amber);border-color:var(--amber);color:#fff">去补标准</button>
+                <button class="btn btn-sm">编辑关系</button>
+                <button class="btn btn-sm">删除</button>
+              </div>
+            </div>
+            <div class="rel-card ok">
+              <div class="rel-hd">
+                <div>
+                  <div class="rel-name">dim_customer</div>
+                  <div class="rel-sub">DIM · 客户</div>
+                </div>
+                <span class="tag green" style="margin-left:auto">已绑标准</span>
+              </div>
+              <div class="rel-meta"><span class="mono">INNER JOIN</span> · 更新于 11-02 14:02</div>
+              <div class="rel-key mono">customer_id <span class="muted">(事实)</span> = customer_id <span class="muted">(维表)</span></div>
+              <div class="rel-actions">
+                <button class="btn btn-sm">编辑关系</button>
+                <button class="btn btn-sm">删除</button>
+              </div>
+            </div>
+            <div class="rel-card ok">
+              <div class="rel-hd">
+                <div>
+                  <div class="rel-name">dim_date</div>
+                  <div class="rel-sub">DIM · 日期</div>
+                </div>
+                <span class="tag green" style="margin-left:auto">已绑标准</span>
+              </div>
+              <div class="rel-meta"><span class="mono">INNER JOIN</span> · 更新于 11-02 13:48</div>
+              <div class="rel-key mono">biz_date_sk <span class="muted">(事实)</span> = date_sk <span class="muted">(维表)</span></div>
+              <div class="rel-actions">
+                <button class="btn btn-sm">编辑关系</button>
+                <button class="btn btn-sm">删除</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-fields">
+        <div class="card">
+          <div class="card-hd">
+            <h3>字段</h3>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input class="input" style="width:200px;height:28px" placeholder="搜索字段或标准">
+              <label style="font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:5px">
+                <input type="checkbox"> 仅看未绑标准
+              </label>
+            </div>
+          </div>
+          <div class="card-bd" style="padding:0">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:40px">#</th>
+                  <th style="width:150px">字段</th>
+                  <th style="width:150px">绑定标准</th>
+                  <th style="width:90px">类型</th>
+                  <th style="width:70px">主键</th>
+                  <th style="width:90px">时间角色</th>
+                  <th>同义词</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="muted">1</td>
+                  <td class="mono key">order_id</td>
+                  <td><span class="tag blue">订单编号</span></td>
+                  <td class="muted">String</td>
+                  <td><span class="tag">是</span></td>
+                  <td><label class="switch"><input type="checkbox"><span></span></label></td>
+                  <td><span class="tag">订单号<span class="x">×</span></span><span class="tag">单据号<span class="x">×</span></span></td>
+                </tr>
+                <tr>
+                  <td class="muted">2</td>
+                  <td class="mono key">customer_id</td>
+                  <td><span class="tag blue">客户编号</span></td>
+                  <td class="muted">String</td>
+                  <td></td>
+                  <td><label class="switch"><input type="checkbox"><span></span></label></td>
+                  <td><span class="tag">客户ID<span class="x">×</span></span><span class="tag">买家<span class="x">×</span></span></td>
+                </tr>
+                <tr>
+                  <td class="muted">3</td>
+                  <td class="mono key">product_id</td>
+                  <td><span class="tag red">未绑标准</span></td>
+                  <td class="muted">String</td>
+                  <td></td>
+                  <td><label class="switch"><input type="checkbox"><span></span></label></td>
+                  <td><span class="tag">商品ID<span class="x">×</span></span></td>
+                </tr>
+                <tr>
+                  <td class="muted">4</td>
+                  <td class="mono key">biz_date_sk</td>
+                  <td><span class="tag blue">业务日期代理键</span></td>
+                  <td class="muted">Integer</td>
+                  <td></td>
+                  <td><label class="switch"><input type="checkbox" checked><span></span></label></td>
+                  <td><span class="tag">业务日期<span class="x">×</span></span></td>
+                </tr>
+                <tr>
+                  <td class="muted">5</td>
+                  <td class="mono key">paid_amount</td>
+                  <td><span class="tag blue">支付金额</span></td>
+                  <td class="muted">Decimal</td>
+                  <td></td>
+                  <td><label class="switch"><input type="checkbox"><span></span></label></td>
+                  <td><span class="tag">成交金额<span class="x">×</span></span><span class="tag">实付<span class="x">×</span></span></td>
+                </tr>
+                <tr>
+                  <td class="muted">6</td>
+                  <td class="mono key">order_status</td>
+                  <td><span class="tag blue">订单状态</span></td>
+                  <td class="muted">String</td>
+                  <td></td>
+                  <td><label class="switch"><input type="checkbox"><span></span></label></td>
+                  <td><span class="tag">单据状态<span class="x">×</span></span></td>
+                </tr>
+                <tr>
+                  <td class="muted">7</td>
+                  <td class="mono key">created_at</td>
+                  <td><span class="tag">未绑标准</span></td>
+                  <td class="muted">DateTime</td>
+                  <td></td>
+                  <td><label class="switch"><input type="checkbox"><span></span></label></td>
+                  <td class="muted">—</td>
+                </tr>
+                <tr>
+                  <td class="muted">8</td>
+                  <td class="mono key">updated_at</td>
+                  <td><span class="tag">未绑标准</span></td>
+                  <td class="muted">DateTime</td>
+                  <td></td>
+                  <td><label class="switch"><input type="checkbox"><span></span></label></td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="note">
+          时间角色与数据类型相互独立：<span class="mono">biz_date_sk</span> 是整数但承担业务时间维度；<span class="mono">created_at</span> 是日期时间但只是审计戳。迁移时一律默认关闭，避免把历史审计字段静默升级为时间维度。
+        </div>
+      </section>
+
+      <section class="panel" id="panel-export">
+        <div class="banner">
+          <div>
+            <b>规范版本 0.2.0.dev0（草案）</b><br>
+            导出为单向投影，不写回、不作存储格式。规范仍可能发生破坏性变更，升级需人工评审。
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hd">
+            <h3>dwd_trade_order_detail.ossie.yaml</h3>
+            <div style="display:flex;gap:8px">
+              <span class="hint">节选 · 完整导出含 3 个数据集 · 3 条关系</span>
+              <button class="btn btn-sm">复制</button>
+              <button class="btn btn-primary btn-sm">导出文件</button>
+            </div>
+          </div>
+          <div class="card-bd">
+<pre class="yaml"><span class="c"># 由 Yak Ops 1.16.0 生成，规范版本固定 0.2.0.dev0</span>
+<span class="c"># 指标导出策略：仅导出有唯一字段绑定的指标，其余计入 custom_extensions</span>
+<span class="k">version</span>: <span class="s">"0.2.0.dev0"</span>
+<span class="k">name</span>: <span class="s">dwd_trade_order_detail</span>
+<span class="k">description</span>: <span class="s">交易域订单明细事实表</span>
+<span class="k">datasets</span>:
+  - <span class="k">name</span>: <span class="s">dwd_trade_order_detail</span>
+    <span class="k">source</span>: <span class="s">warehouse.dws.dwd_trade_order_detail</span>
+    <span class="k">primary_key</span>: [<span class="s">order_id</span>, <span class="s">product_id</span>]
+    <span class="k">description</span>: <span class="s">交易域订单明细事实表</span>
+    <span class="k">ai_context</span>:
+      <span class="k">instructions</span>: <span class="s">"粒度：一行 = 一个订单明细行；时间过滤使用 biz_date_sk"</span>
+    <span class="k">fields</span>:
+      - <span class="k">name</span>: <span class="s">biz_date_sk</span>
+        <span class="k">expression</span>:
+          <span class="k">dialects</span>:
+            - <span class="k">dialect</span>: <span class="s">ANSI_SQL</span>
+              <span class="k">expression</span>: <span class="s">biz_date_sk</span>
+        <span class="k">datatype</span>: <span class="s">Integer</span>
+        <span class="k">dimension</span>:
+          <span class="k">is_time</span>: <span class="s">true</span>
+        <span class="k">ai_context</span>:
+          <span class="k">synonyms</span>: [<span class="s">"业务日期"</span>]
+      - <span class="k">name</span>: <span class="s">created_at</span>
+        <span class="k">expression</span>:
+          <span class="k">dialects</span>:
+            - <span class="k">dialect</span>: <span class="s">ANSI_SQL</span>
+              <span class="k">expression</span>: <span class="s">created_at</span>
+        <span class="k">datatype</span>: <span class="s">DateTime</span>
+        <span class="k">dimension</span>:
+          <span class="k">is_time</span>: <span class="s">false</span>
+<span class="k">relationships</span>:
+  - <span class="k">name</span>: <span class="s">order_to_customer</span>
+    <span class="k">from</span>: <span class="s">dwd_trade_order_detail</span>
+    <span class="k">to</span>: <span class="s">dim_customer</span>
+    <span class="k">from_columns</span>: [<span class="s">customer_id</span>]
+    <span class="k">to_columns</span>: [<span class="s">customer_id</span>]
+<span class="k">custom_extensions</span>:
+  - <span class="k">vendor_name</span>: <span class="s">yak-ops</span>
+    <span class="k">data</span>: <span class="s">'{"release":"1.16.0","exportedAt":"2026-11-02","grainNote":"一行 = 一个订单明细行","skippedMetrics":["d7_gmv"]}'</span></pre>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="drawer-mask" id="mask" onclick="closeDrawer()"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawer-hd">
+      <span>新建关系</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeDrawer()">关闭</button>
+    </div>
+    <div class="drawer-bd">
+      <div class="field">
+        <label>从（多端）</label>
+        <input class="input" value="dwd_trade_order_detail" disabled>
+      </div>
+      <div class="field">
+        <label>到（一端）</label>
+        <select class="select">
+          <option>dim_customer</option>
+          <option>dim_date</option>
+          <option>dim_product</option>
+          <option>dim_store</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>关系名</label>
+        <input class="input" value="order_to_customer">
+      </div>
+
+      <div class="field">
+        <label>推荐关联键（按标准匹配，最多 3 组）</label>
+        <div class="prop sel">
+          <input type="radio" checked name="prop" style="margin-top:3px">
+          <div class="l">
+            <div class="t">customer_id → customer_id</div>
+            <div class="s">两侧均绑定标准「客户编号」 · 类型一致 String(64) · 匹配度 高</div>
+          </div>
+        </div>
+        <div class="prop">
+          <input type="radio" name="prop" style="margin-top:3px">
+          <div class="l">
+            <div class="t">order_customer_sk → customer_sk</div>
+            <div class="s">两侧绑定标准「客户代理键」 · 类型一致 Integer · 匹配度 中</div>
+          </div>
+        </div>
+        <div class="prop" style="cursor:not-allowed;opacity:.6">
+          <input type="radio" disabled name="prop" style="margin-top:3px">
+          <div class="l">
+            <div class="t">buyer_no → customer_no</div>
+            <div class="s">buyer_no 未绑定标准，不可作为关联键</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>已选映射（有序，支持复合键）</label>
+        <div class="map-row">
+          <span class="mono">customer_id</span>
+          <span class="arrow">→</span>
+          <span class="mono">customer_id</span>
+          <button class="btn btn-ghost btn-sm">移除</button>
+        </div>
+        <button class="btn btn-sm">+ 添加键对</button>
+      </div>
+
+      <div class="field">
+        <label>Join 类型</label>
+        <div class="radio-line">
+          <label><input type="radio" name="join" checked> LEFT（默认，维表缺失时保留事实行）</label>
+          <label><input type="radio" name="join"> INNER</label>
+        </div>
+      </div>
+
+      <div class="note">
+        关联键字段必须已绑定数据标准。未绑标准的字段无法保存为关系，请先在数据标准中补齐。
+      </div>
+    </div>
+    <div class="drawer-ft">
+      <button class="btn" onclick="closeDrawer()">取消</button>
+      <button class="btn btn-primary" onclick="closeDrawer()">保存关系</button>
+    </div>
+  </aside>
+</div>
+
+<script>
+  function switchTab(name){
+    document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+    document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+    var idx = {fields:0, relations:1, export:2}[name];
+    document.querySelectorAll('.tab')[idx].classList.add('active');
+    document.getElementById('panel-' + name).classList.add('active');
+  }
+  function openDrawer(){
+    document.getElementById('drawer').classList.add('show');
+    document.getElementById('mask').classList.add('show');
+  }
+  function closeDrawer(){
+    document.getElementById('drawer').classList.remove('show');
+    document.getElementById('mask').classList.remove('show');
+  }
+  function editGrain(){
+    document.getElementById('grainText').style.display = 'none';
+    document.getElementById('grainEditor').style.display = 'block';
+  }
+  function saveGrain(){
+    document.getElementById('grainText').textContent = document.getElementById('grainInput').value;
+    cancelGrain();
+  }
+  function cancelGrain(){
+    document.getElementById('grainText').style.display = '';
+    document.getElementById('grainEditor').style.display = 'none';
+  }
+</script>
+</body>
+</html>

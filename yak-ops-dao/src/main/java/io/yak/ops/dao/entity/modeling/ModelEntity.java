@@ -47,6 +47,8 @@ public class ModelEntity extends BaseEntity {
     private String ownerId;
     /** Optional business description. */
     private String description;
+    /** Declared meaning of one row, e.g. "one row per order line"; null when undeclared. */
+    private String grainNote;
     /** Optimistic version advanced by every accepted update. */
     private long revision;
     /** Joined layer display name; null on write paths. */

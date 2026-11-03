@@ -25,6 +25,7 @@ import { useOptions } from "../data-standards/state";
 import BatchImportDialog from "./batch-import-dialog";
 import ImportDialog from "./import-dialog";
 import type { FieldDraft, FieldIssue, FieldIssueField } from "./fields";
+import { FieldSynonymsDialog } from "./field-synonyms-dialog";
 import { emptyField, TYPE_ITEMS } from "./fields";
 import {
   applyStandard,
@@ -35,6 +36,8 @@ import {
 import StandardPicker from "./standard-picker";
 
 interface Props {
+  /** Saved model identity; synonym editing is disabled until the model exists. */
+  modelId?: string;
   rows: FieldDraft[];
   onChange: (rows: FieldDraft[]) => void;
   issues: FieldIssue[];
@@ -57,6 +60,7 @@ type Picker = { mode: "single"; index: number } | { mode: "multiple" };
 const cell = "border-b border-[var(--yak-components-panel-border)] px-2 py-1.5 align-middle";
 
 export default function FieldEditor({
+  modelId,
   rows,
   onChange,
   issues,
@@ -67,6 +71,11 @@ export default function FieldEditor({
   metricOptions,
 }: Props) {
   const [picker, setPicker] = useState<Picker | null>(null);
+  const [synonymTarget, setSynonymTarget] = useState<{
+    index: number;
+    code: string;
+    name: string;
+  } | null>(null);
   const [importing, setImporting] = useState(false);
   const [importingSource, setImportingSource] = useState(false);
   const [optionVersion, setOptionVersion] = useState(0);
@@ -261,7 +270,7 @@ export default function FieldEditor({
       )}
       <div className="min-w-0 overflow-auto rounded-lg border border-[var(--yak-components-panel-border)]">
         <table
-          className={`w-full ${allowAggregate ? "min-w-[1850px]" : "min-w-[1740px]"} border-collapse text-xs`}
+          className={`w-full ${allowAggregate ? "min-w-[2050px]" : "min-w-[1940px]"} border-collapse text-xs`}
         >
           <thead className="sticky top-0 z-10 bg-[var(--yak-components-table-header-bg)] text-left text-[var(--yak-components-field-label)]">
             <tr>
@@ -292,6 +301,9 @@ export default function FieldEditor({
               <th className="w-[56px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 text-center font-medium">
                 分区
               </th>
+              <th className="w-[72px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 text-center font-medium">
+                时间角色
+              </th>
               {allowAggregate && (
                 <th className="w-[128px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 font-medium">
                   聚合
@@ -313,6 +325,9 @@ export default function FieldEditor({
               )}
               <th className="w-[240px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 font-medium">
                 字段描述
+              </th>
+              <th className="w-[150px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 font-medium">
+                同义词
               </th>
               <th className="w-[124px] border-b border-[var(--yak-components-panel-border)] px-2 py-2 text-center font-medium">
                 操作
@@ -429,6 +444,14 @@ export default function FieldEditor({
                       checked={row.isPartition}
                       disabled={disabled}
                       onCheckedChange={(checked) => patch(index, { isPartition: checked })}
+                    />
+                  </td>
+                  <td className={`${cell} text-center`}>
+                    <Checkbox
+                      aria-label={`第 ${index + 1} 行时间角色`}
+                      checked={row.isTime}
+                      disabled={disabled}
+                      onCheckedChange={(checked) => patch(index, { isTime: checked })}
                     />
                   </td>
                   {allowAggregate && (
@@ -596,6 +619,35 @@ export default function FieldEditor({
                       onChange={(event) => patch(index, { description: event.target.value })}
                     />
                   </td>
+                  <td className={cell}>
+                    <div className="flex flex-wrap items-center gap-1">
+                      {row.synonyms.slice(0, 2).map((term) => (
+                        <span
+                          key={term}
+                          className="rounded-full border border-[var(--yak-components-panel-border)] bg-[var(--yak-components-badge-info-bg)] px-1.5 py-0.5 text-[11px]"
+                        >
+                          {term}
+                        </span>
+                      ))}
+                      {row.synonyms.length > 2 && (
+                        <span className="text-[11px] text-[var(--yak-components-field-label)]">
+                          +{row.synonyms.length - 2}
+                        </span>
+                      )}
+                      <Button
+                        size="small"
+                        variant="ghost"
+                        className="px-0.5 font-normal [color:var(--yak-color-primary)] hover:[color:var(--yak-color-primary)]"
+                        disabled={disabled || !modelId}
+                        title={modelId ? undefined : "先保存模型，再维护同义词"}
+                        onClick={() =>
+                          setSynonymTarget({ index, code: row.enCode.trim(), name: row.cnName })
+                        }
+                      >
+                        {row.synonyms.length === 0 ? "添加" : "管理"}
+                      </Button>
+                    </div>
+                  </td>
                   <td className={`${cell} text-center`}>
                     <div className="flex items-center justify-center gap-1">
                       <Button
@@ -637,7 +689,7 @@ export default function FieldEditor({
             {rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={(allowAggregate ? 14 : 13) + (showMetric ? 1 : 0)}
+                  colSpan={(allowAggregate ? 16 : 15) + (showMetric ? 1 : 0)}
                   className="px-3 py-8 text-center text-[var(--yak-color-text-secondary)]"
                 >
                   暂无字段，
@@ -676,6 +728,21 @@ export default function FieldEditor({
             onChange([...rows, ...imported]);
             setImportingSource(false);
             toast.success(`已导入 ${imported.length} 个字段`);
+          }}
+        />
+      )}
+      {synonymTarget && modelId && (
+        <FieldSynonymsDialog
+          modelId={modelId}
+          fieldCode={synonymTarget.code}
+          fieldName={synonymTarget.name}
+          terms={rows[synonymTarget.index]?.synonyms ?? []}
+          disabled={disabled}
+          onClose={() => setSynonymTarget(null)}
+          onSaved={(terms) => {
+            patch(synonymTarget.index, { synonyms: terms });
+            setSynonymTarget(null);
+            toast.success("同义词已保存");
           }}
         />
       )}

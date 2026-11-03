@@ -172,6 +172,7 @@ export function columnToField(
     isPrimaryKey: Boolean(column.primaryKey),
     isNotNull: column.nullable === false,
     isPartition: false,
+    isTime: false,
     aggregateType: null,
     standardId: null,
     standardEnCode: null,
@@ -181,6 +182,7 @@ export function columnToField(
     measureUnitEnCode: null,
     metricId: null,
     description: commentDescription(column.remarks),
+    synonyms: [],
     importNote: mapping.note,
     source: sourceTable ? { table: sourceTable, column: column.name } : null,
   };
