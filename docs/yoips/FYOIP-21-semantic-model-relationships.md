@@ -76,6 +76,8 @@ All paths are Workspace-scoped and authenticated. Mutations require the same per
 | PUT | `/api/v1/data-modeling/models/{modelId}/grain` | Set `grainNote` |
 | GET | `/api/v1/data-modeling/synonyms?targetType=&targetId=` | Read synonyms of one target |
 | PUT | `/api/v1/data-modeling/synonyms` | Replace the synonym set of one target atomically |
+| GET | `/api/v1/data-modeling/models/{modelId}/fields/{fieldCode}/synonyms` | Read the synonyms of one model field |
+| PUT | `/api/v1/data-modeling/models/{modelId}/fields/{fieldCode}/synonyms` | Replace the synonyms of one model field atomically |
 | POST | `/api/v1/data-modeling/models/{modelId}/semantic-export` | Return the pre-flight checks and the Ossie YAML document |
 
 Request and response shapes that are not obvious:
