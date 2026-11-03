@@ -12,7 +12,7 @@ export type GovernanceScanStatus =
   | "PARTIAL"
   | "FAILED"
   | "SKIPPED";
-export type GovernanceTargetType = "DATA_MAP_TABLE" | "TASK_DEFINITION";
+export type GovernanceTargetType = "DATA_MAP_TABLE" | "TASK_DEFINITION" | "MODELING_MODEL";
 
 export interface GovernanceDimensionScore {
   dimensionCode: GovernanceDimension;

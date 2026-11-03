@@ -27,6 +27,7 @@ public class ModelingSynonymRepositoryImpl implements ModelingSynonymRepository 
     public void add(ModelingSynonymEntity row) {
         mapper.insert(row);
     }
+
     @Override
     public List<ModelingSynonymEntity> listByTargets(String workspaceId, String targetType, List<String> targetIds) {
         if (targetIds == null || targetIds.isEmpty()) return List.of();

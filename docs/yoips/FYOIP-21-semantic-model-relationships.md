@@ -80,8 +80,8 @@ All paths are Workspace-scoped and authenticated. Mutations require the same per
 
 Request and response shapes that are not obvious:
 
-- `POST .../relations/proposals` takes `{ "targetModelId": "..." }` and returns `{ "candidates": [ { "fromFieldCode": "...", "toFieldCode": "...", "fromStandardEnCode": "...", "toStandardEnCode": "...", "sameStandard": true, "typesCompatible": true, "selectable": true, "reason": "..." } ] }`, at most three candidates, ordered by standard match then name match. A candidate whose key field has no standard is returned with `selectable: false` and the reason, so the UI can show why it is blocked.
-- `PUT .../synonyms` takes `{ "targetType": "MODEL_FIELD", "targetId": "...", "terms": ["...", "..."] }` and replaces the whole set in one transaction. `targetType` accepts `STANDARD_FIELD`, `MODEL_FIELD` and `METRIC`.
+- `POST .../relations/proposals` takes `{ "targetModelId": "..." }` and returns a bare candidate array `[ { "fromFieldCode": "...", "toFieldCode": "...", "fromStandardEnCode": "...", "toStandardEnCode": "...", "sameStandard": true, "typesCompatible": true, "selectable": true, "reason": "..." } ]`, at most three candidates, ordered by standard match then name match. A candidate whose key field has no standard is returned with `selectable: false` and the reason, so the UI can show why it is blocked.
+- `PUT .../synonyms` takes `{ "targetType": "STANDARD_FIELD", "targetId": "...", "terms": ["...", "..."] }` and replaces the whole set in one transaction. This surface accepts `STANDARD_FIELD` and `METRIC`; `MODEL_FIELD` is rejected here because field row ids are unstable, and is served by `models/{modelId}/fields/{fieldCode}/synonyms` using the composite `modelId:fieldCode` key.
 - `joinType` accepts `INNER` and `LEFT`; `LEFT` is the default because a fact row may outlive a missing dimension row.
 
 ### Persisted formats
@@ -161,7 +161,7 @@ Two rules register into the existing `GovernanceRuleRegistry`.
 
 Both require a new `IssueTargetType.MODELING_MODEL` value and a display name projection. The governance UI resolves the target name from `yak_ops_modeling_model.cn_name`; no new detail page is required for this release.
 
-**Both rules produce Issues only and are excluded from the health score in this release.** The score calculator reads exactly two dimensions today, both hard-wired to other object types; wiring modeling into the score needs its own dimension design and is deferred. The exclusion is recorded in the rule metadata so the score cannot silently absorb it later.
+**Both rules produce Issues only and are excluded from the health score in this release.** The score calculator reads exactly two dimensions today, both hard-wired to other object types; wiring modeling into the score needs its own dimension design and is deferred. The exclusion is explicit: `GovernanceRule.scored()` defaults to `true` and both rules override it to `false`; the scan persists that flag on `yak_ops_governance_issue.scored`, and the score aggregation adds `AND scored = 1`. Without the flag the existing dimension-only aggregation would silently absorb the new findings.
 
 ## Proposed Changes
 
@@ -230,7 +230,7 @@ Mappings and limits that are deliberate:
 - `dataset.source` is the published physical table when the model has a publication, and the layer-prefixed model name otherwise. The exporter never invents a database or schema.
 - `grain_note` is projected into `datasets[].ai_context.instructions` and preserved verbatim in `custom_extensions`, so the meaning survives even though Ossie has no grain attribute.
 - **Metrics are exported only when exactly one model field binds the metric.** The exporter then synthesizes `AGG(field_code)` from `MetricAtomic.aggregateType`. Derived and composite metrics are skipped in this release, and every skipped metric is listed by code in `custom_extensions.data`. The platform owns structured modifiers and time periods; collapsing them into opaque expression text would trade auditability for portability, and this proposal refuses that trade.
-- The synthesized aggregate is restricted to a **portability whitelist**: `SUM`, `COUNT`, `COUNT DISTINCT`, `MIN`, `MAX`, `AVG`. No window functions, no dialect functions, no date-bucket expressions such as `DATE_TRUNC` — an aggregate outside the whitelist is skipped and declared exactly like any other unexportable metric, regardless of the target warehouse.
+- The synthesized aggregate is restricted to a **portability whitelist**: `SUM`, `COUNT`, `MIN`, `MAX`, `AVG`. `COUNT DISTINCT` joins the whitelist once `AggregateType` models it; today the enum has no distinct variant. No window functions, no dialect functions, no date-bucket expressions such as `DATE_TRUNC` — an aggregate outside the whitelist is skipped and declared exactly like any other unexportable metric, regardless of the target warehouse.
 - A related dataset ships at least the fields the document references: its primary key fields, its join key fields, and its `is_time` fields. Name resolution in the specification requires referenced fields to be declared; exporting a relationship to a dataset without them produces an invalid document.
 - Expressions carry `dialects: [{dialect: ANSI_SQL}]`. The platform does not yet own a SQL dialect emitter, and pretending otherwise would produce unverifiable output.
 
@@ -268,8 +268,9 @@ Neither rule feeds the health score in this release (see the rule contract secti
 
 - Repository tests: relation creation rejects a blank name, a self-relation, a cross-Workspace target model, a DIM `from` side, a non-DIM `to` side, duplicate key ordinals, empty key lists and an exact duplicate key-pair set against the same model pair.
 - Key-resolution tests: after replacing a model's fields through the normal update path, relations resolve by code; removing a field code surfaces the explicit broken state; re-adding the code heals it.
-- Validation tests: saving a relation with an unstandardized key fails with a stable error code; the proposal endpoint returns candidates ordered by standard match, marks unstandardized candidates `selectable: false`, and never returns more than one pair per field.
+- Validation tests: saving a relation with an unstandardized key fails with a stable error code; the proposal endpoint returns candidates ordered by standard match, marks unstandardized candidates `selectable: false`, and returns at most three candidates.
 - Synonym tests: replace is atomic; duplicate terms within a target are rejected by the unique key; the same term on two different targets is accepted.
+- Scoring isolation checks: both rules return `scored() == false`; the issue insert persists that flag and the DEV aggregation filters `scored = 1`, so advisory findings never enter the score.
 - Export tests: golden-file comparison for a fact model with two dimensions, including composite keys, a null publication and a metric with no dialect; the emitted `version` equals the pinned constant; skipped metrics appear in `custom_extensions`; related datasets declare every referenced field; an aggregate outside the portability whitelist is skipped and declared.
 - Rule tests: both rules enumerate completely, emit one candidate per model, and produce no candidate when the relation keys are standardized or the grain is present; neither rule is referenced by the score calculator.
 - Migration test: apply `V14` to a database at `V13` containing models, then assert `is_time = 0` and `grain_note IS NULL` for every pre-existing row.

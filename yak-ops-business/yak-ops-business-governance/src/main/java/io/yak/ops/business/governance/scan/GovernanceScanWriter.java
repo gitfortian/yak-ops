@@ -377,6 +377,7 @@ public class GovernanceScanWriter {
         row.setRuleCode(rule.code());
         row.setRuleVersion(rule.version());
         row.setDimensionCode(rule.dimension().getValue());
+        row.setScored(rule.scored());
         row.setSeverity(rule.severity().getValue());
         row.setTargetType(rule.targetType().getValue());
         row.setTargetId(candidate.targetId());

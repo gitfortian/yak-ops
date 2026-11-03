@@ -73,6 +73,8 @@ export interface ModelField {
   measureUnitId: string | null;
   measureUnitEnCode: string | null;
   description: string | null;
+  /** Business synonyms attached to this field code, empty when none. */
+  synonyms: string[];
   /** Derived metric this field was imported from; advisory, and only measure kinds carry one. */
   metricId: string | null;
   metricEnCode: string | null;

@@ -304,7 +304,9 @@ export default function LogicalModelEditorPage() {
   const requestedTab = searchParams.get("tab");
   const activeTab: EditorTab =
     editing &&
-    (requestedTab === "publish" || requestedTab === "relations" || requestedTab === "export")
+    (requestedTab === "publish" ||
+      (requestedTab === "relations" && form.type !== "DIM") ||
+      requestedTab === "export")
       ? requestedTab
       : requestedTab === "fields"
         ? "fields"
@@ -1010,7 +1012,7 @@ export default function LogicalModelEditorPage() {
             <TabsList>
               <TabsTab value="info">基本信息</TabsTab>
               <TabsTab value="fields">字段定义</TabsTab>
-              {editing && <TabsTab value="relations">关系</TabsTab>}
+              {editing && form.type !== "DIM" && <TabsTab value="relations">关系</TabsTab>}
               {editing && <TabsTab value="export">语义导出</TabsTab>}
               {editing && <TabsTab value="publish">发布</TabsTab>}
             </TabsList>
@@ -1439,18 +1441,20 @@ export default function LogicalModelEditorPage() {
                         onChange={(value) => patch({ description: value })}
                       />
                     </div>
-                    <div className="md:col-span-2">
-                      <InputField
-                        id="model-grain"
-                        label="粒度声明"
-                        value={form.grainNote}
-                        placeholder="一行代表什么，例如：一行 = 一个订单明细行"
-                        maxLength={200}
-                        disabled={disabled}
-                        hint="治理扫描会对未声明粒度的明细 / 汇总 / 应用表给出提醒"
-                        onChange={(value) => patch({ grainNote: value })}
-                      />
-                    </div>
+                    {form.type !== "DIM" && (
+                      <div className="md:col-span-2">
+                        <InputField
+                          id="model-grain"
+                          label="粒度声明"
+                          value={form.grainNote}
+                          placeholder="一行代表什么，例如：一行 = 一个订单明细行"
+                          maxLength={200}
+                          disabled={disabled}
+                          hint="治理扫描会对未声明粒度的明细 / 汇总 / 应用表给出提醒"
+                          onChange={(value) => patch({ grainNote: value })}
+                        />
+                      </div>
+                    )}
                   </div>
                   {errors.ownership && (
                     <p className="mt-2 text-xs text-[var(--yak-components-badge-danger-text)]">
@@ -1479,6 +1483,7 @@ export default function LogicalModelEditorPage() {
                     </span>
                   </div>
                   <FieldEditor
+                    modelId={id}
                     rows={rows}
                     onChange={setRows}
                     issues={attempted ? issues : []}
@@ -1490,9 +1495,13 @@ export default function LogicalModelEditorPage() {
                 </CardContent>
               </Card>
             </TabsPanel>
-            {editing && id && (
+            {editing && id && form.type !== "DIM" && (
               <TabsPanel value="relations" className="pt-4">
-                <ModelRelationsPanel modelId={id} revision={revision ?? 0} />
+                <ModelRelationsPanel
+                  modelId={id}
+                  revision={revision ?? 0}
+                  onRequestFields={() => setTab("fields")}
+                />
               </TabsPanel>
             )}
             {editing && id && (

@@ -4,6 +4,8 @@ import io.yak.ops.business.modeling.synonym.SemanticSynonymService;
 import io.yak.ops.common.bean.dto.modeling.UpdateModelSynonymsDTO;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.enums.modeling.SemanticSynonymTargetType;
+import io.yak.ops.common.enums.modeling.dimension.DimensionModelingErrorCode;
+import io.yak.ops.common.exception.BusinessException;
 import io.yak.ops.common.result.Result;
 import io.yak.ops.security.authentication.AuthenticationManager;
 import jakarta.annotation.Resource;
@@ -29,22 +31,28 @@ public class SemanticSynonymController {
     private AuthenticationManager authenticationManager;
 
     @GetMapping
-    public Result<List<String>> list(
-            @RequestParam String targetType, @RequestParam String targetId) {
+    public Result<List<String>> list(@RequestParam String targetType, @RequestParam String targetId) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
-        SemanticSynonymTargetType type = SemanticSynonymTargetType.valueOf(targetType);
-        return Result.success(service.list(workspaceId, actor(), type, targetId));
+        return Result.success(service.list(workspaceId, actor(), targetType(targetType), targetId));
     }
 
     @PutMapping
     public Result<List<String>> replace(@Valid @RequestBody UpdateModelSynonymsDTO dto) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
-        SemanticSynonymTargetType type = SemanticSynonymTargetType.valueOf(dto.getTargetType());
+        SemanticSynonymTargetType type = targetType(dto.getTargetType());
         service.replace(workspaceId, actor(), type, dto.getTargetId(), dto.getTerms());
         return Result.success(service.list(workspaceId, actor(), type, dto.getTargetId()));
     }
 
     private String actor() {
         return authenticationManager.getLoginUserId();
+    }
+
+    private static SemanticSynonymTargetType targetType(String raw) {
+        try {
+            return SemanticSynonymTargetType.valueOf(raw);
+        } catch (IllegalArgumentException | NullPointerException unknown) {
+            throw new BusinessException(DimensionModelingErrorCode.SYNONYM_TARGET_INVALID);
+        }
     }
 }

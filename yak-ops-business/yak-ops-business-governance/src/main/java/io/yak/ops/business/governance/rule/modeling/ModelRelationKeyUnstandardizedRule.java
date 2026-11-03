@@ -48,6 +48,11 @@ public class ModelRelationKeyUnstandardizedRule implements GovernanceRule {
     }
 
     @Override
+    public boolean scored() {
+        return false;
+    }
+
+    @Override
     public void evaluate(GovernanceRuleContext context, Consumer<IssueCandidate> sink) {
         Set<String> accused = new HashSet<>();
         for (var row : context.modeling().modelsWithUnstandardizedRelationKeys(context.workspaceId())) {

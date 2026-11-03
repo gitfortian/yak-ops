@@ -27,7 +27,16 @@ import { getModels } from "@/service/data-modeling/dimension-modeling";
  * 关系页签：按目标维表分组的卡片列表，左边框颜色即健康状态；抽屉内建关系并消费键对提案。
  * 无图形——一跳多对一范围内卡片的信息密度高于任何图。
  */
-export function ModelRelationsPanel({ modelId, revision }: { modelId: string; revision: number }) {
+export function ModelRelationsPanel({
+  modelId,
+  revision,
+  onRequestFields,
+}: {
+  modelId: string;
+  revision: number;
+  /** Takes the user to the field editor, the only place a standard can actually be bound. */
+  onRequestFields: () => void;
+}) {
   const [relations, setRelations] = useState<ModelRelation[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -70,7 +79,9 @@ export function ModelRelationsPanel({ modelId, revision }: { modelId: string; re
     }
   };
 
-  const ordered = [...relations].sort((a, b) => healthRank(a) - healthRank(b));
+  const ordered = [...relations].sort(
+    (a, b) => healthRank(a) - healthRank(b) || a.toModelName.localeCompare(b.toModelName),
+  );
   const blocked = ordered.filter((relation) => relation.status !== "READY").length;
 
   return (
@@ -99,7 +110,7 @@ export function ModelRelationsPanel({ modelId, revision }: { modelId: string; re
           <h3 className="text-sm font-medium">关系</h3>
           <div className="flex items-center gap-2">
             <span className="text-xs text-[var(--yak-components-field-label)]">
-              按目标维表分组 · 左边框颜色即健康状态
+              按健康状态排序 · 同一目标维表相邻
             </span>
             <Button size="small" variant="primary" onClick={() => setCreating(true)}>
               新建关系
@@ -125,6 +136,7 @@ export function ModelRelationsPanel({ modelId, revision }: { modelId: string; re
               key={relation.id}
               relation={relation}
               onEdit={() => setEditing(relation)}
+              onFixStandard={onRequestFields}
               onDelete={() => remove(relation)}
             />
           ))}
@@ -180,10 +192,12 @@ const STATUS_LABEL: Record<
 function RelationCard({
   relation,
   onEdit,
+  onFixStandard,
   onDelete,
 }: {
   relation: ModelRelation;
   onEdit: () => void;
+  onFixStandard: () => void;
   onDelete: () => void;
 }) {
   const status = STATUS_LABEL[relation.status];
@@ -244,7 +258,7 @@ function RelationCard({
           <Button
             size="small"
             className="border-[var(--yak-components-badge-warning-text)] text-[var(--yak-components-badge-warning-text)]"
-            onClick={onEdit}
+            onClick={onFixStandard}
           >
             去补标准
           </Button>
@@ -283,6 +297,8 @@ function RelationDrawer({
     })) ?? [],
   );
   const [proposals, setProposals] = useState<RelationProposal[] | null>(null);
+  const [manualFrom, setManualFrom] = useState("");
+  const [manualTo, setManualTo] = useState("");
   const [dimCandidates, setDimCandidates] = useState<{ id: string; name: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -465,6 +481,47 @@ function RelationDrawer({
                   </button>
                 );
               })}
+            </div>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs text-[var(--yak-components-field-label)]">
+              手动添加键对（两侧字段都必须已绑定标准）
+            </label>
+            <div className="flex items-center gap-2">
+              <Input
+                value={manualFrom}
+                placeholder="事实表字段编码"
+                onChange={(event) => setManualFrom(event.target.value)}
+              />
+              <span className="text-xs text-[var(--yak-components-field-label)]">=</span>
+              <Input
+                value={manualTo}
+                placeholder="维表字段编码"
+                onChange={(event) => setManualTo(event.target.value)}
+              />
+              <Button
+                size="small"
+                disabled={!manualFrom.trim() || !manualTo.trim()}
+                onClick={() => {
+                  const fromFieldCode = manualFrom.trim();
+                  const toFieldCode = manualTo.trim();
+                  if (
+                    pairs.some(
+                      (pair) =>
+                        pair.fromFieldCode === fromFieldCode && pair.toFieldCode === toFieldCode,
+                    )
+                  ) {
+                    setFailure("该键对已经在映射中");
+                    return;
+                  }
+                  setPairs((previous) => [...previous, { fromFieldCode, toFieldCode }]);
+                  setManualFrom("");
+                  setManualTo("");
+                  setFailure(null);
+                }}
+              >
+                添加
+              </Button>
             </div>
           </div>
           <div>

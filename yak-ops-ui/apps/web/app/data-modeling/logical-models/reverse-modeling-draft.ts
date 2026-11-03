@@ -61,6 +61,7 @@ export function describeFieldDrafts(
       measureUnitEnCode: null,
       metricId: null,
       description: commentDescription(column.remarks),
+      synonyms: [],
       importNote: note || null,
       source: sourceTable ? { table: sourceTable, column: column.name } : null,
     };

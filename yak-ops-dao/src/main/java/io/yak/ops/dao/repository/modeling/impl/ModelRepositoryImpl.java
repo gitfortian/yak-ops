@@ -94,6 +94,7 @@ public class ModelRepositoryImpl implements ModelRepository {
     public void deleteFields(String modelId) {
         mapper.deleteFields(modelId);
     }
+
     @Override
     public long countFieldsByMetric(String workspaceId, String metricId) {
         return mapper.countFieldsByMetric(workspaceId, metricId);

@@ -41,6 +41,8 @@ export interface FieldDraft {
   metricId: string | null;
   /** Optional business description; loaded from and submitted with the model field. */
   description: string | null;
+  /** Business synonyms shown as tags; edited through their own endpoint, never submitted with the model. */
+  synonyms: string[];
   /** Why an imported column still has no logical type; shown beside the row and never submitted. */
   importNote: string | null;
   /**
@@ -94,6 +96,7 @@ export function emptyField(): FieldDraft {
     measureUnitEnCode: null,
     metricId: null,
     description: null,
+    synonyms: [],
     importNote: null,
     source: null,
   };
@@ -119,6 +122,7 @@ export function fromModelField(field: ModelField): FieldDraft {
     measureUnitEnCode: field.measureUnitEnCode,
     metricId: field.metricId ?? null,
     description: field.description,
+    synonyms: field.synonyms ?? [],
     importNote: null,
     source: null,
   };

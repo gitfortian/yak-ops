@@ -18,7 +18,6 @@ export function SemanticExportPanel({
   const [failed, setFailed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
-  const [acknowledged, setAcknowledged] = useState(false);
 
   const run = useCallback(() => {
     setLoading(true);
@@ -86,10 +85,7 @@ export function SemanticExportPanel({
               点击「重新体检并生成」生成导出前检查与 Ossie 文档。
             </p>
           )}
-          {result &&
-            checksView(blocking, warnings, okays, acknowledged, setAcknowledged, () =>
-              setConfirmed(true),
-            )}
+          {result && checksView(blocking, warnings, okays, () => setConfirmed(true))}
         </div>
       </div>
 
@@ -119,8 +115,6 @@ function checksView(
   blocking: SemanticExport["checks"],
   warnings: SemanticExport["checks"],
   okays: SemanticExport["checks"],
-  acknowledged: boolean,
-  setAcknowledged: (value: boolean) => void,
   confirm: () => void,
 ) {
   const hasBlocking = blocking.length > 0;
@@ -149,21 +143,11 @@ function checksView(
       ))}
       <div className="flex items-center justify-end gap-3 pt-1">
         {hasBlocking && (
-          <label className="flex items-center gap-2 text-xs text-[var(--yak-components-field-label)]">
-            <input
-              type="checkbox"
-              checked={acknowledged}
-              onChange={(event) => setAcknowledged(event.target.checked)}
-            />
-            我知道存在未绑标准的关联键，仍要生成文档
-          </label>
+          <span className="text-xs text-[var(--yak-components-badge-danger-text)]">
+            存在已移除的关联键字段，请先修复关系后再导出。
+          </span>
         )}
-        <Button
-          size="small"
-          variant="primary"
-          disabled={hasBlocking && !acknowledged}
-          onClick={confirm}
-        >
+        <Button size="small" variant="primary" disabled={hasBlocking} onClick={confirm}>
           生成导出文档
         </Button>
       </div>

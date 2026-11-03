@@ -84,6 +84,8 @@ export const GOVERNANCE_RULE_LABEL: Record<string, string> = {
   DATA_MAP_TABLE_NO_DESCRIPTION: "数据表缺少描述",
   TASK_CONSECUTIVE_FAILURES: "任务连续失败",
   TASK_SLOW_RUNS: "任务运行过慢",
+  MODEL_RELATION_KEY_UNSTANDARDIZED: "关系的关联键未绑数据标准",
+  MODELING_GRAIN_UNDECLARED: "模型未声明粒度",
 };
 
 export const GOVERNANCE_REASON_LABEL: Record<string, string> = {
@@ -115,6 +117,10 @@ export function governanceEvidenceSummary(issue: {
       return `连续失败 ${observed} 次，阈值 ${issue.thresholdValue ?? 3} 次（近 ${window} 天定时实例 ${issue.sampleCount ?? 0} 个）`;
     case "TASK_SLOW_RUNS":
       return `平均耗时 ${Math.round(observed)} 秒，阈值 ${issue.thresholdValue ?? 7200} 秒（近 ${window} 天定时实例 ${issue.sampleCount ?? 0} 个）`;
+    case "MODEL_RELATION_KEY_UNSTANDARDIZED":
+      return "至少一条关系存在未绑定标准的关联键";
+    case "MODELING_GRAIN_UNDECLARED":
+      return "该明细 / 汇总 / 应用模型尚未声明“一行代表什么”";
     default:
       return `观测值 ${observed}，阈值 ${issue.thresholdValue ?? "-"}`;
   }

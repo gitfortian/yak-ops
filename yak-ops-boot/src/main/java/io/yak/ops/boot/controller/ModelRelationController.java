@@ -1,6 +1,8 @@
 package io.yak.ops.boot.controller;
 
 import io.yak.ops.business.modeling.relation.ModelRelationService;
+import io.yak.ops.business.modeling.semantic.OssieSemanticExporter;
+import io.yak.ops.business.modeling.synonym.SemanticSynonymService;
 import io.yak.ops.common.bean.dto.modeling.CreateModelRelationDTO;
 import io.yak.ops.common.bean.dto.modeling.RelationProposalQueryDTO;
 import io.yak.ops.common.bean.dto.modeling.UpdateFieldSynonymsDTO;
@@ -9,8 +11,6 @@ import io.yak.ops.common.bean.dto.modeling.UpdateModelRelationDTO;
 import io.yak.ops.common.bean.vo.modeling.ModelRelationProposalVO;
 import io.yak.ops.common.bean.vo.modeling.ModelRelationVO;
 import io.yak.ops.common.bean.vo.modeling.SemanticExportVO;
-import io.yak.ops.business.modeling.semantic.OssieSemanticExporter;
-import io.yak.ops.business.modeling.synonym.SemanticSynonymService;
 import io.yak.ops.common.context.WorkspaceContext;
 import io.yak.ops.common.result.Result;
 import io.yak.ops.security.authentication.AuthenticationManager;
@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -73,9 +74,9 @@ public class ModelRelationController {
     }
 
     @DeleteMapping("/api/v1/data-modeling/relations/{relationId}")
-    public Result<Boolean> delete(@PathVariable String relationId, Long revision) {
+    public Result<Boolean> delete(@PathVariable String relationId, @RequestParam long revision) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
-        relationService.delete(workspaceId, actor(), relationId, revision == null ? 0L : revision);
+        relationService.delete(workspaceId, actor(), relationId, revision);
         return Result.success(Boolean.TRUE);
     }
 

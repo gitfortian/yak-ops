@@ -46,6 +46,11 @@ public class ModelingGrainUndeclaredRule implements GovernanceRule {
     }
 
     @Override
+    public boolean scored() {
+        return false;
+    }
+
+    @Override
     public void evaluate(GovernanceRuleContext context, Consumer<IssueCandidate> sink) {
         for (var row : context.modeling().modelsMissingGrain(context.workspaceId())) {
             sink.accept(new IssueCandidate(row.modelId(), row.modelName(), BigDecimal.ZERO, BigDecimal.ONE, 1, 0));

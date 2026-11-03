@@ -77,6 +77,7 @@ export function fromStandard(standard: StandardField): FieldDraft {
     measureUnitEnCode: null,
     metricId: null,
     description: null,
+    synonyms: [],
     importNote: null,
     source: null,
   };

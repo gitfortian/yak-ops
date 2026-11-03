@@ -1,8 +1,8 @@
 package io.yak.ops.dao.repository.modeling;
 
-import io.yak.ops.dao.mapper.modeling.ModelingRelationMapper;
 import io.yak.ops.dao.entity.modeling.ModelingRelationColumnEntity;
 import io.yak.ops.dao.entity.modeling.ModelingRelationEntity;
+import io.yak.ops.dao.mapper.modeling.ModelingRelationMapper;
 import jakarta.annotation.Resource;
 import java.util.List;
 import java.util.Optional;

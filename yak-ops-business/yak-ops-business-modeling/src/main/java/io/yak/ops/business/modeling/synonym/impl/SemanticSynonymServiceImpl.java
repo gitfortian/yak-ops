@@ -15,6 +15,7 @@ import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,8 +60,7 @@ public class SemanticSynonymServiceImpl implements SemanticSynonymService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<String> list(
-            String workspaceId, String actor, SemanticSynonymTargetType targetType, String targetId) {
+    public List<String> list(String workspaceId, String actor, SemanticSynonymTargetType targetType, String targetId) {
         requireActor(workspaceId, actor);
         requireTarget(workspaceId, targetType, targetId);
         return terms(synonyms.listByTarget(workspaceId, targetType.name(), targetId));
@@ -111,21 +111,21 @@ public class SemanticSynonymServiceImpl implements SemanticSynonymService {
         Set<String> seen = new HashSet<>();
         for (String raw : input) {
             String term = raw == null ? null : raw.strip();
-            if (term == null || term.isEmpty() || term.length() > MAX_TERM_LENGTH || !seen.add(term))
+            // The column collation is case-insensitive; rejecting here keeps the failure a 400
+            // instead of a unique-key violation surfaced as a 500.
+            String key = term == null ? null : term.toLowerCase(Locale.ROOT);
+            if (term == null || term.isEmpty() || term.length() > MAX_TERM_LENGTH || !seen.add(key))
                 throw new BusinessException(DimensionModelingErrorCode.SYNONYM_INVALID);
             terms.add(term);
         }
         return terms;
     }
 
-    private void requireTarget(
-            String workspaceId, SemanticSynonymTargetType targetType, String targetId) {
+    private void requireTarget(String workspaceId, SemanticSynonymTargetType targetType, String targetId) {
         if (targetType == SemanticSynonymTargetType.MODEL_FIELD)
             throw new BusinessException(DimensionModelingErrorCode.SYNONYM_TARGET_INVALID);
-        if (targetId == null || targetId.isBlank())
-            throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
-        if (targetType == SemanticSynonymTargetType.STANDARD_FIELD
-                && models.standard(workspaceId, targetId) == null)
+        if (targetId == null || targetId.isBlank()) throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
+        if (targetType == SemanticSynonymTargetType.STANDARD_FIELD && models.standard(workspaceId, targetId) == null)
             throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
         // METRIC targets are not existence-checked here: metrics span three tables and the binding
         // the synonyms annotate is advisory. A wrong id simply carries no synonyms.
@@ -133,6 +133,8 @@ public class SemanticSynonymServiceImpl implements SemanticSynonymService {
 
     private void requireField(String workspaceId, String modelId, String fieldCode) {
         if (modelId == null || modelId.isBlank() || fieldCode == null || fieldCode.isBlank())
+            throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
+        if (models.find(workspaceId, modelId).isEmpty())
             throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
         for (ModelFieldEntity field : models.fields(modelId)) {
             if (fieldCode.equals(field.getEnCode())) return;

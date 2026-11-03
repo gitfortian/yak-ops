@@ -1,18 +1,19 @@
 package io.yak.ops.business.modeling.semantic;
 
-import io.yak.ops.business.modeling.model.ModelService;
 import io.yak.ops.common.bean.vo.modeling.SemanticExportCheckVO;
 import io.yak.ops.common.bean.vo.modeling.SemanticExportVO;
 import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.modeling.AggregateType;
 import io.yak.ops.common.enums.modeling.standard.DataType;
 import io.yak.ops.common.exception.BusinessException;
+import io.yak.ops.dao.entity.modeling.LayerEntity;
 import io.yak.ops.dao.entity.modeling.ModelEntity;
 import io.yak.ops.dao.entity.modeling.ModelFieldEntity;
 import io.yak.ops.dao.entity.modeling.ModelPublicationEntity;
 import io.yak.ops.dao.entity.modeling.ModelingRelationColumnEntity;
 import io.yak.ops.dao.entity.modeling.ModelingRelationEntity;
 import io.yak.ops.dao.entity.modeling.ModelingSynonymEntity;
+import io.yak.ops.dao.repository.modeling.LayerRepository;
 import io.yak.ops.dao.repository.modeling.ModelRepository;
 import io.yak.ops.dao.repository.modeling.ModelingRelationRepository;
 import io.yak.ops.dao.repository.modeling.ModelingSynonymRepository;
@@ -23,6 +24,7 @@ import jakarta.annotation.Resource;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -40,12 +42,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class OssieSemanticExporter {
     public static final String SPEC_VERSION = "0.2.0.dev0";
     private static final Set<String> PORTABLE_AGGREGATES = Set.of(
-            AggregateType.SUM.name(), AggregateType.COUNT.name(), AggregateType.AVG.name(),
-            AggregateType.MAX.name(), AggregateType.MIN.name());
+            AggregateType.SUM.name(),
+            AggregateType.COUNT.name(),
+            AggregateType.AVG.name(),
+            AggregateType.MAX.name(),
+            AggregateType.MIN.name());
     private static final String VENDOR = "yak-ops";
     private static final String LEVEL_ERROR = "ERROR";
     private static final String LEVEL_WARN = "WARN";
     private static final String LEVEL_OK = "OK";
+    private static final String MODEL_FIELD_SYNONYM = "MODEL_FIELD";
 
     @Resource
     private ModelRepository models;
@@ -63,6 +69,9 @@ public class OssieSemanticExporter {
     private MetricAtomicRepository atomicMetrics;
 
     @Resource
+    private LayerRepository layers;
+
+    @Resource
     private WorkspaceService workspaces;
 
     /**
@@ -76,20 +85,26 @@ public class OssieSemanticExporter {
     public SemanticExportVO export(String workspaceId, String actor, String modelId) {
         if (actor == null || actor.isBlank() || !workspaces.isActiveMember(workspaceId, actor))
             throw new BusinessException(io.yak.ops.workspace.enums.WorkspaceErrorCode.ACCESS_DENIED);
-        ModelEntity model = models
-                .find(workspaceId, modelId)
+        ModelEntity model = models.find(workspaceId, modelId)
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
         List<ModelFieldEntity> fields = models.fields(modelId);
         List<ModelingRelationEntity> relationRows = this.relations.listByModel(workspaceId, modelId);
 
+        Map<String, ModelEntity> datasetModels = new LinkedHashMap<>();
         Map<String, List<ModelFieldEntity>> datasetFields = new LinkedHashMap<>();
+        datasetModels.put(model.getId(), model);
         datasetFields.put(model.getId(), fields);
         for (ModelingRelationEntity relation : relationRows) {
             String otherId = model.getId().equals(relation.getFromModelId())
                     ? relation.getToModelId()
                     : relation.getFromModelId();
-            datasetFields.computeIfAbsent(otherId, key -> models.fields(key));
+            if (datasetModels.containsKey(otherId)) continue;
+            ModelEntity other = models.find(workspaceId, otherId)
+                    .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
+            datasetModels.put(otherId, other);
+            datasetFields.put(otherId, models.fields(otherId));
         }
+        Map<String, String> datasetNames = datasetNames(datasetModels);
 
         List<SemanticExportCheckVO> checks = new ArrayList<>();
         int readyKeys = 0;
@@ -105,32 +120,29 @@ public class OssieSemanticExporter {
                         byCode(otherFields, fromSide ? pair.getToFieldCode() : pair.getFromFieldCode());
                 if (own == null || other == null) {
                     checks.add(new SemanticExportCheckVO(
-                            LEVEL_ERROR,
-                            "FIELD_REMOVED",
-                            "关系 " + relation.getName() + " 的关联键字段已移除，无法完成导出"));
+                            LEVEL_ERROR, "FIELD_REMOVED", "关系 " + relation.getName() + " 的关联键字段已移除，无法完成导出"));
                 } else if (own.getStandardId() == null || other.getStandardId() == null) {
                     checks.add(new SemanticExportCheckVO(
-                            LEVEL_WARN,
-                            "RELATION_KEY_UNSTANDARDIZED",
-                            "关系 " + relation.getName() + " 存在未绑定标准的关联键"));
+                            LEVEL_WARN, "RELATION_KEY_UNSTANDARDIZED", "关系 " + relation.getName() + " 存在未绑定标准的关联键"));
                 } else {
                     readyKeys++;
                 }
             }
         }
-        checks.add(new SemanticExportCheckVO(LEVEL_OK, "RELATIONS_READY", readyKeys + " 个关联键已绑标准，就绪"));
+        if (relationRows.isEmpty()) {
+            checks.add(new SemanticExportCheckVO(LEVEL_OK, "NO_RELATIONS", "该模型尚未声明关系"));
+        } else if (readyKeys > 0) {
+            checks.add(new SemanticExportCheckVO(LEVEL_OK, "RELATIONS_READY", readyKeys + " 个关联键已绑标准，就绪"));
+        }
 
-        List<SemanticMetricProjection> metrics = resolveMetrics(workspaceId, model.getId(), fields, checks);
+        MetricResolution metricResolution = resolveMetrics(workspaceId, fields, checks);
 
-        String yaml = render(workspaceId, model, relationRows, datasetFields, metrics);
+        String yaml = render(workspaceId, datasetModels, datasetFields, datasetNames, relationRows, metricResolution);
         return new SemanticExportVO(checks, yaml);
     }
 
-    private List<SemanticMetricProjection> resolveMetrics(
-            String workspaceId,
-            String modelId,
-            List<ModelFieldEntity> fields,
-            List<SemanticExportCheckVO> checks) {
+    private MetricResolution resolveMetrics(
+            String workspaceId, List<ModelFieldEntity> fields, List<SemanticExportCheckVO> checks) {
         Map<String, ModelFieldEntity> binding = new HashMap<>();
         Set<String> metricIds = new LinkedHashSet<>();
         for (ModelFieldEntity field : fields) {
@@ -140,34 +152,36 @@ public class OssieSemanticExporter {
             }
         }
         List<SemanticMetricProjection> projections = new ArrayList<>();
+        List<String> skipped = new ArrayList<>();
         for (String metricId : metricIds) {
+            String metricCode = metricCode(workspaceId, metricId);
             long bindings = models.countFieldsByMetric(workspaceId, metricId);
             if (bindings != 1) {
+                skipped.add(metricCode);
                 checks.add(new SemanticExportCheckVO(
                         LEVEL_WARN,
                         "METRIC_SKIPPED",
-                        "指标 " + metricId + " 关联了 " + bindings + " 个模型字段，无法唯一确定数据来源，已跳过"));
+                        "指标 " + metricCode + " 关联了 " + bindings + " 个模型字段，无法唯一确定数据来源，已跳过"));
                 continue;
             }
             var atomic = atomicMetrics.find(workspaceId, metricId);
             if (atomic.isEmpty()) {
+                skipped.add(metricCode);
                 checks.add(new SemanticExportCheckVO(
-                        LEVEL_WARN,
-                        "METRIC_SKIPPED",
-                        "指标 " + metricId + " 为派生或复合指标，暂不支持 Ossie 表达式，已跳过"));
+                        LEVEL_WARN, "METRIC_SKIPPED", "指标 " + metricCode + " 为派生或复合指标，暂不支持 Ossie 表达式，已跳过"));
                 continue;
             }
             if (!PORTABLE_AGGREGATES.contains(atomic.get().getAggregateType().name())) {
+                skipped.add(metricCode);
                 checks.add(new SemanticExportCheckVO(
-                        LEVEL_WARN,
-                        "METRIC_SKIPPED",
-                        "指标 " + metricId + " 的聚合不在可移植白名单内，已跳过"));
+                        LEVEL_WARN, "METRIC_SKIPPED", "指标 " + metricCode + " 的聚合不在可移植白名单内，已跳过"));
                 continue;
             }
             ModelFieldEntity field = binding.get(metricId);
             if (field == null) {
+                skipped.add(metricCode);
                 checks.add(new SemanticExportCheckVO(
-                        LEVEL_WARN, "METRIC_SKIPPED", "指标 " + metricId + " 的绑定字段不在导出范围内，已跳过"));
+                        LEVEL_WARN, "METRIC_SKIPPED", "指标 " + metricCode + " 的绑定字段不在导出范围内，已跳过"));
                 continue;
             }
             projections.add(new SemanticMetricProjection(
@@ -175,39 +189,42 @@ public class OssieSemanticExporter {
                     atomic.get().getAggregateType().name() + "(" + field.getEnCode() + ")",
                     atomic.get().getDataType()));
         }
-        return projections;
+        return new MetricResolution(projections, skipped);
+    }
+
+    private String metricCode(String workspaceId, String metricId) {
+        return atomicMetrics
+                .find(workspaceId, metricId)
+                .map(metric -> metric.getEnCode())
+                .orElse(metricId);
     }
 
     private String render(
             String workspaceId,
-            ModelEntity model,
-            List<ModelingRelationEntity> relationRows,
+            Map<String, ModelEntity> datasetModels,
             Map<String, List<ModelFieldEntity>> datasetFields,
-            List<SemanticMetricProjection> metrics) {
+            Map<String, String> datasetNames,
+            List<ModelingRelationEntity> relationRows,
+            MetricResolution metricResolution) {
         StringBuilder yaml = new StringBuilder();
         yaml.append("# 由 Yak Ops 1.16.0 生成，规范版本固定 ").append(SPEC_VERSION).append('\n');
         yaml.append("# 指标导出策略：仅导出有唯一字段绑定的基础聚合，其余计入 custom_extensions\n");
         yaml.append("version: \"").append(SPEC_VERSION).append("\"\n");
-        yaml.append("name: ").append(quote(model.getName())).append('\n');
-        if (model.getDescription() != null)
-            yaml.append("description: ").append(quote(model.getDescription())).append('\n');
-        if (model.getGrainNote() != null) {
-            yaml.append("ai_context:\n");
-            yaml.append("  instructions: ")
-                    .append(quote("粒度：" + model.getGrainNote()))
-                    .append('\n');
-        }
+        ModelEntity primary = datasetModels.values().iterator().next();
+        yaml.append("name: ").append(quote(primary.getName())).append('\n');
+        if (primary.getDescription() != null)
+            yaml.append("description: ").append(quote(primary.getDescription())).append('\n');
+
+        Map<String, List<String>> synonymsByField = synonymsByField(workspaceId, datasetFields);
         yaml.append("datasets:\n");
-        List<String> datasetNames = new ArrayList<>(datasetFields.keySet());
-        for (int index = 0; index < datasetNames.size(); index++) {
-            String datasetId = datasetNames.get(index);
-            List<ModelFieldEntity> fields = datasetFields.get(datasetId);
-            yaml.append(index == 0 ? "  " : "  - ").append("name: ").append(quote(datasetId)).append('\n');
-            if (index == 0) {
-                yaml.append("    source: ").append(quote(source(workspaceId, model))).append('\n');
-            } else {
-                yaml.append("    source: ").append(quote(datasetId)).append('\n');
-            }
+        for (Map.Entry<String, List<ModelFieldEntity>> entry : datasetFields.entrySet()) {
+            String datasetId = entry.getKey();
+            ModelEntity datasetModel = datasetModels.get(datasetId);
+            yaml.append("  - name: ").append(quote(datasetNames.get(datasetId))).append('\n');
+            yaml.append("    source: ")
+                    .append(quote(source(workspaceId, datasetModel)))
+                    .append('\n');
+            List<ModelFieldEntity> fields = entry.getValue();
             List<String> primaryKey = new ArrayList<>();
             for (ModelFieldEntity field : fields) {
                 if (Boolean.TRUE.equals(field.getIsPrimaryKey())) primaryKey.add(field.getEnCode());
@@ -215,9 +232,20 @@ public class OssieSemanticExporter {
             if (!primaryKey.isEmpty()) {
                 yaml.append("    primary_key: ").append(bracket(primaryKey)).append('\n');
             }
+            if (datasetModel.getDescription() != null) {
+                yaml.append("    description: ")
+                        .append(quote(datasetModel.getDescription()))
+                        .append('\n');
+            }
+            if (datasetModel.getGrainNote() != null) {
+                yaml.append("    ai_context:\n");
+                yaml.append("      instructions: ")
+                        .append(quote("粒度：" + datasetModel.getGrainNote()))
+                        .append('\n');
+            }
             yaml.append("    fields:\n");
             for (ModelFieldEntity field : fields) {
-                renderField(yaml, field);
+                renderField(yaml, field, synonymsByField.get(fieldKey(field)));
             }
         }
         if (!relationRows.isEmpty()) {
@@ -231,70 +259,129 @@ public class OssieSemanticExporter {
                     to.add(pair.getToFieldCode());
                 }
                 yaml.append("  - name: ").append(quote(relation.getName())).append('\n');
-                yaml.append("    from: ").append(quote(relation.getFromModelId())).append('\n');
-                yaml.append("    to: ").append(quote(relation.getToModelId())).append('\n');
+                yaml.append("    from: ")
+                        .append(quote(datasetNames.getOrDefault(relation.getFromModelId(), relation.getFromModelId())))
+                        .append('\n');
+                yaml.append("    to: ")
+                        .append(quote(datasetNames.getOrDefault(relation.getToModelId(), relation.getToModelId())))
+                        .append('\n');
                 yaml.append("    from_columns: ").append(bracket(from)).append('\n');
                 yaml.append("    to_columns: ").append(bracket(to)).append('\n');
             }
         }
-        if (!metrics.isEmpty()) {
+        if (!metricResolution.metrics().isEmpty()) {
             yaml.append("metrics:\n");
-            for (SemanticMetricProjection metric : metrics) {
+            for (SemanticMetricProjection metric : metricResolution.metrics()) {
                 yaml.append("  - name: ").append(quote(metric.name())).append('\n');
                 yaml.append("    expression:\n");
                 yaml.append("      dialects:\n");
                 yaml.append("        - dialect: ANSI_SQL\n");
-                yaml.append("          expression: ").append(quote(metric.expression())).append('\n');
-                yaml.append("    datatype: ").append(datatype(metric.dataType())).append('\n');
+                yaml.append("          expression: ")
+                        .append(quote(metric.expression()))
+                        .append('\n');
+                yaml.append("    datatype: ")
+                        .append(datatype(metric.dataType()))
+                        .append('\n');
             }
         }
         yaml.append("custom_extensions:\n");
         yaml.append("  - vendor_name: ").append(quote(VENDOR)).append('\n');
-        yaml.append("    data: ").append(quote(extensions(model))).append('\n');
+        yaml.append("    data: ")
+                .append(quote(extensions(primary, metricResolution.skippedMetrics())))
+                .append('\n');
         return yaml.toString();
     }
 
-    private void renderField(StringBuilder yaml, ModelFieldEntity field) {
+    private Map<String, List<String>> synonymsByField(
+            String workspaceId, Map<String, List<ModelFieldEntity>> datasetFields) {
+        List<String> keys = new ArrayList<>();
+        for (List<ModelFieldEntity> fields : datasetFields.values()) {
+            for (ModelFieldEntity field : fields) {
+                keys.add(fieldKey(field));
+            }
+        }
+        Map<String, List<String>> terms = new HashMap<>();
+        for (ModelingSynonymEntity row : synonyms.listByTargets(workspaceId, MODEL_FIELD_SYNONYM, keys)) {
+            terms.computeIfAbsent(row.getTargetId(), key -> new ArrayList<>()).add(row.getTerm());
+        }
+        return terms;
+    }
+
+    private void renderField(StringBuilder yaml, ModelFieldEntity field, List<String> synonymTerms) {
         yaml.append("      - name: ").append(quote(field.getEnCode())).append('\n');
         yaml.append("        expression:\n");
         yaml.append("          dialects:\n");
         yaml.append("            - dialect: ANSI_SQL\n");
-        yaml.append("              expression: ").append(quote(field.getEnCode())).append('\n');
+        yaml.append("              expression: ")
+                .append(quote(field.getEnCode()))
+                .append('\n');
         yaml.append("        datatype: ").append(datatype(field.getDataType())).append('\n');
         yaml.append("        dimension:\n");
         yaml.append("          is_time: ")
                 .append(Boolean.TRUE.equals(field.getIsTime()) ? "true" : "false")
                 .append('\n');
-        List<ModelingSynonymEntity> synonymRows = synonyms.listByTarget(
-                field.getWorkspaceId(),
-                "MODEL_FIELD",
-                field.getModelId() + ":" + field.getEnCode());
-        if (!synonymRows.isEmpty()) {
-            List<String> terms = new ArrayList<>();
-            for (ModelingSynonymEntity row : synonymRows) {
-                terms.add(row.getTerm());
-            }
+        if (synonymTerms != null && !synonymTerms.isEmpty()) {
             yaml.append("        ai_context:\n");
-            yaml.append("          synonyms: ").append(bracket(terms)).append('\n');
+            yaml.append("          synonyms: ").append(bracket(synonymTerms)).append('\n');
         }
     }
 
     private String source(String workspaceId, ModelEntity model) {
         List<ModelPublicationEntity> rows = publications.listByModel(workspaceId, model.getId(), 1);
-        if (rows.isEmpty()) return model.getName();
-        ModelPublicationEntity publication = rows.get(0);
-        if (publication.getPhysicalTable() == null) return model.getName();
-        return publication.getPhysicalDatabase() + "." + publication.getPhysicalSchema() + "."
-                + publication.getPhysicalTable();
+        if (!rows.isEmpty()) {
+            ModelPublicationEntity publication = rows.get(0);
+            if ("SUCCEEDED".equals(publication.getStatus()) && publication.getPhysicalTable() != null) {
+                List<String> parts = new ArrayList<>();
+                if (publication.getPhysicalDatabase() != null
+                        && !publication.getPhysicalDatabase().isBlank()) parts.add(publication.getPhysicalDatabase());
+                if (publication.getPhysicalSchema() != null
+                        && !publication.getPhysicalSchema().isBlank()) parts.add(publication.getPhysicalSchema());
+                if (!publication.getPhysicalTable().isBlank()) parts.add(publication.getPhysicalTable());
+                if (!parts.isEmpty()) return String.join(".", parts);
+            }
+        }
+        String layerCode = layers.layer(workspaceId, model.getLayerId())
+                .map(LayerEntity::getEnCode)
+                .orElse(null);
+        return layerCode == null || layerCode.isBlank() ? model.getName() : layerCode + "." + model.getName();
     }
 
-    private String extensions(ModelEntity model) {
+    private String extensions(ModelEntity model, List<String> skippedMetrics) {
         StringBuilder json = new StringBuilder();
         json.append("{\"release\":\"1.16.0\"");
         json.append(",\"exportedAt\":\"").append(LocalDate.now()).append('"');
         json.append(",\"modelId\":\"").append(escape(model.getId())).append('"');
-        json.append('}');
+        if (model.getGrainNote() != null)
+            json.append(",\"grainNote\":\"")
+                    .append(escape(model.getGrainNote()))
+                    .append('"');
+        json.append(",\"skippedMetrics\":[");
+        for (int index = 0; index < skippedMetrics.size(); index++) {
+            if (index > 0) json.append(',');
+            json.append('"').append(escape(skippedMetrics.get(index))).append('"');
+        }
+        json.append("]}");
         return json.toString();
+    }
+
+    private static Map<String, String> datasetNames(Map<String, ModelEntity> datasetModels) {
+        Map<String, String> names = new LinkedHashMap<>();
+        Set<String> used = new HashSet<>();
+        for (Map.Entry<String, ModelEntity> entry : datasetModels.entrySet()) {
+            String base = entry.getValue().getName();
+            String candidate = base;
+            int suffix = 2;
+            while (!used.add(candidate)) {
+                candidate = base + "-" + suffix;
+                suffix++;
+            }
+            names.put(entry.getKey(), candidate);
+        }
+        return names;
+    }
+
+    private static String fieldKey(ModelFieldEntity field) {
+        return field.getModelId() + ":" + field.getEnCode();
     }
 
     private static String datatype(DataType dataType) {
@@ -336,4 +423,7 @@ public class OssieSemanticExporter {
 
     /** One exported metric synthesized from an atomic metric and its single bound field. */
     private record SemanticMetricProjection(String name, String expression, DataType dataType) {}
+
+    /** Exported metrics plus the codes of every metric the projection had to skip. */
+    private record MetricResolution(List<SemanticMetricProjection> metrics, List<String> skippedMetrics) {}
 }

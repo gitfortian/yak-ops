@@ -1,6 +1,5 @@
 package io.yak.ops.business.modeling.relation.impl;
 
-import io.yak.ops.business.modeling.model.ModelService;
 import io.yak.ops.business.modeling.relation.ModelRelationService;
 import io.yak.ops.common.bean.dto.modeling.CreateModelRelationDTO;
 import io.yak.ops.common.bean.dto.modeling.RelationKeyPairDTO;
@@ -83,11 +82,12 @@ public class ModelRelationServiceImpl implements ModelRelationService {
         validateDirections(from, to);
         String name = resolveName(workspaceId, input.getName(), from, to, null);
         RelationJoinType joinType = resolveJoinType(input.getJoinType());
+        String relationId = IdUtils.nextId();
         List<ModelingRelationColumnEntity> columns =
-                validateKeys(workspaceId, actor, from, to, input.getKeys(), null);
+                validateKeys(workspaceId, actor, from, to, input.getKeys(), relationId);
         ModelingRelationEntity row = new ModelingRelationEntity();
         row.initCreate(actor);
-        row.setId(IdUtils.nextId());
+        row.setId(relationId);
         row.setWorkspaceId(workspaceId);
         row.setName(name);
         row.setFromModelId(from.getId());
@@ -111,13 +111,15 @@ public class ModelRelationServiceImpl implements ModelRelationService {
             throw new BusinessException(DimensionModelingErrorCode.REVISION_CONFLICT);
         ModelEntity from = requireModel(workspaceId, row.getFromModelId());
         ModelEntity to = requireModel(workspaceId, row.getToModelId());
-        if (relations.countName(workspaceId, input.getName(), relationId) > 0)
+        String name = trim(input.getName());
+        if (name == null) throw new BusinessException(DimensionModelingErrorCode.RELATION_DUPLICATE_NAME);
+        if (relations.countName(workspaceId, name, relationId) > 0)
             throw new BusinessException(DimensionModelingErrorCode.RELATION_DUPLICATE_NAME);
         RelationJoinType joinType = resolveJoinType(input.getJoinType());
         List<ModelingRelationColumnEntity> columns =
                 validateKeys(workspaceId, actor, from, to, input.getKeys(), relationId);
         row.initUpdate(actor);
-        row.setName(input.getName().strip());
+        row.setName(name);
         row.setJoinType(joinType.name());
         row.setDescription(optionalText(input.getDescription()));
         if (!relations.update(row)) throw new BusinessException(DimensionModelingErrorCode.REVISION_CONFLICT);
@@ -168,7 +170,8 @@ public class ModelRelationServiceImpl implements ModelRelationService {
                         reason));
             }
         }
-        candidates.sort(Comparator.comparing(ModelRelationProposalVO::sameStandard).reversed()
+        candidates.sort(Comparator.comparing(ModelRelationProposalVO::sameStandard)
+                .reversed()
                 .thenComparing(proposal -> sameCode(proposal) ? 0 : 1)
                 .thenComparing(ModelRelationProposalVO::fromFieldCode));
         if (candidates.size() > MAX_PROPOSALS) return new ArrayList<>(candidates.subList(0, MAX_PROPOSALS));
@@ -181,9 +184,12 @@ public class ModelRelationServiceImpl implements ModelRelationService {
         requireActor(workspaceId, actor);
         ModelEntity row = models.lock(workspaceId, modelId)
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
+        if (ModelType.from(row.getType()) == ModelType.DIM)
+            throw new BusinessException(DimensionModelingErrorCode.GRAIN_NOT_APPLICABLE);
         if (row.getRevision() != input.getRevision())
             throw new BusinessException(DimensionModelingErrorCode.REVISION_CONFLICT);
-        String grain = input.getGrainNote() == null ? null : input.getGrainNote().strip();
+        String grain =
+                input.getGrainNote() == null ? null : input.getGrainNote().strip();
         if (grain != null && grain.isEmpty()) grain = null;
         if (grain != null && grain.length() > 200)
             throw new BusinessException(DimensionModelingErrorCode.GRAIN_TOO_LONG);
@@ -199,7 +205,8 @@ public class ModelRelationServiceImpl implements ModelRelationService {
             ModelEntity to,
             List<RelationKeyPairDTO> input,
             String relationId) {
-        if (input == null || input.isEmpty()) throw new BusinessException(DimensionModelingErrorCode.RELATION_KEY_EMPTY);
+        if (input == null || input.isEmpty())
+            throw new BusinessException(DimensionModelingErrorCode.RELATION_KEY_EMPTY);
         if (input.size() > MAX_KEY_PAIRS) throw new BusinessException(DimensionModelingErrorCode.RELATION_KEY_TOO_MANY);
         List<ModelFieldEntity> fromFields = models.fields(from.getId());
         List<ModelFieldEntity> toFields = models.fields(to.getId());
@@ -216,16 +223,19 @@ public class ModelRelationServiceImpl implements ModelRelationService {
                 throw new BusinessException(DimensionModelingErrorCode.RELATION_KEY_EMPTY);
             if (!seenFromCodes.add(fromCode)) throw new BusinessException(DimensionModelingErrorCode.INVALID_FIELD);
             ModelFieldEntity fromField = fromByCode.get(fromCode);
-            if (fromField == null || fromField.getStandardId() == null)
+            if (fromField == null) throw new BusinessException(DimensionModelingErrorCode.RELATION_KEY_FIELD_MISSING);
+            if (fromField.getStandardId() == null)
                 throw new BusinessException(DimensionModelingErrorCode.RELATION_KEY_FIELD_UNSTANDARDIZED);
             ModelFieldEntity toField = toByCode.get(toCode);
-            if (toField == null || toField.getStandardId() == null)
+            if (toField == null) throw new BusinessException(DimensionModelingErrorCode.RELATION_KEY_FIELD_MISSING);
+            if (toField.getStandardId() == null)
                 throw new BusinessException(DimensionModelingErrorCode.RELATION_KEY_FIELD_UNSTANDARDIZED);
             ModelingRelationColumnEntity column = new ModelingRelationColumnEntity();
             column.initCreate(actor);
             column.setId(IdUtils.nextId());
             column.setWorkspaceId(workspaceId);
             column.setRelationId(relationId);
+            column.setRevision(1L);
             column.setOrdinal(index);
             column.setFromFieldCode(fromCode);
             column.setToFieldCode(toCode);
@@ -243,8 +253,7 @@ public class ModelRelationServiceImpl implements ModelRelationService {
             String excludeRelationId) {
         String fingerprint = fingerprint(columns);
         for (ModelingRelationEntity existing : relations.listByModel(workspaceId, fromModelId)) {
-            if (!fromModelId.equals(existing.getFromModelId()) || !toModelId.equals(existing.getToModelId()))
-                continue;
+            if (!fromModelId.equals(existing.getFromModelId()) || !toModelId.equals(existing.getToModelId())) continue;
             if (existing.getId().equals(excludeRelationId)) continue;
             List<ModelingRelationColumnEntity> existingColumns = relations.columns(existing.getId());
             if (fingerprint.equals(fingerprint(existingColumns)))
@@ -253,13 +262,12 @@ public class ModelRelationServiceImpl implements ModelRelationService {
     }
 
     private static String fingerprint(List<ModelingRelationColumnEntity> columns) {
-        StringBuilder from = new StringBuilder();
-        StringBuilder to = new StringBuilder();
+        List<String> pairs = new ArrayList<>(columns.size());
         for (ModelingRelationColumnEntity column : columns) {
-            from.append(column.getFromFieldCode()).append('|');
-            to.append(column.getToFieldCode()).append('|');
+            pairs.add(column.getFromFieldCode() + "=" + column.getToFieldCode());
         }
-        return from + "->" + to;
+        pairs.sort(Comparator.naturalOrder());
+        return String.join("|", pairs);
     }
 
     private ModelRelationVO project(
@@ -277,9 +285,7 @@ public class ModelRelationServiceImpl implements ModelRelationService {
             ModelFieldEntity fromField = fromByCode.get(column.getFromFieldCode());
             ModelFieldEntity toField = toByCode.get(column.getToFieldCode());
             boolean resolved = fromField != null && toField != null;
-            boolean bound = resolved
-                    && fromField.getStandardId() != null
-                    && toField.getStandardId() != null;
+            boolean bound = resolved && fromField.getStandardId() != null && toField.getStandardId() != null;
             if (!resolved) fieldRemoved = true;
             if (resolved && !bound) unstandardized = true;
             keys.add(new ModelRelationKeyVO(
@@ -291,9 +297,7 @@ public class ModelRelationServiceImpl implements ModelRelationService {
                     resolved,
                     bound));
         }
-        String status = fieldRemoved
-                ? STATUS_FIELD_REMOVED
-                : unstandardized ? STATUS_KEY_UNSTANDARDIZED : STATUS_READY;
+        String status = fieldRemoved ? STATUS_FIELD_REMOVED : unstandardized ? STATUS_KEY_UNSTANDARDIZED : STATUS_READY;
         return new ModelRelationVO(
                 row.getId(),
                 row.getName(),
@@ -323,12 +327,16 @@ public class ModelRelationServiceImpl implements ModelRelationService {
             throw new BusinessException(DimensionModelingErrorCode.RELATION_TARGET_NOT_DIM);
     }
 
-    private String resolveName(String workspaceId, String requested, ModelEntity from, ModelEntity to, String excludeId) {
+    private String resolveName(
+            String workspaceId, String requested, ModelEntity from, ModelEntity to, String excludeId) {
         String base = trim(requested);
-        if (base == null) {
-            base = from.getName() + "_to_" + to.getName();
-            if (base.length() > 64) base = base.substring(0, 64);
+        if (base != null) {
+            if (relations.countName(workspaceId, base, excludeId) > 0)
+                throw new BusinessException(DimensionModelingErrorCode.RELATION_DUPLICATE_NAME);
+            return base;
         }
+        base = from.getName() + "_to_" + to.getName();
+        if (base.length() > 64) base = base.substring(0, 64);
         String candidate = base;
         int suffix = 2;
         while (relations.countName(workspaceId, candidate, excludeId) > 0) {
@@ -386,10 +394,8 @@ public class ModelRelationServiceImpl implements ModelRelationService {
     }
 
     private ModelEntity requireModel(String workspaceId, String modelId) {
-        if (modelId == null || modelId.isBlank())
-            throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
-        return models
-                .find(workspaceId, modelId)
+        if (modelId == null || modelId.isBlank()) throw new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS);
+        return models.find(workspaceId, modelId)
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
     }
 

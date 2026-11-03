@@ -3,6 +3,7 @@ package io.yak.ops.common.bean.vo.modeling;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.yak.ops.common.enums.modeling.AggregateType;
 import io.yak.ops.common.enums.modeling.standard.DataType;
+import java.util.List;
 
 /**
  * One ordered model field.
@@ -27,6 +28,7 @@ import io.yak.ops.common.enums.modeling.standard.DataType;
  * @param metricEnCode imported metric code for display, null when not imported
  * @param metricCnName imported metric name for display, null when not imported
  * @param description optional business description
+ * @param synonyms business synonyms stored for this field code, empty when none
  */
 public record ModelFieldVO(
         String id,
@@ -49,4 +51,5 @@ public record ModelFieldVO(
         String metricId,
         String metricEnCode,
         String metricCnName,
-        String description) {}
+        String description,
+        List<String> synonyms) {}

@@ -147,8 +147,7 @@ public interface ModelMapper {
 
     @Select("SELECT COUNT(*) FROM yak_ops_modeling_model_field "
             + "WHERE workspace_id=#{workspaceId} AND metric_id=#{metricId}")
-    long countFieldsByMetric(
-            @Param("workspaceId") String workspaceId, @Param("metricId") String metricId);
+    long countFieldsByMetric(@Param("workspaceId") String workspaceId, @Param("metricId") String metricId);
 
     @Select("SELECT id,workspace_id,type,name,cn_name,grain_note FROM yak_ops_modeling_model "
             + "WHERE workspace_id=#{workspaceId} AND type IN ('DWD','DWS','ADS') "

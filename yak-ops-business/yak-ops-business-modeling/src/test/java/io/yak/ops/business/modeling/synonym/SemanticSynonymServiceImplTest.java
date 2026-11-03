@@ -14,6 +14,7 @@ import io.yak.ops.common.enums.common.CommonErrorCode;
 import io.yak.ops.common.enums.modeling.SemanticSynonymTargetType;
 import io.yak.ops.common.enums.modeling.dimension.DimensionModelingErrorCode;
 import io.yak.ops.common.exception.BusinessException;
+import io.yak.ops.dao.entity.modeling.ModelEntity;
 import io.yak.ops.dao.entity.modeling.ModelFieldEntity;
 import io.yak.ops.dao.entity.modeling.ModelingSynonymEntity;
 import io.yak.ops.dao.repository.modeling.ModelRepository;
@@ -59,6 +60,10 @@ class SemanticSynonymServiceImplTest {
     }
 
     private void givenFieldExists() {
+        ModelEntity model = new ModelEntity();
+        model.setId(MODEL_ID);
+        model.setWorkspaceId(WS);
+        when(models.find(WS, MODEL_ID)).thenReturn(Optional.of(model));
         ModelFieldEntity field = new ModelFieldEntity();
         field.setEnCode("customer_id");
         when(models.fields(MODEL_ID)).thenReturn(List.of(field));
@@ -79,6 +84,9 @@ class SemanticSynonymServiceImplTest {
 
     @Test
     void rejectsMissingField() {
+        ModelEntity model = new ModelEntity();
+        model.setId(MODEL_ID);
+        when(models.find(WS, MODEL_ID)).thenReturn(Optional.of(model));
         when(models.fields(MODEL_ID)).thenReturn(List.of());
 
         BusinessException failure = assertThrows(BusinessException.class,
@@ -96,6 +104,17 @@ class SemanticSynonymServiceImplTest {
         BusinessException duplicate = assertThrows(BusinessException.class,
                 () -> service.replaceForModelField(WS, ACTOR, MODEL_ID, "customer_id", List.of("客户", "客户")));
         assertTrue(duplicate.getMessage().contains(DimensionModelingErrorCode.SYNONYM_INVALID.getMessage()));
+
+        BusinessException caseDuplicate = assertThrows(BusinessException.class,
+                () -> service.replaceForModelField(WS, ACTOR, MODEL_ID, "customer_id", List.of("Order", "order")));
+        assertTrue(caseDuplicate.getMessage().contains(DimensionModelingErrorCode.SYNONYM_INVALID.getMessage()));
+    }
+
+    @Test
+    void rejectsFieldOfAnotherWorkspace() {
+        BusinessException failure = assertThrows(BusinessException.class,
+                () -> service.listForModelField("ws-2", ACTOR, MODEL_ID, "customer_id"));
+        assertTrue(failure.getMessage().contains(CommonErrorCode.RESOURCE_NOT_EXISTS.getMessage()));
     }
 
     @Test

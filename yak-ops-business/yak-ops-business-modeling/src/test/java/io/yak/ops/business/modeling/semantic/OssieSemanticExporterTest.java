@@ -15,6 +15,7 @@ import io.yak.ops.dao.entity.modeling.ModelPublicationEntity;
 import io.yak.ops.dao.entity.modeling.ModelingRelationColumnEntity;
 import io.yak.ops.dao.entity.modeling.ModelingRelationEntity;
 import io.yak.ops.dao.entity.modeling.ModelingSynonymEntity;
+import io.yak.ops.dao.repository.modeling.LayerRepository;
 import io.yak.ops.dao.repository.modeling.ModelRepository;
 import io.yak.ops.dao.repository.modeling.ModelingRelationRepository;
 import io.yak.ops.dao.repository.modeling.ModelingSynonymRepository;
@@ -41,6 +42,7 @@ class OssieSemanticExporterTest {
     private ModelingSynonymRepository synonyms;
     private PublicationRepository publications;
     private MetricAtomicRepository atomicMetrics;
+    private LayerRepository layers;
     private OssieSemanticExporter exporter;
 
     @BeforeEach
@@ -50,6 +52,7 @@ class OssieSemanticExporterTest {
         synonyms = Mockito.mock(ModelingSynonymRepository.class);
         publications = Mockito.mock(PublicationRepository.class);
         atomicMetrics = Mockito.mock(MetricAtomicRepository.class);
+        layers = Mockito.mock(LayerRepository.class);
         WorkspaceService workspaces = Mockito.mock(WorkspaceService.class);
         when(workspaces.isActiveMember(anyString(), anyString())).thenReturn(true);
         exporter = new OssieSemanticExporter();
@@ -58,6 +61,7 @@ class OssieSemanticExporterTest {
         inject("synonyms", synonyms);
         inject("publications", publications);
         inject("atomicMetrics", atomicMetrics);
+        inject("layers", layers);
         inject("workspaces", workspaces);
     }
 
@@ -116,8 +120,9 @@ class OssieSemanticExporterTest {
         pair.setToFieldCode("customer_id");
         when(relations.columns("rel-1")).thenReturn(List.of(pair));
         ModelingSynonymEntity synonym = new ModelingSynonymEntity();
+        synonym.setTargetId(MODEL_ID + ":order_id");
         synonym.setTerm("订单号");
-        when(synonyms.listByTarget(WS, "MODEL_FIELD", MODEL_ID + ":order_id"))
+        when(synonyms.listByTargets(Mockito.eq(WS), Mockito.eq("MODEL_FIELD"), Mockito.anyList()))
                 .thenReturn(List.of(synonym));
         when(publications.listByModel(WS, MODEL_ID, 1)).thenReturn(List.of());
         when(models.countFieldsByMetric(anyString(), anyString())).thenReturn(0L);
@@ -136,6 +141,15 @@ class OssieSemanticExporterTest {
         assertTrue(yaml.contains("to_columns: [\"customer_id\"]"));
         assertTrue(yaml.contains("vendor_name: \"yak-ops\""));
         assertTrue(vo.checks().stream().anyMatch(check -> "OK".equals(check.level())));
+        // A projection that cannot be parsed is not a document; the golden assertions above are
+        // deliberately structural instead of substring-only.
+        var document = new org.yaml.snakeyaml.Yaml().load(yaml);
+        var datasets = (List<?>) ((java.util.Map<?, ?>) document).get("datasets");
+        assertEquals(2, datasets.size());
+        assertEquals("dwd_order_detail", ((java.util.Map<?, ?>) datasets.get(0)).get("name"));
+        var relationships = (List<?>) ((java.util.Map<?, ?>) document).get("relationships");
+        assertEquals("dwd_order_detail", ((java.util.Map<?, ?>) relationships.get(0)).get("from"));
+        assertEquals("dim_customer", ((java.util.Map<?, ?>) relationships.get(0)).get("to"));
     }
 
     @Test
@@ -176,11 +190,30 @@ class OssieSemanticExporterTest {
 
         SemanticExportVO vo = exporter.export(WS, ACTOR, MODEL_ID);
 
-        assertEquals(true, vo.yaml().contains("METRIC_SKIPPED") || vo.yaml().contains("custom_extensions"));
         List<SemanticExportCheckVO> warns =
                 vo.checks().stream().filter(check -> "METRIC_SKIPPED".equals(check.code())).toList();
         assertEquals(1, warns.size());
         assertTrue(warns.get(0).message().contains("派生或复合指标"));
+        assertTrue(vo.yaml().contains("skippedMetrics"), vo.yaml());
+        assertTrue(vo.yaml().contains("metric-derived"), vo.yaml());
+        assertTrue(vo.yaml().contains("grainNote"), vo.yaml());
+    }
+
+    @Test
+    void omitsAnAbsentSchemaInsteadOfRenderingNull() {
+        ModelEntity fact = model(MODEL_ID, "DWD", "dwd_order_detail");
+        when(models.find(WS, MODEL_ID)).thenReturn(Optional.of(fact));
+        when(models.fields(MODEL_ID)).thenReturn(List.of());
+        when(relations.listByModel(WS, MODEL_ID)).thenReturn(List.of());
+        ModelPublicationEntity publication = new ModelPublicationEntity();
+        publication.setPhysicalDatabase("warehouse");
+        publication.setPhysicalTable("dwd_order_detail");
+        publication.setStatus("SUCCEEDED");
+        when(publications.listByModel(WS, MODEL_ID, 1)).thenReturn(List.of(publication));
+
+        SemanticExportVO vo = exporter.export(WS, ACTOR, MODEL_ID);
+
+        assertTrue(vo.yaml().contains("source: \"warehouse.dwd_order_detail\""), vo.yaml());
     }
 
     @Test
@@ -193,6 +226,7 @@ class OssieSemanticExporterTest {
         publication.setPhysicalDatabase("lake");
         publication.setPhysicalSchema("dws");
         publication.setPhysicalTable("dwd_order_detail");
+        publication.setStatus("SUCCEEDED");
         when(publications.listByModel(WS, MODEL_ID, 1)).thenReturn(List.of(publication));
         when(models.countFieldsByMetric(anyString(), anyString())).thenReturn(0L);
 

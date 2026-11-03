@@ -23,4 +23,6 @@ public class ModelingRelationColumnEntity extends BaseEntity {
     private String fromFieldCode;
     /** en_code of the one-side model field. */
     private String toFieldCode;
+    /** Optimistic version inherited from the owning relation; pairs are replaced as a set. */
+    private long revision;
 }

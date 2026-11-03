@@ -19,6 +19,8 @@ public class GovernanceIssueEntity {
     private Integer ruleVersion;
     /** DEV or COMPUTE. */
     private String dimensionCode;
+    /** Whether this Issue participates in the health score; advisory rules set false. */
+    private Boolean scored;
     /** HIGH, MEDIUM or LOW; fixed by the rule. */
     private String severity;
     /** DATA_MAP_TABLE or TASK_DEFINITION. */

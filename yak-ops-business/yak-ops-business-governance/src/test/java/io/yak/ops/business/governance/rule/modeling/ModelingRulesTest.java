@@ -1,6 +1,7 @@
 package io.yak.ops.business.governance.rule.modeling;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -40,6 +41,7 @@ class ModelingRulesTest {
         assertEquals("订单明细", candidates.get(0).targetName());
         assertEquals(IssueSeverity.MEDIUM, rule.severity());
         assertEquals(IssueTargetType.MODELING_MODEL, rule.targetType());
+        assertFalse(rule.scored(), "grain findings are advisory and must not enter the health score");
     }
 
     @Test
@@ -59,5 +61,6 @@ class ModelingRulesTest {
                 java.util.Set.of("m-1", "m-2"),
                 candidates.stream().map(IssueCandidate::targetId).collect(Collectors.toSet()));
         assertEquals(IssueSeverity.HIGH, rule.severity());
+        assertFalse(rule.scored(), "relation-key findings are advisory and must not enter the health score");
     }
 }

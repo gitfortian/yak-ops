@@ -146,9 +146,18 @@ export default function GovernanceIssueDetailPage() {
                 <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
                   <span className="text-[var(--yak-components-muted-text)]">
                     目标：
-                    {record.targetType === "DATA_MAP_TABLE" ? (
+                    {record.targetType === "DATA_MAP_TABLE" ||
+                    record.targetType === "MODELING_MODEL" ? (
                       <Link
-                        to={`/data-governance/data-map/tables/${record.targetId}`}
+                        to={
+                          record.targetType === "DATA_MAP_TABLE"
+                            ? `/data-governance/data-map/tables/${record.targetId}`
+                            : `/data-modeling/logical-models/${record.targetId}?tab=${
+                                record.ruleCode === "MODEL_RELATION_KEY_UNSTANDARDIZED"
+                                  ? "relations"
+                                  : "info"
+                              }`
+                        }
                         className="font-mono font-semibold [color:var(--yak-color-primary)] hover:underline"
                       >
                         {governanceTargetLabel(record.targetName)}

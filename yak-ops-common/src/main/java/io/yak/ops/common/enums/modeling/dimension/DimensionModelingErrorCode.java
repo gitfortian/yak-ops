@@ -47,7 +47,8 @@ public enum DimensionModelingErrorCode implements ErrorCode {
     GRAIN_TOO_LONG(19525, "粒度声明不能超过200个字符"),
     SYNONYM_INVALID(19526, "同义词不合法：每项不能为空且不超过64个字符"),
     SYNONYM_TARGET_INVALID(19527, "同义词目标不存在或类型不支持"),
-    RELATION_KEY_TOO_MANY(19528, "关联键对数量不能超过8个");
+    RELATION_KEY_TOO_MANY(19528, "关联键对数量不能超过8个"),
+    GRAIN_NOT_APPLICABLE(19529, "维度表不需要声明粒度");
 
     private final Integer code;
     private final String message;

@@ -61,6 +61,12 @@ CREATE TABLE yak_ops_modeling_synonym (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Business synonym of one standard field, model field or metric; replace-set semantics per target';
 
+-- The two semantic rules are advisory in this release: they create Issues but must not enter the
+-- DEV health score, which still derives from catalogue tables. The flag keeps them visible while
+-- excluding them from the aggregate.
+ALTER TABLE yak_ops_governance_issue
+    ADD COLUMN scored TINYINT NOT NULL DEFAULT 1 COMMENT 'Whether the Issue participates in the health score' AFTER dimension_code;
+
 ALTER TABLE yak_ops_modeling_model
     ADD COLUMN grain_note VARCHAR(200) NULL COMMENT 'Declared meaning of one row; null when undeclared' AFTER description;
 

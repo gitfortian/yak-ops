@@ -121,13 +121,13 @@ class ModelPublicationServiceTest {
     private static ModelFieldVO field(String code, String cnName) {
         return new ModelFieldVO(
                 code, 1, code, cnName, DataType.STRING, "32", true, true, false, false, null, null, null, null, null, null,
-                null, null, null, null, null);
+                null, null, null, null, null, java.util.List.of());
     }
 
     private static ModelFieldVO bigintField(String code, String cnName) {
         return new ModelFieldVO(
                 code, 2, code, cnName, DataType.BIGINT, null, false, true, false, false, null, null, null, null, null, null,
-                null, null, null, null, null);
+                null, null, null, null, null, java.util.List.of());
     }
 
     private static ModelVO model() {

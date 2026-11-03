@@ -24,6 +24,7 @@ import io.yak.ops.dao.entity.modeling.PlanningNodeEntity;
 import io.yak.ops.dao.repository.modeling.DimensionRepository;
 import io.yak.ops.dao.repository.modeling.ModelRepository;
 import io.yak.ops.dao.repository.modeling.ModelingRelationRepository;
+import io.yak.ops.dao.repository.modeling.ModelingSynonymRepository;
 import io.yak.ops.dao.repository.modeling.PlanningRepository;
 import io.yak.ops.dao.repository.modeling.PublicationRepository;
 import io.yak.ops.dao.repository.modeling.metric.MetricDerivedRepository;
@@ -87,6 +88,10 @@ public class ModelServiceImpl implements ModelService {
     @Resource
     private ModelingRelationRepository relations;
 
+    /** Read-only here: the field rows carry their business synonyms for display. */
+    @Resource
+    private ModelingSynonymRepository synonyms;
+
     @Resource
     private WorkspaceService workspaces;
 
@@ -128,7 +133,7 @@ public class ModelServiceImpl implements ModelService {
                 workspaceId, rows.stream().map(ModelEntity::getId).toList());
         return PageData.of(
                 rows.stream()
-                        .map(row -> project(row, null, statusOf(statuses, row.getId())))
+                        .map(row -> project(row, null, statusOf(statuses, row.getId()), Map.of()))
                         .toList(),
                 total,
                 pageNo,
@@ -142,7 +147,17 @@ public class ModelServiceImpl implements ModelService {
         var row = models.find(workspaceId, id)
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.RESOURCE_NOT_EXISTS));
         var statuses = publications.latestStatusByModel(workspaceId, List.of(row.getId()));
-        return project(row, models.fields(row.getId()), statusOf(statuses, row.getId()));
+        var fieldRows = models.fields(row.getId());
+        Map<String, List<String>> synonymTerms = new java.util.HashMap<>();
+        List<String> fieldKeys = fieldRows.stream()
+                .map(field -> field.getModelId() + ":" + field.getEnCode())
+                .toList();
+        for (var synonym : synonyms.listByTargets(workspaceId, "MODEL_FIELD", fieldKeys)) {
+            synonymTerms
+                    .computeIfAbsent(synonym.getTargetId(), key -> new ArrayList<>())
+                    .add(synonym.getTerm());
+        }
+        return project(row, fieldRows, statusOf(statuses, row.getId()), synonymTerms);
     }
 
     @Override
@@ -318,7 +333,10 @@ public class ModelServiceImpl implements ModelService {
         row.setPhysicalProperties(normalizeProperties(input.getPhysicalProperties()));
         row.setOwnerId(requireOwner(workspaceId, actor, input.getOwnerId()));
         row.setDescription(optionalText(input.getDescription(), 500));
-        row.setGrainNote(optionalText(input.getGrainNote(), 200, DimensionModelingErrorCode.GRAIN_TOO_LONG));
+        row.setGrainNote(
+                input.getType() == ModelType.DIM
+                        ? null
+                        : optionalText(input.getGrainNote(), 200, DimensionModelingErrorCode.GRAIN_TOO_LONG));
         return processCode;
     }
 
@@ -577,7 +595,11 @@ public class ModelServiceImpl implements ModelService {
         return normalized.isEmpty() ? null : normalized;
     }
 
-    private static ModelVO project(ModelEntity row, List<ModelFieldEntity> fields, PublicationStatus status) {
+    private static ModelVO project(
+            ModelEntity row,
+            List<ModelFieldEntity> fields,
+            PublicationStatus status,
+            Map<String, List<String>> synonymTerms) {
         return new ModelVO(
                 row.getId(),
                 ModelType.from(row.getType()),
@@ -606,7 +628,9 @@ public class ModelServiceImpl implements ModelService {
                 row.getRevision(),
                 fields == null
                         ? null
-                        : fields.stream().map(ModelServiceImpl::project).toList(),
+                        : fields.stream()
+                                .map(field -> project(field, synonymTerms))
+                                .toList(),
                 status);
     }
 
@@ -615,7 +639,7 @@ public class ModelServiceImpl implements ModelService {
         return PublicationStatus.from(statuses.get(modelId));
     }
 
-    private static ModelFieldVO project(ModelFieldEntity row) {
+    private static ModelFieldVO project(ModelFieldEntity row, Map<String, List<String>> synonymTerms) {
         return new ModelFieldVO(
                 row.getId(),
                 row.getOrdinal(),
@@ -637,6 +661,7 @@ public class ModelServiceImpl implements ModelService {
                 row.getMetricId(),
                 row.getMetricEnCode(),
                 row.getMetricCnName(),
-                row.getDescription());
+                row.getDescription(),
+                synonymTerms.getOrDefault(row.getModelId() + ":" + row.getEnCode(), List.of()));
     }
 }

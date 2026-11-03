@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 /** Validation matrix of the semantic relation surface, keyed on the proposal's decisions. */
@@ -107,7 +108,25 @@ class ModelRelationServiceImplTest {
         assertEquals("dwd_order_to_dim_customer", vo.name());
         assertEquals("READY", vo.status());
         Mockito.verify(relations).add(any(ModelingRelationEntity.class));
-        Mockito.verify(relations).addColumn(any(ModelingRelationColumnEntity.class));
+        ArgumentCaptor<ModelingRelationColumnEntity> column =
+                ArgumentCaptor.forClass(ModelingRelationColumnEntity.class);
+        Mockito.verify(relations).addColumn(column.capture());
+        assertEquals(vo.id(), column.getValue().getRelationId());
+        assertEquals(1L, column.getValue().getRevision());
+        assertEquals(0, column.getValue().getOrdinal());
+    }
+
+    @Test
+    void createRejectsExplicitDuplicateNameInsteadOfRenaming() {
+        givenFactAndDim();
+        when(relations.countName(anyString(), anyString(), any())).thenReturn(1L);
+        CreateModelRelationDTO dto = createDTO();
+        dto.setName("order_to_customer");
+
+        BusinessException failure =
+                assertThrows(BusinessException.class, () -> service.create(WS, ACTOR, FROM_ID, dto));
+
+        assertTrue(failure.getMessage().contains(DimensionModelingErrorCode.RELATION_DUPLICATE_NAME.getMessage()));
     }
 
     @Test
@@ -137,6 +156,54 @@ class ModelRelationServiceImplTest {
         when(models.fields(FROM_ID)).thenReturn(List.of(field("customer_id", null)));
         BusinessException failure = assertThrows(BusinessException.class, () -> service.create(WS, ACTOR, FROM_ID, createDTO()));
         assertTrue(failure.getMessage().contains(DimensionModelingErrorCode.RELATION_KEY_FIELD_UNSTANDARDIZED.getMessage()));
+    }
+
+    @Test
+    void createRejectsMissingKeyFieldWithItsOwnError() {
+        givenFactAndDim();
+        when(models.fields(FROM_ID)).thenReturn(List.of());
+        BusinessException failure = assertThrows(BusinessException.class, () -> service.create(WS, ACTOR, FROM_ID, createDTO()));
+        assertTrue(failure.getMessage().contains(DimensionModelingErrorCode.RELATION_KEY_FIELD_MISSING.getMessage()));
+    }
+
+    @Test
+    void updateStampsRelationIdAndRevisionOnReplacementColumns() {
+        ModelingRelationEntity stored = modelRelation();
+        when(relations.lock(WS, "rel-1")).thenReturn(Optional.of(stored));
+        when(relations.countName(anyString(), anyString(), any())).thenReturn(0L);
+        givenFactAndDim();
+        when(relations.update(any(ModelingRelationEntity.class))).thenReturn(true);
+        when(relations.find(WS, "rel-1")).thenReturn(Optional.of(stored));
+
+        service.update(WS, ACTOR, "rel-1", updateDTO());
+
+        ArgumentCaptor<ModelingRelationColumnEntity> column =
+                ArgumentCaptor.forClass(ModelingRelationColumnEntity.class);
+        Mockito.verify(relations).addColumn(column.capture());
+        assertEquals("rel-1", column.getValue().getRelationId());
+        assertEquals(1L, column.getValue().getRevision());
+    }
+
+    private static ModelingRelationEntity modelRelation() {
+        ModelingRelationEntity stored = new ModelingRelationEntity();
+        stored.setId("rel-1");
+        stored.setName("order_to_customer");
+        stored.setFromModelId(FROM_ID);
+        stored.setToModelId(TO_ID);
+        stored.setRevision(1L);
+        return stored;
+    }
+
+    private static UpdateModelRelationDTO updateDTO() {
+        UpdateModelRelationDTO dto = new UpdateModelRelationDTO();
+        dto.setName("order_to_customer");
+        dto.setJoinType("LEFT");
+        dto.setRevision(1L);
+        RelationKeyPairDTO pair = new RelationKeyPairDTO();
+        pair.setFromFieldCode("customer_id");
+        pair.setToFieldCode("customer_id");
+        dto.setKeys(List.of(pair));
+        return dto;
     }
 
     @Test

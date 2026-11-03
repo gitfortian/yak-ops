@@ -185,7 +185,7 @@ public class GlobalExceptionHandler {
                         RELATION_KEY_FIELD_UNSTANDARDIZED,
                         GRAIN_TOO_LONG,
                         SYNONYM_INVALID -> HttpStatus.BAD_REQUEST;
-                case RELATION_KEY_FIELD_MISSING -> HttpStatus.UNPROCESSABLE_ENTITY;
+                case RELATION_KEY_FIELD_MISSING, GRAIN_NOT_APPLICABLE -> HttpStatus.UNPROCESSABLE_ENTITY;
                 case RELATION_DUPLICATE_NAME,
                         RELATION_SELF,
                         RELATION_TARGET_NOT_DIM,

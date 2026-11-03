@@ -55,8 +55,7 @@ public interface ModelRelationService {
      * @param targetModelId one-side DIM model identity
      * @return at most three candidates, blocked ones included with a reason
      */
-    List<ModelRelationProposalVO> proposals(
-            String workspaceId, String actor, String modelId, String targetModelId);
+    List<ModelRelationProposalVO> proposals(String workspaceId, String actor, String modelId, String targetModelId);
 
     /**
      * Declares the meaning of one row of the model.
