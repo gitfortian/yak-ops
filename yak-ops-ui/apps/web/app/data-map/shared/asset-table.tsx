@@ -164,6 +164,7 @@ export default function AssetTable({
       aria-busy={stale || undefined}
     >
       <Table
+        className="[&_tbody_tr]:transition-colors [&_tbody_tr:focus-within]:bg-[var(--yak-color-hover)]"
         columns={columns}
         dataSource={records}
         rowKey="id"
