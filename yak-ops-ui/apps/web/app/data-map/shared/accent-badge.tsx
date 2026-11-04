@@ -22,6 +22,8 @@ export function accentToneOf(id: string): AccentTone {
 interface Props {
   tone: AccentTone;
   children: ReactNode;
+  /** Renders an inline remove affordance, shown on hover; the tag picker uses it to unbind. */
+  onRemove?: () => void;
 }
 
 /**
@@ -29,12 +31,25 @@ interface Props {
  * Badge tones: gold ranks a core asset, purple marks a domain family, cyan
  * marks sensitive data.
  */
-export default function AccentBadge({ tone, children }: Props) {
+export default function AccentBadge({ tone, children, onRemove }: Props) {
   return (
     <span
-      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-[4px] border px-[7px] py-0.5 text-[11px] font-medium ${TONE_CLASS[tone]}`}
+      className={`group inline-flex items-center gap-0.5 whitespace-nowrap rounded-[4px] border px-[7px] py-0.5 text-[11px] font-medium ${TONE_CLASS[tone]}`}
     >
       {children}
+      {onRemove && (
+        <button
+          type="button"
+          aria-label={`移除 ${typeof children === "string" ? children : "标签"}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onRemove();
+          }}
+          className="hidden cursor-pointer rounded-[3px] px-0.5 leading-none opacity-80 hover:opacity-100 group-hover:inline-block"
+        >
+          ×
+        </button>
+      )}
     </span>
   );
 }

@@ -3,23 +3,23 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-import { getCrawlSummary, listCrawls } from "@/service/data-map/crawl";
+import { listCrawls } from "@/service/data-map/crawl";
 import { dataMapFailureMessage } from "@/service/data-map/request";
-import { changeTaskStatus, deleteTask, listTasks, runTask } from "@/service/data-map/task";
-import type {
-  Crawl,
-  CrawlSummary,
-  CrawlTask,
-  CrawlTaskStatus,
-  TaskQuery,
-} from "@/service/data-map/types";
+import {
+  changeTaskStatus,
+  deleteTask,
+  listTasks,
+  retryTaskRun,
+  runTask,
+} from "@/service/data-map/task";
+import type { Crawl, CrawlTask, CrawlTaskStatus, TaskQuery } from "@/service/data-map/types";
 
 import DataMapEmptyState from "../shared/empty-state";
 import { dataMapKeys } from "../shared/keys";
 import { DATA_MAP_BASE, readTaskStatus } from "../shared/labels";
 import { useDatasourceOptions, useOwnerOptions } from "../shared/lookups";
 import { useDataMapScope } from "../shared/scope";
-import HealthBand from "./components/health-band";
+import HealthBand, { useHealthSummary } from "./components/health-band";
 import { BatchConfirmDialog, DeleteTaskDialog } from "./components/task-confirm";
 import TaskDrawer from "./components/task-drawer";
 import TaskFilters from "./components/task-filters";
@@ -30,31 +30,6 @@ const DEFAULT_PAGE_SIZE = 20;
 const ACTIVE_POLL_MS = 5000;
 /** Runs read for the "newest instance per task" join; wide enough for a full page of tasks. */
 const LATEST_RUN_WINDOW = 50;
-/** The band's run window; fixed so the strip cannot silently change meaning between loads. */
-const SUMMARY_HOURS = 24;
-/** Shown until the first summary arrives; zeros read as "nothing known", not as a real state. */
-const EMPTY_SUMMARY: CrawlSummary = {
-  taskTotal: 0,
-  onlineTaskCount: 0,
-  windowHours: SUMMARY_HOURS,
-  runTotal: 0,
-  runSucceeded: 0,
-  runPartial: 0,
-  runFailed: 0,
-  runInterrupted: 0,
-  runRunning: 0,
-  runPending: 0,
-  failedTableCount: 0,
-  abnormalTaskCount: 0,
-  columnTotal: 0,
-  describedColumnCount: 0,
-  todayRunTotal: 0,
-  todayRunSucceeded: 0,
-  weekRunTotal: 0,
-  weekRunSucceeded: 0,
-  avgDurationSeconds: 0,
-  p95DurationSeconds: 0,
-};
 
 const readPageNo = (value: string | null) => {
   const parsed = Number(value);
@@ -65,6 +40,34 @@ const isRunActive = (status: string | null | undefined) =>
   status === "PENDING" || status === "RUNNING";
 
 const tasksPath = `${DATA_MAP_BASE}/tasks`;
+
+/**
+ * One active run per datasource is the backend rule, so tasks sharing a source are submitted one
+ * after another while different sources proceed in parallel. Returns how many submissions landed.
+ */
+const submitRunsByDatasource = async (tasks: CrawlTask[]) => {
+  const byDatasource = new Map<string, CrawlTask[]>();
+  tasks.forEach((task) => {
+    const bucket = byDatasource.get(task.datasourceId) ?? [];
+    bucket.push(task);
+    byDatasource.set(task.datasourceId, bucket);
+  });
+  const submitted = await Promise.all(
+    [...byDatasource.values()].map(async (bucket) => {
+      let landed = 0;
+      for (const task of bucket) {
+        try {
+          await runTask(task.id);
+          landed += 1;
+        } catch {
+          // A source that turned busy mid-batch is counted by the caller; the next task still runs.
+        }
+      }
+      return landed;
+    }),
+  );
+  return submitted.reduce((total, count) => total + count, 0);
+};
 
 interface ConfirmRequest {
   kind: "offline" | "delete";
@@ -136,15 +139,7 @@ export default function CrawlTasksPage() {
         : false,
   });
 
-  const summary = useQuery({
-    queryKey: dataMapKeys.crawlSummary(scope, SUMMARY_HOURS),
-    queryFn: ({ signal }) => getCrawlSummary(SUMMARY_HOURS, signal),
-    enabled: ready,
-    refetchInterval: (query) =>
-      (query.state.data?.runRunning ?? 0) + (query.state.data?.runPending ?? 0) > 0
-        ? ACTIVE_POLL_MS
-        : false,
-  });
+  const health = useHealthSummary();
 
   const records = page.data?.bizData ?? [];
   const total = page.data?.pagination?.total ?? 0;
@@ -249,8 +244,36 @@ export default function CrawlTasksPage() {
     onError: (error) => toast.error(dataMapFailureMessage(error, "批量操作失败")),
   });
 
+  const collect = useMutation({
+    mutationFn: (tasks: CrawlTask[]) => submitRunsByDatasource(tasks),
+    onSuccess: (submitted, tasks) => {
+      invalidate();
+      setSelected(new Set());
+      const skipped = tasks.length - submitted;
+      if (skipped === 0) {
+        toast.success(`已提交 ${submitted} 个采集`);
+      } else {
+        toast.warning(`${submitted} 个已提交，${skipped} 个未提交（该数据源已有采集在跑）`);
+      }
+    },
+    onError: (error) => toast.error(dataMapFailureMessage(error, "批量采集提交失败")),
+  });
+
+  const retry = useMutation({
+    mutationFn: (crawl: Crawl) => retryTaskRun(crawl.taskId ?? "", crawl.id),
+    onSuccess: () => {
+      invalidate();
+      toast.success("已提交重试，仅重新采集失败表");
+    },
+    onError: (error) => toast.error(dataMapFailureMessage(error, "重试提交失败，请稍后重试")),
+  });
+
   const selectedTasks = records.filter((task) => selected.has(task.id));
   const onlineSelected = selectedTasks.filter((task) => task.status === "RUNNING");
+  /** Online tasks whose source is idle: the backend rejects a second concurrent run per source. */
+  const collectableSelected = selectedTasks.filter(
+    (task) => task.status === "RUNNING" && !busyDatasourceIds.has(task.datasourceId),
+  );
 
   const requestDelete = (task: CrawlTask) => {
     if (task.status === "RUNNING") {
@@ -289,7 +312,7 @@ export default function CrawlTasksPage() {
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-6 pb-4 pt-4 max-md:px-4">
         <HealthBand
-          summary={summary.data ?? EMPTY_SUMMARY}
+          summary={health}
           onlyAbnormal={onlyAbnormal}
           onToggleAbnormal={() => writeParams({ abnormal: onlyAbnormal ? "" : "1" })}
         />
@@ -404,6 +427,8 @@ export default function CrawlTasksPage() {
         running={run.isPending && run.variables === activeTask?.id}
         onRun={(task) => run.mutate(task.id)}
         onEdit={(task) => navigate(`${tasksPath}/${task.id}/edit`)}
+        retryingId={retry.isPending ? (retry.variables?.id ?? null) : null}
+        onRetry={(crawl) => retry.mutate(crawl)}
       />
 
       {selected.size > 0 && (
@@ -411,6 +436,20 @@ export default function CrawlTasksPage() {
           <span className="text-xs text-[var(--yak-components-panel-text)]">
             已选 {selected.size} 个任务
           </span>
+          <Button
+            size="small"
+            variant="primary"
+            loading={collect.isPending}
+            disabled={collectableSelected.length === 0}
+            title={
+              collectableSelected.length === 0
+                ? "所选任务未上线，或其数据源正在采集"
+                : `为 ${collectableSelected.length} 个已上线任务各提交一次采集`
+            }
+            onClick={() => collect.mutate(collectableSelected)}
+          >
+            批量采集
+          </Button>
           <Button
             size="small"
             onClick={() =>

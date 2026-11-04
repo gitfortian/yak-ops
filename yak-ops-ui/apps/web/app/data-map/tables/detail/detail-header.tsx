@@ -1,15 +1,5 @@
 import { Badge, Button, Card, toast } from "@yak-ops/yak-ui";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Check,
-  Clock3,
-  Columns3,
-  Copy,
-  Flame,
-  Pencil,
-  Star,
-} from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, Clock3, Copy, Pencil, Star } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -53,7 +43,7 @@ function Meta({ icon, label, children }: { icon: ReactNode; label: string; child
  * Asset overview card above the tabs.
  *
  * <p>It answers "what is this table and who owns it" before any tab is opened: identity, location,
- * liveness, owner, domain, last crawl and tags. Everything here is read-only; curating happens
+ * liveness, owner, domain and last crawl. Everything here is read-only; curating happens
  * behind the edit action so a detail visit can never change data by accident.
  */
 export default function DetailHeader({ detail, onEdit, onToggleFavorite, favoritePending }: Props) {
@@ -174,33 +164,6 @@ export default function DetailHeader({ detail, onEdit, onToggleFavorite, favorit
         <Meta icon={<Clock3 size={13} aria-hidden="true" />} label="最近采集">
           <span title={detail.lastSeenTime}>{relativeTime(detail.lastSeenTime)}</span>
         </Meta>
-
-        <Meta icon={<Flame size={13} aria-hidden="true" />} label="累计访问">
-          <span className="font-semibold [font-variant-numeric:tabular-nums]">
-            {detail.viewCount}
-          </span>
-        </Meta>
-
-        <Meta icon={<Columns3 size={13} aria-hidden="true" />} label="字段">
-          <span className="font-semibold [font-variant-numeric:tabular-nums]">
-            {detail.columns.length}
-          </span>
-        </Meta>
-
-        <div className={`${META_CLASS} gap-2`}>
-          <span className={META_LABEL_CLASS}>业务标签</span>
-          {detail.tags.length === 0 ? (
-            <span className="text-[var(--yak-components-muted-text)]">暂无标签</span>
-          ) : (
-            <span className="flex flex-wrap items-center gap-1">
-              {detail.tags.map((tag) => (
-                <Badge key={tag.valueId} tone="info">
-                  {tag.valueName}
-                </Badge>
-              ))}
-            </span>
-          )}
-        </div>
       </div>
     </Card>
   );
