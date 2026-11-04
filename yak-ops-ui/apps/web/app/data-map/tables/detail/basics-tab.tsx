@@ -2,6 +2,7 @@ import {
   Alert,
   Button,
   Field,
+  FieldDescription,
   FieldLabel,
   Select,
   SelectContent,
@@ -20,12 +21,11 @@ import { updateTable } from "@/service/data-map/catalog";
 import { dataMapFailureMessage } from "@/service/data-map/request";
 import type { TableDetail } from "@/service/data-map/types";
 
-import AccentBadge, { accentToneOf } from "../../shared/accent-badge";
 import { dataMapKeys } from "../../shared/keys";
 import { relativeTime } from "../../shared/labels";
 import { useDomainTaxonomy, useOwnerOptions } from "../../shared/lookups";
 import { useDataMapScope } from "../../shared/scope";
-import TagDialog from "./tag-dialog";
+import TagPicker from "./tag-picker";
 
 interface Props {
   detail: TableDetail;
@@ -38,17 +38,6 @@ interface Props {
 
 const NO_DOMAIN = "__none__";
 const NO_OWNER = "__none__";
-
-/** Groups the asset's tag values by their key, keeping the key order of the response. */
-function groupTagsByKey(tags: TableDetail["tags"]) {
-  const grouped = new Map<string, { keyName: string; values: string[] }>();
-  for (const tag of tags) {
-    const entry = grouped.get(tag.keyId) ?? { keyName: tag.keyName, values: [] };
-    entry.values.push(tag.valueName);
-    grouped.set(tag.keyId, entry);
-  }
-  return [...grouped].map(([keyId, entry]) => ({ keyId, ...entry }));
-}
 
 /**
  * Curated metadata of one asset.
@@ -65,7 +54,6 @@ export default function BasicsTab({ detail, editing, onCancel, onSaved, onEdit }
   const [description, setDescription] = useState(detail.description ?? "");
   const [ownerId, setOwnerId] = useState(detail.ownerId ?? "");
   const [domainId, setDomainId] = useState(detail.domainId ?? "");
-  const [tagsOpen, setTagsOpen] = useState(false);
   const [failure, setFailure] = useState("");
 
   const save = useMutation({
@@ -83,8 +71,6 @@ export default function BasicsTab({ detail, editing, onCancel, onSaved, onEdit }
     },
     onError: (error) => setFailure(dataMapFailureMessage(error, "保存失败，请稍后重试。")),
   });
-
-  const tagGroups = groupTagsByKey(detail.tags);
 
   const ownerOptions = [
     { value: NO_OWNER, label: "未指定" },
@@ -112,8 +98,8 @@ export default function BasicsTab({ detail, editing, onCancel, onSaved, onEdit }
   return (
     <div className="space-y-6">
       {!editing && (
-        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_260px]">
-          <div className="space-y-6">
+        <div className="grid grid-cols-1 items-start gap-7 xl:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="max-w-[1100px] space-y-6">
             <section>
               <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--yak-components-muted-text)]">
                 业务描述
@@ -137,27 +123,7 @@ export default function BasicsTab({ detail, editing, onCancel, onSaved, onEdit }
               <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--yak-components-muted-text)]">
                 业务标签
               </h2>
-              <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                {tagGroups.length === 0 ? (
-                  <span className="text-sm text-[var(--yak-components-muted-text)]">未打标签</span>
-                ) : (
-                  tagGroups.map((group) => (
-                    <span key={group.keyId} className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs text-[var(--yak-components-muted-text)]">
-                        {group.keyName}
-                      </span>
-                      {group.values.map((value) => (
-                        <AccentBadge key={value} tone={accentToneOf(value)}>
-                          {value}
-                        </AccentBadge>
-                      ))}
-                    </span>
-                  ))
-                )}
-                <Button size="small" variant="ghost" onClick={() => setTagsOpen(true)}>
-                  编辑标签
-                </Button>
-              </div>
+              <TagPicker tableId={detail.id} tags={detail.tags} />
             </section>
 
             {detail.remarks && (
@@ -292,6 +258,12 @@ export default function BasicsTab({ detail, editing, onCancel, onSaved, onEdit }
             </Select>
           </Field>
 
+          <Field>
+            <FieldLabel>业务标签</FieldLabel>
+            <TagPicker tableId={detail.id} tags={detail.tags} />
+            <FieldDescription>标签每次点击即时保存，不随「取消」还原。</FieldDescription>
+          </Field>
+
           {failure && <Alert>{failure}</Alert>}
 
           <div className="flex items-center gap-2 border-t border-[var(--yak-components-panel-border)] pt-4">
@@ -308,19 +280,6 @@ export default function BasicsTab({ detail, editing, onCancel, onSaved, onEdit }
             )}
           </div>
         </div>
-      )}
-
-      {tagsOpen && (
-        <TagDialog
-          tableId={detail.id}
-          selectedValueIds={detail.tags.map((tag) => tag.valueId)}
-          onClose={() => setTagsOpen(false)}
-          onSaved={() => {
-            setTagsOpen(false);
-            void queryClient.invalidateQueries({ queryKey: dataMapKeys.table(scope, detail.id) });
-            onSaved();
-          }}
-        />
       )}
     </div>
   );

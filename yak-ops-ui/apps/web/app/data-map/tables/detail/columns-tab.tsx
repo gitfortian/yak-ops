@@ -26,6 +26,17 @@ const ordinalOf = (column: TableColumn) =>
 
 const columns: TableColumns<TableColumn> = [
   {
+    key: "ordinal",
+    title: "序号",
+    width: 64,
+    align: "center",
+    render: (_value, record) => (
+      <span className="text-xs text-[var(--yak-components-muted-text)]">
+        {record.ordinal ?? "-"}
+      </span>
+    ),
+  },
+  {
     key: "name",
     title: "字段",
     minWidth: 220,
@@ -85,17 +96,6 @@ const columns: TableColumns<TableColumn> = [
         title={record.remarks ?? undefined}
       >
         {record.remarks || "-"}
-      </span>
-    ),
-  },
-  {
-    key: "ordinal",
-    title: "序号",
-    width: 64,
-    align: "right",
-    render: (_value, record) => (
-      <span className="text-xs text-[var(--yak-components-muted-text)] opacity-60">
-        {record.ordinal ?? "-"}
       </span>
     ),
   },

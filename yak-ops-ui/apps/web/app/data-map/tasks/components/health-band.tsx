@@ -1,6 +1,57 @@
+import { useQuery } from "@tanstack/react-query";
+
+import { getCrawlSummary } from "@/service/data-map/crawl";
 import type { CrawlSummary } from "@/service/data-map/types";
 
+import { dataMapKeys } from "../../shared/keys";
+import { useDataMapScope } from "../../shared/scope";
 import { formatDuration } from "../../shared/labels";
+
+/** The band's run window; fixed so the strip cannot silently change meaning between loads. */
+const SUMMARY_HOURS = 24;
+const ACTIVE_POLL_MS = 5000;
+
+/** Shown until the first summary arrives; zeros read as "nothing known", not as a real state. */
+const EMPTY_SUMMARY: CrawlSummary = {
+  taskTotal: 0,
+  onlineTaskCount: 0,
+  windowHours: SUMMARY_HOURS,
+  runTotal: 0,
+  runSucceeded: 0,
+  runPartial: 0,
+  runFailed: 0,
+  runInterrupted: 0,
+  runRunning: 0,
+  runPending: 0,
+  failedTableCount: 0,
+  abnormalTaskCount: 0,
+  columnTotal: 0,
+  describedColumnCount: 0,
+  todayRunTotal: 0,
+  todayRunSucceeded: 0,
+  weekRunTotal: 0,
+  weekRunSucceeded: 0,
+  avgDurationSeconds: 0,
+  p95DurationSeconds: 0,
+};
+
+/**
+ * Collection health of the whole Workspace. Both tabs of the console show the band, so the figures
+ * and their polling live here instead of being re-declared by whichever page renders first.
+ */
+export function useHealthSummary(): CrawlSummary {
+  const { scope, ready } = useDataMapScope();
+  const query = useQuery({
+    queryKey: dataMapKeys.crawlSummary(scope, SUMMARY_HOURS),
+    queryFn: ({ signal }) => getCrawlSummary(SUMMARY_HOURS, signal),
+    enabled: ready,
+    refetchInterval: (result) =>
+      (result.state.data?.runRunning ?? 0) + (result.state.data?.runPending ?? 0) > 0
+        ? ACTIVE_POLL_MS
+        : false,
+  });
+  return query.data ?? EMPTY_SUMMARY;
+}
 
 interface MetricProps {
   label: string;

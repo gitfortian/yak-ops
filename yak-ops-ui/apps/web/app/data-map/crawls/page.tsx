@@ -14,7 +14,7 @@ import {
 } from "@yak-ops/yak-ui";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { listCrawls } from "@/service/data-map/crawl";
 import { dataMapFailureMessage } from "@/service/data-map/request";
@@ -23,14 +23,17 @@ import type { Crawl, CrawlQuery, CrawlStatus, CrawlTrigger } from "@/service/dat
 
 import DataMapEmptyState from "../shared/empty-state";
 import { dataMapKeys } from "../shared/keys";
+import { DATA_MAP_BASE } from "../shared/labels";
 import { useDatasourceOptions } from "../shared/lookups";
 import { useDataMapScope } from "../shared/scope";
+import HealthBand, { useHealthSummary } from "../tasks/components/health-band";
 import TaskTabs from "../tasks/components/task-tabs";
 import RunTable from "./run-table";
 
 const PAGE_SIZE = 20;
 const ACTIVE_POLL_MS = 5000;
 const DEFAULT_DAYS = 7;
+const tasksPath = `${DATA_MAP_BASE}/tasks`;
 
 /**
  * Status options of the feed. `PARTIAL` is not a stored status: the backend reports a run with
@@ -71,10 +74,13 @@ const readPageNo = (value: string | null) => {
 };
 
 export default function CrawlRunsPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { scope, ready } = useDataMapScope();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const health = useHealthSummary();
 
   const pageNo = readPageNo(searchParams.get("pageNo"));
   const outcomeValue = searchParams.get("outcome") ?? "";
@@ -136,6 +142,7 @@ export default function CrawlRunsPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: [...dataMapKeys.all, "crawls"] });
       void queryClient.invalidateQueries({ queryKey: [...dataMapKeys.all, "tasks"] });
+      void queryClient.invalidateQueries({ queryKey: [...dataMapKeys.all, "crawl-summary"] });
       toast.success("已提交重试，仅重新采集失败表");
     },
     onError: (error) => toast.error(dataMapFailureMessage(error, "重试提交失败，请稍后重试")),
@@ -154,9 +161,15 @@ export default function CrawlRunsPage() {
         className="bg-[var(--yak-color-background)] px-6 max-md:px-4"
       />
 
-      <div className="flex min-h-0 flex-1 flex-col px-6 pb-4 pt-4 max-md:px-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 px-6 pb-4 pt-4 max-md:px-4">
+        <HealthBand
+          summary={health}
+          onlyAbnormal={false}
+          onToggleAbnormal={() => navigate(`${tasksPath}?abnormal=1`)}
+        />
+
         {feed.isError && (
-          <Alert className="mb-3 shrink-0">
+          <Alert className="shrink-0">
             {dataMapFailureMessage(feed.error, "实例记录加载失败，请稍后重试。")}
           </Alert>
         )}

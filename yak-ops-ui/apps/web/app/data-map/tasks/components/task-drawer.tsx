@@ -1,5 +1,4 @@
 import {
-  Badge,
   Button,
   Drawer,
   DrawerBody,
@@ -13,7 +12,7 @@ import {
   TabsTab,
 } from "@yak-ops/yak-ui";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Pencil, Play } from "lucide-react";
+import { ChevronDown, Pencil, Play, RotateCcw } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
@@ -37,6 +36,8 @@ import { RunBadge, RunNotStarted, TaskLifecycle } from "./status";
 const RECENT_RUN_LIMIT = 8;
 const VISIBLE_FAILURE_LIMIT = 50;
 
+const isRunActive = (status: string) => status === "PENDING" || status === "RUNNING";
+
 interface Props {
   task: CrawlTask | null;
   open: boolean;
@@ -46,6 +47,8 @@ interface Props {
   running: boolean;
   onRun: (task: CrawlTask) => void;
   onEdit: (task: CrawlTask) => void;
+  retryingId: string | null;
+  onRetry: (crawl: Crawl) => void;
 }
 
 function Section({
@@ -118,11 +121,19 @@ function RunCounts({ crawl }: { crawl: Crawl }) {
 }
 
 /** Failures are fetched on demand: the list only needs the count, the detail carries the reasons. */
-function RunFailures({ crawlId, failedCount }: { crawlId: string; failedCount: number }) {
+function RunFailures({
+  crawl,
+  retryingId,
+  onRetry,
+}: {
+  crawl: Crawl;
+  retryingId: string | null;
+  onRetry: (crawl: Crawl) => void;
+}) {
   const { scope, ready } = useDataMapScope();
   const query = useQuery({
-    queryKey: dataMapKeys.crawl(scope, crawlId),
-    queryFn: ({ signal }) => getCrawl(crawlId, signal),
+    queryKey: dataMapKeys.crawl(scope, crawl.id),
+    queryFn: ({ signal }) => getCrawl(crawl.id, signal),
     enabled: ready,
     staleTime: 60 * 1000,
   });
@@ -145,6 +156,9 @@ function RunFailures({ crawlId, failedCount }: { crawlId: string; failedCount: n
 
   const failures = query.data?.failures ?? [];
   const visible = failures.slice(0, VISIBLE_FAILURE_LIMIT);
+  /** Retry re-enumerates this instance's failed tables, so an active or source-level run has none. */
+  const canRetry = Boolean(crawl.taskId) && crawl.failedCount > 0 && !isRunActive(crawl.status);
+
   return (
     <div className="mt-2 rounded-md bg-[var(--yak-color-surface-muted)] p-2.5">
       <div className="mb-1.5 text-[11px] text-[var(--yak-components-muted-text)]">
@@ -152,7 +166,7 @@ function RunFailures({ crawlId, failedCount }: { crawlId: string; failedCount: n
       </div>
       {visible.length === 0 ? (
         <div className="text-xs text-[var(--yak-components-muted-text)]">
-          实例已记录 {failedCount} 张失败表，但明细为空。
+          实例已记录 {crawl.failedCount} 张失败表，但明细为空。
         </div>
       ) : (
         <ul className="max-h-56 space-y-1.5 overflow-y-auto">
@@ -168,11 +182,30 @@ function RunFailures({ crawlId, failedCount }: { crawlId: string; failedCount: n
           ))}
         </ul>
       )}
+      {canRetry && (
+        <Button
+          size="small"
+          className="mt-2 h-7 text-xs"
+          loading={retryingId === crawl.id}
+          onClick={() => onRetry(crawl)}
+        >
+          <RotateCcw size={12} aria-hidden="true" className="mr-1" />
+          仅重试这 {crawl.failedCount} 张失败表
+        </Button>
+      )}
     </div>
   );
 }
 
-function RunRow({ crawl }: { crawl: Crawl }) {
+function RunRow({
+  crawl,
+  retryingId,
+  onRetry,
+}: {
+  crawl: Crawl;
+  retryingId: string | null;
+  onRetry: (crawl: Crawl) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const shown = runDisplayStatus(crawl.status, crawl.failedCount);
   if (!shown) return null;
@@ -229,38 +262,10 @@ function RunRow({ crawl }: { crawl: Crawl }) {
           </button>
         )}
       </div>
-      {expanded && expandable && <RunFailures crawlId={crawl.id} failedCount={crawl.failedCount} />}
+      {expanded && expandable && (
+        <RunFailures crawl={crawl} retryingId={retryingId} onRetry={onRetry} />
+      )}
     </li>
-  );
-}
-
-/** Quality and lineage have no backend yet; the tab states the dependency instead of faking a score. */
-function GovernancePlaceholder() {
-  return (
-    <div className="space-y-3">
-      <div className="rounded-[var(--yak-radius-control-medium)] border border-dashed border-[var(--yak-components-control-border)] p-4">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-[var(--yak-components-panel-text)]">
-            采集健康度
-          </span>
-          <Badge tone="warning">示例</Badge>
-        </div>
-        <p className="mt-1.5 text-xs leading-5 text-[var(--yak-components-muted-text)]">
-          依赖数据质量（FYOIP-16），接入前不展示任何数值。
-        </p>
-      </div>
-      <div className="rounded-[var(--yak-radius-control-medium)] border border-dashed border-[var(--yak-components-control-border)] p-4">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-[var(--yak-components-panel-text)]">
-            血缘关系
-          </span>
-          <Badge tone="warning">示例</Badge>
-        </div>
-        <p className="mt-1.5 text-xs leading-5 text-[var(--yak-components-muted-text)]">
-          依赖资产关系（FYOIP-17），接入前不提供入口。
-        </p>
-      </div>
-    </div>
   );
 }
 
@@ -273,6 +278,8 @@ export default function TaskDrawer({
   running,
   onRun,
   onEdit,
+  retryingId,
+  onRetry,
 }: Props) {
   const { scope, ready } = useDataMapScope();
   const [tab, setTab] = useState("overview");
@@ -375,12 +382,6 @@ export default function TaskDrawer({
               <TabsList className="shrink-0 px-4 pt-1">
                 <TabsTab value="overview">概览</TabsTab>
                 <TabsTab value="runs">运行历史</TabsTab>
-                <TabsTab value="governance" className="gap-1">
-                  质量与血缘
-                  <span className="ml-1 text-[10px] text-[var(--yak-components-badge-warning-text)]">
-                    示例
-                  </span>
-                </TabsTab>
               </TabsList>
 
               <DrawerBody className="space-y-3 pt-3">
@@ -487,6 +488,10 @@ export default function TaskDrawer({
                       被排除的表不刷新字段，也不判缺失。
                     </p>
                   </Section>
+
+                  <p className="text-[11px] leading-4 text-[var(--yak-components-muted-text)]">
+                    质量与血缘依赖数据治理（FYOIP-16）与资产关系（FYOIP-17），当前版本不提供。
+                  </p>
                 </TabsPanel>
 
                 <TabsPanel value="runs">
@@ -503,14 +508,15 @@ export default function TaskDrawer({
                   ) : (
                     <ul>
                       {records.map((crawl) => (
-                        <RunRow key={crawl.id} crawl={crawl} />
+                        <RunRow
+                          key={crawl.id}
+                          crawl={crawl}
+                          retryingId={retryingId}
+                          onRetry={onRetry}
+                        />
                       ))}
                     </ul>
                   )}
-                </TabsPanel>
-
-                <TabsPanel value="governance">
-                  <GovernancePlaceholder />
                 </TabsPanel>
               </DrawerBody>
             </Tabs>

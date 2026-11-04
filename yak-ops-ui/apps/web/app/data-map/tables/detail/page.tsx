@@ -82,7 +82,7 @@ export default function TableDetailPage() {
 
   return (
     <div className="h-full min-h-0 overflow-auto bg-[var(--yak-datamap-page-bg)]">
-      <div className="mx-auto w-full max-w-[1180px] px-6 py-5 max-md:px-4">
+      <div className="w-full px-6 py-5 max-md:px-4">
         {detail.isError && (
           <Alert className="mb-4">
             {dataMapFailureMessage(detail.error, "资产加载失败，请稍后重试。")}
