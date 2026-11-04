@@ -65,8 +65,8 @@ export default function BrowsePanel({
     datasourceFacets.find((facet) => facet.facetKey === id)?.assetCount;
 
   return (
-    <div className="overflow-hidden rounded-[var(--yak-radius-control-medium)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-components-panel-bg)]">
-      <div className="flex border-b border-[var(--yak-components-control-border)]">
+    <div className="sticky top-0 overflow-hidden rounded-[var(--yak-radius-md)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] shadow-[var(--yak-datamap-card-shadow)]">
+      <div className="flex border-b border-[var(--yak-components-control-border)] bg-[var(--yak-components-collapse-section-bg)]">
         {TABS.map((entry) => (
           <button
             key={entry.key}

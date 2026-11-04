@@ -32,7 +32,7 @@ export default function StatCard({
   hintTone = "flat",
 }: Props) {
   return (
-    <div className="flex items-start gap-3 rounded-[var(--yak-radius-md)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] p-3.5 shadow-[var(--yak-datamap-card-shadow)]">
+    <div className="flex min-h-[88px] items-center gap-3 bg-[var(--yak-datamap-surface)] px-3.5 py-3 transition-colors hover:bg-[var(--yak-color-hover)] max-sm:min-h-[82px]">
       <span
         className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${iconClassName}`}
       >
@@ -40,7 +40,7 @@ export default function StatCard({
       </span>
       <span className="min-w-0">
         <span className="block text-xs text-[var(--yak-components-muted-text)]">{label}</span>
-        <span className="mt-0.5 block text-[22px] font-bold leading-7 tracking-tight text-[var(--yak-components-panel-text)] [font-variant-numeric:tabular-nums]">
+        <span className="mt-0.5 block text-[21px] font-semibold leading-7 tracking-tight text-[var(--yak-components-panel-text)] [font-variant-numeric:tabular-nums]">
           {value}
         </span>
         {hint && (

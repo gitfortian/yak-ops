@@ -77,7 +77,7 @@ export default function DomainCards({
               key={domain.facetKey}
               type="button"
               onClick={() => navigate(`${DATA_MAP_BASE}/catalog?domainId=${domain.facetKey}`)}
-              className="cursor-pointer rounded-[var(--yak-radius-md)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] p-4 text-left shadow-[var(--yak-datamap-card-shadow)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--yak-color-primary-ring)] hover:shadow-[var(--yak-datamap-card-shadow-hover)]"
+              className="group min-h-[172px] cursor-pointer rounded-[var(--yak-radius-md)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] p-4 text-left transition-colors hover:border-[var(--yak-color-primary-ring)] hover:bg-[var(--yak-color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--yak-color-primary-ring)] motion-reduce:transition-none"
             >
               <div className="flex items-center gap-2.5">
                 <span
@@ -124,7 +124,7 @@ export default function DomainCards({
         <button
           type="button"
           onClick={() => navigate(`${DATA_MAP_BASE}/catalog?unclassified=1`)}
-          className="cursor-pointer rounded-[var(--yak-radius-md)] border border-[var(--yak-datamap-badge-gold-border)] bg-[var(--yak-datamap-badge-gold-bg)] p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--yak-datamap-card-shadow-hover)]"
+          className="min-h-[172px] cursor-pointer rounded-[var(--yak-radius-md)] border border-[var(--yak-datamap-badge-gold-border)] bg-[var(--yak-datamap-badge-gold-bg)] p-4 text-left transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--yak-color-primary-ring)] motion-reduce:transition-none"
         >
           <div className="flex items-center gap-2.5">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--yak-components-badge-warning-bg)] text-[var(--yak-components-badge-warning-text)]">

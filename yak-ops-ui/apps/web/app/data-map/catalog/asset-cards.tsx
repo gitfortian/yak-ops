@@ -52,7 +52,7 @@ export default function AssetCards({ records, loading }: Props) {
           <Link
             key={record.id}
             to={`/data-governance/data-map/tables/${record.id}`}
-            className="block rounded-[var(--yak-radius-md)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] p-4 shadow-[var(--yak-datamap-card-shadow)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--yak-color-primary-ring)] hover:shadow-[var(--yak-datamap-card-shadow-hover)]"
+            className="block rounded-[var(--yak-radius-md)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] p-4 transition-colors hover:border-[var(--yak-color-primary-ring)] hover:bg-[var(--yak-color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--yak-color-primary-ring)] motion-reduce:transition-none"
           >
             <div className="flex items-start justify-between gap-2">
               <div className="flex min-w-0 items-start gap-2">

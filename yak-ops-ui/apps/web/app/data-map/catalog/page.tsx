@@ -1,6 +1,15 @@
-import { Alert, Button, PageHeader, Pagination } from "@yak-ops/yak-ui";
+import {
+  Alert,
+  Button,
+  Drawer,
+  DrawerBody,
+  DrawerContent,
+  DrawerTitle,
+  PageHeader,
+  Pagination,
+} from "@yak-ops/yak-ui";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { LayoutGrid, List, X } from "lucide-react";
+import { FolderTree, LayoutGrid, List, LoaderCircle, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -53,6 +62,7 @@ export default function CatalogPage() {
   const { query, update } = useCatalogQuery();
   const { scope, ready } = useDataMapScope();
   const [draft, setDraft] = useState(query.keyword);
+  const [browseOpen, setBrowseOpen] = useState(false);
   const [tableWidths, onTableWidthsChange] = useStoredColumnWidths("yak.datamap.catalog-table.v1");
 
   const taxonomy = useDomainTaxonomy();
@@ -127,6 +137,7 @@ export default function CatalogPage() {
   );
 
   const selectBrowse = (selection: BrowseSelection) => {
+    setBrowseOpen(false);
     switch (selection.kind) {
       case "all":
         update({
@@ -235,10 +246,11 @@ export default function CatalogPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[var(--yak-color-background)]">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--yak-datamap-page-bg)]">
       <PageHeader
         title="资产目录"
-        className="px-6 pb-5 pt-5 max-md:px-4"
+        description="按数据域、数据源和治理状态定位工作区资产"
+        className="px-6 pb-4 pt-5 max-md:px-4"
         extra={
           <Button size="small" onClick={() => navigate(`${DATA_MAP_BASE}/tasks/new`)}>
             发起采集
@@ -247,7 +259,7 @@ export default function CatalogPage() {
       />
 
       <div className="flex min-h-0 flex-1 gap-4 px-6 pb-4 max-md:px-4">
-        <div className="hidden w-56 shrink-0 lg:block">
+        <aside className="hidden w-56 shrink-0 lg:block">
           <BrowsePanel
             categories={taxonomy.categories}
             taxonomyLoading={taxonomy.isPending}
@@ -259,10 +271,19 @@ export default function CatalogPage() {
             unclassifiedCount={overview.data?.unclassifiedCount ?? 0}
             onSelect={selectBrowse}
           />
-        </div>
+        </aside>
 
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           <div className="rounded-[var(--yak-radius-lg)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] p-3.5 shadow-[var(--yak-datamap-card-shadow)]">
+            <div className="mb-3 flex items-center justify-between gap-2 lg:hidden">
+              <span className="text-xs font-semibold text-[var(--yak-components-panel-text)]">
+                筛选资产
+              </span>
+              <Button size="small" variant="secondary" onClick={() => setBrowseOpen(true)}>
+                <FolderTree size={14} aria-hidden="true" />
+                浏览分类
+              </Button>
+            </div>
             <CatalogFilters
               keyword={draft}
               datasourceId={query.datasourceId}
@@ -307,6 +328,19 @@ export default function CatalogPage() {
                 </button>
               )}
               <span className="ml-auto flex items-center gap-3 text-xs text-[var(--yak-components-muted-text)]">
+                {page.isFetching && (
+                  <span
+                    className="inline-flex items-center gap-1.5 text-[var(--yak-color-primary)]"
+                    role="status"
+                  >
+                    <LoaderCircle
+                      size={12}
+                      className="animate-spin motion-reduce:animate-none"
+                      aria-hidden="true"
+                    />
+                    更新中
+                  </span>
+                )}
                 共 <b className="text-[var(--yak-components-panel-text)]">{countLabel(total)}</b>{" "}
                 个资产
                 <span className="flex overflow-hidden rounded-[var(--yak-radius-control-small)] border border-[var(--yak-components-control-border)]">
@@ -412,6 +446,26 @@ export default function CatalogPage() {
           </div>
         </div>
       </div>
+      <Drawer open={browseOpen} onOpenChange={setBrowseOpen} side="left">
+        <DrawerContent width="min(340px, calc(100vw - 2rem))" className="max-w-[calc(100vw-1rem)]">
+          <div className="border-b border-[var(--yak-components-panel-border)] px-4 py-3">
+            <DrawerTitle className="text-sm font-semibold">浏览资产</DrawerTitle>
+          </div>
+          <DrawerBody className="p-3">
+            <BrowsePanel
+              categories={taxonomy.categories}
+              taxonomyLoading={taxonomy.isPending}
+              datasources={datasources.options}
+              tagDictionary={tagDictionary.data ?? []}
+              domainFacets={facets.data?.domains ?? []}
+              datasourceFacets={facets.data?.datasources ?? []}
+              selected={browseSelectionOf(query)}
+              unclassifiedCount={overview.data?.unclassifiedCount ?? 0}
+              onSelect={selectBrowse}
+            />
+          </DrawerBody>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }

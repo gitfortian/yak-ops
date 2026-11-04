@@ -1,4 +1,4 @@
-import { Alert, Button, Input } from "@yak-ops/yak-ui";
+import { Alert, Button, Input, PageHeader } from "@yak-ops/yak-ui";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -28,7 +28,7 @@ import { useDataMapScope } from "../shared/scope";
 const percent = (covered: number, total: number) =>
   total > 0 ? `${Math.round((covered / total) * 100)}%` : "—";
 
-/** 渐变探索横幅：全局搜索入口与热门资产快捷词。 */
+/** Explore header: the primary search action and a few recent entry points. */
 function Hero({
   assetCount,
   datasourceCount,
@@ -60,15 +60,20 @@ function Hero({
   };
 
   return (
-    <section className="rounded-[var(--yak-radius-lg)] border border-[var(--yak-components-panel-border)] bg-[image:var(--yak-datamap-hero-gradient)] px-7 pb-6 pt-7 shadow-[var(--yak-datamap-card-shadow)]">
-      <h2 className="text-[17px] font-bold tracking-tight text-[var(--yak-components-panel-text)]">
-        探索数据资产
-      </h2>
-      <p className="mt-1.5 text-xs text-[var(--yak-components-muted-text)]">
-        已收录 {datasourceCount === undefined ? "—" : countLabel(datasourceCount)} 个数据源的{" "}
-        {assetCount === undefined ? "—" : countLabel(assetCount)} 张表
-      </p>
-      <div className="relative mt-4 max-w-[640px]">
+    <section className="relative overflow-hidden rounded-[var(--yak-radius-lg)] border border-[var(--yak-color-primary-ring)] bg-[image:var(--yak-datamap-hero-gradient)] px-6 pb-6 pt-5 shadow-[var(--yak-datamap-card-shadow)] max-md:px-4">
+      <div className="relative z-10">
+        <PageHeader
+          title="探索数据资产"
+          description={
+            <>
+              已收录 {datasourceCount === undefined ? "—" : countLabel(datasourceCount)} 个数据源的{" "}
+              {assetCount === undefined ? "—" : countLabel(assetCount)} 张表
+            </>
+          }
+          className="p-0"
+        />
+      </div>
+      <div className="relative z-10 mt-4 max-w-[720px]">
         <Search
           size={16}
           aria-hidden="true"
@@ -78,7 +83,7 @@ function Hero({
           ref={inputRef}
           value={keyword}
           variant="outlined"
-          className="h-11 rounded-[10px] border-[1.5px] border-[var(--yak-color-primary-ring)] pl-10 pr-16 shadow-[var(--yak-datamap-hero-search-shadow)]"
+          className="h-12 rounded-[var(--yak-radius-control-medium)] border-[1.5px] border-[var(--yak-color-primary-ring)] bg-[var(--yak-datamap-surface)] pl-10 pr-16 shadow-[var(--yak-datamap-hero-search-shadow)]"
           placeholder="搜索表、字段、描述、标签，例如「订单金额」"
           aria-label="搜索资产"
           onChange={(event) => setKeyword(event.target.value)}
@@ -90,23 +95,28 @@ function Hero({
           Ctrl K
         </kbd>
       </div>
-      {hotTables.length > 0 && (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-[var(--yak-components-muted-text)]">热门搜索</span>
-          {hotTables.slice(0, 4).map((table) => (
-            <button
-              key={table.id}
-              type="button"
-              onClick={() =>
-                navigate(`${DATA_MAP_BASE}/catalog?keyword=${encodeURIComponent(table.name)}`)
-              }
-              className="inline-flex h-[26px] cursor-pointer items-center gap-1.5 rounded-full border border-[var(--yak-components-input-border)] bg-[var(--yak-datamap-surface)] px-2.5 text-xs text-[var(--yak-components-panel-text)] transition-colors hover:border-[var(--yak-color-primary)] hover:bg-[var(--yak-color-primary-subtle)] hover:text-[var(--yak-color-primary)]"
-            >
-              <span className="font-mono text-[11.5px]">{table.name}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="relative z-10">
+        {hotTables.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--yak-components-muted-text)]">
+              热门搜索
+            </span>
+            {hotTables.slice(0, 4).map((table) => (
+              <button
+                key={table.id}
+                type="button"
+                onClick={() =>
+                  navigate(`${DATA_MAP_BASE}/catalog?keyword=${encodeURIComponent(table.name)}`)
+                }
+                className="inline-flex h-[26px] cursor-pointer items-center gap-1.5 rounded-full border border-[var(--yak-components-input-border)] bg-[var(--yak-datamap-surface)] px-2.5 text-xs text-[var(--yak-components-panel-text)] transition-colors hover:border-[var(--yak-color-primary)] hover:bg-[var(--yak-color-primary-subtle)] hover:text-[var(--yak-color-primary)]"
+              >
+                <span className="font-mono text-[11.5px]">{table.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="pointer-events-none absolute -right-16 -top-24 size-64 rounded-full border-[24px] border-[var(--yak-color-primary-subtle)] opacity-70" />
     </section>
   );
 }
@@ -131,7 +141,7 @@ export default function OverviewPage() {
   const hotTables = data?.hotTables ?? [];
 
   return (
-    <div className="h-full min-h-0 overflow-auto bg-[var(--yak-color-background)] px-6 py-5 max-md:px-4">
+    <div className="h-full min-h-0 overflow-auto bg-[var(--yak-datamap-page-bg)] px-6 py-5 max-md:px-4">
       {overview.isError && (
         <Alert className="mb-4">
           {dataMapFailureMessage(overview.error, "总览加载失败，请稍后重试。")}
@@ -156,7 +166,7 @@ export default function OverviewPage() {
         </section>
       ) : (
         <>
-          <section className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <section className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-[var(--yak-radius-lg)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-components-panel-border)] md:grid-cols-3 xl:grid-cols-6">
             <StatCard
               icon={<Database size={15} aria-hidden="true" />}
               iconClassName="bg-[var(--yak-color-primary-subtle)] text-[var(--yak-color-primary)]"
@@ -199,9 +209,14 @@ export default function OverviewPage() {
             />
           </section>
 
-          <section className="mt-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold tracking-tight">按数据域浏览</h3>
+          <section className="mt-7">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold tracking-tight">按数据域浏览</h3>
+                <p className="mt-1 text-xs text-[var(--yak-components-muted-text)]">
+                  从业务域快速定位资产，并关注治理覆盖情况
+                </p>
+              </div>
             </div>
             <div className="mt-3">
               <DomainCards
@@ -213,10 +228,15 @@ export default function OverviewPage() {
             </div>
           </section>
 
-          <section className="mt-6 grid grid-cols-1 items-start gap-4 xl:grid-cols-[1.7fr_1fr]">
+          <section className="mt-7 grid grid-cols-1 items-start gap-4 xl:grid-cols-[1.7fr_1fr]">
             <div className="overflow-hidden rounded-[var(--yak-radius-lg)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] shadow-[var(--yak-datamap-card-shadow)]">
-              <div className="flex items-center gap-2 border-b border-[var(--yak-components-panel-border)] px-4 py-3">
-                <h3 className="text-[13px] font-bold">热门资产</h3>
+              <div className="flex items-center gap-2 border-b border-[var(--yak-components-panel-border)] px-4 py-3.5">
+                <div>
+                  <h3 className="text-[13px] font-bold">热门资产</h3>
+                  <p className="mt-0.5 text-[11px] text-[var(--yak-components-muted-text)]">
+                    团队访问频率最高的资产
+                  </p>
+                </div>
                 <span className="rounded-full bg-[var(--yak-color-primary-subtle)] px-2 py-0.5 text-[11px] font-medium text-[var(--yak-color-primary)]">
                   按访问热度
                 </span>
@@ -233,8 +253,13 @@ export default function OverviewPage() {
             </div>
 
             <div className="overflow-hidden rounded-[var(--yak-radius-lg)] border border-[var(--yak-components-panel-border)] bg-[var(--yak-datamap-surface)] shadow-[var(--yak-datamap-card-shadow)]">
-              <div className="flex items-center gap-2 border-b border-[var(--yak-components-panel-border)] px-4 py-3">
-                <h3 className="text-[13px] font-bold">平台动态</h3>
+              <div className="flex items-center gap-2 border-b border-[var(--yak-components-panel-border)] px-4 py-3.5">
+                <div>
+                  <h3 className="text-[13px] font-bold">平台动态</h3>
+                  <p className="mt-0.5 text-[11px] text-[var(--yak-components-muted-text)]">
+                    最近的采集进展与结果
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={() => navigate(`${DATA_MAP_BASE}/tasks`)}
