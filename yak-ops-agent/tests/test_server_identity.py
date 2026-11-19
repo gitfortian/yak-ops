@@ -11,6 +11,7 @@ Covers:
 from __future__ import annotations
 
 import asyncio
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -20,9 +21,16 @@ from unittest.mock import patch
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from yak_agent.api import deps, server
+from yak_agent.api import deps, errors, server
 from yak_agent.service import persistence
 from yak_agent.service import session as session_service
+from yak_agent.service.errors import (
+    ConfirmationNotPending,
+    SessionBusy,
+    SessionForbidden,
+    SessionNotFound,
+    SessionStateInvalid,
+)
 
 
 class UserKeyTests(unittest.TestCase):
@@ -119,10 +127,8 @@ class PersistenceTests(unittest.TestCase):
             persistent=False,
         )
 
-        with self.assertRaises(HTTPException) as ctx:
+        with self.assertRaises(SessionNotFound):
             session_service.load_session("does-not-exist", identity, None)
-
-        self.assertEqual(ctx.exception.status_code, 404)
 
     def test_create_session_with_legacy_identity_writes_no_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -247,13 +253,29 @@ class DeleteSessionTests(unittest.TestCase):
         session_service.SESSIONS["sid"] = session
         try:
             with patch.object(server, "request_identity", return_value=identity):
-                with self.assertRaises(HTTPException) as ctx:
+                with self.assertRaises(SessionBusy):
                     asyncio.run(server.delete_session("sid", None))
 
-            self.assertEqual(ctx.exception.status_code, 409)
             self.assertIn("sid", session_service.SESSIONS)
         finally:
             session_service.SESSIONS.pop("sid", None)
+
+
+class SessionErrorHandlerTests(unittest.TestCase):
+    def test_session_errors_map_to_one_http_status_table(self) -> None:
+        cases = (
+            (SessionForbidden, 403),
+            (SessionNotFound, 404),
+            (SessionBusy, 409),
+            (ConfirmationNotPending, 409),
+            (SessionStateInvalid, 422),
+        )
+        for error_type, expected_status in cases:
+            with self.subTest(error=error_type.__name__):
+                response = asyncio.run(errors.session_error_handler(None, error_type()))
+                self.assertEqual(response.status_code, expected_status)
+                payload = json.loads(response.body)
+                self.assertEqual(payload["detail"], error_type.default_message)
 
 
 if __name__ == "__main__":
